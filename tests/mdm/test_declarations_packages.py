@@ -1,20 +1,15 @@
 import json
 import uuid
-from functools import lru_cache
-from io import BytesIO
 from urllib.parse import urlparse
 
 from accounts.models import User
 from django.contrib.auth.models import Group
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.declarations import (
     _find_zentral_ref_package,
@@ -38,7 +33,7 @@ from zentral.contrib.mdm.models import (
     Platform,
 )
 
-from .utils import force_dep_enrollment_session, force_enrolled_user
+from .utils import force_dep_enrollment_session, force_enrolled_user, force_package
 
 
 PACKAGE_DECL_TYPE = "com.apple.configuration.package"
@@ -67,31 +62,6 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
         return "mdm"
 
     # helpers
-
-    @classmethod
-    @lru_cache
-    def _build_package_bytes(cls):
-        return build_dummy_package(name="testdecl", version="1.0", product_archive_title="testdecl")
-
-    def _force_package(self):
-        buf = BytesIO(self._build_package_bytes())
-        buf.name = "testdecl.pkg"
-        uploaded = SimpleUploadedFile(buf.name, buf.read())
-        _, _, pkg_data = read_package_info(uploaded, compute_sha256=True)
-        uploaded.seek(0)
-        return Package.objects.create(
-            name=get_random_string(12),
-            description="",
-            type=Package.Type.PKG,
-            file=uploaded,
-            filename=uploaded.name,
-            sha256=pkg_data["package_sha256"],
-            size=pkg_data["package_size"],
-            product_id=pkg_data["product_id"],
-            product_version=pkg_data["product_version"],
-            bundles=pkg_data["bundles"],
-            manifest=pkg_data["manifest"],
-        )
 
     def _decl_source(self, manifest_url):
         return json.dumps({
@@ -152,7 +122,7 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
     # _find_zentral_ref_package
 
     def test_find_zentral_ref_package_resolves(self):
-        package = self._force_package()
+        package = force_package()
         found = _find_zentral_ref_package(f"ztl:{package.pk}")
         self.assertEqual(found, package)
 
@@ -170,7 +140,7 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
         # When the target carries an EnrolledUser, the token embeds eupk and the
         # loader returns the same EnrolledUser. Covers the eupk branch in
         # _dump_token and the matching load_*_token path.
-        package = self._force_package()
+        package = force_package()
         session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         enrolled_user = force_enrolled_user(session.enrolled_device)
         target = Target(session.enrolled_device, enrolled_user)
@@ -187,7 +157,7 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
     # get_declaration_info: package_refs extraction
 
     def test_get_declaration_info_package_ref(self):
-        package = self._force_package()
+        package = force_package()
         info = get_declaration_info(
             self._decl_source(f"ztl:{package.pk}"),
             Channel.DEVICE, [Platform.MACOS],
@@ -215,7 +185,7 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
 
     def _make_declaration_artifact(self, manifest_url_value):
         # Build a Declaration row pointing at a Package via ManifestURL.
-        package = self._force_package() if manifest_url_value.startswith("ztl:placeholder") else None
+        package = force_package() if manifest_url_value.startswith("ztl:placeholder") else None
         if package:
             manifest_url_value = f"ztl:{package.pk}"
         artifact = Artifact.objects.create(
@@ -299,7 +269,7 @@ class PackageDeclarationLinkerTestCase(TestCase, LoginCase):
         self.assertNotIn(package, Package.objects.can_be_deleted())
 
     def test_can_be_deleted_allows_unreferenced_package(self):
-        package = self._force_package()
+        package = force_package()
         self.assertTrue(package.can_be_deleted())
         self.assertIn(package, Package.objects.can_be_deleted())
 

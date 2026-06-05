@@ -7,6 +7,7 @@ import random
 import uuid
 import zipfile
 from datetime import date, datetime, time, timedelta
+from functools import lru_cache
 from unittest.mock import patch
 
 from cryptography import x509
@@ -18,6 +19,7 @@ from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmGroup, RealmUser
 
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.cert_issuer_backends import CertIssuerBackend
 from zentral.contrib.mdm.crypto import load_push_certificate_and_key
@@ -50,6 +52,7 @@ from zentral.contrib.mdm.models import (
     LocationAsset,
     OTAEnrollment,
     OTAEnrollmentSession,
+    Package,
     PackageRef,
     Platform,
     Profile,
@@ -68,6 +71,8 @@ from zentral.contrib.mdm.models import (
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.utils.payloads import sign_payload
 from zentral.utils.time import naive_utcnow
+
+from tests.utils.packages import build_dummy_package
 
 # realm
 
@@ -1117,3 +1122,47 @@ def build_status_report(extra_configurations=None):
             configuration["reasons"] = reasons
         configurations.append(configuration)
     return status_report
+
+
+# package
+
+
+@lru_cache
+def _test_package_bytes():
+    # build_dummy_package isn't byte-for-byte deterministic (timestamps, paths),
+    # so cache once and hand the same bytes to every caller.
+    return build_dummy_package(name="testpkg", version="1.0", product_archive_title="testpkg")
+
+
+def build_test_package_file():
+    """Return an in-memory BytesIO of the standard test package, with .name set
+    so it can be POSTed to a Django form. Bytes match force_package, enabling
+    sha256-collision scenarios.
+    """
+    buf = io.BytesIO(_test_package_bytes())
+    buf.name = "testpkg.pkg"
+    return buf
+
+
+def force_package(name=None, description="", sha256=None):
+    """Build a real .pkg, run it through read_package_info, and create a Package.
+
+    sha256 overrides the computed package_sha256 when a test needs multiple
+    Package rows from the same package bytes (Package.sha256 is unique).
+    """
+    uploaded = SimpleUploadedFile("testpkg.pkg", _test_package_bytes())
+    _, _, pkg_data = read_package_info(uploaded, compute_sha256=True)
+    uploaded.seek(0)
+    return Package.objects.create(
+        name=name or get_random_string(12),
+        description=description,
+        type=Package.Type.PKG,
+        file=uploaded,
+        filename=uploaded.name,
+        sha256=sha256 if sha256 is not None else pkg_data["package_sha256"],
+        size=pkg_data["package_size"],
+        product_id=pkg_data["product_id"],
+        product_version=pkg_data["product_version"],
+        bundles=pkg_data["bundles"],
+        manifest=pkg_data["manifest"],
+    )

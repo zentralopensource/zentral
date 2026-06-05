@@ -4,16 +4,16 @@ from unittest.mock import patch
 
 from accounts.models import User
 from django.contrib.auth.models import Group
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.models import Package
 from zentral.core.events.base import AuditEvent
+
+from .utils import build_test_package_file, force_package
 
 
 class PackageManagementViewsTestCase(TestCase, LoginCase):
@@ -44,36 +44,15 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         package.name = f"{name}.pkg"
         return package
 
-    def _force_package(self, name=None, description=""):
-        name = name or get_random_string(12)
-        raw = self._build_package(name="testforce")
-        raw.seek(0)
-        uploaded = SimpleUploadedFile(raw.name, raw.read())
-        _, _, pkg_data = read_package_info(uploaded, compute_sha256=True)
-        uploaded.seek(0)
-        return Package.objects.create(
-            name=name,
-            description=description,
-            type=Package.Type.PKG,
-            file=uploaded,
-            filename=uploaded.name,
-            sha256=pkg_data["package_sha256"],
-            size=pkg_data["package_size"],
-            product_id=pkg_data["product_id"],
-            product_version=pkg_data["product_version"],
-            bundles=pkg_data["bundles"],
-            manifest=pkg_data["manifest"],
-        )
-
     # model
 
     def test_serialize_for_event_keys_only(self):
-        package = self._force_package(description="ignored")
+        package = force_package(description="ignored")
         d = package.serialize_for_event(keys_only=True)
         self.assertEqual(d, {"pk": str(package.id), "name": package.name})
 
     def test_post_delete_package_swallows_storage_failure(self):
-        package = self._force_package()
+        package = force_package()
         with patch.object(package.file, "delete", side_effect=OSError("storage gone")):
             with self.assertLogs("zentral.contrib.mdm.models", level="ERROR") as captured:
                 package.delete()
@@ -106,7 +85,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/package_list.html")
 
     def test_packages_no_links(self):
-        package = self._force_package()
+        package = force_package()
         self.login("mdm.view_package")
         response = self.client.get(reverse("mdm:packages"))
         self.assertEqual(response.status_code, 200)
@@ -116,7 +95,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("mdm:delete_package", args=(package.pk,)))
 
     def test_packages_all_links(self):
-        package = self._force_package()
+        package = force_package()
         self.login("mdm.view_package", "mdm.change_package", "mdm.delete_package")
         response = self.client.get(reverse("mdm:packages"))
         self.assertEqual(response.status_code, 200)
@@ -126,17 +105,17 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
     # detail
 
     def test_package_redirect(self):
-        package = self._force_package()
+        package = force_package()
         self.login_redirect("package", package.pk)
 
     def test_package_permission_denied(self):
-        package = self._force_package()
+        package = force_package()
         self.login()
         response = self.client.get(reverse("mdm:package", args=(package.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_package_get(self):
-        package = self._force_package(description="some description")
+        package = force_package(description="some description")
         self.login("mdm.view_package")
         response = self.client.get(reverse("mdm:package", args=(package.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -153,7 +132,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         from zentral.contrib.mdm.models import (
             Artifact, ArtifactVersion, Channel, Declaration, PackageRef, Platform,
         )
-        package = self._force_package()
+        package = force_package()
         artifact = Artifact.objects.create(
             name="ref-artifact",
             type=Artifact.Type.CONFIGURATION,
@@ -267,10 +246,10 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(package.filename, "something.ipa")
 
     def test_create_package_post_duplicate_sha256(self):
-        # _force_package builds from "testforce"; reuse the cached bytes so the
-        # upload has the same sha256 as the existing row.
-        existing = self._force_package(name="first")
-        package_file = self._build_package(name="testforce")
+        # build_test_package_file shares cached bytes with force_package so the
+        # upload's sha256 matches the existing row.
+        existing = force_package(name="first")
+        package_file = build_test_package_file()
         package_file.seek(0)
         self.login("mdm.add_package", "mdm.view_package")
         response = self.client.post(reverse("mdm:create_package"),
@@ -289,7 +268,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         # Names are not unique: the same name can coexist on multiple packages
         # (e.g. successive versions of the same product). sha256 uniqueness is
         # what prevents true duplicates.
-        existing = self._force_package(name="shared-name")
+        existing = force_package(name="shared-name")
         package_file = self._build_package(name="Test345")
         self.login("mdm.add_package", "mdm.view_package")
         response = self.client.post(reverse("mdm:create_package"),
@@ -304,17 +283,17 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
     # update
 
     def test_update_package_redirect(self):
-        package = self._force_package()
+        package = force_package()
         self.login_redirect("update_package", package.pk)
 
     def test_update_package_permission_denied(self):
-        package = self._force_package()
+        package = force_package()
         self.login()
         response = self.client.get(reverse("mdm:update_package", args=(package.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_package_get(self):
-        package = self._force_package()
+        package = force_package()
         self.login("mdm.change_package")
         response = self.client.get(reverse("mdm:update_package", args=(package.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -326,7 +305,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_package_post(self, post_event):
-        package = self._force_package()
+        package = force_package()
         original_product_id = package.product_id
         original_sha256 = package.sha256
         new_name = get_random_string(12)
@@ -356,17 +335,17 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
     # delete
 
     def test_delete_package_redirect(self):
-        package = self._force_package()
+        package = force_package()
         self.login_redirect("delete_package", package.pk)
 
     def test_delete_package_permission_denied(self):
-        package = self._force_package()
+        package = force_package()
         self.login()
         response = self.client.get(reverse("mdm:delete_package", args=(package.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_delete_package_get(self):
-        package = self._force_package()
+        package = force_package()
         self.login("mdm.delete_package")
         response = self.client.get(reverse("mdm:delete_package", args=(package.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -375,7 +354,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_package_post(self, post_event):
-        package = self._force_package()
+        package = force_package()
         pk = package.pk
         self.login("mdm.delete_package", "mdm.view_package")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -395,17 +374,17 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
     # download
 
     def test_download_package_redirect(self):
-        package = self._force_package()
+        package = force_package()
         self.login_redirect("download_package", package.pk)
 
     def test_download_package_permission_denied(self):
-        package = self._force_package()
+        package = force_package()
         self.login()
         response = self.client.get(reverse("mdm:download_package", args=(package.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_download_package(self):
-        package = self._force_package()
+        package = force_package()
         self.login("mdm.view_package")
         response = self.client.get(reverse("mdm:download_package", args=(package.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -417,7 +396,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
     @patch("zentral.contrib.mdm.views.packages.file_storage_has_signed_urls")
     def test_download_package_redirect_to_storage(self, file_storage_has_signed_urls):
         file_storage_has_signed_urls.return_value = True
-        package = self._force_package()
+        package = force_package()
         self.login("mdm.view_package")
         response = self.client.get(reverse("mdm:download_package", args=(package.pk,)))
         self.assertEqual(response.status_code, 302)

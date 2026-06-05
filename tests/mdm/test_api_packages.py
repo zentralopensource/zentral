@@ -14,7 +14,6 @@ from django.utils.crypto import get_random_string
 from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
-from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -25,6 +24,8 @@ from zentral.contrib.mdm.models import (
     Platform,
 )
 from zentral.core.events.base import AuditEvent
+
+from .utils import force_package
 
 
 class MDMPackagesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
@@ -70,29 +71,11 @@ class MDMPackagesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         return file, sha256, len(content)
 
     def _force_package(self, name=None):
-        name = name or get_random_string(12)
-        file, sha256, size = self._build_package_file(name="forced")
-        file.seek(0)
-        _, _, pkg_data = read_package_info(file, compute_sha256=True)
-        file.seek(0)
-        # one Package per test (sha256 unique) — derive a per-instance sha256
-        # by hashing the random name into the synthetic value.
-        synthetic_sha = hashlib.sha256(f"{name}-{get_random_string(8)}".encode()).hexdigest()
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        uploaded = SimpleUploadedFile(f"{name}.pkg", file.read())
-        return Package.objects.create(
+        # Tests in this class may create multiple Packages per test, so override
+        # sha256 to a unique value (Package.sha256 has a unique constraint).
+        return force_package(
             name=name,
-            description="",
-            type=Package.Type.PKG,
-            file=uploaded,
-            filename=uploaded.name,
-            sha256=synthetic_sha,
-            size=pkg_data["package_size"],
-            product_id=pkg_data["product_id"],
-            product_version=pkg_data["product_version"],
-            bundles=pkg_data["bundles"],
-            manifest=pkg_data["manifest"],
-            source_uri="",
+            sha256=hashlib.sha256(get_random_string(16).encode()).hexdigest(),
         )
 
     # list

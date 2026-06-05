@@ -1,16 +1,12 @@
 import plistlib
 import uuid
-from functools import lru_cache
-from io import BytesIO
 from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from tests.utils.packages import build_dummy_package
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.app_manifest import read_package_info
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.declarations.packages import (
     dump_package_file_token,
@@ -18,9 +14,8 @@ from zentral.contrib.mdm.declarations.packages import (
     load_package_file_token,
     load_package_manifest_token,
 )
-from zentral.contrib.mdm.models import Package
 
-from .utils import force_dep_enrollment_session
+from .utils import force_dep_enrollment_session, force_package
 
 
 class PackagePublicViewsTestCase(TestCase):
@@ -33,32 +28,6 @@ class PackagePublicViewsTestCase(TestCase):
 
     # helpers
 
-    @classmethod
-    @lru_cache
-    def _build_package_bytes(cls):
-        return build_dummy_package(name="testpub", version="1.0", product_archive_title="testpub")
-
-    def _force_package(self):
-        buf = BytesIO(self._build_package_bytes())
-        buf.name = "testpub.pkg"
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        uploaded = SimpleUploadedFile(buf.name, buf.read())
-        _, _, pkg_data = read_package_info(uploaded, compute_sha256=True)
-        uploaded.seek(0)
-        return Package.objects.create(
-            name=get_random_string(12),
-            description="",
-            type=Package.Type.PKG,
-            file=uploaded,
-            filename=uploaded.name,
-            sha256=pkg_data["package_sha256"],
-            size=pkg_data["package_size"],
-            product_id=pkg_data["product_id"],
-            product_version=pkg_data["product_version"],
-            bundles=pkg_data["bundles"],
-            manifest=pkg_data["manifest"],
-        )
-
     def _build_session(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)
         return session
@@ -66,7 +35,7 @@ class PackagePublicViewsTestCase(TestCase):
     # token roundtrip
 
     def test_manifest_token_roundtrip(self):
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         target = Target(session.enrolled_device)
         token = dump_package_manifest_token(session, target, package.pk)
@@ -76,7 +45,7 @@ class PackagePublicViewsTestCase(TestCase):
         self.assertIsNone(loaded_user)
 
     def test_file_token_roundtrip(self):
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         target = Target(session.enrolled_device)
         token = dump_package_file_token(session, target, package.pk)
@@ -86,7 +55,7 @@ class PackagePublicViewsTestCase(TestCase):
         self.assertIsNone(loaded_user)
 
     def test_manifest_token_cannot_be_loaded_as_file_token(self):
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         target = Target(session.enrolled_device)
         token = dump_package_manifest_token(session, target, package.pk)
@@ -95,7 +64,7 @@ class PackagePublicViewsTestCase(TestCase):
             load_package_file_token(token)
 
     def test_file_token_cannot_be_loaded_as_manifest_token(self):
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         target = Target(session.enrolled_device)
         token = dump_package_file_token(session, target, package.pk)
@@ -107,7 +76,7 @@ class PackagePublicViewsTestCase(TestCase):
         # Two calls with the same inputs must produce the same token, regardless
         # of when they happen. Patching time.time to a far-future value between
         # the two calls would catch any timestamp-mixing signer.
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         target = Target(session.enrolled_device)
         t1 = dump_package_manifest_token(session, target, package.pk)
@@ -116,7 +85,7 @@ class PackagePublicViewsTestCase(TestCase):
         self.assertEqual(t1, t2)
 
     def test_file_token_stable_across_calls(self):
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         target = Target(session.enrolled_device)
         t1 = dump_package_file_token(session, target, package.pk)
@@ -140,7 +109,7 @@ class PackagePublicViewsTestCase(TestCase):
                             for r in captured.output))
 
     def test_package_manifest_view_does_not_mutate_stored_manifest(self):
-        package = self._force_package()
+        package = force_package()
         original_assets_0 = dict(package.manifest["items"][0]["assets"][0])
         session = self._build_session()
         token = dump_package_manifest_token(session, Target(session.enrolled_device), package.pk)
@@ -154,7 +123,7 @@ class PackagePublicViewsTestCase(TestCase):
         self.assertEqual(package.manifest["items"][0]["assets"][0], original_assets_0)
 
     def test_package_manifest_view_returns_plist(self):
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         token = dump_package_manifest_token(session, Target(session.enrolled_device), package.pk)
         response = self.client.get(reverse("mdm_public:package_manifest", args=(token,)))
@@ -193,7 +162,7 @@ class PackagePublicViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_package_file_view_returns_file(self):
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         token = dump_package_file_token(session, Target(session.enrolled_device), package.pk)
         response = self.client.get(reverse("mdm_public:package_file", args=(token,)))
@@ -205,7 +174,7 @@ class PackagePublicViewsTestCase(TestCase):
     @patch("zentral.contrib.mdm.public_views.mdm.file_storage_has_signed_urls")
     def test_package_file_view_redirects_when_storage_signs_urls(self, file_storage_has_signed_urls):
         file_storage_has_signed_urls.return_value = True
-        package = self._force_package()
+        package = force_package()
         session = self._build_session()
         token = dump_package_file_token(session, Target(session.enrolled_device), package.pk)
         response = self.client.get(reverse("mdm_public:package_file", args=(token,)))
