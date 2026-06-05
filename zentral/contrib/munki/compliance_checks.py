@@ -44,6 +44,7 @@ def validate_expected_result(script_check_type, expected_result):
 def serialize_script_check_for_job(script_check):
     d = {
         "pk": script_check.pk,
+        "name": script_check.compliance_check.name,
         "version": script_check.compliance_check.version,
         "type": str(script_check.type),
         "source": script_check.source,

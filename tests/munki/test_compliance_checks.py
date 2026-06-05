@@ -67,6 +67,7 @@ class MunkiComplianceChecksTestCase(TestCase):
         self.assertEqual(
             serialize_script_check_for_job(sc),
             {"pk": sc.pk,
+             "name": sc.compliance_check.name,
              "type": "ZSH_INT",
              "version": sc.compliance_check.version,
              "source": "echo 10",
@@ -83,6 +84,7 @@ class MunkiComplianceChecksTestCase(TestCase):
         self.assertEqual(
             serialize_script_check_for_job(sc),
             {"pk": sc.pk,
+             "name": sc.compliance_check.name,
              "type": "ZSH_BOOL",
              "version": sc.compliance_check.version,
              "source": "echo 1",
@@ -99,6 +101,7 @@ class MunkiComplianceChecksTestCase(TestCase):
         self.assertEqual(
             serialize_script_check_for_job(sc),
             {"pk": sc.pk,
+             "name": sc.compliance_check.name,
              "type": "ZSH_STR",
              "version": sc.compliance_check.version,
              "source": "echo un",

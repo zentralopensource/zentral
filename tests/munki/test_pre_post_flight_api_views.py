@@ -481,6 +481,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(
             response.json()["script_checks"],
             [{'pk': sc.pk,
+              'name': sc.compliance_check.name,
               'version': 1,
               'type': 'ZSH_BOOL',
               'source': 'echo true',
@@ -506,6 +507,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(
             response.json()["script_checks"],
             [{'pk': sc.pk,
+              'name': sc.compliance_check.name,
               'version': 1,
               'type': 'ZSH_BOOL',
               'source': 'echo true',
@@ -550,7 +552,9 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertEqual(
             response.json()["script_checks"],
-            [{'pk': sc.pk, 'version': 1,
+            [{'pk': sc.pk,
+              'name': sc.compliance_check.name,
+              'version': 1,
               'type': 'ZSH_BOOL',
               'source': 'echo true',
               'expected_bool_result': True,
@@ -597,7 +601,9 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(
             response.json()["script_checks"],
-            [{'pk': sc.pk, 'version': 1,
+            [{'pk': sc.pk,
+              'name': sc.compliance_check.name,
+              'version': 1,
               'type': 'ZSH_INT',
               'source': 'echo 10',
               'expected_int_result': 10,
