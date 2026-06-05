@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework.urlpatterns import format_suffix_patterns
 
 from . import api_views
 
@@ -21,4 +20,3 @@ urlpatterns = [
         view=api_views.OIDCAPITokenIssuerAuth.as_view(),
         name="oidc_api_token_issuer_exchange")
 ]
-urlpatterns = format_suffix_patterns(urlpatterns)

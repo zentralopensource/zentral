@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework.urlpatterns import format_suffix_patterns
 
 from .api_views import (
                         ACMEIssuerDetail,
@@ -155,6 +154,3 @@ urlpatterns = [
     path('dep_enrollment_custom_views/<uuid:pk>/', DEPEnrollmentCustomViewDetail.as_view(),
          name="dep_enrollment_custom_view")
 ]
-
-
-urlpatterns = format_suffix_patterns(urlpatterns)

@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework.urlpatterns import format_suffix_patterns
 from .api_views import (ArchiveMachines,
                         CleanupInventory,
                         FullExport,
@@ -76,6 +75,3 @@ urlpatterns = [
     path('taxonomies/', TaxonomyList.as_view(), name="taxonomies"),
     path('taxonomies/<int:pk>/', TaxonomyDetail.as_view(), name="taxonomy"),
 ]
-
-
-urlpatterns = format_suffix_patterns(urlpatterns)
