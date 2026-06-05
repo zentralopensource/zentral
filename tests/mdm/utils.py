@@ -4,6 +4,7 @@ import json
 import os.path
 import plistlib
 import random
+import tempfile
 import uuid
 import zipfile
 from datetime import date, datetime, time, timedelta
@@ -1128,20 +1129,33 @@ def build_status_report(extra_configurations=None):
 
 
 @lru_cache
-def _test_package_bytes():
+def _test_package_bytes(name="testpkg", version="1.0"):
     # build_dummy_package isn't byte-for-byte deterministic (timestamps, paths),
-    # so cache once and hand the same bytes to every caller.
-    return build_dummy_package(name="testpkg", version="1.0", product_archive_title="testpkg")
+    # so cache once per (name, version) and hand the same bytes to every caller.
+    return build_dummy_package(name=name, version=version, product_archive_title=name)
 
 
-def build_test_package_file():
-    """Return an in-memory BytesIO of the standard test package, with .name set
-    so it can be POSTed to a Django form. Bytes match force_package, enabling
-    sha256-collision scenarios.
+def build_test_package_file(name="testpkg"):
+    """Return an in-memory BytesIO of a test package, with .name set so it can
+    be POSTed to a Django form. Bytes are shared via the cache, so callers with
+    the same name see the same sha256 (used by collision tests).
     """
-    buf = io.BytesIO(_test_package_bytes())
-    buf.name = "testpkg.pkg"
+    buf = io.BytesIO(_test_package_bytes(name))
+    buf.name = f"{name}.pkg"
     return buf
+
+
+def build_test_package_tempfile(name="testpkg"):
+    """Test .pkg as an on-disk tempfile, for API upload tests that need a real
+    file. Returns (NamedTemporaryFile, sha256_hex, size). A fresh tempfile per
+    call (consumers may close or seek it), but the underlying bytes come from
+    the shared cache.
+    """
+    content = _test_package_bytes(name)
+    file = tempfile.NamedTemporaryFile(suffix=".pkg")
+    file.write(content)
+    sha256 = hashlib.sha256(content).hexdigest()
+    return file, sha256, len(content)
 
 
 def force_package(name=None, description="", sha256=None):
@@ -1150,7 +1164,11 @@ def force_package(name=None, description="", sha256=None):
     sha256 overrides the computed package_sha256 when a test needs multiple
     Package rows from the same package bytes (Package.sha256 is unique).
     """
-    uploaded = SimpleUploadedFile("testpkg.pkg", _test_package_bytes())
+    # _test_package_bytes is lru_cache'd on its positional args. Pass "testpkg"
+    # explicitly so we share the cache entry with build_test_package_file() and
+    # build_test_package_tempfile() when they're invoked with the default name
+    # — sha256-collision tests rely on this.
+    uploaded = SimpleUploadedFile("testpkg.pkg", _test_package_bytes("testpkg"))
     _, _, pkg_data = read_package_info(uploaded, compute_sha256=True)
     uploaded.seek(0)
     return Package.objects.create(

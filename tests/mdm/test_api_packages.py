@@ -1,8 +1,6 @@
 import hashlib
 import os
-import tempfile
 import uuid
-from functools import lru_cache
 from unittest.mock import Mock, patch
 
 from accounts.models import APIToken, User
@@ -11,7 +9,6 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.mdm.models import (
@@ -25,7 +22,7 @@ from zentral.contrib.mdm.models import (
 )
 from zentral.core.events.base import AuditEvent
 
-from .utils import force_package
+from .utils import build_test_package_tempfile, force_package
 
 
 class MDMPackagesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
@@ -61,14 +58,6 @@ class MDMPackagesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         return self.api_key
 
     # helpers
-
-    @lru_cache
-    def _build_package_file(self, name="apitest"):
-        content = build_dummy_package(name=name, version="1.0", product_archive_title=name)
-        file = tempfile.NamedTemporaryFile(suffix=".pkg")
-        file.write(content)
-        sha256 = hashlib.sha256(content).hexdigest()
-        return file, sha256, len(content)
 
     def _force_package(self, name=None):
         # Tests in this class may create multiple Packages per test, so override
@@ -186,7 +175,7 @@ class MDMPackagesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @patch("zentral.utils.external_resources.download_s3_external_resource")
     def test_create_package_hash_mismatch(self, download_s3_external_resource):
-        file, _, _ = self._build_package_file()
+        file, _, _ = build_test_package_tempfile(name="apitest")
         file.seek(0)
         download_s3_external_resource.return_value = file
         self.set_permissions("mdm.add_package")
@@ -199,7 +188,7 @@ class MDMPackagesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @patch("zentral.utils.external_resources.download_s3_external_resource")
     def test_create_package_duplicate_sha256(self, download_s3_external_resource):
-        file, sha256, _ = self._build_package_file()
+        file, sha256, _ = build_test_package_tempfile(name="apitest")
         # pre-existing row with the same sha256 the upload will hash to
         Package.objects.filter(sha256=sha256).delete()
         file.seek(0)
@@ -224,7 +213,7 @@ class MDMPackagesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.utils.external_resources.download_s3_external_resource")
     def test_create_package(self, download_s3_external_resource, post_event):
-        file, sha256, size = self._build_package_file()
+        file, sha256, size = build_test_package_tempfile(name="apitest")
         Package.objects.filter(sha256=sha256).delete()
         file.seek(0)
         download_s3_external_resource.return_value = file

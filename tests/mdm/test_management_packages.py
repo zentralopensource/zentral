@@ -1,4 +1,3 @@
-from functools import lru_cache
 from io import BytesIO
 from unittest.mock import patch
 
@@ -8,7 +7,6 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.models import Package
 from zentral.core.events.base import AuditEvent
@@ -35,14 +33,6 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
 
     def _get_url_namespace(self):
         return "mdm"
-
-    # helpers
-
-    @lru_cache
-    def _build_package(self, name="test123", version="1.0"):
-        package = BytesIO(build_dummy_package(name=name, version=version, product_archive_title=name))
-        package.name = f"{name}.pkg"
-        return package
 
     # model
 
@@ -186,7 +176,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_package_post(self, post_event):
-        package_file = self._build_package(name="Test345")
+        package_file = build_test_package_file(name="Test345")
         self.login("mdm.add_package", "mdm.view_package")
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -269,7 +259,7 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         # (e.g. successive versions of the same product). sha256 uniqueness is
         # what prevents true duplicates.
         existing = force_package(name="shared-name")
-        package_file = self._build_package(name="Test345")
+        package_file = build_test_package_file(name="Test345")
         self.login("mdm.add_package", "mdm.view_package")
         response = self.client.post(reverse("mdm:create_package"),
                                     {"name": existing.name,
