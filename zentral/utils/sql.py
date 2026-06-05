@@ -1,23 +1,11 @@
 import logging
 import re
-from pygments import highlight
-from pygments.lexers import SqlLexer
-from pygments.formatters import HtmlFormatter
-import sqlparse
 
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import SqlLexer
 
 logger = logging.getLogger("zentral.utils.sql")
-
-
-# monkey patch sqlparse to have file, path and last not considered as keywords
-try:
-    from sqlparse.keywords import KEYWORDS, KEYWORDS_PLPGSQL
-except ImportError:
-    logger.error("Could not monkey patch sqlparse")
-else:
-    KEYWORDS.pop("FILE", None)
-    KEYWORDS.pop("LAST", None)
-    KEYWORDS_PLPGSQL.pop("PATH", None)
 
 
 # SQL → HTML
@@ -27,8 +15,7 @@ def format_sql(query):
         return ""
     sql_lexer = SqlLexer()
     html_formatter = HtmlFormatter(cssclass="highlight")
-    reindent = len(query) > 80
-    query = sqlparse.format(query, reindent=reindent, keyword_case='upper')
+    query = query.strip()
     return highlight(query, sql_lexer, html_formatter)
 
 
