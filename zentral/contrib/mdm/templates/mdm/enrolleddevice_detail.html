@@ -699,7 +699,7 @@
                   {% url 'mdm:download_enrolled_device_command_result' command.uuid as url %}
                   {% button 'DOWNLOAD' url "Download Result" %}
                 {% endif %}
-                {% if not command.time and perms.mdm.delete_devicecommand %}
+                {% if command.can_be_deleted and perms.mdm.delete_devicecommand %}
                   <button type="button"
                           class="btn btn-link text-danger delete-command"
                           data-url="{% url 'mdm_api:enrolled_device_command' command.uuid %}"
