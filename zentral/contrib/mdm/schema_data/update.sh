@@ -1,5 +1,5 @@
 #!/bin/bash
-GIT_REF="release"
+GIT_REF="1548d422768fe7a125e4a6f30ee0cb121a0cc333"
 
 set -e
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -8,7 +8,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 rm -rf "$SCRIPT_DIR/other" "$SCRIPT_DIR/declarative"
 
 # clone Apple repository to temporary folder
-git clone -q --depth 1 https://github.com/apple/device-management /tmp/device-management
+git clone -q https://github.com/apple/device-management /tmp/device-management
 
 # set git clone as current directory
 cd /tmp/device-management
