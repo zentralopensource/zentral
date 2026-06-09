@@ -1,16 +1,16 @@
 from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace, Principal, Request, Resource
 from pbac.types import (
-    AppliesTo,
-    AttrSpec,
     LEGACY_PERM_APPLIES_TO,
-    ResourceType,
     SERVICE_ACCOUNT,
     SYSTEM,
     USER,
+    AppliesTo,
+    AttrSpec,
+    ResourceType,
 )
-from .models import MetaBusinessUnit, MetaMachine, Tag
 
+from .models import MetaBusinessUnit, MetaMachine, Tag
 
 # namespace
 
@@ -78,7 +78,7 @@ delete_machine_tag_action = engine.register_action(
 view_machine_tag_action = engine.register_action(
     "viewMachineTag",
     get_namespace(),
-    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="inventory.view_machinetag",
 )

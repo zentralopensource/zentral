@@ -797,3 +797,28 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
         self.assertIsNotNone(action.applies_to)
         resource_names = {r.name for r in action.applies_to.resources}
         self.assertEqual(resource_names, {"Machine", "System"})
+
+    def test_view_machine_tag_action_belongs_to_admin_user_and_viewer_groups(self):
+        # viewMachineTag is read-only, so — like every model-default view*
+        # action the engine auto-registers — it must sit in the Viewer group,
+        # at both the namespace-scoped and global level. A viewer-only policy
+        # has to grant it.
+        action = engine.legacy_perm_actions["inventory.view_machinetag"]
+        namespace = engine.get_namespace("Inventory")
+        for basename in (ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER):
+            self.assertIn(engine.get_action_group(basename, namespace), action.parents)
+            self.assertIn(engine.get_action_group(basename), action.parents)
+
+    def test_mutating_machine_tag_actions_excluded_from_viewer_group(self):
+        # The flip side of the fix: create/deleteMachineTag mutate, so a viewer
+        # must never reach them. Guards against someone copy-pasting the viewer
+        # basename onto the wrong action.
+        namespace = engine.get_namespace("Inventory")
+        viewer_groups = (
+            engine.get_action_group(ActionGroupBasename.VIEWER, namespace),
+            engine.get_action_group(ActionGroupBasename.VIEWER),
+        )
+        for legacy_perm in ("inventory.add_machinetag", "inventory.delete_machinetag"):
+            action = engine.legacy_perm_actions[legacy_perm]
+            for group in viewer_groups:
+                self.assertNotIn(group, action.parents)
