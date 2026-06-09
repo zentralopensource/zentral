@@ -256,7 +256,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -305,6 +305,12 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             db_command.serialize_for_event(keys_only=True),
             {"pk": db_command.pk, "uuid": str(cmd.uuid), "name": "DeviceLock"}
+        )
+        self.assertEqual(
+            db_command.linked_objects_keys_for_event(),
+            {"mdm_device_command": [(str(cmd.uuid),)],
+             "mdm_artifact_version": [(str(av.pk),)],
+             "mdm_artifact": [(str(a.pk),)]}
         )
 
     # user commands

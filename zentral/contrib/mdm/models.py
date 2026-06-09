@@ -3372,7 +3372,11 @@ class Command(models.Model):
         return d
 
     def linked_objects_keys_for_event(self):
-        return {"mdm_command": [(str(self.uuid),)]}
+        keys = {}
+        if self.artifact_version:
+            keys["mdm_artifact_version"] = [(str(self.artifact_version.pk),)]
+            keys["mdm_artifact"] = [(str(self.artifact_version.artifact.pk),)]
+        return keys
 
     class Meta:
         abstract = True
@@ -3380,6 +3384,13 @@ class Command(models.Model):
 
 class DeviceCommand(Command):
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="commands")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["enrolled_device_id"],
+                         condition=Q(time__isnull=True) | Q(result_time__isnull=True),
+                         name="apns_device_opti")
+        ]
 
     def can_be_deleted(self):
         return self.time is None
@@ -3390,12 +3401,10 @@ class DeviceCommand(Command):
             d["enrolled_device"] = self.enrolled_device.serialize_for_event(keys_only=True)
         return d
 
-    class Meta:
-        indexes = [
-            models.Index(fields=["enrolled_device_id"],
-                         condition=Q(time__isnull=True) | Q(result_time__isnull=True),
-                         name="apns_device_opti")
-        ]
+    def linked_objects_keys_for_event(self):
+        keys = super().linked_objects_keys_for_event()
+        keys["mdm_device_command"] = [(str(self.uuid),)]
+        return keys
 
 
 class UserCommand(Command):
