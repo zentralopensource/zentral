@@ -1,5 +1,4 @@
 from django.urls import path
-from rest_framework.urlpatterns import format_suffix_patterns
 from zentral.contrib.google_workspace.api_views import (
     SyncTagsView, ConnectionList, ConnectionDetail, GroupTagMappingList, GroupTagMappingDetail)
 
@@ -16,5 +15,3 @@ urlpatterns = [
     path('group_tag_mappings/<uuid:pk>/',
          GroupTagMappingDetail.as_view(), name="group_tag_mapping"),
 ]
-
-urlpatterns = format_suffix_patterns(urlpatterns)
