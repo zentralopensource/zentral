@@ -661,7 +661,8 @@
           <th>Artifact</th>
           <th>Time</th>
           <th>Result time</th>
-          <th>Status</th>
+          <th style="width:150px">Status</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -692,9 +693,21 @@
               <td>{{ command.result_time|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
               <td>
                 {{ command.get_status_display|default:"-" }}
+              </td>
+              <td>
                 {% if command.result %}
                   {% url 'mdm:download_enrolled_device_command_result' command.uuid as url %}
                   {% button 'DOWNLOAD' url "Download Result" %}
+                {% endif %}
+                {% if command.can_be_deleted and perms.mdm.delete_devicecommand %}
+                  <button type="button"
+                          class="btn btn-link text-danger delete-command"
+                          data-url="{% url 'mdm_api:enrolled_device_command' command.uuid %}"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="bottom"
+                          data-bs-title="Delete queued command">
+                    <i class="bi bi-trash"></i>
+                  </button>
                 {% endif %}
               </td>
             </tr>
@@ -778,6 +791,30 @@
     }
   }
 
+  var csrfToken = "{{ csrf_token }}";
+
+  function deleteCommand($btn) {
+    $.ajax({
+      url: $btn.data("url"),
+      type: "DELETE",
+      headers: {"X-CSRFToken": csrfToken},
+      success: function () {
+        $btn.tooltip("hide");
+        $btn.closest("tr").remove();
+      },
+      error: function (xhr) {
+        var msg = "The command could not be deleted. Please reload the page.";
+        var data = xhr.responseJSON;
+        if (Array.isArray(data) && data.length) {
+          msg = data.join(" ");
+        } else if (data && data.detail) {
+          msg = data.detail;
+        }
+        window.alert(msg);
+      }
+    });
+  }
+
   $(document).ready(function () {
     $(".show-ed-secret").click(function() {
       toggleEDSecret($(this));
@@ -786,6 +823,10 @@
     $(".copy-ed-secret").click(function() {
       copyEDSecret($(this));
     });
+
+    $(".delete-command").click(function() {
+      deleteCommand($(this));
+    });
   });
-  </script>
+</script>
 {% endblock %}

@@ -3353,6 +3353,31 @@ class Command(models.Model):
     def __str__(self):
         return " - ".join(s for s in (self.name, str(self.uuid), self.status) if s)
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "uuid": str(self.uuid), "name": self.name}
+        if keys_only:
+            return d
+        if self.artifact_version:
+            d["artifact_version"] = self.artifact_version.serialize_for_event()
+        if self.artifact_operation:
+            d["artifact_operation"] = self.artifact_operation
+        for attr in ("not_before", "time", "result_time"):
+            value = getattr(self, attr)
+            if value:
+                d[attr] = value
+        if self.status:
+            d["status"] = self.status
+        d["created_at"] = self.created_at
+        d["updated_at"] = self.updated_at
+        return d
+
+    def linked_objects_keys_for_event(self):
+        keys = {}
+        if self.artifact_version:
+            keys["mdm_artifact_version"] = [(str(self.artifact_version.pk),)]
+            keys["mdm_artifact"] = [(str(self.artifact_version.artifact.pk),)]
+        return keys
+
     class Meta:
         abstract = True
 
@@ -3366,6 +3391,20 @@ class DeviceCommand(Command):
                          condition=Q(time__isnull=True) | Q(result_time__isnull=True),
                          name="apns_device_opti")
         ]
+
+    def can_be_deleted(self):
+        return self.time is None
+
+    def serialize_for_event(self, keys_only=False):
+        d = super().serialize_for_event(keys_only)
+        if not keys_only:
+            d["enrolled_device"] = self.enrolled_device.serialize_for_event(keys_only=True)
+        return d
+
+    def linked_objects_keys_for_event(self):
+        keys = super().linked_objects_keys_for_event()
+        keys["mdm_device_command"] = [(str(self.uuid),)]
+        return keys
 
 
 class UserCommand(Command):
