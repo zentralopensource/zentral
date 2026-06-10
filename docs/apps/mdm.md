@@ -1148,6 +1148,21 @@ Response:
 }
 ```
 
+ * method: `DELETE`
+ * PBAC action: `MDM::Action::"deleteDeviceCommand"`
+
+Deletes a queued MDM device command.
+
+Example:
+
+```bash
+curl -XDELETE -v \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/devices/commands/e2ff6623-b3c6-4d69-8065-ded674088d51/"
+```
+
+Response: HTTP 204 No Content
+
 
 ### `/api/mdm/locations/`
 
