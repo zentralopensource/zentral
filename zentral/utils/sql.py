@@ -14,7 +14,7 @@ def format_sql(query):
     if not query:
         return ""
     sql_lexer = SqlLexer()
-    html_formatter = HtmlFormatter(cssclass="highlight")
+    html_formatter = HtmlFormatter(cssclass="highlight sql")
     query = query.strip()
     return highlight(query, sql_lexer, html_formatter)
 

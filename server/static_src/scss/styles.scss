@@ -71,7 +71,7 @@ $bootstrap-icons-font-dir: "~bootstrap-icons/font/fonts";
 @import "pygments";
 
 // wrap long lines (single-line SQL queries for example) instead of stretching the layout
-.highlight pre {
+.highlight.sql pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
