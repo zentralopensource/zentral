@@ -219,7 +219,7 @@ class ClickHouseStore(BaseStore):
         query_ctx = self.client.create_query_context(
             query=(
                 f"SELECT metadata, type, tags, created_at, payload FROM `{self.table_name}` WHERE {wheres} "
-                "ORDER BY created_at DESC, metadata.id.:String ASC, metadata.idx.:UInt32 ASC LIMIT {limit:UInt32}"
+                "ORDER BY created_at DESC, metadata.id.:String ASC, metadata.index.:Int64 ASC LIMIT {limit:UInt32}"
             ),
             parameters=params,
             # the top-K dynamic filter mixes up the `type` primary key column with `created_at`
