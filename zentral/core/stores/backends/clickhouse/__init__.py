@@ -219,9 +219,13 @@ class ClickHouseStore(BaseStore):
         query_ctx = self.client.create_query_context(
             query=(
                 f"SELECT metadata, type, tags, created_at, payload FROM `{self.table_name}` WHERE {wheres} "
-                "ORDER BY created_at DESC, metadata.id.:String ASC, metadata.idx.:UInt32 ASC LIMIT {limit:UInt32}"
+                "ORDER BY created_at DESC, metadata.id.:String ASC, metadata.index.:Int64 ASC LIMIT {limit:UInt32}"
             ),
-            parameters=params
+            parameters=params,
+            # the top-K dynamic filter mixes up the `type` primary key column with `created_at`
+            # when `type` is pinned by an equality predicate and the rows are read in order,
+            # and fails with CANNOT_PARSE_DATETIME (seen on 26.5.1.882, TODO: link upstream issue)
+            settings={"use_top_k_dynamic_filtering": 0},
         )
         events = []
         cursor = None
