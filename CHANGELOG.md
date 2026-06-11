@@ -3,15 +3,41 @@
 
 ### Features
 
+#### Core
+
+New Policy-Based Access Control (PBAC): role permissions are now expressed as Cedar policies.
+
+Upgraded to Python 3.14 — expect some performance improvements.
+
 #### Inventory
 
 Added facet search for tags on the machine list — multiple tag filters now compose with AND.
 
 #### MDM
 
+New Package artifact to distribute installer packages, served directly by Zentral, manageable via the API.
+
+Queued device commands can now be deleted via the API and in the UI before they are sent to the device.
+
+Schema updates based on the 2026 Seed 1 Apple device management release.
+
 Added `zentral_mdm_target_artifacts_bucket` metrics.
 
+#### Munki
+
+New public endpoint to fetch the enrollment information, authenticated with the enrollment secret.
+
+The script check name was added to the job details payload.
+
 ### Backward incompatibilities
+
+#### 🧨 Legacy role permissions replaced by PBAC policies
+
+Permissions cannot be managed on the roles anymore, neither in the UI nor via the API. Use PBAC policies instead.
+
+#### 🧨 API format suffix routes removed
+
+The optional `.json` format suffix routes were dropped from the API endpoints.
 
 #### 🧨 Business unit tags removed
 
@@ -21,9 +47,11 @@ Tags cannot be applied to all the machines in a business unit anymore.
 
 The API endpoint for the monolith catalog list is paginated now. Remember to upgrade the Terraform Provider.
 
-#### 🧨 Role grants restricted to the actor's own roles
+#### 🧨 Privilege escalation hardening
 
-Non-superusers can no longer grant a user or service account a role they don't belong to themselves — the rule covers every UI path that assigns roles: editing a user, creating a service account, and editing a service account. Removing existing memberships is unaffected. Operators who delegated user management without granting the underlying roles will need to either add those roles to the delegate or perform the assignment as a superuser.
+Granting the superuser status and managing the PBAC policies now require a superuser logged in with a local session.
+
+Non-superusers can only grant a user or service account a role they belong to themselves. Removing existing memberships is unaffected.
 
 #### 🧨 Inventory export tags column
 
@@ -34,6 +62,20 @@ The "Tags" column in the inventory export now matches the UI badges via `str(tag
 Replaced slow Santa `zentral_santa_targets_*`  metrics with `zentral_santa_target_states` metrics.
 
 Fix MDM tagging issue when multiple enrollment sessions exist on the same device, some authenticated, some unauthenticated.
+
+Fixed a shutdown hang in the AWS SNS/SQS workers.
+
+Fixed a threading issue in the Jamf event preprocessor.
+
+Fixed the Munki postflight duplicated app instance issue.
+
+Fixed the Munki report sorting when mixing naive and aware datetimes.
+
+Fixed the osquery CPU count collection in the system info.
+
+Orphaned Google Workspace machine tags are now removed when the user leaves all mapped groups.
+
+Multiple fixes in the ClickHouse event store event fetch.
 
 ## 2026.3
 
