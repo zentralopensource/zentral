@@ -88,7 +88,7 @@ AS SELECT
     type,
     date_trunc('day', created_at) AS date,
     count(*) AS count
-FROM zentral_events
+FROM `{database}`.`{table_name}`
 ARRAY JOIN needles
 GROUP BY
     needle,
