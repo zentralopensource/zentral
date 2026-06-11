@@ -13,6 +13,7 @@ from django.utils.text import slugify
 from zentral.core.events import event_cls_from_type
 from zentral.utils.time import naive_utcnow
 
+from .distributed_query_result_stores import get_distributed_query_result_store
 from .models import DistributedQuery, FileCarvingSession
 
 logger = logging.getLogger("zentral.contrib.osquery.tasks")
@@ -61,10 +62,11 @@ def _export_dqr_to_tmp_csv_file(distributed_query):
         csv_w = csv.writer(tmp_f)
         columns = distributed_query.result_columns()
         csv_w.writerow(["serial number"] + columns)
-        for dqr in distributed_query.distributedqueryresult_set.iterator():
-            row = [dqr.serial_number]
+        store = get_distributed_query_result_store()
+        for serial_number, dqr_row in store.iter_results(distributed_query.pk):
+            row = [serial_number]
             for column in columns:
-                row.append(dqr.row.get(column) or "")
+                row.append(dqr_row.get(column) or "")
             csv_w.writerow(row)
     return tmp_fp
 
@@ -72,8 +74,9 @@ def _export_dqr_to_tmp_csv_file(distributed_query):
 def _export_dqr_to_tmp_ndjson_file(distributed_query):
     tmp_fh, tmp_fp = tempfile.mkstemp()
     with os.fdopen(tmp_fh, "w") as tmp_f:
-        for dqr in distributed_query.distributedqueryresult_set.iterator():
-            json.dump({"serial_number": dqr.serial_number, "row": dqr.row}, tmp_f)
+        store = get_distributed_query_result_store()
+        for serial_number, dqr_row in store.iter_results(distributed_query.pk):
+            json.dump({"serial_number": serial_number, "row": dqr_row}, tmp_f)
             tmp_f.write("\n")
     return tmp_fp
 
@@ -90,13 +93,14 @@ def _export_dqr_to_tmp_xlsx_file(distributed_query):
             col_idx += 1
             worksheet.write_string(row_idx, col_idx, column)
         worksheet.freeze_panes(1, 0)
-        for dqr in distributed_query.distributedqueryresult_set.iterator():
+        store = get_distributed_query_result_store()
+        for serial_number, dqr_row in store.iter_results(distributed_query.pk):
             row_idx += 1
             col_idx = 0
-            worksheet.write_string(row_idx, col_idx, dqr.serial_number)
+            worksheet.write_string(row_idx, col_idx, serial_number)
             for column in columns:
                 col_idx += 1
-                val = dqr.row.get(column)
+                val = dqr_row.get(column)
                 if not val:
                     worksheet.write_blank(row_idx, col_idx, "")
                 elif isinstance(val, (int, float)):

@@ -1,3 +1,4 @@
+import gzip
 import json
 import uuid
 from datetime import datetime
@@ -22,6 +23,7 @@ from zentral.contrib.osquery.events import (
     OsqueryRequestEvent,
     OsqueryResultEvent,
 )
+from zentral.contrib.osquery.preprocessors import DistributedQueryResultsPreprocessor
 from zentral.contrib.osquery.models import (
     Configuration,
     ConfigurationPack,
@@ -943,6 +945,13 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(json_response, {"queries": {}})
         self.assertEqual(dqm_qs.count(), 2)
 
+    def _process_dqr_raw_events(self, post_raw_event):
+        preprocessor = DistributedQueryResultsPreprocessor()
+        for call_args in post_raw_event.call_args_list:
+            routing_key, raw_event = call_args.args
+            self.assertEqual(routing_key, preprocessor.routing_key)
+            list(preprocessor.process_raw_event(raw_event))
+
     def test_distributed_write_405(self):
         response = self.client.get(reverse("osquery_public:distributed_write"))
         self.assertEqual(response.status_code, 405)
@@ -956,7 +965,30 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json("distributed_write", {"node_key": "godzilla"})
         self.assertContains(response, '{"node_invalid": true}', status_code=200)
 
-    def test_distributed_write_no_compliance_check(self):
+    @patch("zentral.contrib.osquery.events.queues.post_raw_event")
+    def test_distributed_write_gzip(self, post_raw_event):
+        em = self.force_enrolled_machine()
+        dq = DistributedQuery.objects.create(sql="select username from users;",
+                                             valid_from=naive_utcnow(),
+                                             query_version=1)
+        dqm = DistributedQueryMachine.objects.create(distributed_query=dq, serial_number=em.serial_number)
+        response = self.client.post(
+            reverse("osquery_public:distributed_write"),
+            gzip.compress(json.dumps({"node_key": em.node_key,
+                                      "queries": {str(dqm.pk): [{"username": "godzilla"}]},
+                                      "statuses": {str(dqm.pk): 0}}).encode("utf-8")),
+            content_type="application/json",
+            headers={"content-encoding": "gzip"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {})
+        self._process_dqr_raw_events(post_raw_event)
+        dqr_qs = DistributedQueryResult.objects.filter(distributed_query=dq, serial_number=em.serial_number)
+        self.assertEqual(dqr_qs.count(), 1)
+        self.assertEqual(dqr_qs.first().row, {"username": "godzilla"})
+
+    @patch("zentral.contrib.osquery.events.queues.post_raw_event")
+    def test_distributed_write_no_compliance_check(self, post_raw_event):
         em = self.force_enrolled_machine()
         dq = DistributedQuery.objects.create(sql="select username from users;",
                                              valid_from=naive_utcnow(),
@@ -970,14 +1002,16 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(response.json(), {})
         dqm.refresh_from_db()
         self.assertEqual(dqm.status, 0)
+        self._process_dqr_raw_events(post_raw_event)
         dqr_qs = DistributedQueryResult.objects.filter(distributed_query=dq, serial_number=em.serial_number)
         self.assertEqual(dqr_qs.count(), 1)
         self.assertEqual(dqr_qs.first().row, {"username": "godzilla"})
         ms_qs = MachineStatus.objects.filter(serial_number=em.serial_number)
         self.assertEqual(ms_qs.count(), 0)
 
+    @patch("zentral.contrib.osquery.events.queues.post_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_distributed_write_one_carve(self, post_event):
+    def test_distributed_write_one_carve(self, post_event, post_raw_event):
         query, _, distributed_query = self.force_query(force_distributed_query=True)
         em = self.force_enrolled_machine()
         dqm = DistributedQueryMachine.objects.create(distributed_query=distributed_query,
@@ -1018,8 +1052,9 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(file_carving_event.payload["action"], "schedule")
         self.assertEqual(file_carving_event.payload["session_id"], str(fcs.pk))
 
+    @patch("zentral.contrib.osquery.events.queues.post_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_distributed_write_two_distributed_queries_one_compliance_check(self, post_event):
+    def test_distributed_write_two_distributed_queries_one_compliance_check(self, post_event, post_raw_event):
         query1, _, distributed_query1 = self.force_query(force_distributed_query=True, force_compliance_check=True)
         query2, _, distributed_query2 = self.force_query(force_distributed_query=True, force_compliance_check=False)
         em = self.force_enrolled_machine()
@@ -1076,8 +1111,11 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertEqual(machine_compliance_event.metadata.machine_serial_number, em.serial_number)
         self.assertEqual(machine_compliance_event.payload, {"status": Status.OK.name})
 
+    @patch("zentral.contrib.osquery.events.queues.post_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_distributed_write_two_distributed_queries_one_outdated_version_compliance_check(self, post_event):
+    def test_distributed_write_two_distributed_queries_one_outdated_version_compliance_check(
+        self, post_event, post_raw_event
+    ):
         query1, _, distributed_query1 = self.force_query(force_distributed_query=True, force_compliance_check=True)
         query1.version = 127
         query1.save()
@@ -1101,8 +1139,9 @@ class OsqueryAPIViewsTestCase(TestCase):
         self.assertIsInstance(request_event, OsqueryRequestEvent)
         self.assertEqual(request_event.payload["request_type"], "distributed_write")
 
+    @patch("zentral.contrib.osquery.events.queues.post_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_distributed_write_two_distributed_queries_add_one_tag(self, post_event):
+    def test_distributed_write_two_distributed_queries_add_one_tag(self, post_event, post_raw_event):
         query1, _, distributed_query1 = self.force_query(force_distributed_query=True, force_tag=True)
         query2, _, distributed_query2 = self.force_query(force_distributed_query=True, force_tag=False)
         em = self.force_enrolled_machine()
@@ -1135,8 +1174,9 @@ class OsqueryAPIViewsTestCase(TestCase):
             {"action": "added", "tag": {"pk": query1.tag.pk, "name": query1.tag.name}},
         )
 
+    @patch("zentral.contrib.osquery.events.queues.post_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_distributed_write_two_distributed_queries_remove_one_tag(self, post_event):
+    def test_distributed_write_two_distributed_queries_remove_one_tag(self, post_event, post_raw_event):
         query1, _, distributed_query1 = self.force_query(force_distributed_query=True, force_tag=True)
         query2, _, distributed_query2 = self.force_query(force_distributed_query=True, force_tag=False)
         em = self.force_enrolled_machine()
