@@ -3,9 +3,9 @@ import logging
 import os
 import re
 
-import clickhouse_connect
 from django.utils.functional import cached_property
 
+from zentral.utils.clickhouse import get_clickhouse_client
 from zentral.utils.time import naive_utcnow
 
 from ..base import BaseDistributedQueryResultStore, DistributedQueryResultRow
@@ -15,21 +15,6 @@ logger = logging.getLogger("zentral.contrib.osquery.distributed_query_result_sto
 
 class DistributedQueryResultStore(BaseDistributedQueryResultStore):
     identifier_regex = re.compile(r"^[a-zA-Z_][0-9a-zA-Z_]*$")
-    client_kwargs_keys = (
-        # connection
-        "host",
-        "port",
-        "secure",
-        "verify",
-        "compress",
-        # auth
-        "username",
-        "database",
-        "password",
-        # timeouts
-        "connect_timeout",
-        "send_receive_timeout",
-    )
     default_database = "default"
     default_table_name = "osquery_distributed_query_results"
     column_names = (
@@ -42,25 +27,21 @@ class DistributedQueryResultStore(BaseDistributedQueryResultStore):
 
     def __init__(self, config_d, ttl_days):
         super().__init__(config_d, ttl_days)
-        self.client_kwargs = {
-            k: config_d[k]
-            for k in self.client_kwargs_keys
-            if config_d.get(k) is not None
-        }
-        self.client_kwargs.setdefault("database", self.default_database)
-        self.database = self.client_kwargs["database"]
+        self.database = config_d.get("database") or self.default_database
         self.table_name = config_d.get("table_name", self.default_table_name)
         for identifier in (self.database, self.table_name):
             if not self.identifier_regex.match(identifier):
                 raise ValueError(f"Invalid identifier: {identifier}")
         self._configured = False
 
+    def _get_client_kwarg(self, key):
+        if key == "database":
+            return self.database
+        return self.config_d.get(key)
+
     @cached_property
     def client(self):
-        return clickhouse_connect.get_client(
-            autogenerate_session_id=False,
-            **self.client_kwargs
-        )
+        return get_clickhouse_client(self._get_client_kwarg)
 
     def migrate(self):
         migration_filepath = os.path.join(

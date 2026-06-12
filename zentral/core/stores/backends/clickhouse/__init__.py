@@ -2,7 +2,6 @@ import logging
 import os
 from datetime import timedelta
 
-import clickhouse_connect
 from django.utils.functional import cached_property
 from django.utils.timezone import is_naive, make_aware, make_naive
 from kombu.utils import json
@@ -10,28 +9,14 @@ from rest_framework import serializers
 
 from zentral.core.events import event_from_event_d, event_types
 from zentral.core.stores.backends.base import BaseStore, serialize_needles
+from zentral.utils.clickhouse import CLIENT_KWARGS_KEYS, get_clickhouse_client
 from zentral.utils.time import naive_utcnow
 
 logger = logging.getLogger('zentral.core.stores.backends.clickhouse')
 
 
 class ClickHouseStore(BaseStore):
-    client_kwargs_keys = (
-        # connection
-        "host",
-        "port",
-        "secure",
-        "verify",
-        "compress",
-        # auth
-        "username",
-        "database",
-        "password",
-        "access_token",
-        # timeouts
-        "connect_timeout",
-        "send_receive_timeout",
-    )
+    client_kwargs_keys = CLIENT_KWARGS_KEYS
     kwargs_keys = client_kwargs_keys + (
         # storage
         "table_engine",
@@ -69,11 +54,7 @@ class ClickHouseStore(BaseStore):
 
     @cached_property
     def client(self):
-        return clickhouse_connect.get_client(
-            autogenerate_session_id=False,  # we do run queries concurrently when querying the database
-            **{k: getattr(self, k)
-               for k in self.client_kwargs_keys}
-        )
+        return get_clickhouse_client(lambda k: getattr(self, k))
 
     def migrate(self):
         # TODO: much to be done here in the future!
