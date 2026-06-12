@@ -150,6 +150,74 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_form.html")
         self.assertFormError(response.context["form"], "os_version", "Not a valid OS version")
 
+    def test_create_software_update_enforcement_post_one_time_clears_invalid_latest_fields(self):
+        # Submitting ONE_TIME alongside a bad max_os_version (e.g. stale value left over
+        # when the user toggles the Type radio) must not surface "Not a valid OS version" —
+        # the form clears latest-side fields server-side.
+        self.login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
+        name = get_random_string(12)
+        response = self.client.post(reverse("mdm:create_software_update_enforcement"),
+                                    {"name": name,
+                                     "platforms": ["macOS"],
+                                     "enforcement_type": "ONE_TIME",
+                                     "os_version": "14.1",
+                                     "local_datetime": "2023-11-10 09:30",
+                                     "max_os_version": "ABC",
+                                     "delay_days": 99,
+                                     "local_time": "09:30:00"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_detail.html")
+        sue = response.context["object"]
+        self.assertEqual(sue.os_version, "14.1")
+        self.assertEqual(sue.max_os_version, "")
+        self.assertIsNone(sue.delay_days)
+        self.assertIsNone(sue.local_time)
+
+    def test_create_software_update_enforcement_post_latest_clears_invalid_one_time_fields(self):
+        self.login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
+        name = get_random_string(12)
+        response = self.client.post(reverse("mdm:create_software_update_enforcement"),
+                                    {"name": name,
+                                     "platforms": ["macOS"],
+                                     "enforcement_type": "LATEST",
+                                     "max_os_version": "19.0",
+                                     "delay_days": 12,
+                                     "local_time": "09:30:00",
+                                     "os_version": "ABC",
+                                     "build_version": "garbage",
+                                     "local_datetime": "2023-11-10 09:30"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_detail.html")
+        sue = response.context["object"]
+        self.assertEqual(sue.max_os_version, "19.0")
+        self.assertEqual(sue.os_version, "")
+        self.assertEqual(sue.build_version, "")
+        self.assertIsNone(sue.local_datetime)
+
+    def test_create_software_update_enforcement_post_re_render_blanks_other_fields(self):
+        # When validation fails, the bound form must re-render with the other-side
+        # fields blanked out, not echoing back the submitted (stale) values.
+        self.login("mdm.add_softwareupdateenforcement")
+        response = self.client.post(reverse("mdm:create_software_update_enforcement"),
+                                    {"name": get_random_string(12),
+                                     "enforcement_type": "ONE_TIME",
+                                     "os_version": "ABC",
+                                     "local_datetime": "2023-11-10 09:30",
+                                     "max_os_version": "17.1",
+                                     "delay_days": 12,
+                                     "local_time": "09:30:00"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_form.html")
+        form = response.context["form"]
+        self.assertFormError(form, "os_version", "Not a valid OS version")
+        self.assertEqual(form["max_os_version"].value(), "")
+        self.assertEqual(form["delay_days"].value(), "")
+        self.assertEqual(form["local_time"].value(), "")
+        self.assertFalse(form.has_error("max_os_version"))
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_software_update_enforcement_post_latest(self, post_event):
         self.login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")

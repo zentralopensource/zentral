@@ -1487,19 +1487,21 @@ class SoftwareUpdateEnforcementForm(forms.ModelForm):
 
     def clean(self):
         super().clean()
-        enforcement_type = self.cleaned_data.get("enforcement_type")
-        if enforcement_type == "ONE_TIME":
+        if self.cleaned_data.get("enforcement_type") == "ONE_TIME":
             required_fields = (f for f in self.one_time_fields if f != "build_version")
             other_fields = self.latest_fields
         else:
             required_fields = self.latest_fields
             other_fields = self.one_time_fields
+        self.data = self.data.copy()
+        for field in other_fields:
+            self.cleaned_data[field] = None if field in ("delay_days", "local_time", "local_datetime") else ""
+            self._errors.pop(field, None)
+            self.data[self.add_prefix(field)] = ""
         for field in required_fields:
             value = self.cleaned_data.get(field)
             if not self.has_error(field) and (value is None or value == ""):
                 self.add_error(field, "This field is required")
-        for field in other_fields:
-            setattr(self.instance, field, "" if field not in ("delay_days", "local_time", "local_datetime") else None)
 
 
 class LocationForm(forms.ModelForm):
