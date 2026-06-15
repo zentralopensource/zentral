@@ -100,6 +100,75 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         result = response.json()
         self.assertEqual(result['task_result_url'], reverse("base_api:task_result", args=(result['task_id'],)))
 
+    # dep_virtual_server_beta_tokens
+
+    SAMPLE_BETA_TOKENS = [
+        {"os": "iOS", "title": "iOS 26 AppleSeed Beta", "token": "ios26token"},
+        {"os": "OSX", "title": "macOS Tahoe 26 AppleSeed Beta", "token": "mac26token"},
+    ]
+
+    def test_sa_dep_virtual_server_beta_tokens_unauthorized(self):
+        dep_server = force_dep_virtual_server()
+        response = self.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_sa_dep_virtual_server_beta_tokens_permission_denied(self):
+        dep_server = force_dep_virtual_server()
+        response = self.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.api_views.dep.get_dep_virtual_server_beta_tokens")
+    def test_sa_dep_virtual_server_beta_tokens(self, get_tokens):
+        get_tokens.return_value = self.SAMPLE_BETA_TOKENS
+        dep_server = force_dep_virtual_server()
+        self.set_permissions("mdm.view_depvirtualserver")
+        response = self.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"beta_tokens": self.SAMPLE_BETA_TOKENS})
+        get_tokens.assert_called_once_with(dep_server)
+
+    def test_user_dep_virtual_server_beta_tokens_unauthorized(self):
+        dep_server = force_dep_virtual_server()
+        response = self.client.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 401)
+
+    def test_user_dep_virtual_server_beta_tokens_permission_denied(self):
+        dep_server = force_dep_virtual_server()
+        self.login()
+        response = self.client.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.api_views.dep.get_dep_virtual_server_beta_tokens")
+    def test_user_dep_virtual_server_beta_tokens(self, get_tokens):
+        get_tokens.return_value = self.SAMPLE_BETA_TOKENS
+        dep_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"beta_tokens": self.SAMPLE_BETA_TOKENS})
+
+    @patch("zentral.contrib.mdm.api_views.dep.get_dep_virtual_server_beta_tokens")
+    def test_dep_virtual_server_beta_tokens_empty(self, get_tokens):
+        get_tokens.return_value = []
+        dep_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"beta_tokens": []})
+
+    @patch("zentral.contrib.mdm.api_views.dep.get_dep_virtual_server_beta_tokens")
+    def test_dep_virtual_server_beta_tokens_dep_client_error(self, get_tokens):
+        get_tokens.side_effect = DEPClientError("Could not get auth session token",
+                                                error_code="token_rejected", status_code=403)
+        dep_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.get(reverse("mdm_api:dep_virtual_server_beta_tokens", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["beta_tokens"], [])
+        self.assertIn("token_rejected", body["error"])
+
     # list dep devices
 
     def test_list_dep_devices_unauthorized(self):

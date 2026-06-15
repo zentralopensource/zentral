@@ -12,7 +12,8 @@
 <h3>DEP virtual server <i>{{ object }}</i></h3>
 
 <div class="row">
-  <div class="col-md-12">
+  <div class="col-md-4">
+    <h4>DEP server</h4>
     <dl class="row">
       <dt class="col-sm-3 text-md-end">name</dt>
       <dd  class="col-sm-9">{{ object.name }}</dd>
@@ -35,11 +36,10 @@
       </dd>
     </dl>
 
-    {% created_updated_at object %}
 
   </div>
   {% with object.organization as org %}
-  <div class="col-md-6">
+  <div class="col-md-4">
     <h4>DEP organization</h4>
     <dl class="row">
       <dt class="col-sm-3 text-md-end">name</dt>
@@ -59,13 +59,15 @@
     </dl>
   </div>
   {% endwith %}
+
+
   {% with object.token as token %}
-  <div class="col-md-6">
+  <div class="col-md-4">
     <h4>DEP Token</h4>
     {% if perms.mdm.change_depvirtualserver and token %}
     <a href="{% url 'mdm:renew_dep_token' token.id %}" class="btn btn-secondary">Renew</a>
     {% endif %}
-    <dl class="row">
+    <dl class="row float-end">
       <dt class="col-sm-3 text-md-end">expiry</dt>
       <dd class="col-sm-9">
         {% if token.expires_soon %}
@@ -77,9 +79,12 @@
     </dl>
   </div>
   {% endwith %}
+
+  {% created_updated_at object %}
+
 </div>
 
-<div class="row">
+<div class="row mb-5 mt-5">
   <div class="col-md-12">
     {% with object.depenrollment_set.count as enrollment_count %}
 
@@ -119,7 +124,7 @@
   </div>
 </div>
 
-<div class="row">
+<div class="row mb-5">
   <div class="col-md-12">
     <div class="d-flex align-items-center mb-1">
         <h3>Device{{ devices_count|pluralize }} ({{ devices_count }})</h3>
@@ -197,7 +202,44 @@
     {% endif %}
   </div>
 </div>
+<div class="row">
+  <div class="col-md-12">
+    <div class="d-flex align-items-center mb-1">
+      <h3>Beta enrollment tokens</h3>
+      <div class="ms-auto">
+        <button id="beta-tokens-fetch-btn" type="button" class="btn btn-link"
+            data-url="{% url 'mdm_api:dep_virtual_server_beta_tokens' object.pk %}"
+            data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Fetch / refresh">
+          <i class="bi bi-arrow-repeat"></i>
+        </button>
+      </div>
+    </div>
+    <div id="beta-tokens-container">
+      <p class="text-muted">Click <i class="bi bi-arrow-repeat"></i> to fetch the beta enrollment tokens from Apple.</p>
+    </div>
+    <template id="beta-tokens-table-tmpl">
+      <table class="table-object-properties">
+        <thead>
+          <tr>
+            <th class="col-md-2">OS</th>
+            <th class="col-md-4">Program</th>
+            <th class="col-md-6">Token</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </template>
+    <template id="beta-tokens-row-tmpl">
+      <tr>
+        <td><code data-field="os"></code></td>
+        <td data-field="title"></td>
+        <td><code data-field="token"></code></td>
+      </tr>
+    </template>
+  </div>
+</div>
 {% endblock %}
+
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
@@ -232,6 +274,82 @@
         }
       });
   }
+
+  function renderBetaTokensError(message) {
+    var container = document.getElementById("beta-tokens-container");
+    container.replaceChildren();
+    var alert = document.createElement("div");
+    alert.className = "alert alert-danger";
+    alert.textContent = message;
+    container.appendChild(alert);
+  }
+
+  function renderBetaTokens(data) {
+    var container = document.getElementById("beta-tokens-container");
+    container.replaceChildren();
+
+    if (data.error) {
+      renderBetaTokensError("Could not fetch beta enrollment tokens: " + data.error);
+      return;
+    }
+
+    var tokens = data.beta_tokens || [];
+    if (tokens.length === 0) {
+      var p = document.createElement("p");
+      p.className = "text-muted";
+      p.textContent =
+        "No beta enrollment tokens available. The organisation tied to this DEP " +
+        "virtual server may not have accepted the AppleSeed for IT terms in " +
+        "Apple Business Manager / Apple School Manager yet.";
+      container.appendChild(p);
+      return;
+    }
+
+    var tableFragment = document.getElementById("beta-tokens-table-tmpl").content.cloneNode(true);
+    var tbody = tableFragment.querySelector("tbody");
+    var rowTmpl = document.getElementById("beta-tokens-row-tmpl");
+    tokens.forEach(function (entry) {
+      var rowFragment = rowTmpl.content.cloneNode(true);
+      rowFragment.querySelector('[data-field="os"]').textContent = entry.os;
+      rowFragment.querySelector('[data-field="title"]').textContent = entry.title;
+      rowFragment.querySelector('[data-field="token"]').textContent = entry.token;
+      tbody.appendChild(rowFragment);
+    });
+    container.appendChild(tableFragment);
+  }
+
+  function fetchBetaTokens() {
+    var btn = document.getElementById("beta-tokens-fetch-btn");
+    var container = document.getElementById("beta-tokens-container");
+    btn.disabled = true;
+    container.replaceChildren();
+    var loading = document.createElement("p");
+    loading.className = "text-muted";
+    loading.textContent = "Loading…";
+    container.appendChild(loading);
+
+    fetch(btn.dataset.url, {headers: {"Accept": "application/json"}})
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+        return response.json();
+      })
+      .then(renderBetaTokens)
+      .catch(function () {
+        renderBetaTokensError("Failed to fetch beta enrollment tokens.");
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var betaTokensBtn = document.getElementById("beta-tokens-fetch-btn");
+    if (betaTokensBtn) {
+      betaTokensBtn.addEventListener("click", fetchBetaTokens);
+    }
+  });
 
   $(document).ready(function () {
     $(".task").click(function (event) {

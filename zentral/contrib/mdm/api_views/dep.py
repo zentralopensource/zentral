@@ -5,15 +5,17 @@ from django_filters import rest_framework as filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.filters import OrderingFilter
-from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from zentral.contrib.mdm.dep import disown_dep_device
+from zentral.contrib.mdm.dep import disown_dep_device, get_dep_virtual_server_beta_tokens
+from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.events import post_dep_device_disowned_event
 from zentral.contrib.mdm.models import DEPDevice, DEPVirtualServer
 from zentral.contrib.mdm.serializers import (
     DEPDeviceSerializer,
+    DEPVirtualServerBetaTokensSerializer,
 )
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
 from zentral.utils.drf import (
@@ -64,6 +66,23 @@ class DEPDeviceDetail(RetrieveUpdateAPIView):
     queryset = DEPDevice.objects.all()
     serializer_class = DEPDeviceSerializer
     permission_classes = [DefaultDjangoModelPermissions]
+
+
+class DEPVirtualServerBetaTokensView(RetrieveAPIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
+    permission_required = "mdm.view_depvirtualserver"
+    permission_classes = [DjangoPermissionRequired]
+    queryset = DEPVirtualServer.objects.all()
+    serializer_class = DEPVirtualServerBetaTokensSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        dep_virtual_server = self.get_object()
+        response_data = {"beta_tokens": []}
+        try:
+            response_data["beta_tokens"] = get_dep_virtual_server_beta_tokens(dep_virtual_server)
+        except DEPClientError as e:
+            response_data["error"] = str(e)
+        return Response(self.get_serializer(response_data).data)
 
 
 class DisownDEPDevice(APIView):

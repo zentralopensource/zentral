@@ -23,6 +23,8 @@ Schema updates based on the 2026 Seed 1 Apple device management release.
 
 Added `zentral_mdm_target_artifacts_bucket` metrics.
 
+Added a Beta enrollment tokens section on the DEP virtual server detail page that fetches the organization's AppleSeed for IT tokens from Apple.
+
 #### Munki
 
 New public endpoint to fetch the enrollment information, authenticated with the enrollment secret.
