@@ -169,3 +169,6 @@ class DEPClient(object):
     def disown_devices(self, serial_numbers):
         body = {"devices": serial_numbers}
         return self.send_request('devices/disown', 'POST', json=body)
+
+    def get_os_beta_enrollment_tokens(self):
+        return self.send_request('os-beta-enrollment/tokens')

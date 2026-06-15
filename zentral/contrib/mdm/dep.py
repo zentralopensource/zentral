@@ -377,6 +377,16 @@ def refresh_dep_device(dep_device):
         dep_device.save()
 
 
+def get_dep_virtual_server_beta_tokens(dep_virtual_server):
+    client = DEPClient.from_dep_virtual_server(dep_virtual_server)
+    response = client.get_os_beta_enrollment_tokens()
+    return [
+        {"os": entry["os"], "title": entry["title"], "token": entry["token"]}
+        for entry in (response or {}).get("betaEnrollmentTokens", [])
+        if isinstance(entry, dict) and entry.get("token") and entry.get("os")
+    ]
+
+
 def disown_dep_device(dep_device):
     dep_client = DEPClient.from_dep_virtual_server(dep_device.virtual_server)
     disown_response = dep_client.disown_devices([dep_device.serial_number])

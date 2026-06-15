@@ -1342,6 +1342,17 @@ class DEPVirtualServerSerializer(serializers.ModelSerializer):
         ]
 
 
+class DEPBetaEnrollmentTokenSerializer(serializers.Serializer):
+    os = serializers.CharField()
+    title = serializers.CharField()
+    token = serializers.CharField()
+
+
+class DEPVirtualServerBetaTokensSerializer(serializers.Serializer):
+    beta_tokens = DEPBetaEnrollmentTokenSerializer(many=True)
+    error = serializers.CharField(required=False)
+
+
 class DEPEnrollmentSerializer(serializers.ModelSerializer):
     enrollment_secret = EnrollmentSecretSerializer(many=False)
 

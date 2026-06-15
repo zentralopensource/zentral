@@ -123,6 +123,17 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, enrollment.get_absolute_url())
         self.assertContains(response, reverse("mdm:update_dep_virtual_server", args=(virtual_server.pk,)))
         self.assertContains(response, reverse("mdm:renew_dep_token", args=(virtual_server.token.pk,)))
+        self.assertContains(response, reverse("mdm_api:dep_virtual_server_beta_tokens", args=(virtual_server.pk,)))
+
+    def test_dep_virtual_server_detail_has_beta_tokens_section(self):
+        # The detail page wires the AJAX fetch container + API URL but does NOT inline the tokens.
+        virtual_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.get(virtual_server.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="beta-tokens-container"')
+        self.assertContains(response, 'id="beta-tokens-fetch-btn"')
+        self.assertContains(response, reverse("mdm_api:dep_virtual_server_beta_tokens", args=(virtual_server.pk,)))
 
     # update DEP virtual server
 

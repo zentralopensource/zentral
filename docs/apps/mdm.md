@@ -345,6 +345,120 @@ A Software Update Enforcement configuration can only be deleted if it is no long
 1. Navigate to *MDM > Overview > Software Update Enforcements*.
 2. Click the configuration name to review its settings before deleting and use the *Delete button* next to the configuration. Alternatively, you see a delete button already in the list right to the name.
 
+## Apple Beta Program Enrollment
+
+Apple Business Manager (ABM) and Apple School Manager (ASM) organizations can enroll supervised devices into [AppleSeed for IT](https://appleseed.apple.com/sp/welcome) beta programs without requiring each user to sign in with an Apple Account. Apple issues per-organization *beta enrollment tokens* through ABM/ASM, and Zentral lets you browse the tokens for any connected DEP virtual server so you can hand-craft a Declarative Device Management (DDM) declaration that opts devices into a chosen beta program.
+
+This section covers:
+
+1. One-time prerequisites in ABM/ASM.
+2. Browsing the available beta tokens in Zentral.
+3. Hand-crafting a Software Update Settings DDM declaration that uses one of those tokens.
+4. Deploying the declaration via a Blueprint.
+
+### Prerequisites
+
+- The DEP virtual server's organization has accepted the AppleSeed for IT terms in ABM/ASM. Sign in to Apple Business Manager / Apple School Manager as an Administrator or Device Manager and accept the terms on behalf of the organization.
+- Target devices are **supervised**.
+- Target devices run at least:
+  - macOS **15.4**
+  - iOS **18.0**
+  - tvOS **18.4**
+  - visionOS **26.0**
+- watchOS is not supported by the `com.apple.configuration.softwareupdate.settings` declaration.
+
+If the prerequisites aren't met, the device will silently ignore the `Beta` block.
+
+### Browse the beta tokens
+
+1. Navigate to *MDM > Overview > DEP virtual servers*.
+2. Open the virtual server backed by the ABM/ASM organization that accepted the AppleSeed terms.
+3. Scroll to the *Beta enrollment tokens* section at the bottom of the page.
+4. Click the refresh icon to fetch the current tokens from Apple. The table lists every available program with three columns:
+
+| OS         | Program                              | Token                                   |
+|------------|--------------------------------------|-----------------------------------------|
+| `iOS`      | iOS 26 AppleSeed Beta                | `brUNC1K9urL1UhHAY9SuQL22GmyLgZX64F…`   |
+| `OSX`      | macOS Tahoe 26 AppleSeed Beta        | `ami32JBFLwxXVbjUnj9rGYwdiMNNjcSsVS…`   |
+| `tvOS`     | tvOS 26 AppleSeed Beta               | `6pd7bq2PgbuWmLSdfnCGNY5QbXPcV8w7fn…`   |
+| `visionOS` | visionOS 26 AppleSeed Beta           | `LxExaYfhLPyDJJcCJ62engGutE8sEQyrgb…`   |
+
+Notes on the data:
+
+- Apple uses its own OS vocabulary — note `OSX` for macOS, plus `visionOS`, `watchOS`, `homePodOS`. Use the strings as-is when picking the right program.
+- Multiple programs can be listed per OS (e.g. `iOS 17`, `iOS 18`, `iOS 26`, `iOS 27`) — pick by the program *title* shown in the second column.
+- Zentral does not cache the result. Every refresh hits Apple's endpoint.
+- Tokens are tied to OS upgrade periods and rotate over time. Re-fetch and update the declaration whenever Apple withdraws or rotates a program.
+
+### Compose a Software Update Settings declaration
+
+The beta token rides inside a [`com.apple.configuration.softwareupdate.settings`](https://github.com/apple/device-management/blob/release/declarative/declarations/configurations/softwareupdate.settings.yaml) declaration's `Beta` block. Two flavours, depending on whether you want to force or offer enrollment.
+
+#### Force enrollment into a single program — `RequireProgram`
+
+The device is enrolled automatically. The user cannot opt out from Software Update settings.
+
+```json
+{
+  "Type": "com.apple.configuration.softwareupdate.settings",
+  "Identifier": "com.example.beta.ios26.required",
+  "Payload": {
+    "Beta": {
+      "ProgramEnrollment": "AlwaysOn",
+      "RequireProgram": {
+        "Description": "iOS 26 AppleSeed Beta",
+        "Token": "brUNC1K9urL1UhHAY9SuQL22GmyLgZX64F8cVe4i34zqkgULcaFc2ubHfN3sPiFK"
+      }
+    }
+  }
+}
+```
+
+#### Offer one or more programs — `OfferPrograms`
+
+The listed programs appear in Software Update settings; the user picks which one (if any) to enroll into.
+
+```json
+{
+  "Type": "com.apple.configuration.softwareupdate.settings",
+  "Identifier": "com.example.beta.ios.offer",
+  "Payload": {
+    "Beta": {
+      "ProgramEnrollment": "Allowed",
+      "OfferPrograms": [
+        {
+          "Program": {
+            "Description": "iOS 27 AppleSeed Beta",
+            "Token": "brACC1K9urL1UhHAY9SuQL22GmyLgZX64F8cVe4i34zqkgULcaFc2ubHfN3sPiFK"
+          }
+        },
+        {
+          "Program": {
+            "Description": "iOS 18 AppleSeed Beta",
+            "Token": "abcd3DDm1kmRP7oxZCYt78fM6R7AiaYTazQzM9XwfLb9tBf7dSXKD4fXk2LgMLxs"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Field reference:
+
+- `Identifier`: must be unique. Use a reverse-DNS string you control.
+- `ServerToken`: optional in the source you paste — Zentral assigns a fresh UUID if you omit it, and re-generates it whenever the declaration changes.
+- `ProgramEnrollment`: `AlwaysOn` (forces the program in `RequireProgram`), `Allowed` (offers the programs in `OfferPrograms`), or `AlwaysOff` (removes the device from any beta program it had previously joined).
+- `Description`: human-readable label shown on the device. It doesn't have to match Apple's program title verbatim, but copying it across keeps things obvious.
+- `Token`: paste the value from the Zentral *Beta enrollment tokens* table for the program you want.
+
+The full set of keys (including `Notifications`, `Deferrals`, `AutomaticActions`, …) is documented in [Apple's schema](https://github.com/apple/device-management/blob/release/declarative/declarations/configurations/softwareupdate.settings.yaml). The `Beta` block can coexist with other Software Update settings in the same declaration.
+
+### Updating a declaration when Apple rotates a token
+
+Apple rotates beta enrollment tokens between OS upgrade periods. When that happens, you have to check and re-fetch your tokens and update the declaration.
+
+
 ## Recovery Password Configuration
 
 Recovery Password Configuration manages both **recoveryOS password protection** for Apple Silicon Macs and **firmware password protection** for Intel-based Macs via MDM. This prevents unauthorized access when Macs are started in recovery mode.
