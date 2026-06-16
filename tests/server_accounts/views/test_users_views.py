@@ -315,6 +315,21 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, p.name)
         self.assertContains(response, reverse("accounts:policy", args=(p.pk,)))
 
+    # user detail — PBAC principal representation
+
+    def test_view_user_shows_pbac_principal(self):
+        self.login("accounts.view_user")
+        response = self.client.get(reverse("accounts:user", args=(self.user.pk,)))
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        self.assertContains(response, f'<code>User::&quot;{self.user.pk}&quot;</code>', html=False)
+
+    def test_view_service_account_shows_pbac_principal(self):
+        self.login("accounts.view_user")
+        response = self.client.get(reverse("accounts:user", args=(self.service_account.pk,)))
+        self.assertContains(
+            response, f'<code>ServiceAccount::&quot;{self.service_account.pk}&quot;</code>', html=False
+        )
+
     def test_view_user_policies_section_hidden_without_view_policy_perm(self):
         from accounts.models import Policy
         Policy.objects.create(

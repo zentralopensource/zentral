@@ -156,6 +156,11 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("accounts:policy", args=(p.pk,)))
         self.assertNotContains(response, other_policy.name)
 
+    def test_view_group_shows_pbac_principal(self):
+        self.login("auth.view_group")
+        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        self.assertContains(response, f'<code>Role::&quot;{self.group.pk}&quot;</code>', html=False)
+
     def test_view_group_policies_section_hidden_without_view_policy_perm(self):
         Policy.objects.create(
             name=get_random_string(12),
