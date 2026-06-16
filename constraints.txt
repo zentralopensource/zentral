@@ -26,7 +26,7 @@ click-plugins==1.1.1
 click-repl==0.3.0
 clickhouse-connect==1.0.0
 coverage==7.14.0
-cryptography==46.0.7
+cryptography==48.0.1
 decorator==5.1.1
 defusedxml==0.7.1
 Django==5.2.15
@@ -120,7 +120,7 @@ pycparser==3.0
 pycurl==7.46.0
 Pygments==2.20.0
 PyJWT==2.13.0
-pyOpenSSL==26.0.0
+pyOpenSSL==26.2.0
 pyotp==2.9.0
 pyparsing==3.2.5
 pysaml2==7.5.0
