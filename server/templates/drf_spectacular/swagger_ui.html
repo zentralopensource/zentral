@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+{% load static %}
+{# Project override of drf_spectacular/swagger_ui.html. Three deviations from upstream: #}
+{# - the inline bootstrap script gets nonce="{{ request.csp_nonce }}" so it passes      #}
+{#   Zentral's `script-src 'self' 'nonce-…'`;                                           #}
+{# - a small Zentral-branded header is rendered above #swagger-ui (Swagger's default    #}
+{#   BaseLayout has no topbar of its own);                                              #}
+{# - the swagger-ui body background is reset so the header sits flush.                  #}
+<html>
+  <head>
+    {% block head %}
+    <title>{{ title|default:"Swagger" }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% if favicon_href %}<link rel="icon" href="{{ favicon_href }}">{% endif %}
+    <link rel="stylesheet" href="{{ swagger_ui_css }}">
+    <style>
+      html { box-sizing: border-box; overflow-y: scroll; }
+      *, *:after, *:before { box-sizing: inherit; }
+      body { background: #fafafa; margin: 0; }
+
+      .zentral-swagger-header {
+        background: #ffffff;
+        border-bottom: 1px solid #e6e6e6;
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+      }
+      .zentral-swagger-header img {
+        height: 32px;
+        width: auto;
+        display: block;
+      }
+    </style>
+    {% endblock head %}
+  </head>
+  <body>
+    {% block body %}
+    <header class="zentral-swagger-header">
+      <img src="{% static 'images/swagger-logo.svg' %}" alt="Zentral">
+    </header>
+    <div id="swagger-ui"></div>
+    <script src="{{ swagger_ui_bundle }}"></script>
+    <script src="{{ swagger_ui_standalone }}"></script>
+    {% if script_url %}
+    <script src="{{ script_url }}"></script>
+    {% else %}
+    <script nonce="{{ request.csp_nonce }}">
+    {% include template_name_js %}
+    </script>
+    {% endif %}
+    {% endblock %}
+  </body>
+</html>

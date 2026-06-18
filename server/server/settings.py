@@ -12,9 +12,12 @@ https://docs.djangoproject.com/en/1.8/ref/settings/
 
 import os
 import sys
+
 from django.core.management import utils
+
 # Import the zentral settings (base.json)
 from zentral.conf import settings as zentral_settings
+
 from .celery import app as celery_app
 
 __all__ = ('celery_app',)
@@ -30,6 +33,8 @@ SECRET_KEY_FALLBACKS = django_zentral_settings.get('SECRET_KEY_FALLBACKS', [])
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = django_zentral_settings.get('DEBUG', False)
+# SECURITY WARNING: don't run with openapi turned on in production!
+OPENAPI = django_zentral_settings.get('OPENAPI', False)
 
 ALLOWED_HOSTS = list(django_zentral_settings.get('ALLOWED_HOSTS', []))
 if not ALLOWED_HOSTS:
@@ -91,6 +96,63 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
+
+# OpenAPI schema generation is a development-only concern
+if OPENAPI:
+    INSTALLED_APPS += [
+        'drf_spectacular',
+        'drf_spectacular_sidecar',
+    ]
+    REST_FRAMEWORK['DEFAULT_SCHEMA_CLASS'] = 'drf_spectacular.openapi.AutoSchema'
+
+    SPECTACULAR_SETTINGS = {
+        "TITLE": "Zentral API",
+        "DESCRIPTION": "Management and public APIs for the Zentral MDM platform.",
+        "VERSION": "1.0.0",
+        "COMPONENT_SPLIT_REQUEST": True,
+        "GENERIC_ADDITIONAL_PROPERTIES": 'dict',
+        "SERVE_INCLUDE_SCHEMA": False,
+        "SCHEMA_PATH_PREFIX": r"/(api|public)/",
+        # serve Swagger UI / ReDoc assets locally (via drf-spectacular-sidecar)
+        "SWAGGER_UI_DIST": "SIDECAR",
+        "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+        "REDOC_DIST": "SIDECAR",
+        "SWAGGER_UI_SETTINGS": {
+            "filter": True,
+            "deepLinking": True,
+            "docExpansion": "list",
+            "tagsSorter": "alpha",
+        },
+        # Pin component names for choice fields whose auto-derived names
+        # collide. drf-spectacular can't name these on its own because the same
+        # field name ("backend", "platforms", …) carries different choice sets
+        # across modules, or the same choice set is reached via several field
+        # names. Each entry maps the desired component name to its choice set.
+        "ENUM_NAME_OVERRIDES": {
+            # "backend": cert-issuer backends collide with the store/repository/
+            # action backends that spectacular already names cleanly.
+            "CertIssuerBackendEnum": "zentral.contrib.mdm.cert_issuer_backends.CertIssuerBackend",
+            # "platforms"/"platform": three distinct choice sets across modules.
+            "InventoryPlatformEnum": "zentral.contrib.inventory.conf.PLATFORM_CHOICES",
+            "OsqueryPlatformEnum": "zentral.contrib.osquery.models.Platform.choices",
+            "MdmPlatformEnum": "zentral.contrib.mdm.models.Platform",
+            # one IntegerChoices reached via collect_apps/collect_certificates/collect_profiles.
+            "InventoryItemCollectionOptionEnum":
+                "zentral.contrib.mdm.models.Blueprint.InventoryItemCollectionOption",
+            # One key-usage bitmask choice set, defined as an inline tuple (no
+            # named class) on SCEPIssuer.key_usage, SCEPConfig.key_usage and
+            # ACMEIssuer.usage_flags. spectacular keys enums on their values, so
+            # giving the literal choice set here names all three at once. A list
+            # of dotted field paths does NOT work — the value must be a real
+            # choices iterable.
+            "KeyUsageEnum": [
+                (0, "None (0)"),
+                (1, "Signing (1)"),
+                (4, "Encryption (4)"),
+                (5, "Signing & Encryption (1 | 4 = 5)"),
+            ],
+        },
+    }
 
 AUTH_USER_MODEL = 'accounts.User'
 
