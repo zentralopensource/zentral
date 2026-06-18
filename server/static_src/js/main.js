@@ -5,6 +5,9 @@ import '../scss/styles.scss'
 // TODO: only the plugins we need!
 import * as bootstrap from 'bootstrap'
 
+// Live updates for the enrolled device command list (no-op on other pages)
+import { initEnrolledDeviceCommands } from './enrolled_device_commands'
+
 // Enable bootstrap tooltip if the device doesn't have touch events.
 if (!('ontouchstart' in window)) {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
@@ -60,6 +63,8 @@ function get_data_and_make_chart(url, charts) {
 }
 
 $(document).ready(function () {
+    initEnrolledDeviceCommands();
+
     var charts = {};
     var urls = Array();
     $(".chart").each(function (index, canvas) {
