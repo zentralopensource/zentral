@@ -1,6 +1,9 @@
+from django.http import QueryDict
 from django.test import TestCase
 from unittest.mock import patch
 from zentral.contrib.inventory.events import InventoryCleanupFinished, InventoryCleanupStarted
+from zentral.contrib.inventory.models import MachineTag, Tag
+from zentral.contrib.inventory.utils import MSQuery
 from zentral.contrib.inventory.tasks import (cleanup_inventory,
                                              # inventory
                                              export_inventory,
@@ -49,6 +52,18 @@ class InventoryTasksTest(TestCase):
     def test_export_inventory_xlsx(self):
         result = export_inventory("", "yolo_inv.xlsx")
         self.assertEqual(result["filepath"], "exports/yolo_inv.xlsx")
+
+    def test_export_inventory_xlsx_invalid_tag_sheet_name(self):
+        # A selected tag becomes a "Tags · <tag>" aggregation sheet; the invalid
+        # Excel characters in the name used to make xlsxwriter raise
+        # InvalidWorksheetName and crash the export task.
+        tag = Tag.objects.create(name="QA/Prod:[2024]*?")
+        MachineTag.objects.create(serial_number="0123456789", tag=tag)
+        query = f"t={tag.pk}"
+        titles = [title for title, _, _ in MSQuery(QueryDict(query)).export_sheets_data()]
+        self.assertTrue(any(any(c in title for c in "[]:*?/\\") for title in titles))
+        result = export_inventory(query, "yolo_inv_tag.xlsx")
+        self.assertEqual(result["filepath"], "exports/yolo_inv_tag.xlsx")
 
     def test_export_full_inventory(self):
         result = export_full_inventory()

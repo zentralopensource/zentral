@@ -10,6 +10,7 @@ from django.core.files.storage import default_storage
 from django.db import connection, transaction
 from django.utils.text import slugify
 import xlsxwriter
+from zentral.utils.xlsx import add_worksheet
 from .forms import TargetSearchForm
 
 
@@ -91,7 +92,7 @@ def _export_targets_xlsx(iterator, filepath):
             try:
                 worksheet, row_idx = worksheets[target_type]
             except KeyError:
-                worksheet = workbook.add_worksheet(target_type.title())
+                worksheet = add_worksheet(workbook, target_type.title())
                 row_idx = 0
                 for col_idx, (h, _) in enumerate(row):
                     worksheet.write_string(row_idx, col_idx, h)
