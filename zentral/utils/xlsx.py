@@ -6,7 +6,7 @@ MAX_WORKSHEET_NAME_LENGTH = 31
 
 # xlsxwriter rejects worksheet names that are > 31 chars, contain any of []:*?/\,
 # start/end with "'", or collide case-insensitively. See Workbook._check_sheetname:
-# https://github.com/jmcnamara/XlsxWriter/blob/RELEASE_3.2.0/xlsxwriter/workbook.py#L571-L609
+# https://github.com/jmcnamara/XlsxWriter/blob/f5f7ecdb62c1b26bfb5d92f438557c54a635188c/xlsxwriter/workbook.py#L826-L870
 _INVALID_WORKSHEET_NAME_CHARS = re.compile(r"[\[\]:*?/\\]")
 
 
