@@ -79,6 +79,8 @@ Orphaned Google Workspace machine tags are now removed when the user leaves all 
 
 Multiple fixes in the ClickHouse event store event fetch.
 
+Fixed the XLSX inventory export crashing when a worksheet name (e.g. a tag, app or compliance check name) contained characters Excel forbids in sheet names (`[]:*?/\`).
+
 ## 2026.3
 
 ### Features

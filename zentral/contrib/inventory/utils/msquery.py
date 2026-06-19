@@ -17,7 +17,7 @@ from django import forms
 from django.db import connection
 from django.http import QueryDict
 from django.urls import reverse
-from django.utils.text import Truncator, slugify
+from django.utils.text import slugify
 
 from zentral.contrib.inventory.conf import EC2, os_version_display, os_version_version_display
 from zentral.contrib.inventory.models import MachineTag, MetaMachine, Tag
@@ -26,6 +26,7 @@ from zentral.core.compliance_checks.models import Status as ComplianceCheckStatu
 from zentral.core.incidents.models import Severity, Status
 from zentral.utils.text import decode_args, encode_args
 from zentral.utils.time import naive_utcnow
+from zentral.utils.xlsx import add_worksheet
 
 __all__ = [
     'AndroidAppFilter',
@@ -2146,7 +2147,7 @@ class MSQuery:
         )
         # machines
         for title, headers, rows in self.export_sheets_data():
-            ws = workbook.add_worksheet(Truncator(title).chars(31))
+            ws = add_worksheet(workbook, title)
             row_idx = col_idx = 0
             for header in headers:
                 ws.write_string(row_idx, col_idx, header)

@@ -12,6 +12,7 @@ from django.utils.text import slugify
 
 from zentral.core.events import event_cls_from_type
 from zentral.utils.time import naive_utcnow
+from zentral.utils.xlsx import add_worksheet
 
 from .models import DistributedQuery, FileCarvingSession
 
@@ -82,7 +83,7 @@ def _export_dqr_to_tmp_xlsx_file(distributed_query):
     tmp_fh, tmp_fp = tempfile.mkstemp()
     with os.fdopen(tmp_fh, "wb") as tmp_f:
         workbook = xlsxwriter.Workbook(tmp_f)
-        worksheet = workbook.add_worksheet("Results")
+        worksheet = add_worksheet(workbook, "Results")
         columns = distributed_query.result_columns()
         row_idx = col_idx = 0
         worksheet.write_string(row_idx, col_idx, "serial number")

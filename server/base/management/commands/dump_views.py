@@ -3,6 +3,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.urls import URLPattern, URLResolver
 import xlsxwriter
+from zentral.utils.xlsx import add_worksheet
 
 
 class Command(BaseCommand):
@@ -29,7 +30,7 @@ class Command(BaseCommand):
         outfile = options.get("xlsx")
         if outfile:
             workbook = xlsxwriter.Workbook(outfile)
-            worksheet = workbook.add_worksheet("Zentral Django views")
+            worksheet = add_worksheet(workbook, "Zentral Django views")
             for _, name in self.csv_headers:
                 worksheet.write(row_idx, col_idx, name)
                 col_idx += 1
