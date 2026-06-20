@@ -300,7 +300,7 @@ class TestClickHouseStore(TestCase):
 
     # event storage
 
-    @patch("zentral.core.stores.backends.clickhouse.clickhouse_connect.get_client")
+    @patch("zentral.utils.clickhouse.clickhouse_connect.get_client")
     def test_store(self, get_client):
         mocked_client = Mock()
         get_client.return_value = mocked_client
@@ -310,7 +310,7 @@ class TestClickHouseStore(TestCase):
         mocked_client.command.assert_called()
         mocked_client.insert.assert_called_once()
 
-    @patch("zentral.core.stores.backends.clickhouse.clickhouse_connect.get_client")
+    @patch("zentral.utils.clickhouse.clickhouse_connect.get_client")
     def test_bulk_store(self, get_client):
         mocked_client = Mock()
         get_client.return_value = mocked_client
@@ -323,7 +323,7 @@ class TestClickHouseStore(TestCase):
 
     # get_app_hist_data with timezones
 
-    @patch("zentral.core.stores.backends.clickhouse.clickhouse_connect.get_client")
+    @patch("zentral.utils.clickhouse.clickhouse_connect.get_client")
     def test_get_app_hist_data_with_timezones(self, get_client):
         mocked_client = Mock()
         get_client.return_value = mocked_client

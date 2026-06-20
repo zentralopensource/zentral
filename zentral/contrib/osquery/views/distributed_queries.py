@@ -4,13 +4,14 @@ import math
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import connection
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from zentral.utils.sql import tables_in_query
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView, TemplateView
+from zentral.contrib.osquery.distributed_query_result_stores import get_distributed_query_result_store
 from zentral.contrib.osquery.forms import DistributedQueryForm, DistributedQueryMachineSearchForm
-from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
+from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine,
                                             FileCarvingSession, Query)
 from zentral.utils.views import UserPaginationListView, UserPaginationMixin
 
@@ -31,8 +32,6 @@ class DistributedQueryListView(PermissionRequiredMixin, UserPaginationMixin, Tem
                 "select dq.id, dq.sql, dq.query_id, q.name as query_name,"
                 "(select count(*) from osquery_distributedquerymachine where distributed_query_id=dq.id) "
                 "as machine_count,"
-                "(select count(*) from osquery_distributedqueryresult where distributed_query_id=dq.id) "
-                "as result_count,"
                 "(select count(*) from osquery_filecarvingsession where distributed_query_id=dq.id) "
                 "as file_carving_session_count "
                 "from osquery_distributedquery dq "
@@ -41,10 +40,17 @@ class DistributedQueryListView(PermissionRequiredMixin, UserPaginationMixin, Tem
                 [self.get_paginate_by(), offset]
             )
             columns = [col.name for col in c.description]
+            distributed_queries = []
             for row in c.fetchall():
                 dq = dict(zip(columns, row))
                 dq["tables"] = sorted(tables_in_query(dq["sql"]))
-                yield dq
+                distributed_queries.append(dq)
+        result_counts = get_distributed_query_result_store().get_result_counts(
+            [dq["id"] for dq in distributed_queries]
+        )
+        for dq in distributed_queries:
+            dq["result_count"] = result_counts.get(dq["id"], 0)
+            yield dq
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -109,7 +115,7 @@ class DistributedQueryView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ctx["query"] = self.object.query
         ctx["dqm_count"] = self.object.distributedquerymachine_set.count()
-        ctx["result_count"] = self.object.distributedqueryresult_set.count()
+        ctx["result_count"] = get_distributed_query_result_store().get_result_count(self.object.pk)
         ctx["file_carving_session_count"] = self.object.filecarvingsession_set.count()
         return ctx
 
@@ -133,7 +139,7 @@ class DeleteDistributedQueryView(PermissionRequiredMixin, DeleteView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["machine_count"] = self.object.distributedquerymachine_set.count()
-        ctx["result_count"] = self.object.distributedqueryresult_set.count()
+        ctx["result_count"] = get_distributed_query_result_store().get_result_count(self.object.pk)
         ctx["file_carving_session_count"] = self.object.filecarvingsession_set.count()
         return ctx
 
@@ -165,18 +171,30 @@ class DistributedQueryMachineListView(PermissionRequiredMixin, UserPaginationLis
         return ctx
 
 
+class DistributedQueryResultList:
+    def __init__(self, store, distributed_query_pk, q):
+        self.store = store
+        self.distributed_query_pk = distributed_query_pk
+        self.q = q
+        self._count = None
+
+    def count(self):
+        if self._count is None:
+            self._count = self.store.get_result_count(self.distributed_query_pk, self.q)
+        return self._count
+
+    def __getitem__(self, k):
+        offset = k.start or 0
+        return self.store.get_results(self.distributed_query_pk, self.q, offset, k.stop - offset)
+
+
 class DistributedQueryResultListView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "osquery.view_distributedqueryresult"
-    model = DistributedQueryResult
+    template_name = "osquery/distributedqueryresult_list.html"
 
     def get_queryset(self):
         self.distributed_query = get_object_or_404(
             DistributedQuery.objects.select_related("query"), pk=self.kwargs["pk"]
-        )
-        qs = (
-            super().get_queryset()
-                   .filter(distributed_query=self.distributed_query)
-                   .order_by("-pk")
         )
         self.is_search = False
         self.search_q = None
@@ -186,8 +204,9 @@ class DistributedQueryResultListView(PermissionRequiredMixin, UserPaginationList
             if q:
                 self.search_q = q
                 self.is_search = True
-                qs = qs.filter(Q(serial_number__icontains=q) | Q(row__icontains=q))
-        return qs
+        return DistributedQueryResultList(
+            get_distributed_query_result_store(), self.distributed_query.pk, self.search_q
+        )
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

@@ -1,10 +1,16 @@
+import json
 import logging
 import uuid
+
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
 from zentral.contrib.osquery.models import EnrolledMachine, PackQuery, QueryType, parse_result_name
 from zentral.contrib.osquery.tags import TagUpdateAggregator
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
+from zentral.core.queues import queues
+from zentral.utils.json import remove_null_character
 from zentral.utils.time import naive_utcfromtimestamp
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
@@ -277,6 +283,33 @@ def post_results(msn, results, request):
                 tag_update_agg.add_result(query_pk, query_version, event_time, snapshot)
     cc_status_agg.commit_and_post_events()
     tag_update_agg.commit()
+
+
+# Distributed query results
+
+
+DISTRIBUTED_QUERY_RESULTS_ROUTING_KEY = "osquery_distributed_query_results"
+# conservative inline limit: the SQS send thread posts batches of up to 10 messages with a 1MiB
+# total payload limit, and the JSON escaping of the non-ASCII characters can inflate the posted
+# message up to ~3x compared to the raw request body used to make the inline decision
+DISTRIBUTED_QUERY_RESULT_INLINE_MAX_SIZE = 32 * 2**10
+
+
+def post_distributed_query_result_rows(distributed_query_pk, serial_number, rows, inline):
+    # a machine answers a distributed query only once, and an osquery agent re-sends the same
+    # results unchanged, so (distributed_query_pk, serial_number, row index) identifies a row,
+    # and the duplicates can be eliminated by the result store.
+    raw_event = {"distributed_query_pk": distributed_query_pk,
+                 "serial_number": serial_number}
+    rows = remove_null_character(rows)
+    if inline:
+        raw_event["rows"] = rows
+    else:
+        raw_event["filepath"] = default_storage.save(
+            f"osquery/distributed_query_results/{distributed_query_pk}/{uuid.uuid4()}.json",
+            ContentFile(json.dumps(rows).encode("utf-8"))
+        )
+    queues.post_raw_event(DISTRIBUTED_QUERY_RESULTS_ROUTING_KEY, raw_event)
 
 
 # Utility function for the audit trail
