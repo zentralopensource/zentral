@@ -5,11 +5,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.contrib import messages
 from django.core.exceptions import SuspiciousOperation
 from django.db import transaction
-from django.db.models import Count, F, Func, Max, OuterRef, Subquery
-from django.http import FileResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.db.models import BooleanField, Count, ExpressionWrapper, F, Func, Max, OuterRef, Q, Subquery
+from django.http import FileResponse, HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
+from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
@@ -1280,6 +1282,31 @@ class EnrolledDeviceListView(PermissionRequiredMixin, UserPaginationListView):
         return ctx
 
 
+def enrolled_device_command_list_context(enrolled_device, max_command_number=10):
+    commands_qs = (
+        enrolled_device.commands
+                       .select_related("artifact_version__artifact")
+                       # the result blob can be large and is only needed on the download
+                       # endpoint; defer it and expose a cheap boolean for the template
+                       .defer("result")
+                       .annotate(has_result=ExpressionWrapper(Q(result__isnull=False),
+                                                              output_field=BooleanField()))
+                       .order_by("-created_at")
+    )
+    return {
+        "object": enrolled_device,
+        "loaded_commands": [load_command(cmd) for cmd in commands_qs[:max_command_number]],
+        "commands_count": commands_qs.count(),
+        # any command not yet sent or still awaiting a result -> keep polling
+        "commands_pending": enrolled_device.commands.filter(
+            Q(time__isnull=True) | Q(result_time__isnull=True)
+        ).exists(),
+    }
+
+
+# set the CSRF cookie even when no {% csrf_token %} form is rendered, so the
+# command list's JS (delete/poke) always has a token for its X-CSRFToken header
+@method_decorator(ensure_csrf_cookie, name="get")
 class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_enrolleddevice"
     model = EnrolledDevice
@@ -1309,17 +1336,7 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
                                               .order_by("-updated_at"))
         ctx["target_artifacts_count"] = ctx["target_artifacts"].count()
         # commands
-        commands_qs = (
-            self.object.commands
-                       .select_related("artifact_version__artifact")
-                       .all()
-                       .order_by("-created_at")
-        )
-        ctx["loaded_commands"] = [
-            load_command(cmd)
-            for cmd in commands_qs[:self.max_command_number]
-        ]
-        ctx["commands_count"] = commands_qs.count()
+        ctx.update(enrolled_device_command_list_context(self.object, self.max_command_number))
         ctx["enrollment_session_info_list"] = list(self.object.iter_enrollment_session_info())
         ctx["enrollment_session_info_count"] = len(ctx["enrollment_session_info_list"])
         ctx["create_command_links"] = []
@@ -1334,6 +1351,9 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
+# shares the delete button with the detail page, so the command list JS needs
+# the CSRF cookie here too (see EnrolledDeviceView)
+@method_decorator(ensure_csrf_cookie, name="get")
 class EnrolledDeviceCommandsView(PermissionRequiredMixin, UserPaginationListView):
     permission_required = "mdm.view_enrolleddevice"
     model = DeviceCommand
@@ -1346,7 +1366,11 @@ class EnrolledDeviceCommandsView(PermissionRequiredMixin, UserPaginationListView
         return (
             self.enrolled_device.commands
                                 .select_related("artifact_version__artifact")
-                                .all()
+                                # don't load the (potentially large) result blob just to
+                                # decide whether to show the download link
+                                .defer("result")
+                                .annotate(has_result=ExpressionWrapper(Q(result__isnull=False),
+                                                                       output_field=BooleanField()))
                                 .order_by("-created_at")
         )
 
@@ -1355,11 +1379,23 @@ class EnrolledDeviceCommandsView(PermissionRequiredMixin, UserPaginationListView
         ctx["enrolled_device"] = self.enrolled_device
         page = ctx["page_obj"]
         ctx["loaded_commands"] = (load_command(cmd) for cmd in page)
+        # any command not yet sent or still awaiting a result -> keep polling
+        ctx["commands_pending"] = self.enrolled_device.commands.filter(
+            Q(time__isnull=True) | Q(result_time__isnull=True)
+        ).exists()
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
             ctx['reset_link'] = "?{}".format(qd.urlencode())
         return ctx
+
+
+class EnrolledDeviceCommandsFeedView(EnrolledDeviceCommandsView):
+    # XHR-only fragment of EnrolledDeviceCommandsView for the live updates: same
+    # paginated queryset/context, just the table partial; 403 instead of a login
+    # redirect so an expired session can't be swapped into the page as HTML
+    raise_exception = True
+    template_name = "mdm/_devicecommand_list_table.html"
 
 
 class PokeEnrolledDeviceView(PermissionRequiredMixin, View):
@@ -1368,8 +1404,25 @@ class PokeEnrolledDeviceView(PermissionRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
         send_enrolled_device_notification(enrolled_device)
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"status": "ok"})
         messages.info(request, "Device poked!")
         return redirect(enrolled_device)
+
+
+class EnrolledDeviceCommandFeedView(PermissionRequiredMixin, View):
+    permission_required = "mdm.view_enrolleddevice"
+    # XHR-only endpoint: fail with 403 instead of redirecting to the login page,
+    # so an expired session can't be swapped into the command list as HTML
+    raise_exception = True
+
+    def get(self, request, *args, **kwargs):
+        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        return render(
+            request,
+            "mdm/_enrolleddevice_command_list.html",
+            enrolled_device_command_list_context(enrolled_device),
+        )
 
 
 class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateView):

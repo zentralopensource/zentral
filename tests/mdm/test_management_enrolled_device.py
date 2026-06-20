@@ -299,6 +299,16 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(len(response.context["loaded_commands"]), 1)
         self.assertNotContains(response, "See all commands")
 
+    def test_enrolled_device_view_sets_csrf_cookie(self):
+        # the command list JS reads the CSRF token from the cookie for its
+        # delete/poke calls, so the detail page must set it even for a user
+        # whose permissions render no {% csrf_token %} form
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("csrftoken", response.cookies)
+
     def test_enrolled_device_top_10_command(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
         self.login("mdm.view_enrolleddevice")
@@ -335,6 +345,99 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             response,
             reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
         )
+
+    # command feed (realtime polling)
+
+    def _force_queued_device_command(self, enrolled_device):
+        return CustomCommand.create_for_device(
+            enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
+            queue=True
+        )
+
+    def test_enrolled_device_command_feed_unauthenticated_forbidden(self):
+        # XHR-only endpoint: an expired/absent session gets a 403, not a login-page
+        # redirect that would otherwise be swapped into the command list
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        response = self.client.get(
+            reverse("mdm:enrolled_device_command_feed", args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_device_command_feed_permission_denied(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self.login()
+        response = self.client.get(
+            reverse("mdm:enrolled_device_command_feed", args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_device_command_feed_queued_pending(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        cmd = self._force_queued_device_command(session.enrolled_device)
+        self.login("mdm.view_enrolleddevice", "mdm.delete_devicecommand")
+        response = self.client.get(
+            reverse("mdm:enrolled_device_command_feed", args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/_enrolleddevice_command_list.html")
+        self.assertContains(response, "CustomCommand (DeviceInformation)")
+        self.assertContains(response, 'data-pending="1"')
+        # a pending command shows a spinner + a hidden per-row resume button in the status column
+        self.assertContains(response, "spinner-border")
+        self.assertContains(response, "resume-command")
+        self.assertContains(response, reverse("mdm_api:enrolled_device_command", args=(cmd.uuid,)))
+
+    def test_enrolled_device_command_feed_acknowledged_not_pending(self):
+        session, device_udid, _ = force_user_enrollment_session(self.mbu, completed=True)
+        cmd = self._force_queued_device_command(session.enrolled_device)
+        db_command = cmd.db_command
+        db_command.time = db_command.created_at
+        db_command.result_time = db_command.created_at
+        db_command.status = "Acknowledged"
+        db_command.result = plistlib.dumps({"CommandUUID": str(cmd.uuid), "Status": "Acknowledged"})
+        db_command.save()
+        self.login("mdm.view_enrolleddevice", "mdm.delete_devicecommand")
+        response = self.client.get(
+            reverse("mdm:enrolled_device_command_feed", args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-pending="0"')
+        self.assertContains(response, "Acknowledged")
+        # the download link is driven by the has_result annotation (the blob is deferred)
+        self.assertContains(
+            response,
+            reverse("mdm:download_enrolled_device_command_result", args=(cmd.uuid,))
+        )
+        # a resolved command shows its status, not a spinner or resume button
+        self.assertNotContains(response, "spinner-border")
+        self.assertNotContains(response, "resume-command")
+        # a sent command can no longer be deleted
+        self.assertNotContains(response, reverse("mdm_api:enrolled_device_command", args=(cmd.uuid,)))
+
+    # poke
+
+    def test_poke_enrolled_device_redirect(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.change_enrolleddevice")
+        with patch("zentral.contrib.mdm.views.management.send_enrolled_device_notification") as send:
+            response = self.client.post(
+                reverse("mdm:poke_enrolled_device", args=(session.enrolled_device.pk,))
+            )
+        self.assertEqual(response.status_code, 302)
+        send.assert_called_once_with(session.enrolled_device)
+
+    def test_poke_enrolled_device_ajax(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.change_enrolleddevice")
+        with patch("zentral.contrib.mdm.views.management.send_enrolled_device_notification") as send:
+            response = self.client.post(
+                reverse("mdm:poke_enrolled_device", args=(session.enrolled_device.pk,)),
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+        send.assert_called_once_with(session.enrolled_device)
 
     def test_enrolled_device_apple_silicon_none(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
@@ -482,6 +585,54 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             response,
             reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
         )
+
+    def test_enrolled_device_commands_feed_unauthenticated_forbidden(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        response = self.client.get(
+            reverse("mdm:enrolled_device_commands_feed", args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_device_commands_feed_permission_denied(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        self.login()
+        response = self.client.get(
+            reverse("mdm:enrolled_device_commands_feed", args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_device_commands_feed(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        CustomCommand.create_for_device(
+            session.enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
+            queue=True
+        )
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(
+            reverse("mdm:enrolled_device_commands_feed", args=(session.enrolled_device.pk,))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/_devicecommand_list_table.html")
+        self.assertContains(response, "CustomCommand (DeviceInformation)")
+        # a queued command -> pending marker set + spinner shown
+        self.assertContains(response, 'data-pending="1"')
+        self.assertContains(response, "spinner-border")
+
+    def test_enrolled_device_commands_delete_button_and_csrf_cookie(self):
+        session, _, _ = force_user_enrollment_session(self.mbu, completed=True)
+        cmd = CustomCommand.create_for_device(
+            session.enrolled_device,
+            kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
+            queue=True
+        )
+        self.login("mdm.view_enrolleddevice", "mdm.delete_devicecommand")
+        response = self.client.get(reverse("mdm:enrolled_device_commands", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        # the shared rows partial gives the full list the same delete button as the detail page
+        self.assertContains(response, reverse("mdm_api:enrolled_device_command", args=(cmd.uuid,)))
+        # ... and the page sets the CSRF cookie that delete needs
+        self.assertIn("csrftoken", response.cookies)
 
     # create custom command
 
