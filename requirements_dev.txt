@@ -1,3 +1,4 @@
 -c constraints.txt
 
 coverage
+drf-spectacular-sidecar         # locally-served Swagger UI / ReDoc bundles (CSP-friendly)

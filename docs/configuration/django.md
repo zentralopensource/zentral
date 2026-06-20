@@ -184,6 +184,10 @@ A string representing the language code for this installation. See [Internationa
 
 Turns on/off debugging. Never turn in on in production deployments. `false` by default.
 
+### `django.OPENAPI`
+
+Turns on/off the [OpenAPI schema](../development/openapi.md) and its Swagger UI / ReDoc documentation endpoints. Development only — never turn it on in production deployments. `false` by default.
+
 ### `django.LOG_FORMATTER`
 
 Can be used to load a different log formatter. The default one will simply output a formatted string. Available ones:

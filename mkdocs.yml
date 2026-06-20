@@ -45,3 +45,4 @@ nav:
       - Intro: development/index.md
       - Secure coding notes: development/secure-coding.md
       - EE Split: development/ee-split.md
+      - OpenAPI 3.0: development/openapi.md
