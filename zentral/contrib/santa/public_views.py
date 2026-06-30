@@ -25,6 +25,8 @@ logger = logging.getLogger('zentral.contrib.santa.views.api')
 
 class BaseSyncView(View):
     use_enrolled_machine_cache = True
+    allow_doctor_test = False
+    doctor_test_machine_id = "santactl-doctor-test"
 
     def _get_enrollment_secret_secret(self):
         try:
@@ -79,19 +81,25 @@ class BaseSyncView(View):
                 raise PermissionDenied("Missing client certificate")
             return enrolled_machine
 
+    def doctor_test_response(self):
+        raise NotImplementedError
+
     def post(self, request, *args, **kwargs):
         # secret
         self.enrollment_secret_secret = self._get_enrollment_secret_secret()
         if not self.enrollment_secret_secret:
             return JsonResponse({"detail": "Unauthorized"}, status=401)
 
+        self.client_cert_dn = self._get_client_cert_dn()
+
+        if self.allow_doctor_test and kwargs["machine_id"] == self.doctor_test_machine_id:
+            return self.doctor_test_response()
+
         # machine ID
         try:
             self.hardware_uuid = str(UUID(kwargs["machine_id"]))
         except ValueError:
             raise PermissionDenied("Invalid machine id")
-
-        self.client_cert_dn = self._get_client_cert_dn()
 
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
 
@@ -121,6 +129,21 @@ class BaseSyncView(View):
 
 class PreflightView(BaseSyncView):
     use_enrolled_machine_cache = False
+    allow_doctor_test = True
+
+    def doctor_test_response(self):
+        # The probe uses a sentinel machine id that is never enrolled, so we cannot validate a
+        # machine. We do confirm the enrollment secret (and client certificate, if required) so
+        # that a misconfigured client still gets a meaningful failure from doctor.
+        try:
+            enrollment = Enrollment.objects.select_related("configuration").get(
+                secret__secret=self.enrollment_secret_secret
+            )
+        except Enrollment.DoesNotExist:
+            raise PermissionDenied("Unknown enrollment secret")
+        if enrollment.configuration.client_certificate_auth and not self.client_cert_dn:
+            raise PermissionDenied("Missing client certificate")
+        return JsonResponse({})
 
     def _get_primary_user(self):
         # primary user

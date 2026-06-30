@@ -21,6 +21,7 @@ from zentral.contrib.santa.models import (
     Target,
     TargetCounter,
 )
+from zentral.contrib.santa.public_views import BaseSyncView
 from zentral.core.incidents.models import Severity
 from zentral.utils.time import naive_utcnow
 
@@ -231,6 +232,40 @@ class SantaAPIViewsTestCase(TestCase):
         url = reverse("santa_public:deprecated_preflight", args=("bad_secret", hardware_uuid))
         response = self.client.post(url, data=data, content_type="application/json")
         self.assertEqual(response.status_code, 403)
+
+    # doctor preflight probe (santactl doctor)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_doctor_test(self, post_event):
+        response = self.post_as_json("preflight", "santactl-doctor-test", {})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {})
+        # the probe is not a real machine: nothing enrolled, no event posted
+        post_event.assert_not_called()
+        self.assertEqual(EnrolledMachine.objects.count(), 1)  # only the one from setUpTestData
+
+    def test_preflight_doctor_test_no_auth(self):
+        response = self.client.post(reverse("santa_public:preflight", args=("santactl-doctor-test",)))
+        self.assertEqual(response.status_code, 401)
+
+    def test_preflight_doctor_test_bad_secret(self):
+        response = self.post_as_json("preflight", "santactl-doctor-test", {}, enrollment_secret="bad_secret")
+        self.assertEqual(response.status_code, 403)
+
+    def test_preflight_doctor_test_no_mtls(self):
+        self.configuration.client_certificate_auth = True
+        self.configuration.save()
+        response = self.post_as_json("preflight", "santactl-doctor-test", {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_doctor_test_machine_id_rejected_outside_preflight(self):
+        # the exception is scoped to preflight; other sync endpoints still reject the sentinel id
+        response = self.post_as_json("ruledownload", "santactl-doctor-test", {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_base_sync_view_doctor_test_response_not_implemented(self):
+        with self.assertRaises(NotImplementedError):
+            BaseSyncView().doctor_test_response()
 
     def test_preflight_default_usb_options(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
