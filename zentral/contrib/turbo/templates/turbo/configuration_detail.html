@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">Configuration</h3>
+        <div class="ms-auto">
+            {% if perms.turbo.change_configuration %}
+                {% url 'turbo:update_configuration' object.pk as url %}
+                {% button 'UPDATE' url "Edit Configuration" %}
+            {% endif %}
+            {% if perms.turbo.delete_configuration and object.can_be_deleted %}
+                {% url 'turbo:delete_configuration' object.pk as url %}
+                {% button 'DELETE' url "Delete Configuration" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="table-object-properties">
+    <thead>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Name</td>
+            <td>{{ object.name }}</td>
+        </tr>
+        <tr>
+            <td>Description</td>
+            <td>{{ object.description|default:"-"|linebreaksbr }}</td>
+        </tr>
+        <tr>
+            <td>Inventory interval</td>
+            <td>{{ object.inventory_interval }} seconds</td>
+        </tr>
+        <tr>
+            <td>Default check interval</td>
+            <td>{{ object.default_check_interval }} seconds</td>
+        </tr>
+        <tr>
+            <td>Configuration refresh interval</td>
+            <td>{{ object.config_refresh_interval }} seconds</td>
+        </tr>
+        <tr>
+            <td>Results batch size</td>
+            <td>{{ object.results_batch_size }}</td>
+        </tr>
+    </tbody>
+    </table>
+
+    {% created_updated_at object %}
+
+</div>
+
+{% if perms.turbo.view_enrollment %}
+<div class="d-flex justify-content-between mb-3">
+    <h3>Enrollment{{ enrollment_count|pluralize }} ({{ enrollment_count }})</h3>
+    <div class="ms-auto">
+        {% if perms.turbo.add_enrollment %}
+            {% url 'turbo:create_enrollment' object.id as url %}
+            {% button 'CREATE' url "Create new Enrollment" %}
+        {% endif %}
+    </div>
+</div>
+
+{% if enrollments %}
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>ID</th>
+        <th>Business unit</th>
+        <th>Tags</th>
+        <th>Created at</th>
+        <th>Request count</th>
+        <th>Version</th>
+        <th>Distributor</th>
+        <th></th>
+        {% if perms.turbo.change_enrollment or perms.turbo.delete_enrollment %}<th></th>{% endif %}
+    </thead>
+    <tbody>
+        {% for enrollment, distributor, distributor_link in enrollments %}
+        {% with enrollment.secret as secret %}
+        <tr id="enrollment-{{ enrollment.pk }}" class="data-row">
+        <td>{{ enrollment.pk }}</td>
+        <td>
+            {% if perms.inventory.view_metabusinessunit %}
+            <a href="{{ secret.meta_business_unit.get_absolute_url }}">{{ secret.meta_business_unit|default:"-" }}</a>
+            {% else %}
+            {{ secret.meta_business_unit|default:"-" }}
+            {% endif %}
+        </td>
+        <td>
+            {% for tag in secret.tags.all %}
+            {% inventory_tag tag %}
+            {% empty %}
+            -
+            {% endfor %}
+        </td>
+        <td>{{ secret.created_at }}</td>
+        <td>{{ secret.request_count }}{% if secret.quota %} / {{ secret.quota }}{% endif %}</td>
+        <td>{{ enrollment.version }}</td>
+        <td>
+            {% if distributor %}
+            {% if distributor_link %}
+            <a href="{{ distributor.get_absolute_url }}">{{ distributor.get_description_for_enrollment }}</a>
+            {% else %}
+            {{ distributor.get_description_for_enrollment }}
+            {% endif %}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        <td class="text-center text-nowrap">
+            {% if secret.is_used_up %}
+            <span class="text-danger">Enrollment used up.</span>
+            {% elif enrollment.can_be_updated %}
+            <a type="button" class="btn btn-link"
+                aria-label="Download Turbo configuration plist"
+                title="Download Turbo configuration plist"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Turbo configuration plist"
+                href="{% url 'turbo_api:enrollment_plist' enrollment.pk %}">
+                <i class="bi bi-arrow-down-circle"> plist</i>
+            </a>
+            <a type="button" class="btn btn-link"
+                aria-label="Download Turbo configuration profile"
+                title="Download Turbo configuration profile"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download Turbo configuration profile"
+                href="{% url 'turbo_api:enrollment_configuration_profile' enrollment.pk %}">
+                <i class="bi bi-arrow-down-circle"> configuration profile</i>
+            </a>
+            {% endif %}
+        </td>
+        {% if perms.turbo.change_enrollment or perms.turbo.delete_enrollment %}
+        <td class="text-end text-nowrap">
+            {% if not secret.is_used_up and enrollment.can_be_updated %}
+            {% if perms.turbo.change_enrollment %}
+            <a class="btn btn-link" href="{% url 'turbo:bump_enrollment_version' object.pk enrollment.pk %}">
+                <span class="bi bi-hand-thumbs-up" aria-hidden="true"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Bump Enrollment"></span>
+            </a>
+            {% endif %}
+            {% if perms.turbo.delete_enrollment and enrollment.can_be_deleted %}
+                {% url 'turbo:delete_enrollment' object.pk enrollment.pk as url %}
+                {% button 'DELETE' url "Delete Enrollment" %}
+            {% endif %}
+            {% endif %}
+        </td>
+        {% endif %}
+        </tr>
+        {% endwith %}
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
+    {% endif %}
+{% endif %}
+
+{% if perms.turbo.view_recurringjob %}
+<div class="d-flex justify-content-between mb-3">
+    <h3 id="recurring-jobs">Recurring job{{ recurring_job_count|pluralize }} ({{ recurring_job_count }})</h3>
+    <div class="ms-auto">
+        {% if perms.turbo.add_recurringjob %}
+            {% url 'turbo:create_recurring_job' object.pk as url %}
+            {% button 'CREATE' url "Add recurring job" %}
+        {% endif %}
+    </div>
+</div>
+
+{% if recurring_jobs %}
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Job</th>
+        <th>Interval</th>
+        <th>Scope</th>
+        {% if perms.turbo.change_recurringjob or perms.turbo.delete_recurringjob %}
+        <th></th>
+        {% endif %}
+    </thead>
+    <tbody>
+        {% for recurring_job in recurring_jobs %}
+        <tr id="recurring-job-{{ recurring_job.pk }}" class="data-row">
+        <td><a href="{{ recurring_job.job.definition.get_absolute_url }}">{{ recurring_job.job.get_kind_display }}: {{ recurring_job.job.definition }}</a></td>
+        <td>
+            {% if recurring_job.interval %}{{ recurring_job.interval }} seconds
+            {% else %}<span class="text-secondary">configuration default</span>{% endif %}
+        </td>
+        <td>
+            {% for tag in recurring_job.tags.all %}{% inventory_tag tag %}{% endfor %}
+            {% if recurring_job.serial_numbers %}
+            <span class="badge text-bg-secondary">{{ recurring_job.serial_numbers|length }} serial number{{ recurring_job.serial_numbers|length|pluralize }}</span>
+            {% endif %}
+            {% if recurring_job.excluded_tags.all or recurring_job.excluded_serial_numbers %}
+            <div class="text-secondary small">excludes
+              {% for tag in recurring_job.excluded_tags.all %}{% inventory_tag tag %}{% endfor %}
+              {% if recurring_job.excluded_serial_numbers %}{{ recurring_job.excluded_serial_numbers|length }} serial number{{ recurring_job.excluded_serial_numbers|length|pluralize }}{% endif %}
+            </div>
+            {% endif %}
+            {% if not recurring_job.tags.all and not recurring_job.serial_numbers and not recurring_job.excluded_tags.all and not recurring_job.excluded_serial_numbers %}
+            <span class="text-secondary">all machines</span>
+            {% endif %}
+        </td>
+        {% if perms.turbo.change_recurringjob or perms.turbo.delete_recurringjob %}
+        <td class="text-end py-0">
+            {% if perms.turbo.change_recurringjob %}
+                {% url 'turbo:update_recurring_job' object.pk recurring_job.pk as url %}
+                {% button 'UPDATE' url "Edit recurring job" %}
+            {% endif %}
+            {% if perms.turbo.delete_recurringjob %}
+                {% url 'turbo:delete_recurring_job' object.pk recurring_job.pk as url %}
+                {% button 'DELETE' url "Delete recurring job" %}
+            {% endif %}
+        </td>
+        {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+</div>
+{% endif %}
+{% endif %}
+
+{% if perms.turbo.view_onetimejob %}
+<div class="d-flex justify-content-between mb-3">
+    <h3 id="one-time-jobs">One-time job{{ one_time_job_count|pluralize }} ({{ one_time_job_count }})</h3>
+    <div class="ms-auto">
+        {% if perms.turbo.add_onetimejob %}
+            {% url 'turbo:create_one_time_job' object.pk as url %}
+            {% button 'CREATE' url "Add one-time job" %}
+        {% endif %}
+    </div>
+</div>
+
+{% if one_time_jobs %}
+<div class="table-responsive mb-3">
+    <table class="table table-striped align-middle table-hover">
+    <thead>
+        <th>Job</th>
+        <th>Window</th>
+        <th>Scope</th>
+        {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}
+        <th></th>
+        {% endif %}
+    </thead>
+    <tbody>
+        {% for one_time_job in one_time_jobs %}
+        <tr id="one-time-job-{{ one_time_job.pk }}" class="data-row">
+        <td><a href="{{ one_time_job.job.definition.get_absolute_url }}">{{ one_time_job.job.get_kind_display }}: {{ one_time_job.job.definition }}</a></td>
+        <td>
+            {% if one_time_job.not_before or one_time_job.not_after %}
+            {{ one_time_job.not_before|default:"—" }} → {{ one_time_job.not_after|default:"—" }}
+            {% else %}<span class="text-secondary">anytime</span>{% endif %}
+        </td>
+        <td>
+            {% for tag in one_time_job.tags.all %}{% inventory_tag tag %}{% endfor %}
+            {% if one_time_job.serial_numbers %}
+            <span class="badge text-bg-secondary">{{ one_time_job.serial_numbers|length }} serial number{{ one_time_job.serial_numbers|length|pluralize }}</span>
+            {% endif %}
+            {% if one_time_job.excluded_tags.all or one_time_job.excluded_serial_numbers %}
+            <div class="text-secondary small">excludes
+              {% for tag in one_time_job.excluded_tags.all %}{% inventory_tag tag %}{% endfor %}
+              {% if one_time_job.excluded_serial_numbers %}{{ one_time_job.excluded_serial_numbers|length }} serial number{{ one_time_job.excluded_serial_numbers|length|pluralize }}{% endif %}
+            </div>
+            {% endif %}
+            {% if not one_time_job.tags.all and not one_time_job.serial_numbers and not one_time_job.excluded_tags.all and not one_time_job.excluded_serial_numbers %}
+            <span class="text-secondary">all machines</span>
+            {% endif %}
+        </td>
+        {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}
+        <td class="text-end py-0">
+            {% if perms.turbo.change_onetimejob %}
+                {% url 'turbo:update_one_time_job' object.pk one_time_job.pk as url %}
+                {% button 'UPDATE' url "Edit one-time job" %}
+            {% endif %}
+            {% if perms.turbo.delete_onetimejob %}
+                {% url 'turbo:delete_one_time_job' object.pk one_time_job.pk as url %}
+                {% button 'DELETE' url "Delete one-time job" %}
+            {% endif %}
+        </td>
+        {% endif %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    </table>
+    {% if one_time_job_count > 10 %}
+    <a href="{% url 'turbo:one_time_jobs' %}?configuration={{ object.pk }}">See all {{ one_time_job_count }} one-time jobs</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

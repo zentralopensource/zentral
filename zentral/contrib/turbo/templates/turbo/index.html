@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item active">Turbo</li>
+</ol>
+
+<div class="row">
+  <div class="col-md-12">
+    <h2>Turbo</h2>
+  </div>
+  <div class="col-sm-6">
+    <canvas class="chart"
+            data-app="turbo"
+            data-dataset="event_count"
+            width="200"
+            height="120"></canvas>
+  </div>
+  <div class="col-sm-6">
+    <canvas class="chart"
+            data-app="turbo"
+            data-dataset="unique_msn"
+            width="200"
+            height="120"></canvas>
+  </div>
+  <div class="col-md-12">
+    {% if perms.turbo.view_configuration %}
+    <div class="d-flex align-items-center mb-1">
+        <h3>Configuration{{ configuration_count|pluralize }} ({{ configuration_count }})</h3>
+        <div class="ms-auto">
+            {% if perms.turbo.add_configuration %}
+                {% url 'turbo:create_configuration' as url %}
+                {% button 'CREATE' url "Create new Configuration" %}
+            {% endif %}
+        </div>
+    </div>
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Recurring jobs</th>
+          <th>One-time jobs</th>
+          <th>Enrollments</th>
+          <th>Machines</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for configuration in configurations %}
+        <tr>
+          <td><a href="{% url 'turbo:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
+          <td>{{ configuration.recurring_job_count }}</td>
+          <td>{{ configuration.one_time_job_count }}</td>
+          <td>{{ configuration.enrollment_count }}</td>
+          <td>{{ configuration.machine_count }}</td>
+        </tr>
+        {% empty %}
+        {% if perms.turbo.add_configuration %}
+            {% url 'turbo:create_configuration' as link %}
+            {% no_entities 'Configurations' link %}
+        {% else %}
+            {% no_entities 'Configurations' %}
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

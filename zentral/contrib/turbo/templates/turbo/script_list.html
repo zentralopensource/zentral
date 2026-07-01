@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  {% if form.has_changed %}
+  <li class="breadcrumb-item"><a href="{% url 'turbo:scripts' %}">Scripts</a></li>
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Search</li>
+  {% endif %}
+  {% else %}
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Scripts</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Scripts</li>
+  {% endif %}
+  {% endif %}
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Script{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+    <div class="ms-auto">
+        {% if perms.turbo.add_script %}
+            {% url 'turbo:create_script' as url %}
+            {% button 'CREATE' url "Create new Script" %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form">
+        {{ form }}
+        <button type="submit" class="btn btn-link mx-2"><i class="bi bi-search"></i></button>
+    </form>
+</div>
+
+{% if object_list %}
+{% pagination next_url previous_url %}
+<table class="table table-striped align-middle table-hover">
+<thead>
+    <th>Name</th>
+    <th>Version</th>
+    <th>Compliance check</th>
+    <th>Tag</th>
+    {% if perms.turbo.change_script or perms.turbo.delete_script %}
+    <th></th>
+    {% endif %}
+</thead>
+<tbody>
+    {% for script in object_list %}
+    <tr class="data-row">
+    <td><a href="{{ script.get_absolute_url }}">{{ script }}</a></td>
+    <td>{{ script.job.version }}</td>
+    <td>{{ script.compliance_check_enabled|yesno }}</td>
+    <td>{{ script.tag|default:"-" }}</td>
+    {% if perms.turbo.change_script or perms.turbo.delete_script %}
+    <td class="text-end py-0">
+        {% if perms.turbo.change_script %}
+            {% url 'turbo:update_script' script.pk as url %}
+            {% button 'UPDATE' url "Edit Script" %}
+        {% endif %}
+        {% if perms.turbo.delete_script and script.can_be_deleted %}
+            {% url 'turbo:delete_script' script.pk as url %}
+            {% button 'DELETE' url "Delete Script" %}
+        {% endif %}
+    </td>
+    {% endif %}
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
+{% pagination next_url previous_url %}
+{% elif form.has_changed %}
+    {% url 'turbo:scripts' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% else %}
+    {% if perms.turbo.add_script %}
+        {% url 'turbo:create_script' as link %}
+        {% no_entities 'Turbo scripts' link %}
+    {% else %}
+        {% no_entities 'Turbo scripts' %}
+    {% endif %}
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,15 @@
+{% load inventory_extras %}
+{% comment %}Compact scope summary for a JobScope (`job_scope`): tags / serial numbers, exclusions, or all.{% endcomment %}
+{% for tag in job_scope.tags.all %}{% inventory_tag tag %}{% endfor %}
+{% if job_scope.serial_numbers %}
+<span class="badge text-bg-secondary">{{ job_scope.serial_numbers|length }} serial number{{ job_scope.serial_numbers|length|pluralize }}</span>
+{% endif %}
+{% if job_scope.excluded_tags.all or job_scope.excluded_serial_numbers %}
+<div class="text-secondary small">excludes
+  {% for tag in job_scope.excluded_tags.all %}{% inventory_tag tag %}{% endfor %}
+  {% if job_scope.excluded_serial_numbers %}{{ job_scope.excluded_serial_numbers|length }} serial number{{ job_scope.excluded_serial_numbers|length|pluralize }}{% endif %}
+</div>
+{% endif %}
+{% if not job_scope.tags.all and not job_scope.serial_numbers and not job_scope.excluded_tags.all and not job_scope.excluded_serial_numbers %}
+<span class="text-secondary">all machines</span>
+{% endif %}

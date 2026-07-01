@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:enrolled_machines' %}">Enrolled machines</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:enrolled_machine' serial_number %}">{{ serial_number }}</a></li>
+  <li class="breadcrumb-item active">Schedule one-time job</li>
+</ol>
+
+<h2>Schedule a one-time job for {{ serial_number }}</h2>
+<p class="text-secondary">It runs once on this machine, in configuration <strong>{{ configuration }}</strong>.</p>
+
+<form method="post" class="update-form">{% csrf_token %}
+
+  {{ form }}
+
+  <p>
+    <a class="btn btn-outline-secondary" href="{% url 'turbo:enrolled_machine' serial_number %}">Cancel</a>
+    <button class="btn btn-primary" type="submit">Schedule</button>
+  </p>
+</form>
+{% endblock %}

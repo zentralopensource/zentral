@@ -1,0 +1,91 @@
+{% load inventory_extras ui_extras %}
+{% comment %}
+List of the scheduled and one-time jobs that run this Script / MSCPCheck.
+Expects `recurring_jobs` and `one_time_jobs` in the context (see JobDetailMixin). Edit / delete are
+managed on the job's configuration, so the actions carry the job's configuration_id.
+{% endcomment %}
+
+{% if perms.turbo.view_recurringjob %}
+<h3 id="recurring-jobs" class="mt-3">Recurring job{{ recurring_jobs.count|pluralize }} ({{ recurring_jobs.count }})</h3>
+{% if recurring_jobs %}
+<table class="table table-striped align-middle table-hover">
+  <thead>
+    <tr>
+      <th>Configuration</th>
+      <th>Interval</th>
+      <th>Scope</th>
+      {% if perms.turbo.change_recurringjob or perms.turbo.delete_recurringjob %}<th></th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for recurring_job in recurring_jobs %}
+    <tr class="data-row">
+      <td><a href="{{ recurring_job.get_absolute_url }}">{{ recurring_job.configuration }}</a></td>
+      <td>
+        {% if recurring_job.interval %}{{ recurring_job.interval }} seconds
+        {% else %}<span class="text-secondary">configuration default</span>{% endif %}
+      </td>
+      <td>{% include "turbo/_job_scope.html" with job_scope=recurring_job %}</td>
+      {% if perms.turbo.change_recurringjob or perms.turbo.delete_recurringjob %}
+      <td class="text-end py-0">
+        {% if perms.turbo.change_recurringjob %}
+          {% url 'turbo:update_recurring_job' recurring_job.configuration_id recurring_job.pk as url %}
+          {% button 'UPDATE' url "Edit recurring job" %}
+        {% endif %}
+        {% if perms.turbo.delete_recurringjob %}
+          {% url 'turbo:delete_recurring_job' recurring_job.configuration_id recurring_job.pk as url %}
+          {% button 'DELETE' url "Delete recurring job" %}
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-secondary">Not scheduled in any configuration.</p>
+{% endif %}
+{% endif %}
+
+{% if perms.turbo.view_onetimejob %}
+<h3 id="one-time-jobs" class="mt-3">One-time job{{ one_time_jobs.count|pluralize }} ({{ one_time_jobs.count }})</h3>
+{% if one_time_jobs %}
+<table class="table table-striped align-middle table-hover">
+  <thead>
+    <tr>
+      <th>Configuration</th>
+      <th>Window</th>
+      <th>Scope</th>
+      {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}<th></th>{% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for one_time_job in one_time_jobs %}
+    <tr class="data-row">
+      <td><a href="{{ one_time_job.get_absolute_url }}">{{ one_time_job.configuration }}</a></td>
+      <td>
+        {% if one_time_job.not_before or one_time_job.not_after %}
+        {{ one_time_job.not_before|default:"—" }} → {{ one_time_job.not_after|default:"—" }}
+        {% else %}<span class="text-secondary">anytime</span>{% endif %}
+      </td>
+      <td>{% include "turbo/_job_scope.html" with job_scope=one_time_job %}</td>
+      {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}
+      <td class="text-end py-0">
+        {% if perms.turbo.change_onetimejob %}
+          {% url 'turbo:update_one_time_job' one_time_job.configuration_id one_time_job.pk as url %}
+          {% button 'UPDATE' url "Edit one-time job" %}
+        {% endif %}
+        {% if perms.turbo.delete_onetimejob %}
+          {% url 'turbo:delete_one_time_job' one_time_job.configuration_id one_time_job.pk as url %}
+          {% button 'DELETE' url "Delete one-time job" %}
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-secondary">No one-time jobs.</p>
+{% endif %}
+{% endif %}
