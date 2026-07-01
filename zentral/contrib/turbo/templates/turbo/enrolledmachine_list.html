@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  {% if form.has_changed %}
+  <li class="breadcrumb-item"><a href="{% url 'turbo:enrolled_machines' %}">Enrolled machines</a></li>
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Search</li>
+  {% endif %}
+  {% else %}
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Enrolled machines</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Enrolled machines</li>
+  {% endif %}
+  {% endif %}
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Enrolled machine{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+</div>
+
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form">
+        {{ form }}
+        <button type="submit" class="btn btn-link mx-2"><i class="bi bi-search"></i></button>
+    </form>
+</div>
+
+{% if object_list %}
+{% pagination next_url previous_url %}
+<table class="table table-striped align-middle table-hover">
+<thead>
+    <th>Serial number</th>
+    <th>Configuration</th>
+    <th>Last seen</th>
+</thead>
+<tbody>
+    {% for enrolled_machine in object_list %}
+    <tr class="data-row">
+    <td><a href="{% url 'turbo:enrolled_machine' enrolled_machine.serial_number %}">{{ enrolled_machine.serial_number }}</a></td>
+    <td><a href="{{ enrolled_machine.enrollment.configuration.get_absolute_url }}">{{ enrolled_machine.enrollment.configuration }}</a></td>
+    <td>{{ enrolled_machine.last_seen_at|default:"-" }}</td>
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
+{% pagination next_url previous_url %}
+{% elif form.has_changed %}
+    {% url 'turbo:enrolled_machines' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% else %}
+    {% no_entities 'Turbo enrolled machines' %}
+{% endif %}
+
+{% endblock %}

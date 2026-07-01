@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">Create enrollment</li>
+</ol>
+
+<h2>Create Turbo enrollment</h2>
+
+<form method="post" class="form">{% csrf_token %}
+  {% if secret_form %}
+  {{ secret_form }}
+  {% endif %}
+  {% if enrollment_form %}
+  {{ enrollment_form }}
+  {% endif %}
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ configuration.get_absolute_url }}">
+      Cancel
+    </a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}

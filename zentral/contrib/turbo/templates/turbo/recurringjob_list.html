@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  {% if form.has_changed %}
+  <li class="breadcrumb-item"><a href="{% url 'turbo:recurring_jobs' %}">Recurring jobs</a></li>
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Search</li>
+  {% endif %}
+  {% else %}
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Recurring jobs</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Recurring jobs</li>
+  {% endif %}
+  {% endif %}
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<h2 class="mb-3">Recurring job{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form">
+        {{ form }}
+        <button type="submit" class="btn btn-link mx-2"><i class="bi bi-search"></i></button>
+    </form>
+</div>
+
+{% if object_list %}
+{% pagination next_url previous_url %}
+<table class="table table-striped align-middle table-hover">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Job</th>
+      <th>Configuration</th>
+      <th>Interval</th>
+      <th>Scope</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for recurring_job in object_list %}
+    <tr class="data-row">
+      <td>{{ recurring_job.job.get_kind_display }}</td>
+      <td>{{ recurring_job.job.definition }}</td>
+      <td><a href="{{ recurring_job.configuration.get_absolute_url }}">{{ recurring_job.configuration }}</a></td>
+      <td>
+        {% if recurring_job.interval %}{{ recurring_job.interval }} seconds
+        {% else %}<span class="text-secondary">configuration default</span>{% endif %}
+      </td>
+      <td>
+        {% for tag in recurring_job.tags.all %}{% inventory_tag tag %}{% endfor %}
+        {% if recurring_job.serial_numbers %}
+        <span class="badge text-bg-secondary">{{ recurring_job.serial_numbers|length }} serial number{{ recurring_job.serial_numbers|length|pluralize }}</span>
+        {% endif %}
+        {% if recurring_job.excluded_tags.all or recurring_job.excluded_serial_numbers %}
+        <div class="text-secondary small">excludes
+          {% for tag in recurring_job.excluded_tags.all %}{% inventory_tag tag %}{% endfor %}
+          {% if recurring_job.excluded_serial_numbers %}{{ recurring_job.excluded_serial_numbers|length }} serial number{{ recurring_job.excluded_serial_numbers|length|pluralize }}{% endif %}
+        </div>
+        {% endif %}
+        {% if not recurring_job.tags.all and not recurring_job.serial_numbers and not recurring_job.excluded_tags.all and not recurring_job.excluded_serial_numbers %}
+        <span class="text-secondary">all machines</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% pagination next_url previous_url %}
+{% elif form.has_changed %}
+    {% url 'turbo:recurring_jobs' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% else %}
+    {% no_entities 'Turbo recurring jobs' %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:enrolled_machines' %}">Enrolled machines</a></li>
+  <li class="breadcrumb-item active">{{ serial_number }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-3">
+        <h2 class="m-0">{{ serial_number }}</h2>
+        <div class="ms-auto">
+            {% if perms.turbo.add_onetimejob %}
+                {% url 'turbo:schedule_machine_one_time_job' serial_number as url %}
+                {% button 'CREATE' url "Schedule a one-time job for this machine" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="table-object-properties">
+    <thead>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+    </thead>
+    <tbody>
+        <tr><td>Serial number</td><td><a href="{{ machine_url }}">{{ serial_number }}</a></td></tr>
+        <tr><td>Configuration</td><td><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></td></tr>
+        <tr><td>Enrolled at</td><td>{{ enrolled_machine.created_at }}</td></tr>
+        <tr><td>Last seen</td><td>{{ enrolled_machine.last_seen_at|default:"-" }}</td></tr>
+    </tbody>
+    </table>
+
+    <div class="d-flex align-items-center mt-3 mb-1">
+      <h3 class="fs-5 text-secondary m-0">Job status ({{ machine_job_statuses.count }})</h3>
+      <form method="get" class="ms-auto d-flex align-items-center">
+        <select name="kind" class="form-select form-select-sm me-2">
+          <option value="">All types</option>
+          {% for value, label in kind_choices %}
+          <option value="{{ value }}"{% if value == selected_kind %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-link"><i class="bi bi-funnel"></i></button>
+      </form>
+    </div>
+    {% if machine_job_statuses %}
+    <table class="table table-striped align-middle table-hover">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Job</th>
+          <th>Mode</th>
+          <th>Version</th>
+          <th>Interval</th>
+          <th>Last result</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mjs in machine_job_statuses %}
+        <tr class="data-row{% if mjs.removed_at %} text-secondary{% endif %}">
+          <td>{{ mjs.job.get_kind_display }}</td>
+          <td>
+            {% with definition=mjs.job.definition %}
+            <a href="{{ definition.get_absolute_url }}">{{ definition }}</a>
+            {% endwith %}
+            {% if mjs.removed_at %}<span class="badge text-bg-secondary">removed</span>{% endif %}
+          </td>
+          <td>{% if mjs.one_time_job_id %}one-time{% else %}recurring{% endif %}</td>
+          <td>
+            {{ mjs.seen_version|default:"-" }}
+            {% if mjs.seen_version and mjs.seen_version != mjs.job.version %}
+            <span class="badge text-bg-warning" title="Current version is {{ mjs.job.version }}">stale</span>
+            {% endif %}
+          </td>
+          <td>{% if mjs.seen_interval %}{{ mjs.seen_interval }}s{% else %}-{% endif %}</td>
+          <td>{{ mjs.last_result_at|default:"-" }}</td>
+          <td>{{ mjs.last_seen_at|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-secondary">No job status reported yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

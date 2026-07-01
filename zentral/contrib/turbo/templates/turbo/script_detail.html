@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+{% load inventory_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:scripts' %}">Scripts</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-3">
+        <h2 class="m-0">{{ object }}</h2>
+        <div class="ms-auto">
+            {% if perms.turbo.change_script %}
+                {% url 'turbo:update_script' object.pk as url %}
+                {% button 'UPDATE' url "Edit Script" %}
+            {% endif %}
+            {% if perms.turbo.delete_script and object.can_be_deleted %}
+                {% url 'turbo:delete_script' object.pk as url %}
+                {% button 'DELETE' url "Delete Script" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="table-object-properties">
+    <thead>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+    </thead>
+    <tbody>
+        <tr><td>Name</td><td>{{ object.name }}</td></tr>
+        <tr><td>Description</td><td>{{ object.description|default:"-"|linebreaksbr }}</td></tr>
+        <tr><td>Source</td><td><pre class="mb-0"><code>{{ object.source }}</code></pre></td></tr>
+        <tr><td>Run on Intel architecture</td><td>{{ object.arch_amd64|yesno }}</td></tr>
+        <tr><td>Run on Apple Silicon architecture</td><td>{{ object.arch_arm64|yesno }}</td></tr>
+        <tr><td>Minimum OS version</td><td>{{ object.min_os_version|default:"-" }}</td></tr>
+        <tr><td>Maximum OS version</td><td>{{ object.max_os_version|default:"-" }}</td></tr>
+        <tr>
+            <td>Tag</td>
+            <td>{% if object.tag %}{% inventory_tag object.tag %}{% else %}-{% endif %}</td>
+        </tr>
+        <tr><td>Compliance check</td><td>{{ object.compliance_check_enabled|yesno }}</td></tr>
+    </tbody>
+    </table>
+
+    {% created_updated_at object %}
+
+    {% include "turbo/_object_jobs.html" %}
+
+</div>
+{% endblock %}

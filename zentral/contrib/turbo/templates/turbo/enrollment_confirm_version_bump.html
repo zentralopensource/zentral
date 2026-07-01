@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ enrollment.configuration.get_absolute_url }}">{{ enrollment.configuration }}</a></li>
+  <li class="breadcrumb-item active">Bump enrollment version</li>
+</ol>
+
+<h2>Bump enrollment version</h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to bump this enrollment version?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ enrollment.get_absolute_url }}">No</a>
+    <button class="btn btn-primary" type="submit">Yes</button>
+  </p>
+</form>
+{% endblock %}
