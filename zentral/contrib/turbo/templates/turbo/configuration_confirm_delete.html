@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object }}</a></li>
+  <li class="breadcrumb-item active">Delete</li>
+</ol>
+
+<h2>Delete configuration</h2>
+
+<form method="POST" class="form">{% csrf_token %}
+  <p>Do you really want to delete the Turbo configuration <i>{{ object }}</i>?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}
