@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:enrolled_machines' %}">Enrolled machines</a></li>
+  <li class="breadcrumb-item active">{{ serial_number }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-3">
+        <h2 class="m-0">{{ serial_number }}</h2>
+        <div class="ms-auto">
+            {% if perms.turbo.add_onetimejob %}
+                {% url 'turbo:schedule_machine_one_time_job' urlsafe_serial_number as url %}
+                {% button 'CREATE' url "Schedule a one-time job for this machine" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="table-object-properties">
+    <thead>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+    </thead>
+    <tbody>
+        <tr><td>Serial number</td><td><a href="{{ machine_url }}">{{ serial_number }}</a></td></tr>
+        <tr><td>Configuration</td><td><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></td></tr>
+        <tr><td>Enrolled at</td><td>{{ enrolled_machine.created_at }}</td></tr>
+        <tr><td>Last seen</td><td>{{ enrolled_machine.last_seen_at|default:"-" }}</td></tr>
+    </tbody>
+    </table>
+
+    <div class="d-flex align-items-center mt-3 mb-1">
+      <h3 class="fs-5 text-secondary m-0">Jobs</h3>
+      <form method="get" class="ms-auto d-flex align-items-center">
+        <select name="kind" class="form-select form-select-sm me-2">
+          <option value="">All types</option>
+          {% for value, label in kind_choices %}
+          <option value="{{ value }}"{% if value == selected_kind %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm btn-link"><i class="bi bi-funnel"></i></button>
+      </form>
+    </div>
+
+    <h4 class="fs-6 text-secondary mt-2 mb-1">One-time ({{ one_time_job_machines.count }})</h4>
+    {% if one_time_job_machines %}
+    <table class="table table-striped align-middle table-hover">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Job</th>
+          <th>Version</th>
+          <th>Last seen</th>
+          <th>Ran at</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for otjm in one_time_job_machines %}
+        {% with job=otjm.one_time_job.job %}
+        <tr class="data-row{% if otjm.removed_at %} text-secondary{% endif %}">
+          <td>{{ job.get_kind_display }}</td>
+          <td>
+            {% with definition=job.definition %}
+            <a href="{{ definition.get_absolute_url }}">{{ definition }}</a>
+            {% endwith %}
+            {% if otjm.removed_at %}<span class="badge text-bg-secondary">removed</span>{% endif %}
+          </td>
+          <td>
+            {{ otjm.seen_version|default:"-" }}
+            {% if otjm.seen_version and otjm.seen_version != job.version %}
+            <span class="badge text-bg-warning" title="Current version is {{ job.version }}">stale</span>
+            {% endif %}
+          </td>
+          <td>{{ otjm.last_seen_at|default:"-" }}</td>
+          <td>{{ otjm.last_result_at|default:"-" }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-secondary">No one-time jobs reported yet.</p>
+    {% endif %}
+
+    <h4 class="fs-6 text-secondary mt-3 mb-1">Recurring ({{ recurring_job_machines.count }})</h4>
+    {% if recurring_job_machines %}
+    <table class="table table-striped align-middle table-hover">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Job</th>
+          <th>Version</th>
+          <th>Interval</th>
+          <th>Last run</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rjm in recurring_job_machines %}
+        {% with job=rjm.recurring_job.job %}
+        <tr class="data-row{% if rjm.removed_at %} text-secondary{% endif %}">
+          <td>{{ job.get_kind_display }}</td>
+          <td>
+            {% with definition=job.definition %}
+            <a href="{{ definition.get_absolute_url }}">{{ definition }}</a>
+            {% endwith %}
+            {% if rjm.removed_at %}<span class="badge text-bg-secondary">removed</span>{% endif %}
+          </td>
+          <td>
+            {{ rjm.seen_version|default:"-" }}
+            {% if rjm.seen_version and rjm.seen_version != job.version %}
+            <span class="badge text-bg-warning" title="Current version is {{ job.version }}">stale</span>
+            {% endif %}
+          </td>
+          <td>{% if rjm.seen_interval %}{{ rjm.seen_interval }}s{% else %}-{% endif %}</td>
+          <td>{{ rjm.last_result_at|default:"-" }}</td>
+          <td>{{ rjm.last_seen_at|default:"-" }}</td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-secondary">No recurring jobs reported yet.</p>
+    {% endif %}
+</div>
+{% endblock %}
