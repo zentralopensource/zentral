@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">Delete one-time job</li>
+</ol>
+
+<h2>Delete one-time job</h2>
+
+<form method="POST" class="form">{% csrf_token %}
+  <p>Do you really want to delete the one-time job <i>{{ object.job.get_kind_display }}: {{ object.job.definition }}</i>?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ configuration.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}
