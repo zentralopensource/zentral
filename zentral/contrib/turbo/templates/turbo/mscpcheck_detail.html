@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:mscp_checks' %}">mSCP checks</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-3">
+        <h2 class="m-0">{{ object }}</h2>
+        <div class="ms-auto">
+            {% if perms.turbo.change_mscpcheck %}
+                {% url 'turbo:update_mscp_check' object.pk as url %}
+                {% button 'UPDATE' url "Edit mSCP check" %}
+            {% endif %}
+            {% if perms.turbo.delete_mscpcheck and object.can_be_deleted %}
+                {% url 'turbo:delete_mscp_check' object.pk as url %}
+                {% button 'DELETE' url "Delete mSCP check" %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="table-object-properties">
+    <thead>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+    </thead>
+    <tbody>
+        <tr><td>Rule ID</td><td>{{ object.rule_id }}</td></tr>
+        <tr><td>Baseline</td><td>{{ object.baseline|default:"-" }}</td></tr>
+        <tr>
+            <td>ODV override</td>
+            <td>{% if object.odv is not None %}{{ object.odv }}{% else %}<span class="text-secondary">defer to baseline</span>{% endif %}</td>
+        </tr>
+    </tbody>
+    </table>
+
+    {% created_updated_at object %}
+
+    {% include "turbo/_object_jobs.html" %}
+
+</div>
+{% endblock %}

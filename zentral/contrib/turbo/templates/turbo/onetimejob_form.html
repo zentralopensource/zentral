@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:configurations' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ configuration.get_absolute_url }}">{{ configuration }}</a></li>
+  <li class="breadcrumb-item active">{% if object %}Update{% else %}Add{% endif %} one-time job</li>
+</ol>
+
+<h2>{% if object %}Update{% else %}Add{% endif %} one-time job</h2>
+
+<form method="post" class="update-form">{% csrf_token %}
+
+  {{ form }}
+
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ configuration.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-primary" type="submit">Save</button>
+  </p>
+</form>
+{% endblock %}
