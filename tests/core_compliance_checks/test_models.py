@@ -30,6 +30,11 @@ class ComplianceChecksTestCase(TestCase):
         self.assertEqual(result[2], (None, Status.FAILED, None))
         self.assertEqual(MachineStatus.objects.filter(serial_number=serial_number).count(), 2)
 
+    def test_status_choices_exclude_pending_and_out_of_scope(self):
+        values = [v for v, _ in Status.choices()]
+        self.assertNotIn(Status.PENDING.value, values)
+        self.assertNotIn(Status.OUT_OF_SCOPE.value, values)
+
     def test_update_machine_statuses_to_old_noop(self):
         cc1 = self._force_compliance_check()
         serial_number = get_random_string(12)
