@@ -141,6 +141,17 @@ class TurboScriptAPITestCase(TurboAPITestCase):
         self.assertIsNone(script.compliance_check)
         self.assertFalse(ComplianceCheck.objects.filter(pk=cc_pk).exists())
 
+    def test_patch_script_method_not_allowed(self):
+        # Zentral only does full updates — PATCH is rejected by the shared audit view, so
+        # ScriptSerializer.update() can rely on compliance_check_enabled being present
+        script = force_script()
+        self.set_permissions("turbo.change_script")
+        response = self.client.patch(reverse("turbo_api:script", args=(script.pk,)),
+                                     data={"description": "partial"},
+                                     content_type="application/json",
+                                     HTTP_AUTHORIZATION=f"Token {self._get_api_key()}")
+        self.assertEqual(response.status_code, 405)
+
     def test_delete_script_deletes_compliance_check(self):
         script = force_script(compliance_check=True)
         cc_pk = script.compliance_check.pk
