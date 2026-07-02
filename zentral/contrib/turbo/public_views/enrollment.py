@@ -7,11 +7,9 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from django.views.generic import View
-from rest_framework.generics import RetrieveAPIView
 
-from zentral.contrib.inventory.events import post_enrollment_info_request_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.public_views import EnrollmentSecretAuthentication
+from zentral.contrib.inventory.public_views import BaseEnrollmentInfoView, EnrollmentSecretAuthentication
 from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
 from zentral.core.compliance_checks.models import MachineStatus
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -29,25 +27,11 @@ class TurboEnrollmentSecretAuthentication(EnrollmentSecretAuthentication):
     enrollment_model = Enrollment
 
 
-class EnrollmentInfoView(RetrieveAPIView):
-    """Return an enrollment's info (its current version), identified by its secret in the
-    Authorization header — the agent polls it to notice a version bump."""
+class EnrollmentInfoView(BaseEnrollmentInfoView):
+    """Return the enrollment's info (its current version) — the agent polls it to notice a bump."""
     authentication_classes = [TurboEnrollmentSecretAuthentication]
-    permission_classes = []  # the auth class gates access; no Django user is attached
     serializer_class = EnrollmentInfoSerializer
     queryset = Enrollment.objects.all()  # hint for drf-spectacular; runtime uses get_object()
-
-    def get_object(self):
-        return self.request.auth  # the auth class resolves the header into the Enrollment
-
-    def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        user_agent, ip = user_agent_and_ip_address_from_request(request)
-        serial_number = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER") or None
-        post_enrollment_info_request_event(
-            TurboEnrollmentSecretAuthentication.enrollment_event_type, user_agent, ip,
-            {"status": "ok", "enrollment": {"pk": request.auth.pk}}, machine_serial_number=serial_number)
-        return response
 
 
 class EnrollView(WireErrorMixin, View):
