@@ -95,6 +95,16 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
                           if 'from "turbo_enrolledmachine"' in q["sql"].lower()]
         self.assertEqual(per_row_counts, [])
 
+    def test_patch_enrollment_method_not_allowed(self):
+        # Zentral only does full updates — PATCH is rejected by the shared audit view, so
+        # EnrollmentSerializer.update() can rely on the nested secret being present
+        enrollment = force_enrollment(meta_business_unit=self.mbu)
+        self.set_permissions("turbo.change_enrollment")
+        response = self.client.patch(reverse("turbo_api:enrollment", args=(enrollment.pk,)),
+                                     data={}, content_type="application/json",
+                                     HTTP_AUTHORIZATION=f"Token {self._get_api_key()}")
+        self.assertEqual(response.status_code, 405)
+
     def test_delete_enrollment(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
         pk = enrollment.pk
