@@ -117,7 +117,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(json_response["pk"], self.enrollment.id)
         self.assertEqual(json_response["version"], self.enrollment.version)
 
-    @patch("zentral.contrib.munki.public_views.post_enrollment_info_request_event")
+    @patch("zentral.contrib.inventory.public_views.post_enrollment_info_request_event")
     def test_enrollment_ok_posts_event(self, post_event):
         response = self._get_as_json(reverse("munki_public:enrollment"),
                                      HTTP_AUTHORIZATION="ZtlEnrollmentSecret {}"
@@ -129,7 +129,7 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(payload, {"status": "ok", "enrollment": {"pk": self.enrollment.pk}})
         self.assertIsNone(post_event.call_args.kwargs.get("machine_serial_number"))
 
-    @patch("zentral.contrib.munki.public_views.post_enrollment_info_request_event")
+    @patch("zentral.contrib.inventory.public_views.post_enrollment_info_request_event")
     def test_enrollment_ok_with_serial_number_posts_event(self, post_event):
         serial_number = get_random_string(12)
         response = self._get_as_json(reverse("munki_public:enrollment"),
