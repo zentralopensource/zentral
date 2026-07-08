@@ -10,6 +10,7 @@ module.exports = {
     main: './server/static_src/js/main.js',
     theme: './server/static_src/js/theme.js',
     user_portal: './server/static_src/js/user_portal.js',
+    swagger: './server/static_src/js/swagger.js',
   },
   output: {
     filename: '[name].js',
@@ -27,6 +28,18 @@ module.exports = {
             generator: {
                 filename: 'icons/[hash].svg'
             }
+      },
+      {
+        // Plain CSS pulled from node_modules (e.g. swagger-ui-dist)
+        test: /\.css$/,
+        use: [
+          {
+            loader: miniCssExtractPlugin.loader
+          },
+          {
+            loader: 'css-loader'
+          }
+        ]
       },
       {
         test: /\.(scss)$/,

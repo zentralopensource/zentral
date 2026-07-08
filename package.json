@@ -15,7 +15,8 @@
     "@popperjs/core": "^2.11.8",
     "bootstrap": "^5.3.2",
     "bootstrap-icons": "^1.11",
-    "chart.js": "^4.5.1"
+    "chart.js": "^4.5.1",
+    "swagger-ui-dist": "^5.32.8"
   },
   "scripts": {
     "build": "webpack build --mode=production"
