@@ -1,0 +1,46 @@
+---
+name: OpenAPI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  generate_schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # The `spectacular` management command and the drf-spectacular app are only
+      # wired up when django.OPENAPI is true (and it is false by default, even in
+      # the dev config). Flip it on in the checked-out dev config, which the web
+      # container reads through the bind mount.
+      - name: Enable OpenAPI in the dev configuration
+        run: |
+          conf=conf/start/zentral/base.json
+          jq '.django.OPENAPI = true' "$conf" > "$conf.tmp"
+          mv "$conf.tmp" "$conf"
+
+      - name: Generate and validate the OpenAPI schema
+        run: >-
+          docker compose run --quiet-pull --quiet-build --no-deps -u root web
+          python server/manage.py spectacular
+          --validate
+          --file /zentral/openapi-schema.yaml
+        env:
+          COMPOSE_DOCKER_CLI_BUILD: 1
+          DOCKER_BUILDKIT: 1
+
+      - name: Upload the OpenAPI schema
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: openapi-schema
+          path: openapi-schema.yaml
+          if-no-files-found: error

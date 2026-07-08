@@ -15,6 +15,7 @@
   "django": {
     "SECRET_KEY": "DJANGO SECRET !!! CHANGE THIS !!! DO NOT USE IN PRODUCTION !!!",
     "DEBUG": true,
+    "OPENAPI": true,
     "ALLOWED_HOSTS": [
       "zentral",
       "web"
