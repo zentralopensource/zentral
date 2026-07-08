@@ -1,0 +1,25 @@
+// Standalone styles for the drf-spectacular Swagger UI page. The page loads
+// Swagger's own CSS but none of Zentral's bundles, so this small bundle carries
+// just the branded header — and, crucially, pulls the logo straight from
+// static_src via webpack (url()) instead of a hand-copied static/ duplicate.
+
+html { box-sizing: border-box; overflow-y: scroll; }
+*, *:after, *:before { box-sizing: inherit; }
+body { background: #fafafa; margin: 0; }
+
+.zentral-swagger-header {
+    background: #ffffff;
+    border-bottom: 1px solid #e6e6e6;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+
+    .zentral-logo {
+        background-image: url(../images/logo-light.svg);
+        background-repeat: no-repeat;
+        background-size: contain;
+        width: 128px;
+        height: 32px;
+        display: block;
+    }
+}
