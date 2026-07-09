@@ -52,7 +52,7 @@ if settings.OPENAPI:
 
     urlpatterns += [
         path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-        path('api/schema/elements/', SpectacularElementsView.as_view(url_name='schema'), name='elements'),
+        path('api/schema/explorer/', SpectacularElementsView.as_view(url_name='schema'), name='elements'),
     ]
 
 

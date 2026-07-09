@@ -6,16 +6,16 @@ Zentral uses [drf-spectacular](https://drf-spectacular.readthedocs.io/) to gener
 
 The settings and URL wiring is enabled only when the [`django.OPENAPI`](../configuration/django.md#djangoopenapi) flag is `true` (and `DEBUG` is on). It is `false` by default — do not turn it on in production deployments.
 
-## Viewing the documentation
+## Viewing the API documentation
 
 With the development server running, two endpoints are exposed:
 
 | Path | Description |
 | --- | --- |
 | `/api/schema/` | The raw OpenAPI schema (YAML) |
-| `/api/schema/elements/` | [Stoplight Elements](https://stoplight.io/open-source/elements) |
+| `/api/schema/explorer/` | OpenAPI schema explorer [Stoplight Elements](https://stoplight.io/open-source/elements) |
 
-The Elements assets are served locally from `server/static/dist/` — no external CDN is used — so they load under Zentral's Content Security Policy. They are bundled through webpack (the `elements` entry in `webpack.config.js`). Run `npm run build` to generate the assets.
+The explorer assets are served locally from `server/static/dist/`. They are bundled through webpack (the `elements` entry in `webpack.config.js`). Run `npm run build` to generate the assets.
 
 ## Generating the schema file
 
@@ -37,3 +37,6 @@ The `spectacular` command is only registered when `OPENAPI` is `true` (and `DEBU
 docker compose -f docker-compose.yml \
     exec web python server/manage.py spectacular --validate --file openapi-schema.yaml
 ```
+
+
+[OAD(./openapi-schema.yaml)]
