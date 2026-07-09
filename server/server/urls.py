@@ -47,11 +47,12 @@ urlpatterns = [
 
 # OpenAPI schema endpoints
 if settings.OPENAPI:
-    from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+    from drf_spectacular.views import SpectacularAPIView
+    from server.openapi.views import SpectacularElementsView
 
     urlpatterns += [
         path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-        path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+        path('api/schema/elements/', SpectacularElementsView.as_view(url_name='schema'), name='elements'),
     ]
 
 

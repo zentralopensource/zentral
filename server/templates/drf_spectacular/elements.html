@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+{% load static %}
+{# Project override: @stoplight/elements is bundled locally via webpack           #}
+{# (dist/elements.*) rather than the unpkg CDN, so it loads under Zentral's CSP.   #}
+{# The <elements-api> web component reads its schema URL from an attribute, so no  #}
+{# inline script is needed.                                                        #}
+<html>
+  <head>
+    <title>{{ title|default:"Elements" }}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="icon" href="{% static 'favicon.ico' %}">
+    <link rel="stylesheet" href="{% static 'dist/elements.css' %}">
+  </head>
+  <body>
+    <elements-api apiDescriptionUrl="{{ schema_url }}" router="hash" layout="sidebar" logo="{% static 'images/logo.svg' %}"></elements-api>
+    <script src="{% static 'dist/elements.js' %}"></script>
+  </body>
+</html>

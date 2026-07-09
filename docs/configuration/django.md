@@ -186,7 +186,7 @@ Turns on/off debugging. Never turn in on in production deployments. `false` by d
 
 ### `django.OPENAPI`
 
-Turns on/off the [OpenAPI schema](../development/openapi.md) and its Swagger UI documentation endpoints. It only takes effect when [`django.DEBUG`](#djangodebug) is also `true`; with `DEBUG` off it stays disabled regardless of this flag. Development only — never turn it on in production deployments. `false` by default.
+Turns on/off the [OpenAPI schema](../development/openapi.md) and its Stoplight Elements documentation endpoint. It only takes effect when [`django.DEBUG`](#djangodebug) is also `true`; with `DEBUG` off it stays disabled regardless of this flag. Development only — never turn it on in production deployments. `false` by default.
 
 ### `django.LOG_FORMATTER`
 
