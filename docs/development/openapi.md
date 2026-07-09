@@ -8,14 +8,14 @@ The settings and URL wiring is enabled only when the [`django.OPENAPI`](../confi
 
 ## Viewing the documentation
 
-With the development server running, three endpoints are exposed:
+With the development server running, two endpoints are exposed:
 
 | Path | Description |
 | --- | --- |
 | `/api/schema/` | The raw OpenAPI schema (YAML) |
-| `/api/schema/swagger-ui/` | [Swagger UI](https://swagger.io/tools/swagger-ui/) |
+| `/api/schema/elements/` | [Stoplight Elements](https://stoplight.io/open-source/elements) |
 
-The Swagger UI assets are served locally from `server/static/dist/` — no external CDN is used — so they load under Zentral's Content Security Policy. Swagger UI is bundled through webpack (the `swagger` entry in `webpack.config.js`). Run `npm run build` to generate the assets.
+The Elements assets are served locally from `server/static/dist/` — no external CDN is used — so they load under Zentral's Content Security Policy. They are bundled through webpack (the `elements` entry in `webpack.config.js`). Run `npm run build` to generate the assets.
 
 ## Generating the schema file
 

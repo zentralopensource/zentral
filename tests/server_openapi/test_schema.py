@@ -49,6 +49,6 @@ class OpenAPISchemaTestCase(TestCase):
             response = self.client.get(reverse("schema"))
         self.assertEqual(response.status_code, 200)
 
-    def test_swagger_ui_endpoint(self):
-        response = self.client.get(reverse("swagger-ui"))
+    def test_elements_endpoint(self):
+        response = self.client.get(reverse("elements"))
         self.assertEqual(response.status_code, 200)
