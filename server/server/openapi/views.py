@@ -23,7 +23,7 @@ class SpectacularElementsView(APIView):
     authentication_classes = AUTHENTICATION_CLASSES
     url_name = 'schema'
     url = None
-    template_name = 'drf_spectacular/elements.html'
+    template_name = 'openapi/elements.html'
     title = spectacular_settings.TITLE
 
     @extend_schema(exclude=True)
