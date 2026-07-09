@@ -244,8 +244,10 @@ class CommandBaseForm(forms.Form):
 
 class CommandBaseSerializer(serializers.Serializer):
     def __init__(self, *args, **kwargs):
-        self.channel = kwargs.pop("channel")
-        self.enrolled_device = kwargs.pop("enrolled_device")
+        # channel and enrolled_device default to None so drf-spectacular can
+        # instantiate the serializer without arguments for schema introspection.
+        self.channel = kwargs.pop("channel", None)
+        self.enrolled_device = kwargs.pop("enrolled_device", None)
         self.enrolled_user = kwargs.pop("enrolled_user", None)
         super().__init__(*args, **kwargs)
 

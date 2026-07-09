@@ -21,6 +21,8 @@ class DeviceLockHelperMixin:
     pin_regex = r"[0-9]{6}"
 
     def update_fields(self):
+        if self.enrolled_device is None:
+            return
         if not self.enrolled_device.platform == Platform.MACOS:
             self.fields.pop("pin")
 
