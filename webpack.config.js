@@ -10,7 +10,7 @@ module.exports = {
     main: './server/static_src/js/main.js',
     theme: './server/static_src/js/theme.js',
     user_portal: './server/static_src/js/user_portal.js',
-    swagger: './server/static_src/js/swagger.js',
+    elements: './server/static_src/js/elements.js',
   },
   output: {
     filename: '[name].js',
