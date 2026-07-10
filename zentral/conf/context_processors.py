@@ -1,4 +1,10 @@
+from django.conf import settings as django_settings
 from zentral.conf import settings
+
+
+def openapi(request):
+    """Django context processor to expose the OPENAPI flag to templates."""
+    return {"zentral_openapi": django_settings.OPENAPI}
 
 
 def extra_links(request):
