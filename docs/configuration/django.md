@@ -128,7 +128,7 @@ The connection string used by Celery to connect to the task management queues. T
 
 ### `django.CELERY_BROKER_TRANSPORT_OPTIONS`
 
-Default: `{}` 
+Default: `{}`
 
 A dict of additional options passed to the underlying Celery transport. Please refer to the [Celery documentation](https://docs.celeryproject.org/en/stable/userguide/configuration.html#std-setting-broker_transport_options).
 
@@ -183,6 +183,10 @@ A string representing the language code for this installation. See [Internationa
 ### `django.DEBUG`
 
 Turns on/off debugging. Never turn in on in production deployments. `false` by default.
+
+### `django.OPENAPI`
+
+Turns on/off the [OpenAPI schema](../development/openapi.md) and its Stoplight Elements documentation endpoint. It only takes effect when [`django.DEBUG`](#djangodebug) is also `true`; with `DEBUG` off it stays disabled regardless of this flag. Development only — never turn it on in production deployments. `false` by default.
 
 ### `django.LOG_FORMATTER`
 

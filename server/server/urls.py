@@ -1,9 +1,12 @@
 import logging
-from django.urls import include, path
+
+from accounts.forms import PasswordResetForm
+from accounts.views import login
+from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from accounts.views import login
-from accounts.forms import PasswordResetForm
+from django.urls import include, path
+
 from zentral.conf import settings as zentral_settings
 from zentral.utils.views import server_error
 
@@ -40,6 +43,17 @@ urlpatterns = [
          auth_views.PasswordResetCompleteView.as_view(),
          name='password_reset_complete'),
 ]
+
+
+# OpenAPI schema endpoints
+if settings.OPENAPI:
+    from drf_spectacular.views import SpectacularAPIView
+    from server.openapi.views import SpectacularElementsView
+
+    urlpatterns += [
+        path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+        path('api/schema/explorer/', SpectacularElementsView.as_view(url_name='schema'), name='elements'),
+    ]
 
 
 # zentral apps
