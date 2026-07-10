@@ -7,12 +7,11 @@ from django.core.exceptions import SuspiciousOperation
 from django.http import JsonResponse
 from django.utils.crypto import get_random_string
 from django.views.generic import View
-from rest_framework.generics import RetrieveAPIView
 
-from zentral.contrib.inventory.events import post_enrollment_info_request_event, post_machine_snapshot_raw_event
+from zentral.contrib.inventory.events import post_machine_snapshot_raw_event
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.contrib.inventory.public_views import EnrollmentSecretAuthentication
+from zentral.contrib.inventory.public_views import BaseEnrollmentInfoView, EnrollmentSecretAuthentication
 from zentral.contrib.inventory.utils import add_machine_tags, verify_enrollment_secret
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
@@ -42,28 +41,11 @@ class MunkiEnrollmentSecretAuthentication(EnrollmentSecretAuthentication):
     enrollment_model = Enrollment
 
 
-class EnrollmentView(RetrieveAPIView):
+class EnrollmentView(BaseEnrollmentInfoView):
     """Return information about an enrollment, identified by its secret in the Authorization header."""
     authentication_classes = [MunkiEnrollmentSecretAuthentication]
-    permission_classes = []  # auth class gates access; no Django user is attached
     serializer_class = EnrollmentInfoSerializer
     queryset = Enrollment.objects.all()  # hint for drf-spectacular; runtime uses get_object()
-
-    def get_object(self):
-        # the auth class resolves the Authorization header into the Enrollment instance
-        return self.request.auth
-
-    def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
-        user_agent, ip = user_agent_and_ip_address_from_request(request)
-        serial_number = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER") or None
-        post_enrollment_info_request_event(
-            MunkiEnrollmentSecretAuthentication.enrollment_event_type,
-            user_agent, ip,
-            {"status": "ok", "enrollment": {"pk": request.auth.pk}},
-            machine_serial_number=serial_number,
-        )
-        return response
 
 
 class EnrollView(View):

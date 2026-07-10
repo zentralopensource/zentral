@@ -158,6 +158,7 @@
       }
     },
     "zentral.contrib.osquery": {},
+    "zentral.contrib.turbo": {},
     "zentral.contrib.puppet": {
       "instances": [
         {
