@@ -90,6 +90,7 @@ KNOWN_COMMANDS = {
     "gunicorn": ["gunicorn",
                  "--worker-tmp-dir", "/dev/shm",
                  "--error-logfile", "-",
+                 "--config", "/zentral/server/server/gunicorn_conf.py",
                  "--chdir", "/zentral/server", "server.wsgi"],
     "runworker": ["python", 'server/manage.py', 'runworker'],
     "runworkers": ["python", 'server/manage.py', 'runworkers'],
