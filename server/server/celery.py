@@ -1,7 +1,7 @@
 import logging
 import os
 from celery import Celery, states
-from celery.signals import before_task_publish
+from celery.signals import before_task_publish, worker_process_shutdown, worker_shutdown
 from django.utils.functional import SimpleLazyObject
 
 
@@ -88,3 +88,18 @@ def create_task_result_on_publish(sender=None, headers=None, body=None, **kwargs
 
 
 before_task_publish.connect(create_task_result_on_publish, dispatch_uid='create_task_result_on_publish')
+
+
+# flush the event producer when a worker shuts down: the sender threads run in
+# the process that posts events (the prefork child, or the main process for the
+# solo/threads pools), so cover both shutdown signals. queues.stop() is a no-op
+# when nothing was started.
+
+
+def stop_event_queues(**kwargs):
+    from zentral.core.queues import queues
+    queues.stop()
+
+
+worker_process_shutdown.connect(stop_event_queues, dispatch_uid='stop_event_queues')
+worker_shutdown.connect(stop_event_queues, dispatch_uid='stop_event_queues')

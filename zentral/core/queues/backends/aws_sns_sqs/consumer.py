@@ -5,6 +5,7 @@ import signal
 import threading
 import time
 from zentral.core.queues.exceptions import RetryLater
+from zentral.utils.signals import setup_signal_handler
 from .sqs import SQSDeleteThread, SQSReceiveThread
 
 
@@ -35,8 +36,7 @@ class BaseConsumer:
 
     def run(self, *args, **kwargs):
         exit_status = 0
-        signal.signal(signal.SIGTERM, self._handle_signal)
-        signal.signal(signal.SIGINT, self._handle_signal)
+        setup_signal_handler(self._handle_signal)
         for thread in self._threads:
             thread.start()
         try:
@@ -99,7 +99,7 @@ class ConcurrentConsumerFinalThread(threading.Thread):
         self.delete_message_queue = concurrent_consumer.delete_message_queue
         self.stop_event = concurrent_consumer.stop_event
         self.update_metrics_cb = concurrent_consumer.update_metrics
-        super().__init__(name="ConcurrentConsumer final thread")
+        super().__init__(name="ConcurrentConsumer final thread", daemon=True)
 
     def run(self):
         while True:
@@ -224,7 +224,7 @@ class ConsumerProducerFinalThread(threading.Thread):
         self.in_queue = consumer_producer.published_message_queue
         self.out_queue = consumer_producer.delete_message_queue
         self.callback = consumer_producer.decrement_receipt_handle_unpublished_event_count
-        super().__init__(name="Consumer/Producer final thread")
+        super().__init__(name="Consumer/Producer final thread", daemon=True)
 
     def run(self):
         while True:

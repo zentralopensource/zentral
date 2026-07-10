@@ -15,6 +15,7 @@ from django.utils.functional import cached_property
 from zentral.conf import settings
 from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.base import BaseEventQueues
+from zentral.utils.signals import setup_signal_handler
 from zentral.utils.time import naive_utcnow
 
 from .consumer import BatchConsumer, ConcurrentConsumer, Consumer, ConsumerProducer
@@ -484,10 +485,6 @@ class EventQueues(BaseEventQueues):
         else:
             return SimpleStoreWorker(self, event_store)
 
-    def _setup_signal(self):
-        for signum in (signal.SIGTERM, signal.SIGINT):
-            signal.signal(signum, self._handle_sigterm)
-
     def _graceful_stop(self, signum, frame):
         logger.info("Received signal %s.", signal.Signals(signum).name)
         self.stop()
@@ -499,12 +496,10 @@ class EventQueues(BaseEventQueues):
     def _setup_graceful_stop(self):
         if self._stop_event is None:
             self._stop_event = threading.Event()
-            if threading.current_thread() is threading.main_thread():
-                logger.debug("Setup graceful stop.")
-                for signum in (signal.SIGINT, signal.SIGTERM):
-                    self._previous_signal_handlers[signum] = signal.signal(signum, self._graceful_stop)
-            else:
-                logger.warning("Could not setup graceful stop: not running on main thread.")
+            # off the main thread (e.g. under gthread workers) this wires nothing
+            # and returns {}; the worker_exit / celery shutdown hooks call stop()
+            # there instead.
+            self._previous_signal_handlers = setup_signal_handler(self._graceful_stop)
 
     def post_raw_event(self, routing_key, raw_event):
         # start the sender thread once even if requests post concurrently; assign

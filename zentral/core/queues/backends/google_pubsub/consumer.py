@@ -4,6 +4,7 @@ from kombu.utils import json
 from django.utils.functional import cached_property
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import pubsub_v1
+from zentral.utils.signals import setup_signal_handler
 
 
 logger = logging.getLogger('zentral.core.queues.backends.google_pubsub.consumer')
@@ -124,8 +125,7 @@ class BaseWorker:
             self.exit_code = 1
         else:
             # signals
-            signal.signal(signal.SIGTERM, self.handle_signal)
-            signal.signal(signal.SIGINT, self.handle_signal)
+            setup_signal_handler(self.handle_signal)
 
             # metrics
             self.start_metrics_exporter(metrics_exporter)

@@ -15,7 +15,7 @@ class SNSPublishThread(threading.Thread):
         self.stop_event = stop_event
         self.in_queue = in_queue
         self.out_queue = out_queue
-        super().__init__(name=f"SNS publish thread {thread_id}")
+        super().__init__(name=f"SNS publish thread {thread_id}", daemon=True)
 
     def run(self):
         logger.info("[%s] start on topic %s", self.name, self.topic_arn)

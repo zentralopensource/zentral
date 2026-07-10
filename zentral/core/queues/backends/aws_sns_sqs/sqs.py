@@ -24,7 +24,7 @@ class SQSReceiveThread(threading.Thread):
         self.stop_event = stop_event
         self.out_queue = out_queue
         self.visibility_timeout = visibility_timeout
-        super().__init__(name="SQS receive thread")
+        super().__init__(name="SQS receive thread", daemon=True)
 
     def run(self):
         logger.info("[%s] start on queue %s", self.name, self.queue_url)
@@ -81,7 +81,7 @@ class SQSDeleteThread(threading.Thread):
         self.queue_url = queue_url
         self.stop_event = stop_event
         self.in_queue = in_queue
-        super().__init__(name="SQS delete thread")
+        super().__init__(name="SQS delete thread", daemon=True)
 
     def run(self):
         logger.info("[%s] start on queue %s", self.name, self.queue_url)
@@ -150,7 +150,7 @@ class SQSSendThread(threading.Thread):
         self.stop_event = stop_event
         self.in_queue = in_queue
         self.out_queue = out_queue
-        super().__init__(name="SQS send thread")
+        super().__init__(name="SQS send thread", daemon=True)
 
     def run(self):
         logger.info("[%s] start on queue %s", self.name, self.queue_url)
