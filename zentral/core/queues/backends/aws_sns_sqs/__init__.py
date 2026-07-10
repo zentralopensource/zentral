@@ -333,6 +333,7 @@ class EventQueues(BaseEventQueues):
         self._events_queue = None
         self._stop_event = None
         self._threads = []
+        self._producer_lock = threading.Lock()
         self._previous_signal_handlers = {}
 
     @cached_property
@@ -506,33 +507,41 @@ class EventQueues(BaseEventQueues):
                 logger.warning("Could not setup graceful stop: not running on main thread.")
 
     def post_raw_event(self, routing_key, raw_event):
-        self._setup_graceful_stop()
-        if self._raw_events_queue is None:
-            self._raw_events_queue = queue.Queue(maxsize=20)
-            thread = SQSSendThread(
-                self.setup_queue("raw-events"),
-                self._stop_event,
-                self._raw_events_queue,
-                None,
-                self.client_kwargs
-            )
-            thread.start()
-            self._threads.append(thread)
+        # start the sender thread once even if requests post concurrently; assign
+        # self._raw_events_queue last so it is only visible fully initialized, and
+        # keep the blocking put() out of the lock so a full queue can't stall other producers.
+        with self._producer_lock:
+            if self._raw_events_queue is None:
+                self._setup_graceful_stop()
+                raw_events_queue = queue.Queue(maxsize=20)
+                thread = SQSSendThread(
+                    self.setup_queue("raw-events"),
+                    self._stop_event,
+                    raw_events_queue,
+                    None,
+                    self.client_kwargs
+                )
+                thread.start()
+                self._threads.append(thread)
+                self._raw_events_queue = raw_events_queue
         self._raw_events_queue.put((None, routing_key, raw_event, time.monotonic()))
 
     def post_event(self, event):
-        self._setup_graceful_stop()
-        if self._events_queue is None:
-            self._events_queue = queue.Queue(maxsize=20)
-            thread = SQSSendThread(
-                self.setup_queue("events"),
-                self._stop_event,
-                self._events_queue,
-                None,
-                self.client_kwargs
-            )
-            thread.start()
-            self._threads.append(thread)
+        # see post_raw_event: one-time sender-thread creation under the lock, put() outside.
+        with self._producer_lock:
+            if self._events_queue is None:
+                self._setup_graceful_stop()
+                events_queue = queue.Queue(maxsize=20)
+                thread = SQSSendThread(
+                    self.setup_queue("events"),
+                    self._stop_event,
+                    events_queue,
+                    None,
+                    self.client_kwargs
+                )
+                thread.start()
+                self._threads.append(thread)
+                self._events_queue = events_queue
         self._events_queue.put((None, None, event.serialize(machine_metadata=False), time.monotonic()))
 
     def stop(self):

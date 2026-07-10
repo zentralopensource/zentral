@@ -78,10 +78,14 @@ class JMESPathChecksCache:
             self._checks[jmespath_check.compliance_check.pk] = jmespath_check
         self._last_fetched_time = time.monotonic()
 
-    def _get_source_platform_checks(self, source_name, platform):
+    def _get_checks_and_source_platform_checks(self, source_name, platform):
+        # _load() rebinds self._checks to a fresh dict rather than mutating it in
+        # place, so returning the reference here hands process_tree a stable
+        # snapshot that a concurrent reload cannot corrupt mid-iteration.
         with self._lock:
             self._load()
-            return self._source_platform_checks.get((source_name.lower(), platform), [])
+            return (self._checks,
+                    self._source_platform_checks.get((source_name.lower(), platform), []))
 
     def process_tree(self, tree, last_seen):
         machine_tag_set = None
@@ -92,10 +96,8 @@ class JMESPathChecksCache:
         if not platform:
             logger.warning("Cannot process %s %s tree: missing platform", source_name, serial_number)
             return
-        for check_tag_set, jmespath_parsed_expr, jmespath_check in self._get_source_platform_checks(
-            source_name,
-            platform
-        ):
+        checks, source_platform_checks = self._get_checks_and_source_platform_checks(source_name, platform)
+        for check_tag_set, jmespath_parsed_expr, jmespath_check in source_platform_checks:
             if check_tag_set:
                 if machine_tag_set is None:
                     # TODO cache?
@@ -130,7 +132,7 @@ class JMESPathChecksCache:
                 continue
             if compliance_check_pk:
                 yield JMESPathCheckStatusUpdated.build_from_object_serial_number_and_statuses(
-                    self._checks[compliance_check_pk],
+                    checks[compliance_check_pk],
                     serial_number, status, last_seen, previous_status,
                 )
             else:

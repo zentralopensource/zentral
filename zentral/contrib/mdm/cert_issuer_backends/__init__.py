@@ -1,5 +1,6 @@
 from importlib import import_module
 import logging
+import threading
 from django.db import models
 from zentral.contrib.inventory.conf import mac_secure_enclave_from_model
 
@@ -27,19 +28,24 @@ def get_cert_issuer_backend(cert_issuer, load=False):
 
 
 cert_issuer_cache = {}
+cert_issuer_cache_lock = threading.Lock()
 
 
 def get_cached_cert_issuer_backend(cert_issuer):
-    backend = None
-    version = 0
-    try:
-        backend, version = cert_issuer_cache[cert_issuer.pk]
-    except KeyError:
-        pass
-    if not backend or not version or version < cert_issuer.version:
-        backend = get_cert_issuer_backend(cert_issuer, load=True)
-        cert_issuer_cache[cert_issuer.pk] = (backend, cert_issuer.version)
-    return backend
+    # run the whole check-then-act under the lock: otherwise two threads can both
+    # miss and each rebuild the backend (load=True does secret-engine I/O) while
+    # racing on the shared cache dict.
+    with cert_issuer_cache_lock:
+        backend = None
+        version = 0
+        try:
+            backend, version = cert_issuer_cache[cert_issuer.pk]
+        except KeyError:
+            pass
+        if not backend or not version or version < cert_issuer.version:
+            backend = get_cert_issuer_backend(cert_issuer, load=True)
+            cert_issuer_cache[cert_issuer.pk] = (backend, cert_issuer.version)
+        return backend
 
 
 def test_acme_payload(platform, comparable_os_version, model):

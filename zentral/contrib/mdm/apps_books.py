@@ -269,27 +269,31 @@ class AppsBooksClient:
 
 
 class LocationCache:
+    # The cached client wraps a requests.Session and, on token rotation,
+    # mutates its auth header and calls refresh_from_db() on its Location.
+    # None of that is safe to share across threads, so the cache is thread-local:
+    # each thread keeps its own client, preserving the server-token decrypt and
+    # connection-pool reuse without any cross-thread mutable state.
     def __init__(self):
-        self._lock = threading.Lock()
-        self._locations = {}
+        self._local = threading.local()
 
     def get(self, mdm_info_id):
         if not isinstance(mdm_info_id, str):
             mdm_info_id = str(mdm_info_id)
-        with self._lock:
+        try:
+            locations = self._local.locations
+        except AttributeError:
+            locations = self._local.locations = {}
+        try:
+            return locations[mdm_info_id]
+        except KeyError:
             try:
-                return self._locations[mdm_info_id]
-            except KeyError:
-                location = None
-                client = None
-                try:
-                    location = Location.objects.get(mdm_info_id=mdm_info_id)
-                except Location.DoesNotExist:
-                    raise KeyError
-                else:
-                    client = AppsBooksClient.from_location(location)
-                self._locations[mdm_info_id] = location, client
-                return location, client
+                location = Location.objects.get(mdm_info_id=mdm_info_id)
+            except Location.DoesNotExist:
+                raise KeyError
+            client = AppsBooksClient.from_location(location)
+            locations[mdm_info_id] = location, client
+            return location, client
 
 
 location_cache = SimpleLazyObject(lambda: LocationCache())

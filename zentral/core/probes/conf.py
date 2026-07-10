@@ -91,8 +91,12 @@ class ProbeList(ProbeView):
     def clear(self, *args, **kwargs):
         with self._lock:
             self._probes = None
-            for child in self._children:
-                child.clear()
+            children = list(self._children)
+        # cascade outside our lock: a reader holds a child's lock while iterating
+        # its parent (child -> parent), so taking a child's lock while holding
+        # ours would invert that order and can deadlock.
+        for child in children:
+            child.clear()
 
     def _load(self):
         self._start_sync()

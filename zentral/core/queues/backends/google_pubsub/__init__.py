@@ -397,11 +397,15 @@ class EventQueues(BaseEventQueues):
 
         # publisher client
         self.publisher_client = None
+        self._publisher_lock = threading.Lock()
 
     def _publish(self, topic, event_dict, **attributes):
         message = json.dumps(event_dict).encode("utf-8")
-        if self.publisher_client is None:
-            self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
+        # create the PublisherClient once even under concurrent first publishes;
+        # publish() is thread-safe and must not hold the lock.
+        with self._publisher_lock:
+            if self.publisher_client is None:
+                self.publisher_client = pubsub_v1.PublisherClient(credentials=self.credentials)
         self.publisher_client.publish(topic, message, **attributes)
 
     def get_preprocess_worker(self):

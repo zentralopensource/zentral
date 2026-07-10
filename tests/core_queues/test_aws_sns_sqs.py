@@ -688,3 +688,44 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         args, kwargs = out_queue.put.call_args
         self.assertEqual(args[0][0], "receipt_handle_1")
         self.assertEqual(kwargs, {"timeout": 1})
+
+    # producers
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues._setup_graceful_stop")
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.setup_queue")
+    @patch("zentral.core.queues.backends.aws_sns_sqs.SQSSendThread")
+    def test_post_event_starts_one_sender_thread(self, SQSSendThread, setup_queue, setup_graceful_stop):
+        setup_queue.return_value = "https://example.com/eq"
+        eq = self.get_queues()
+        event = Mock()
+        event.serialize.return_value = {"_zentral": {"type": "yolo"}}
+        eq.post_event(event)
+        # a second concurrent post must not start another sender thread
+        eq.post_event(event)
+        setup_graceful_stop.assert_called_once()
+        setup_queue.assert_called_once_with("events")
+        SQSSendThread.assert_called_once()
+        # the thread receives the instance queue, which is only published after
+        # the thread has been built and started
+        args, _ = SQSSendThread.call_args
+        self.assertIs(args[2], eq._events_queue)
+        SQSSendThread.return_value.start.assert_called_once()
+        self.assertEqual(eq._threads, [SQSSendThread.return_value])
+        self.assertEqual(eq._events_queue.qsize(), 2)
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues._setup_graceful_stop")
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.setup_queue")
+    @patch("zentral.core.queues.backends.aws_sns_sqs.SQSSendThread")
+    def test_post_raw_event_starts_one_sender_thread(self, SQSSendThread, setup_queue, setup_graceful_stop):
+        setup_queue.return_value = "https://example.com/rq"
+        eq = self.get_queues()
+        eq.post_raw_event("routing-key", {"foo": "bar"})
+        # a second concurrent post must not start another sender thread
+        eq.post_raw_event("routing-key", {"foo": "bar"})
+        setup_graceful_stop.assert_called_once()
+        setup_queue.assert_called_once_with("raw-events")
+        SQSSendThread.assert_called_once()
+        args, _ = SQSSendThread.call_args
+        self.assertIs(args[2], eq._raw_events_queue)
+        SQSSendThread.return_value.start.assert_called_once()
+        self.assertEqual(eq._raw_events_queue.qsize(), 2)
