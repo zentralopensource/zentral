@@ -194,6 +194,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'zentral.conf.context_processors.extra_links',
+                'zentral.conf.context_processors.openapi',
             ],
         },
     },
