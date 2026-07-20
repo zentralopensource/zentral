@@ -62,7 +62,7 @@ It's important to note that, unlike how tagging works for catalogs, enrollments 
 
 ### Add software via sub-manifests
 
-You can now add software to your manifest. With monolith, we have decided to only allow software to be added in sub-manifests. Go to `Monolith > Sub-Manifest` to create your first manifest, say `Optional browsers`. Click on `Add > Repository package` to add repository packages to it. If you click on `Add > Configuration profile or package` you will be able to upload directly a configuration profile or package to zentral and zentral will distribute it without touching your repository. You can also directly enter a script    with `Add > Script`. Scripts will be [executed by munki](https://github.com/munki/munki/wiki/Managing-Printers-With-Munki#nopkg-method) directly.
+You can now add software to your manifest. With monolith, we have decided to only allow software to be added in sub-manifests. Go to `Monolith > Sub manifests` to create your first sub-manifest, say `Optional browsers`. Open it and click on `Create new Package` to add a repository package: pick a PkgInfo name and a key (`managed_installs`, `managed_uninstalls`, `default_installs`, `optional_installs`, or `managed_updates`), optionally scoped with a condition, featured flag, and per-tag shards.
 
 Once you have a sub-manifest, add it to the manifest (from the manifest, click on `Add` in the sub-manifest section). If you pick one or many tags, only the machine carrying any of the tags applied will be offered it.
 
@@ -311,7 +311,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest/1/"
+  "https://zentral.example.com/api/monolith/manifests/1/"
 ```
 
 Response (204 No Content)
@@ -344,8 +344,8 @@ Response:
 ```json
 [{
   "id": 1,
+  "repository": 1,
   "name": "production",
-  "priority": 1,
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004",
   "archived_at": null
@@ -357,6 +357,7 @@ Response:
 * method: POST
 * Content-Type: application/json
 * PBAC action: `Monolith::Action::"createCatalog"`
+* `repository` is required; **via the API it must reference a Virtual repository** (S3/Azure catalogs are created by syncing the external repo, not through this endpoint). `archived_at` is read-only.
 
 Examples:
 
@@ -364,8 +365,8 @@ catalog.json
 
 ```json
 {
-  "name": "staging",
-  "priority": 10
+  "repository": 1,
+  "name": "staging"
 }
 ```
 
@@ -383,8 +384,8 @@ Response:
 ```json
 {
   "id": 2,
+  "repository": 1,
   "name": "staging",
-  "priority": 10,
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004",
   "archived_at": null
@@ -412,8 +413,8 @@ Response:
 ```json
 {
   "id": 1,
+  "repository": 1,
   "name": "production",
-  "priority": 1,
   "created_at": "2023-01-30T09:39:35.965003",
   "updated_at": "2023-01-30T09:39:35.965004",
   "archived_at": null
@@ -433,8 +434,8 @@ catalog.json
 
 ```json
 {
-  "name": "production2",
-  "priority": 2
+  "repository": 1,
+  "name": "production2"
 }
 ```
 
@@ -452,8 +453,8 @@ Response:
 ```
 {
   "id": 1,
+  "repository": 1,
   "name": "production2",
-  "priority": 2,
   "created_at": "2023-01-30T09:49:35.965003",
   "updated_at": "2023-01-30T09:49:35.965004",
   "archived_at": null
@@ -1534,7 +1535,7 @@ Response:
 #### Delete a sub manifest pkg info
 
 * method: DELETE
-* PBAC action: `Monolith::Action::"deleteSubManifest"`
+* PBAC action: `Monolith::Action::"deleteSubManifestPkgInfo"`
 * `<int:pk>`: the primary key of the sub manifest pkg info.
 
 Example

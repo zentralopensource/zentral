@@ -67,6 +67,7 @@ Response:
             "machine_type"
         ],
         "managed_installs_sync_interval_days": 7,
+        "script_checks_run_interval_seconds": 86400,
         "auto_reinstall_incidents": true,
         "auto_failed_install_incidents": false,
         "version": 6,
@@ -103,6 +104,7 @@ configuration.json
     "machine_type"
   ],
   "managed_installs_sync_interval_days": 1,
+  "script_checks_run_interval_seconds": 86400,
   "auto_reinstall_incidents": true,
   "auto_failed_install_incidents": true
 }
@@ -137,6 +139,7 @@ Response:
         "machine_type"
     ],
     "managed_installs_sync_interval_days": 1,
+    "script_checks_run_interval_seconds": 86400,
     "auto_reinstall_incidents": true,
     "auto_failed_install_incidents": true,
     "version": 0,
@@ -182,6 +185,7 @@ Response:
         "machine_type"
     ],
     "managed_installs_sync_interval_days": 1,
+    "script_checks_run_interval_seconds": 86400,
     "auto_reinstall_incidents": true,
     "auto_failed_install_incidents": true,
     "version": 0,
@@ -218,6 +222,7 @@ configuration.json
     "machine_type"
   ],
   "managed_installs_sync_interval_days": 1,
+  "script_checks_run_interval_seconds": 86400,
   "auto_reinstall_incidents": true,
   "auto_failed_install_incidents": true
 }
@@ -252,6 +257,7 @@ Response:
         "machine_type"
     ],
     "managed_installs_sync_interval_days": 1,
+    "script_checks_run_interval_seconds": 86400,
     "auto_reinstall_incidents": true,
     "auto_failed_install_incidents": true,
     "version": 1,
