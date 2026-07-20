@@ -72,17 +72,15 @@ class InventoryPreprocessorsTestCase(TestCase):
                 list(pp.process_raw_event({"ms_tree": {"serial_number": get_random_string(12)}}))
 
     @patch("zentral.contrib.inventory.preprocessors.commit_machine_snapshot_and_yield_events")
-    def test_process_raw_machine_snapshot_recoverable_db_error(self, cmsaye):
+    def test_process_raw_machine_snapshot_db_error_propagates(self, cmsaye):
         cmsaye.side_effect = OperationalError("server closed the connection unexpectedly")
         pp = MachineSnapshotPreprocessor()
-        serial_number = get_random_string(12)
-        with self.assertLogs("zentral.contrib.inventory.preprocessors", level="ERROR") as cm:
-            with self.assertRaises(RetryLater):
+        # transient DB errors are re-raised, not dropped, so the worker recycles the
+        # connection and re-enqueues (see zentral.core.queues.preprocessing)
+        with self.assertNoLogs("zentral.contrib.inventory.preprocessors", level="ERROR"):
+            with self.assertRaises(OperationalError):
                 list(pp.process_raw_event(
-                    {"ms_tree": {"serial_number": serial_number,
+                    {"ms_tree": {"serial_number": get_random_string(12),
                                  "source": {"module": "zentral.contrib.munki",
                                             "name": "Munki"}}}
                 ))
-        self.assertEqual(len(cm.output), 1)
-        self.assertIn(f"Source Munki, serial number {serial_number}: recoverable DB error", cm.output[0])
-        self.assertIn("server closed the connection unexpectedly", cm.output[0])

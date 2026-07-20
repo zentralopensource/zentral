@@ -12,6 +12,7 @@ from google.oauth2 import service_account
 from zentral.conf import settings
 from zentral.core.queues.backends.base import BaseEventQueues
 from zentral.core.queues.exceptions import RetryLater
+from zentral.core.queues.preprocessing import iter_preprocessed_events
 from .consumer import BaseWorker, Consumer, ConsumerProducer
 
 
@@ -41,21 +42,14 @@ class PreprocessWorker(ConsumerProducer):
 
     def callback(self, message):
         routing_key = message.attributes.get("routing_key")
-        if not routing_key:
-            self.log_error("Message w/o routing key")
-        else:
-            preprocessor = self.preprocessors.get(routing_key)
-            if not preprocessor:
-                self.log_error("No preprocessor for routing key %s", routing_key)
-            else:
-                try:
-                    for event in preprocessor.process_raw_event(json.loads(message.data)):
-                        self.publish_event(event, machine_metadata=False)
-                        self.inc_counter("produced_events", event.event_type)
-                except RetryLater:
-                    self.log_error("Message with routing key %s could not be preprocessed. Re-enqueued", routing_key)
-                    message.nack()
-                    return
+        try:
+            for event in iter_preprocessed_events(self.preprocessors, routing_key, json.loads(message.data)):
+                self.publish_event(event, machine_metadata=False)
+                self.inc_counter("produced_events", event.event_type)
+        except RetryLater:
+            self.log_error("Message with routing key %s could not be preprocessed. Re-enqueued", routing_key)
+            message.nack()
+            return
         message.ack()
         self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 

@@ -15,6 +15,7 @@ from django.utils.functional import cached_property
 from zentral.conf import settings
 from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.base import BaseEventQueues
+from zentral.core.queues.preprocessing import iter_preprocessed_events
 from zentral.utils.signals import setup_signal_handler
 from zentral.utils.time import naive_utcnow
 
@@ -101,16 +102,9 @@ class PreprocessWorker(WorkerMixin, ConsumerProducer):
         super().run(*args, **kwargs)
 
     def generate_events(self, routing_key, event_d):
-        if not routing_key:
-            logger.error("Message w/o routing key")
-        else:
-            preprocessor = self.preprocessors.get(routing_key)
-            if not preprocessor:
-                logger.error("No preprocessor for routing key %s", routing_key)
-            else:
-                for event in preprocessor.process_raw_event(event_d):
-                    yield None, event.serialize(machine_metadata=False)
-                    self.inc_counter("produced_events", event.event_type)
+        for event in iter_preprocessed_events(self.preprocessors, routing_key, event_d):
+            yield None, event.serialize(machine_metadata=False)
+            self.inc_counter("produced_events", event.event_type)
         self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 
 

@@ -7,6 +7,7 @@ from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
 from zentral.core.queues.backends.base import BaseEventQueues
 from zentral.core.queues.exceptions import RetryLater
+from zentral.core.queues.preprocessing import iter_preprocessed_events
 from zentral.utils.json import save_dead_letter
 
 
@@ -95,24 +96,17 @@ class PreprocessWorker(ConsumerProducerMixin, BaseWorker):
 
     def do_preprocess_raw_event(self, body, message):
         routing_key = message.delivery_info.get("routing_key")
-        if not routing_key:
-            logger.error("Message w/o routing key")
-        else:
-            preprocessor = self.preprocessors.get(routing_key)
-            if not preprocessor:
-                logger.error("No preprocessor for routing key %s", routing_key)
-            else:
-                try:
-                    for event in preprocessor.process_raw_event(body):
-                        self.producer.publish(event.serialize(machine_metadata=False),
-                                              serializer='json',
-                                              exchange=events_exchange,
-                                              declare=[events_exchange])
-                        self.inc_counter("produced_events", event.event_type)
-                except RetryLater:
-                    logger.error("Message with routing key %s could not be processed. Re-enqueued", routing_key)
-                    message.requeue()
-                    return
+        try:
+            for event in iter_preprocessed_events(self.preprocessors, routing_key, body):
+                self.producer.publish(event.serialize(machine_metadata=False),
+                                      serializer='json',
+                                      exchange=events_exchange,
+                                      declare=[events_exchange])
+                self.inc_counter("produced_events", event.event_type)
+        except RetryLater:
+            logger.error("Message with routing key %s could not be processed. Re-enqueued", routing_key)
+            message.requeue()
+            return
         message.ack()
         self.inc_counter("preprocessed_events", routing_key or "UNKNOWN")
 
