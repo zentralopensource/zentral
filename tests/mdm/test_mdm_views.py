@@ -826,6 +826,104 @@ class MDMViewsTestCase(TestCase):
         self.assertTrue(session.enrolled_device.awaiting_configuration)
         self.assertEqual(session.enrolled_device.get_bootstrap_token(), bootstrap_token)
 
+    # checkin - awaiting configuration seeding & preservation
+
+    def _authenticate_payload(self, udid, serial_number, session):
+        return {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(12),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+
+    def test_authenticate_dep_await_device_configured_seeds_awaiting_configuration(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        session.dep_enrollment.await_device_configured = True
+        session.dep_enrollment.save()
+        response = self._put(
+            reverse("mdm_public:checkin"), self._authenticate_payload(udid, serial_number, session), session
+        )
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        session.refresh_from_db()
+        self.assertTrue(session.enrolled_device.awaiting_configuration)
+
+    def test_authenticate_dep_no_await_device_configured_awaiting_configuration_false(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        self.assertFalse(session.dep_enrollment.await_device_configured)
+        response = self._put(
+            reverse("mdm_public:checkin"), self._authenticate_payload(udid, serial_number, session), session
+        )
+        self.assertEqual(response.status_code, 200)
+        session.refresh_from_db()
+        self.assertFalse(session.enrolled_device.awaiting_configuration)
+
+    def test_authenticate_reenrollment_keeps_awaiting_configuration(self, post_event):
+        # a re-enrollment must not touch awaiting_configuration: the device may still be in Setup Assistant,
+        # and re-enrolling should neither clear nor re-arm that state.
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        session.enrolled_device.awaiting_configuration = True
+        session.enrolled_device.save()
+        reenrollment_session = ReEnrollmentSession.objects.create_from_enrollment_session(session)
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            self._authenticate_payload(udid, serial_number, reenrollment_session),
+            reenrollment_session,
+            serial_number=serial_number,
+        )
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, reenrollment=True)
+        session.enrolled_device.refresh_from_db()
+        self.assertTrue(session.enrolled_device.awaiting_configuration)
+
+    def test_device_channel_token_update_missing_awaiting_configuration_keeps_current(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True)
+        session.enrolled_device.awaiting_configuration = True
+        session.enrolled_device.save()
+        payload = {
+            "UDID": udid,
+            "MessageType": "TokenUpdate",
+            # no AwaitingConfiguration key
+            "NotOnConsole": False,
+            "PushMagic": get_random_string(12),
+            "Token": get_random_string(12).encode("utf-8"),
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "UnlockToken": get_random_string(12).encode("utf-8"),
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        # the event reflects the (absent) payload value, but the stored state is preserved
+        self._assertSuccess(post_event, awaiting_configuration=None)
+        session.enrolled_device.refresh_from_db()
+        self.assertTrue(session.enrolled_device.awaiting_configuration)
+
+    def test_set_bootstrap_token_missing_awaiting_configuration_keeps_current(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        session.enrolled_device.awaiting_configuration = True
+        session.enrolled_device.save()
+        bootstrap_token = get_random_string(12).encode("utf-8")
+        payload = {
+            "UDID": udid,
+            "MessageType": "SetBootstrapToken",
+            # no AwaitingConfiguration key
+            "BootstrapToken": bootstrap_token,
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, awaiting_configuration=None)
+        session.enrolled_device.refresh_from_db()
+        self.assertTrue(session.enrolled_device.awaiting_configuration)
+        self.assertEqual(session.enrolled_device.get_bootstrap_token(), bootstrap_token)
+
     # checkin - get bootstrap token
 
     def test_get_no_bootstrap_token_warning(self, post_event):
