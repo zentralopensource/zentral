@@ -905,7 +905,7 @@ class Target:
 
     # https://developer.apple.com/documentation/devicemanagement/declarationitemsresponse/manifestdeclarationitems
     @cached_property
-    def declaration_items(self):
+    def _declaration_items_and_snapshot(self):
         management_status_subscriptions = build_target_management_status_subscriptions(self)
         declarations = {
             "Activations": [
@@ -925,6 +925,10 @@ class Target:
                 {"Identifier": software_update_enforcement_specific["Identifier"],
                  "ServerToken": software_update_enforcement_specific["ServerToken"]}
             )
+        # snapshot of the artifact-backed declarations, keyed by identifier, so that a later fetch of one of
+        # them resolves to the same artifact version and server token we advertised here — even when the live
+        # scope changed in between (e.g. awaiting_configuration flipped). See build_declaration & friends.
+        snapshot = {}
         for artifact, artifact_version, retry_count in self.iter_declaration_artifacts():
             artifact_type = Artifact.Type(artifact["type"])  # TODO: necessary?
             if artifact_type.is_activation:
@@ -937,20 +941,29 @@ class Target:
                 logger.error("Unknown artifact type: %s", artifact_type)
                 continue
 
-            declarations[key].append(
-               {"Identifier": get_artifact_identifier(artifact),
-                "ServerToken": get_artifact_version_server_token(self, artifact, artifact_version, retry_count)}
-            )
+            identifier = get_artifact_identifier(artifact)
+            server_token = get_artifact_version_server_token(self, artifact, artifact_version, retry_count)
+            declarations[key].append({"Identifier": identifier, "ServerToken": server_token})
+            snapshot[identifier] = {"artifact_version_pk": str(artifact_version["pk"]), "server_token": server_token}
         h = hashlib.sha1()
         for key in sorted(declarations.keys()):
             for item in sorted(declarations[key], key=lambda d: (d["Identifier"], d["ServerToken"])):
                 h.update(key.encode("utf-8"))
                 h.update(item["Identifier"].encode("utf-8"))
                 h.update(item["ServerToken"].encode("utf-8"))
-        return {
+        items = {
             "Declarations": declarations,
             "DeclarationsToken": h.hexdigest()
         }
+        return items, snapshot
+
+    @property
+    def declaration_items(self):
+        return self._declaration_items_and_snapshot[0]
+
+    @property
+    def declaration_items_snapshot(self):
+        return self._declaration_items_and_snapshot[1]
 
     # https://developer.apple.com/documentation/devicemanagement/synchronizationtokens
     @cached_property
@@ -964,14 +977,22 @@ class Target:
         }
         return tokens_response, declarations_token
 
+    def get_advertised_declaration(self, declaration_identifier):
+        """Artifact version and server token advertised for this declaration identifier under the target's
+        current declarations token, or None when nothing was stored (→ fall back to the live scope walk)."""
+        return (self.target.declaration_items_snapshot or {}).get(declaration_identifier)
+
     def update_declarations_token(self, declarations_token):
         update_fields = []
         if not self.target.declarative_management:
             update_fields.append("declarative_management")
             self.target.declarative_management = True
         if self.target.declarations_token != declarations_token:
-            update_fields.append("declarations_token")
+            # the snapshot always corresponds to the stored token: an unchanged token means an unchanged
+            # advertised set, so we only need to refresh it when the token itself changes.
+            update_fields.extend(["declarations_token", "declaration_items_snapshot"])
             self.target.declarations_token = declarations_token
+            self.target.declaration_items_snapshot = self.declaration_items_snapshot
         if update_fields:
             self.target.save(update_fields=update_fields + ["updated_at"])
 

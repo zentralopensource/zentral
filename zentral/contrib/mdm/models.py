@@ -977,6 +977,11 @@ class EnrolledDevice(models.Model):
     # declarative management
     declarative_management = models.BooleanField(default=False)
     declarations_token = models.CharField(max_length=40, default="")
+    # snapshot of the declarations advertised for the current declarations_token, keyed by declaration
+    # identifier: {identifier: {"artifact_version_pk": …, "server_token": …}}. Used to resolve a declaration
+    # fetch consistently with what was advertised, even if live scope changed in between. Empty → fall back
+    # to the live scope walk.
+    declaration_items_snapshot = models.JSONField(default=dict)
     client_capabilities = models.JSONField(null=True)
 
     # information
@@ -1428,6 +1433,8 @@ class EnrolledUser(models.Model):
     # declarative management
     declarative_management = models.BooleanField(default=False)
     declarations_token = models.CharField(max_length=40, default="")
+    # see EnrolledDevice.declaration_items_snapshot
+    declaration_items_snapshot = models.JSONField(default=dict)
     client_capabilities = models.JSONField(null=True)
 
     # notifications

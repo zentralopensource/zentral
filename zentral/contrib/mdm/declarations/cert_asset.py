@@ -6,7 +6,6 @@ from zentral.contrib.mdm.models import Artifact, CertAsset, Platform
 from .exceptions import DeclarationError
 from .utils import (artifact_pk_from_identifier_and_model,
                     dump_artifact_version_token,
-                    get_artifact_identifier,
                     get_artifact_version_server_token,
                     load_artifact_version_token)
 
@@ -38,22 +37,29 @@ def build_cert_asset(enrollment_session, target, declaration_identifier):
         artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, CertAsset)
     except ValueError:
         raise DeclarationError('Invalid CertAsset Identifier')
-    ca_artifact, ca_artifact_version, ca_retry_count = (None, None, 0)
-    for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
-        (Artifact.Type.CERT_ASSET,)
-    ):
-        if artifact["pk"] == artifact_pk:
-            ca_artifact = artifact
-            ca_artifact_version = artifact_version
-            ca_retry_count = retry_count
-            break
-    if not ca_artifact_version:
-        raise DeclarationError(f'Could not find CertAsset artifact {artifact_pk}')
+    snapshot = target.get_advertised_declaration(declaration_identifier)
+    if snapshot:
+        artifact_version_pk = snapshot["artifact_version_pk"]
+        server_token = snapshot["server_token"]
+    else:
+        ca_artifact, ca_artifact_version, ca_retry_count = (None, None, 0)
+        for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
+            (Artifact.Type.CERT_ASSET,)
+        ):
+            if artifact["pk"] == artifact_pk:
+                ca_artifact = artifact
+                ca_artifact_version = artifact_version
+                ca_retry_count = retry_count
+                break
+        if not ca_artifact_version:
+            raise DeclarationError(f'Could not find CertAsset artifact {artifact_pk}')
+        artifact_version_pk = ca_artifact_version["pk"]
+        server_token = get_artifact_version_server_token(target, ca_artifact, ca_artifact_version, ca_retry_count)
     try:
         cert_asset = (CertAsset.objects.select_related("acme_issuer", "scep_issuer")
-                                       .get(artifact_version__pk=ca_artifact_version["pk"]))
+                                       .get(artifact_version__pk=artifact_version_pk))
     except CertAsset.DoesNotExist:
-        raise DeclarationError(f'CertAsset for artifact version {ca_artifact_version["pk"]} does not exist')
+        raise DeclarationError(f'CertAsset for artifact version {artifact_version_pk} does not exist')
     decl_type = url_name = None
     if cert_asset.acme_issuer:
         enrolled_device = target.enrolled_device
@@ -70,19 +76,19 @@ def build_cert_asset(enrollment_session, target, declaration_identifier):
         url_name = "scep_credential"
     if decl_type is None:
         raise DeclarationError(
-            f'No compatible issuers found for CertAsset {ca_artifact_version["pk"]} '
+            f'No compatible issuers found for CertAsset {artifact_version_pk} '
             f'and device {enrolled_device.serial_number}'
         )
     return {
         "Type": decl_type,
-        "Identifier": get_artifact_identifier(ca_artifact),
-        "ServerToken": get_artifact_version_server_token(target, ca_artifact, ca_artifact_version, ca_retry_count),
+        "Identifier": declaration_identifier,
+        "ServerToken": server_token,
         "Payload": {
             "Reference": {
                 "DataURL": "https://{}{}".format(
                     settings["api"]["fqdn"],
                     reverse(f"mdm_public:{url_name}",
-                            args=(dump_cert_asset_token(enrollment_session, target, ca_artifact_version["pk"]),))
+                            args=(dump_cert_asset_token(enrollment_session, target, artifact_version_pk),))
                 ),
                 "ContentType": "application/json",
             },

@@ -1245,6 +1245,162 @@ class MDMViewsTestCase(TestCase):
             serial_number=serial_number,
         )
 
+    # checkin - declarative management - declaration items snapshot
+
+    def _advertise_declarations(self, session, udid):
+        # the "tokens" endpoint stores the snapshot of the declarations advertised for the current token
+        self._put(
+            reverse("mdm_public:checkin"),
+            {"UDID": udid, "MessageType": "DeclarativeManagement", "Endpoint": "tokens"},
+            session,
+        )
+        session.enrolled_device.refresh_from_db()
+
+    def test_declarative_management_tokens_store_declaration_items_snapshot(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        _, artifact, (artifact_version,) = force_blueprint_artifact(
+            blueprint=blueprint, artifact_type=Artifact.Type.CONFIGURATION,
+        )
+        self._advertise_declarations(session, udid)
+        self._assertSuccess(post_event, endpoint="tokens")
+        identifier = f"zentral.declaration.{artifact.pk}"
+        self.assertEqual(
+            session.enrolled_device.declaration_items_snapshot[identifier],
+            {"artifact_version_pk": str(artifact_version.pk), "server_token": str(artifact_version.pk)},
+        )
+
+    def test_declarative_management_declaration_served_from_snapshot_when_out_of_scope(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        _, artifact, (artifact_version,) = force_blueprint_artifact(
+            blueprint=blueprint, artifact_type=Artifact.Type.CONFIGURATION,
+        )
+        identifier = f"zentral.declaration.{artifact.pk}"
+        self._advertise_declarations(session, udid)
+        self.assertIn(identifier, session.enrolled_device.declaration_items_snapshot)
+        # the device enters Setup Assistant: the live scope walk would now drop this declaration
+        # (it is not install_during_setup_assistant), which pre-fix produced a 400 on fetch.
+        session.enrolled_device.awaiting_configuration = True
+        session.enrolled_device.save()
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            {"UDID": udid, "MessageType": "DeclarativeManagement",
+             "Endpoint": f"declaration/configuration/{identifier}"},
+            session,
+        )
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        self.assertEqual(declaration["Identifier"], identifier)
+        self.assertEqual(declaration["ServerToken"], str(artifact_version.pk))
+        self.assertEqual(declaration["Type"], "com.apple.configuration.diskmanagement.settings")
+
+    def test_declarative_management_declaration_out_of_scope_without_snapshot_aborts(self, post_event):
+        # same out-of-scope situation but with an empty snapshot (e.g. right after upgrade): the fallback
+        # live walk runs and still aborts, exactly as before the snapshot was introduced.
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._add_blueprint(session)
+        _, artifact, (artifact_version,) = force_blueprint_artifact(
+            blueprint=blueprint, artifact_type=Artifact.Type.CONFIGURATION,
+        )
+        session.enrolled_device.awaiting_configuration = True
+        session.enrolled_device.save()
+        self.assertEqual(session.enrolled_device.declaration_items_snapshot, {})
+        self._put(
+            reverse("mdm_public:checkin"),
+            {"UDID": udid, "MessageType": "DeclarativeManagement",
+             "Endpoint": f"declaration/configuration/zentral.declaration.{artifact.pk}"},
+            session,
+        )
+        self._assertAbort(
+            post_event,
+            f"Could not find Declaration artifact {artifact.pk}",
+            udid=udid,
+            serial_number=serial_number,
+        )
+
+    def test_declarative_management_legacy_profile_served_from_snapshot(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        profile = self._force_blueprint_profile(session)
+        artifact_version = profile.artifact_version
+        artifact = artifact_version.artifact
+        identifier = f"zentral.legacy-profile.{artifact.pk}"
+        # a snapshot pointing at the profile with a sentinel server token the live walk would never produce
+        session.enrolled_device.declaration_items_snapshot = {
+            identifier: {"artifact_version_pk": str(artifact_version.pk), "server_token": "snapshot-token"},
+        }
+        session.enrolled_device.save()
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            {"UDID": udid, "MessageType": "DeclarativeManagement",
+             "Endpoint": f"declaration/configuration/{identifier}"},
+            session,
+        )
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        self.assertEqual(declaration["Identifier"], identifier)
+        self.assertEqual(declaration["ServerToken"], "snapshot-token")
+
+    def test_declarative_management_data_asset_served_from_snapshot(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        bpa, artifact, (artifact_version,) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.DATA_ASSET
+        )
+        session.enrolled_device.blueprint = bpa.blueprint
+        identifier = f"zentral.data-asset.{artifact.pk}"
+        session.enrolled_device.declaration_items_snapshot = {
+            identifier: {"artifact_version_pk": str(artifact_version.pk), "server_token": "snapshot-token"},
+        }
+        session.enrolled_device.save()
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            {"UDID": udid, "MessageType": "DeclarativeManagement",
+             "Endpoint": f"declaration/asset/{identifier}"},
+            session,
+        )
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        self.assertEqual(declaration["Identifier"], identifier)
+        self.assertEqual(declaration["ServerToken"], "snapshot-token")
+        self.assertEqual(declaration["Type"], "com.apple.asset.data")
+
+    def test_declarative_management_cert_asset_served_from_snapshot(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        bpa, artifact, (artifact_version,) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.CERT_ASSET
+        )
+        session.enrolled_device.blueprint = bpa.blueprint
+        session.enrolled_device.model = "Mac16,1"  # Silicon
+        session.enrolled_device.os_version = "15.7.1"  # enough for ACME
+        identifier = f"zentral.cert-asset.{artifact.pk}"
+        session.enrolled_device.declaration_items_snapshot = {
+            identifier: {"artifact_version_pk": str(artifact_version.pk), "server_token": "snapshot-token"},
+        }
+        session.enrolled_device.save()
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            {"UDID": udid, "MessageType": "DeclarativeManagement",
+             "Endpoint": f"declaration/asset/{identifier}"},
+            session,
+        )
+        self.assertEqual(response.status_code, 200)
+        declaration = json.loads(response.content)
+        self.assertEqual(declaration["Identifier"], identifier)
+        self.assertEqual(declaration["ServerToken"], "snapshot-token")
+        self.assertEqual(declaration["Type"], "com.apple.asset.credential.acme")
+
     # status subscriptions
 
     def test_declarative_no_client_capabilities_default_status_subscriptions_declaration(
