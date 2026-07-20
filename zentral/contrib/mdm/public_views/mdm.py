@@ -266,6 +266,8 @@ class CheckinView(MDMView):
         self.get_certificate()
         self.get_push_certificate()
 
+        is_reenrollment = isinstance(self.enrollment_session, ReEnrollmentSession)
+
         # save the enrolled device (NOT YET ENROLLED!)
         enrolled_device_defaults = {"enrollment_id": self.enrollment_id,
                                     "serial_number": self.serial_number,
@@ -274,8 +276,17 @@ class CheckinView(MDMView):
                                     "token": None,
                                     "push_magic": None,
                                     "unlock_token": None,
-                                    "awaiting_configuration": None,
                                     "checkout_at": None}
+        if not is_reenrollment:
+            # Seed the awaiting-configuration state for a fresh enrollment: True only for a DEP enrollment
+            # that awaits DeviceConfigured (the device sits in Setup Assistant until we send it). It is then
+            # preserved across TokenUpdates that omit AwaitingConfiguration and cleared by DeviceConfigured.
+            # A re-enrollment must NOT touch it: the device may still be in Setup Assistant, and re-enrolling
+            # should neither clear nor re-arm that state.
+            enrolled_device_defaults["awaiting_configuration"] = (
+                isinstance(self.enrollment_session, DEPEnrollmentSession)
+                and self.enrollment_session.dep_enrollment.await_device_configured
+            )
         ms_tree = ms_tree_from_payload(self.payload)
         platform = None
         try:
@@ -301,8 +312,6 @@ class CheckinView(MDMView):
             enrolled_device_defaults.update(build_enrolled_device_cert_defaults(self.certificate))
         enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.enrolled_device_udid,
                                                                            defaults=enrolled_device_defaults)
-
-        is_reenrollment = isinstance(self.enrollment_session, ReEnrollmentSession)
 
         # purge the installed artifacts and sent commands, if it is not a re-enrollment
         if not created and not is_reenrollment:
@@ -332,7 +341,11 @@ class CheckinView(MDMView):
 
     def do_token_update(self):
         self.get_push_certificate()
-        awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
+        awaiting_configuration = self.payload.get("AwaitingConfiguration")
+        if awaiting_configuration is None:
+            # Keep the current value: a TokenUpdate that omits AwaitingConfiguration must not clobber the
+            # awaiting-configuration state (seeded at authenticate, cleared by the DeviceConfigured command).
+            awaiting_configuration = self.enrolled_device.awaiting_configuration
         enrolled_device_defaults = {"enrollment_id": self.enrollment_id,
                                     "blueprint": self.enrollment_session.get_blueprint(),
                                     "awaiting_configuration": awaiting_configuration,
@@ -385,9 +398,14 @@ class CheckinView(MDMView):
 
     def do_set_bootstrap_token(self):
         # https://developer.apple.com/documentation/devicemanagement/setbootstraptokenrequest
-        self.enrolled_device.awaiting_configuration = self.payload.get("AwaitingConfiguration", False)
+        update_fields = ["bootstrap_token", "updated_at"]
+        awaiting_configuration = self.payload.get("AwaitingConfiguration")
+        if awaiting_configuration is not None:
+            # Keep the current value when the key is absent (see do_token_update).
+            self.enrolled_device.awaiting_configuration = awaiting_configuration
+            update_fields.append("awaiting_configuration")
         self.enrolled_device.set_bootstrap_token(self.payload.get("BootstrapToken", None))
-        self.enrolled_device.save(update_fields=["awaiting_configuration", "bootstrap_token", "updated_at"])
+        self.enrolled_device.save(update_fields=update_fields)
         self.post_event("success", awaiting_configuration=self.payload.get("AwaitingConfiguration"))
 
     def do_get_bootstrap_token(self):
