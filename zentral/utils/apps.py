@@ -20,6 +20,7 @@ class ZentralAppConfig(AppConfig):
         self.events_module = None
         self.events_templates_dir = None
         self.incidents_module = None
+        self.openapi_module = None
         self.provisioning_module = None
         self.pbac_module = None
 
@@ -31,6 +32,7 @@ class ZentralAppConfig(AppConfig):
         self.import_events()
         self.import_incidents()
         self.import_provisioning()
+        self.import_openapi()
         self.import_pbac_module()
         self.register_legacy_perms()
 
@@ -58,6 +60,13 @@ class ZentralAppConfig(AppConfig):
 
     def import_provisioning(self):
         self._import_submodule("provisioning")
+
+    def import_openapi(self):
+        # The submodule only registers drf-spectacular enum overrides, which are
+        # pointless unless the schema is enabled — so skip it when OPENAPI is off.
+        from django.conf import settings
+        if settings.OPENAPI:
+            self._import_submodule("openapi")
 
     # PBAC
 

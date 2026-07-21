@@ -3,11 +3,9 @@ from django.urls import reverse
 from zentral.conf import settings
 from zentral.contrib.mdm.models import Artifact, DataAsset
 from .exceptions import DeclarationError
-from .utils import (artifact_pk_from_identifier_and_model,
-                    dump_artifact_version_token,
-                    get_artifact_identifier,
-                    get_artifact_version_server_token,
-                    load_artifact_version_token)
+from .utils import (dump_artifact_version_token,
+                    load_artifact_version_token,
+                    resolve_declaration_artifact_version)
 
 
 __all__ = ["build_data_asset", "dump_data_asset_token", "load_data_asset_token"]
@@ -32,35 +30,23 @@ def load_data_asset_token(token):
 
 # https://github.com/apple/device-management/blob/release/declarative/declarations/assets/data.yaml
 def build_data_asset(enrollment_session, target, declaration_identifier):
+    artifact_version_pk, server_token = resolve_declaration_artifact_version(
+        target, declaration_identifier, DataAsset, (Artifact.Type.DATA_ASSET,)
+    )
     try:
-        artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, DataAsset)
-    except ValueError:
-        raise DeclarationError('Invalid DataAsset Identifier')
-    da_artifact, da_artifact_version, da_retry_count = (None, None, 0)
-    for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
-        (Artifact.Type.DATA_ASSET,)
-    ):
-        if artifact["pk"] == artifact_pk:
-            da_artifact = artifact
-            da_artifact_version = artifact_version
-            da_retry_count = retry_count
-            break
-    if not da_artifact_version:
-        raise DeclarationError(f'Could not find DataAsset artifact {artifact_pk}')
-    try:
-        data_asset = DataAsset.objects.get(artifact_version__pk=da_artifact_version["pk"])
+        data_asset = DataAsset.objects.get(artifact_version__pk=artifact_version_pk)
     except DataAsset.DoesNotExist:
-        raise DeclarationError(f'DataAsset for artifact version {da_artifact_version["pk"]} does not exist')
+        raise DeclarationError(f'DataAsset for artifact version {artifact_version_pk} does not exist')
     return {
         "Type": "com.apple.asset.data",
-        "Identifier": get_artifact_identifier(da_artifact),
-        "ServerToken": get_artifact_version_server_token(target, da_artifact, da_artifact_version, da_retry_count),
+        "Identifier": declaration_identifier,
+        "ServerToken": server_token,
         "Payload": {
             "Reference": {
                 "DataURL": "https://{}{}".format(
                     settings["api"]["fqdn"],
                     reverse("mdm_public:data_asset_download_view",
-                            args=(dump_data_asset_token(enrollment_session, target, da_artifact_version["pk"]),))
+                            args=(dump_data_asset_token(enrollment_session, target, artifact_version_pk),))
                 ),
                 "ContentType": data_asset.get_content_type(),
                 "Size": data_asset.file_size,

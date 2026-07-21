@@ -18,7 +18,8 @@ from zentral.contrib.mdm.models import (
 from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.time import naive_utcnow
 
-from .exceptions import (TokenDeviceInactiveError,
+from .exceptions import (DeclarationError,
+                         TokenDeviceInactiveError,
                          TokenSessionNotFoundError,
                          TokenSignatureError,
                          TokenTargetNotFoundError,
@@ -45,6 +46,7 @@ __all__ = [
     "get_artifact_version_server_token",
     "get_blueprint_declaration_identifier",
     "load_artifact_version_token",
+    "resolve_declaration_artifact_version",
 ]
 
 
@@ -130,6 +132,30 @@ def get_artifact_version_server_token(target, artifact, artifact_version, retry_
     if retry_count:
         elements.append(f"rc-{retry_count}")
     return ".".join(elements)
+
+
+def resolve_declaration_artifact_version(target, declaration_identifier, model, included_types, done_types=None):
+    """Resolve the (artifact_version_pk, server_token) for a fetched declaration.
+
+    A declaration fetch carries only the identifier, so we prefer the snapshot advertised for the target's
+    current declarations token, and fall back to the live scope walk when the snapshot is empty (e.g. right
+    after upgrade, before the next token refresh). Raise DeclarationError on an invalid or out-of-scope
+    identifier. The message label is the model name (Declaration / CertAsset / DataAsset / Profile).
+    """
+    try:
+        artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, model)
+    except ValueError:
+        raise DeclarationError(f"Invalid {model.__name__} Identifier")
+    snapshot = target.get_advertised_declaration(declaration_identifier)
+    if snapshot:
+        return snapshot["artifact_version_pk"], snapshot["server_token"]
+    for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
+        included_types, done_types
+    ):
+        if artifact["pk"] == artifact_pk:
+            return (artifact_version["pk"],
+                    get_artifact_version_server_token(target, artifact, artifact_version, retry_count))
+    raise DeclarationError(f"Could not find {model.__name__} artifact {artifact_pk}")
 
 
 def artifact_version_pk_from_server_token(server_token):

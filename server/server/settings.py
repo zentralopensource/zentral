@@ -12,9 +12,12 @@ https://docs.djangoproject.com/en/1.8/ref/settings/
 
 import os
 import sys
+
 from django.core.management import utils
+
 # Import the zentral settings (base.json)
 from zentral.conf import settings as zentral_settings
+
 from .celery import app as celery_app
 
 __all__ = ('celery_app',)
@@ -30,6 +33,8 @@ SECRET_KEY_FALLBACKS = django_zentral_settings.get('SECRET_KEY_FALLBACKS', [])
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = django_zentral_settings.get('DEBUG', False)
+# SECURITY WARNING: don't run with openapi turned on in production!
+OPENAPI = django_zentral_settings.get('OPENAPI', False) and DEBUG
 
 ALLOWED_HOSTS = list(django_zentral_settings.get('ALLOWED_HOSTS', []))
 if not ALLOWED_HOSTS:
@@ -91,6 +96,15 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
 }
+
+# OpenAPI schema generation is a development-only concern
+if OPENAPI:
+    INSTALLED_APPS += [
+        'drf_spectacular',
+    ]
+    REST_FRAMEWORK['DEFAULT_SCHEMA_CLASS'] = 'drf_spectacular.openapi.AutoSchema'
+
+    from .openapi import SPECTACULAR_SETTINGS  # noqa: F401
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -180,6 +194,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'zentral.conf.context_processors.extra_links',
+                'zentral.conf.context_processors.openapi',
             ],
         },
     },

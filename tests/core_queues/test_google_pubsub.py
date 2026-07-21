@@ -1,7 +1,8 @@
 from unittest.mock import Mock, patch
 from django.test import TestCase
-from zentral.core.queues.backends.google_pubsub import EventQueues
+from zentral.core.queues.backends.google_pubsub import EventQueues, PreprocessWorker
 from zentral.core.queues.backends.google_pubsub.consumer import BaseWorker
+from zentral.core.queues.exceptions import RetryLater
 
 
 class GooglePubSubQueuesTestCase(TestCase):
@@ -24,6 +25,35 @@ class GooglePubSubQueuesTestCase(TestCase):
         self.assertEqual(eq.enriched_events_topic, "projects/p/topics/enriched-events")
         self.assertIsNone(eq.credentials)
         self.assertIsNone(eq.publisher_client)
+
+    def test_preprocess_worker_callback_publishes_events(self):
+        w = self.get_queues().get_preprocess_worker()
+        self.assertIsInstance(w, PreprocessWorker)
+        w.metrics_exporter = None
+        w.publish_event = Mock()
+        event = Mock(event_type="yolo")
+        preprocessor = Mock(routing_key="test_routing_key")
+        preprocessor.process_raw_event.return_value = iter([event])
+        w.preprocessors = {"test_routing_key": preprocessor}
+        message = Mock(data=b'{"foo": "bar"}')
+        message.attributes = {"routing_key": "test_routing_key"}
+        w.callback(message)
+        preprocessor.process_raw_event.assert_called_once_with({"foo": "bar"})
+        w.publish_event.assert_called_once_with(event, machine_metadata=False)
+        message.ack.assert_called_once()
+
+    def test_preprocess_worker_callback_nacks_on_retry_later(self):
+        w = self.get_queues().get_preprocess_worker()
+        w.metrics_exporter = None
+        w.publish_event = Mock()
+        preprocessor = Mock(routing_key="test_routing_key")
+        preprocessor.process_raw_event.side_effect = RetryLater
+        w.preprocessors = {"test_routing_key": preprocessor}
+        message = Mock(data=b'{"foo": "bar"}')
+        message.attributes = {"routing_key": "test_routing_key"}
+        w.callback(message)
+        message.nack.assert_called_once()
+        message.ack.assert_not_called()
 
     @patch("zentral.core.queues.backends.google_pubsub.pubsub_v1.PublisherClient")
     def test_publish_creates_publisher_client_once(self, PublisherClient):

@@ -72,6 +72,9 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
 
 class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
+    # Zentral only does full updates — PATCH is a 405 everywhere, so the serializers' update()
+    # methods can rely on every declared field being present in validated_data
+    http_method_names = ["delete", "get", "head", "options", "put"]
 
     def on_commit_callback_extra(self, instance):
         pass

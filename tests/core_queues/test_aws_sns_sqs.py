@@ -424,6 +424,22 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         self.assertEqual(w._threads[0].visibility_timeout, 120)
 
     @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
+    def test_preprocess_worker_generate_events(self, get_queue):
+        get_queue.return_value = (True, "raw-events", "https://www.example.com/fomo")
+        w = self.get_queues().get_preprocess_worker()
+        w.metrics_exporter = None
+        event = Mock(event_type="yolo")
+        event.serialize.return_value = {"_zentral": {"type": "yolo"}}
+        preprocessor = Mock(routing_key="test_routing_key")
+        preprocessor.process_raw_event.return_value = iter([event])
+        w.preprocessors = {"test_routing_key": preprocessor}
+        self.assertEqual(
+            list(w.generate_events("test_routing_key", {"foo": "bar"})),
+            [(None, {"_zentral": {"type": "yolo"}})],
+        )
+        preprocessor.process_raw_event.assert_called_once_with({"foo": "bar"})
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue")
     def test_get_enrich_worker(self, get_queue):
         get_queue.return_value = (True, "events", "https://www.example.com/fomo")
         eq = self.get_queues()

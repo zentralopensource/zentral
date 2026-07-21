@@ -24,12 +24,10 @@ class MachineSnapshotPreprocessor:
         ms_tree = raw_event.get("ms_tree")
         try:
             yield from commit_machine_snapshot_and_yield_events(ms_tree)
-        except RetryLater:
+        except (RetryLater, InterfaceError, OperationalError):
+            # RetryLater and transient DB errors are recycled and re-enqueued by the worker
+            # (iter_preprocessed_events); re-raise so the broad drop below never swallows them
             raise
-        except (InterfaceError, OperationalError) as error:
-            logger.error("Source %s, serial number %s: recoverable DB error: %s",
-                         *self._get_source_name_and_serial_number(ms_tree), error)
-            raise RetryLater
         except Exception as error:
             # deterministic error: reprocessing the tree would fail the same way → drop it
             logger.error("Source %s, serial number %s: machine snapshot tree dropped: %s",
