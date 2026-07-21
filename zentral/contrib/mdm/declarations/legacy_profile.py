@@ -2,11 +2,9 @@ import logging
 from django.urls import reverse
 from zentral.conf import settings
 from zentral.contrib.mdm.models import Artifact, Profile
-from .exceptions import DeclarationError
-from .utils import (artifact_pk_from_identifier_and_model,
-                    dump_artifact_version_token,
-                    get_artifact_version_server_token,
-                    load_artifact_version_token)
+from .utils import (dump_artifact_version_token,
+                    load_artifact_version_token,
+                    resolve_declaration_artifact_version)
 
 
 __all__ = ["dump_legacy_profile_token", "load_legacy_profile_token", "build_legacy_profile"]
@@ -31,28 +29,9 @@ def load_legacy_profile_token(token):
 
 # https://github.com/apple/device-management/blob/release/declarative/declarations/configurations/legacy.yaml
 def build_legacy_profile(enrollment_session, target, declaration_identifier):
-    try:
-        artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, Profile)
-    except ValueError:
-        raise DeclarationError('Invalid Profile Identifier')
-    snapshot = target.get_advertised_declaration(declaration_identifier)
-    if snapshot:
-        artifact_version_pk = snapshot["artifact_version_pk"]
-        server_token = snapshot["server_token"]
-    else:
-        p_artifact, p_artifact_version, p_retry_count = (None, None, 0)
-        for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
-            (Artifact.Type.PROFILE,)
-        ):
-            if artifact["pk"] == artifact_pk:
-                p_artifact = artifact
-                p_artifact_version = artifact_version
-                p_retry_count = retry_count
-                break
-        if not p_artifact_version:
-            raise DeclarationError(f'Could not find Profile artifact {artifact_pk}')
-        artifact_version_pk = p_artifact_version["pk"]
-        server_token = get_artifact_version_server_token(target, p_artifact, p_artifact_version, p_retry_count)
+    artifact_version_pk, server_token = resolve_declaration_artifact_version(
+        target, declaration_identifier, Profile, (Artifact.Type.PROFILE,)
+    )
     return {
         "Type": "com.apple.configuration.legacy",
         "Identifier": declaration_identifier,
