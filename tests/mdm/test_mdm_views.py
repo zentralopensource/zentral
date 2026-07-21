@@ -677,6 +677,11 @@ class MDMViewsTestCase(TestCase):
         ed.last_seen_at = naive_utcnow()
         ed.last_notified_at = naive_utcnow()
         ed.notification_queued_at = naive_utcnow()
+        ed.declarative_management = True
+        ed.declarations_token = get_random_string(40)
+        ed.declaration_items_snapshot = {
+            "zentral.declaration.x": {"artifact_version_pk": "y", "server_token": "z"}
+        }
         ed.save()
         # new enrollment but not a re-enrollment session
         session, udid, serial_number = force_dep_enrollment_session(
@@ -704,6 +709,10 @@ class MDMViewsTestCase(TestCase):
         self.assertIsNone(ed.last_seen_at)
         self.assertIsNone(ed.last_notified_at)
         self.assertIsNone(ed.notification_queued_at)
+        # the DDM sync state is purged as a group
+        self.assertFalse(ed.declarative_management)
+        self.assertEqual(ed.declarations_token, "")
+        self.assertEqual(ed.declaration_items_snapshot, {})
 
     # checkin - user authenticate
 

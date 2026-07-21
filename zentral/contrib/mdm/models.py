@@ -1192,6 +1192,10 @@ class EnrolledDevice(models.Model):
 
     def purge_state(self, full=False):
         self.declarative_management = False
+        # reset the DDM sync state as a group: the token and its advertised-declarations snapshot must be
+        # cleared together, otherwise a stale token/snapshot could survive a purge and be served/compared.
+        self.declarations_token = ""
+        self.declaration_items_snapshot = {}
         self.last_ip = None
         self.last_seen_at = None
         self.last_notified_at = None
