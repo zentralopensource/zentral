@@ -3,10 +3,9 @@ from django.urls import reverse
 from zentral.conf import settings
 from zentral.contrib.mdm.models import Artifact, DataAsset
 from .exceptions import DeclarationError
-from .utils import (artifact_pk_from_identifier_and_model,
-                    dump_artifact_version_token,
-                    get_artifact_version_server_token,
-                    load_artifact_version_token)
+from .utils import (dump_artifact_version_token,
+                    load_artifact_version_token,
+                    resolve_declaration_artifact_version)
 
 
 __all__ = ["build_data_asset", "dump_data_asset_token", "load_data_asset_token"]
@@ -31,28 +30,9 @@ def load_data_asset_token(token):
 
 # https://github.com/apple/device-management/blob/release/declarative/declarations/assets/data.yaml
 def build_data_asset(enrollment_session, target, declaration_identifier):
-    try:
-        artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, DataAsset)
-    except ValueError:
-        raise DeclarationError('Invalid DataAsset Identifier')
-    snapshot = target.get_advertised_declaration(declaration_identifier)
-    if snapshot:
-        artifact_version_pk = snapshot["artifact_version_pk"]
-        server_token = snapshot["server_token"]
-    else:
-        da_artifact, da_artifact_version, da_retry_count = (None, None, 0)
-        for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
-            (Artifact.Type.DATA_ASSET,)
-        ):
-            if artifact["pk"] == artifact_pk:
-                da_artifact = artifact
-                da_artifact_version = artifact_version
-                da_retry_count = retry_count
-                break
-        if not da_artifact_version:
-            raise DeclarationError(f'Could not find DataAsset artifact {artifact_pk}')
-        artifact_version_pk = da_artifact_version["pk"]
-        server_token = get_artifact_version_server_token(target, da_artifact, da_artifact_version, da_retry_count)
+    artifact_version_pk, server_token = resolve_declaration_artifact_version(
+        target, declaration_identifier, DataAsset, (Artifact.Type.DATA_ASSET,)
+    )
     try:
         data_asset = DataAsset.objects.get(artifact_version__pk=artifact_version_pk)
     except DataAsset.DoesNotExist:

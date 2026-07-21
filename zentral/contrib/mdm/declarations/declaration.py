@@ -6,7 +6,7 @@ from zentral.contrib.mdm.payloads import substitute_variables
 from .exceptions import DeclarationError
 from .linkers import declaration_linkers, get_declaration_info
 from .packages import dump_package_manifest_token
-from .utils import artifact_pk_from_identifier_and_model, get_artifact_identifier, get_artifact_version_server_token
+from .utils import get_artifact_identifier, resolve_declaration_artifact_version
 
 
 __all__ = [
@@ -21,33 +21,11 @@ logger = logging.getLogger("zentral.contrib.mdm.declarations.declaration")
 # https://github.com/apple/device-management/blob/release/declarative/declarations/declarationbase.yaml
 def build_declaration(enrollment_session, target, declaration_identifier):
     # artifact version
-    try:
-        artifact_pk = artifact_pk_from_identifier_and_model(declaration_identifier, Declaration)
-    except ValueError:
-        raise DeclarationError("Invalid Declaration Identifier")
-    snapshot = target.get_advertised_declaration(declaration_identifier)
-    if snapshot:
-        artifact_version_pk = snapshot["artifact_version_pk"]
-        server_token = snapshot["server_token"]
-    else:
-        d_artifact, d_artifact_version, d_retry_count = (None, None, 0)
-        for artifact, artifact_version, retry_count in target.all_installed_or_to_install_serialized(
-            included_types=tuple(
-                t for t in Artifact.Type if t.is_raw_declaration
-            ),
-            done_types=tuple(
-                t for t in Artifact.Type if t.is_declaration
-            )
-        ):
-            if artifact["pk"] == artifact_pk:
-                d_artifact = artifact
-                d_artifact_version = artifact_version
-                d_retry_count = retry_count
-                break
-        if not d_artifact_version:
-            raise DeclarationError(f'Could not find Declaration artifact {artifact_pk}')
-        artifact_version_pk = d_artifact_version["pk"]
-        server_token = get_artifact_version_server_token(target, d_artifact, d_artifact_version, d_retry_count)
+    artifact_version_pk, server_token = resolve_declaration_artifact_version(
+        target, declaration_identifier, Declaration,
+        tuple(t for t in Artifact.Type if t.is_raw_declaration),
+        tuple(t for t in Artifact.Type if t.is_declaration),
+    )
     try:
         declaration = (Declaration.objects.prefetch_related("declarationref_set__artifact",
                                                             "packageref_set__package")
