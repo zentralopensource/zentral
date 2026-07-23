@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime
 import json
 import zipfile
 from django.core.files.storage import default_storage
@@ -36,7 +37,13 @@ class InventoryExportsTests(TestCase):
                          'bundle_name': 'Baller.app',
                          'bundle_version': '123',
                          'bundle_version_str': '1.2.3'},
-                 'bundle_path': "/Applications/Baller.app"},
+                 'bundle_path': "/Applications/Baller.app",
+                 'team_id': "ABCDE12345",
+                 'cd_hash': "0123456789abcdef0123456789abcdef01234567",
+                 'entitlements': {"com.apple.security.app-sandbox": True,
+                                  "com.apple.security.network.client": True},
+                 'signing_time': datetime(2024, 1, 2, 3, 4, 5),
+                 'secure_signing_time': datetime(2024, 1, 2, 3, 4, 6)},
             ],
             "disks": [
                 {"name": "/dev/disk3s1s1",
@@ -106,6 +113,20 @@ class InventoryExportsTests(TestCase):
                     self.assertEqual(len(content), 1)
                     mni_d = json.loads(content[0])
                     self.assertEqual(mni_d, {"ms_id": ms_id, "network_interface_id": ni_id})
+                with zf.open("zentral_macos_app_instance_0001.jsonl") as jl:
+                    content = jl.read().decode("utf-8").splitlines()
+                    self.assertEqual(len(content), 1)
+                    oai_d = json.loads(content[0])
+                    self.assertEqual(oai_d["team_id"], "ABCDE12345")
+                    self.assertEqual(oai_d["cd_hash"], "0123456789abcdef0123456789abcdef01234567")
+                    self.assertEqual(oai_d["signing_time"], "2024-01-02T03:04:05")
+                    self.assertEqual(oai_d["secure_signing_time"], "2024-01-02T03:04:06")
+                    # entitlements is jsonb, dumped as text by the full export (like extra_facts)
+                    entitlements = oai_d["entitlements"]
+                    if isinstance(entitlements, str):
+                        entitlements = json.loads(entitlements)
+                    self.assertEqual(entitlements, {"com.apple.security.app-sandbox": True,
+                                                    "com.apple.security.network.client": True})
         default_storage.delete(result["filepath"])
 
     def test_export_machine_snapshots(self):
@@ -147,6 +168,10 @@ class InventoryExportsTests(TestCase):
                  'bundle_version': '123',
                  'bundle_version_str': '1.2.3',
                  'path': '',
+                 'team_id': 'ABCDE12345',
+                 'cd_hash': '0123456789abcdef0123456789abcdef01234567',
+                 'signing_time': '2024-01-02 03:04:05',
+                 'secure_signing_time': '2024-01-02 03:04:06',
                  'serial_number': serial_number,
                  'source_module': 'tests.zentral.io',
                  'source_name': 'Zentral Tests'}
