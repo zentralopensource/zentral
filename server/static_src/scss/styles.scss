@@ -161,6 +161,15 @@ table.table-fixed-scrolleable {
     table-layout: fixed;
 }
 
+// Honour the column width hints on the macOS app-instances table
+table.table-app-instances {
+    table-layout: fixed;
+
+    code {
+        overflow-wrap: anywhere;
+    }
+}
+
 pre.scrolleable {
     overflow-x: scroll;
     padding-bottom: 2em;

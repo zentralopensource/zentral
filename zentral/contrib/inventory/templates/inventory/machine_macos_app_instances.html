@@ -32,18 +32,19 @@
 
 {% for ms, rows in tabs %}
 <div class="table-reponsive appstab" id="apps-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
-  <table class="table table-striped align-middle table-hover table-filtered">
+  <table class="table table-striped align-middle table-hover table-filtered table-app-instances">
     <thead>
       <tr>
-        <th>Bundle</th>
-        <th>Version</th>
-        <th>Path</th>
+        <th width="30%">Bundle</th>
+        <th width="10%">Version</th>
+        <th width="30%">Path</th>
+        <th width="30%">Code signing</th>
       </tr>
     </thead>
     <tbody>
       {% for app_instance, app, bundle_link, version_link in rows %}
       <tr>
-        <td class="search-cell">
+        <td class="search-cell align-top">
           {% if bundle_link %}
           <a href="{{ bundle_link }}">{{ app.all_names|join:" / "|default:"-" }}</a>
           {% else %}
@@ -51,7 +52,7 @@
           {% endif %}
           {% if app.bundle_id %}<br><code>{{ app.bundle_id }}</code>{% endif %}
         </td>
-        <td>
+        <td class="align-top">
           {% if version_link %}
           <a href="{{ version_link }}">
           {% endif %}
@@ -64,11 +65,120 @@
           </a>
           {% endif %}
         </td>
-        <td>{{ app_instance.bundle_path|default:"" }}</td>
+        <td class="align-top">
+          <dl class="row small mb-0">
+            {% if app_instance.bundle_path %}
+            <dt>Bundle path</dt>
+            <dd><code>{{ app_instance.bundle_path }}</code></dd>
+            {% endif %}
+            {% if app_instance.executable_path %}
+            <dt>Executable path</dt>
+            <dd><code>{{ app_instance.executable_path }}</code></dd>
+            {% endif %}
+            {% if app_instance.sha_1 %}
+            <dt>SHA</dt>
+            <dd><code>{{ app_instance.sha_1 }}</code></dd>
+            {% endif %}
+            {% if app_instance.sha_256 %}
+            <dt>SHA 256</dt>
+            <dd><code>{{ app_instance.sha_256 }}</code></dd>
+            {% endif %}
+          </dl>
+        </td>
+        <td class="align-top">
+          <dl class="row small mb-0">
+            {% if app_instance.team_id %}
+            <dt>Team ID</dt>
+            <dd><code>{{ app_instance.team_id }}</code></dd>
+            {% endif %}
+            {% if app_instance.cd_hash %}
+            <dt>Cdhash</dt>
+            <dd><code>{{ app_instance.cd_hash }}</code></dd>
+            {% endif %}
+            {% if app_instance.signing_time %}
+            <dt>Signed</dt>
+            <dd><code>{{ app_instance.signing_time|date:'r' }}</code></dd>
+            {% endif %}
+            {% if app_instance.secure_signing_time %}
+            <dt>Secure signed</dt>
+            <dd><code>{{ app_instance.secure_signing_time|date:'r' }}</code></dd>
+            {% endif %}
+            {% if app_instance.signed_by %}
+            <dt>Signed by</dt>
+            <dd>
+              {% for cert in app_instance.certificate_chain %}
+              {% if not forloop.first %} → {% endif %}<code>{{ cert.short_repr }}</code>
+              {% endfor %}
+            </dd>
+            {% endif %}
+          </dl>
+          {% if app_instance.signed_by %}
+          <button class="btn btn-sm btn-outline-secondary small" type="button"
+                  data-bs-toggle="modal" data-bs-target="#cert-{{ ms.id }}-{{ app_instance.id }}">
+            <i class="bi bi-patch-check"></i> Certificates
+          </button>
+          {% endif %}
+          {% if app_instance.entitlements %}
+          <button class="btn btn-sm btn-outline-secondary small" type="button"
+                  data-bs-toggle="modal" data-bs-target="#ent-{{ ms.id }}-{{ app_instance.id }}">
+            <i class="bi bi-braces"></i> Entitlements
+          </button>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+
+  {% for app_instance, app, bundle_link, version_link in rows %}
+  {% if app_instance.entitlements %}
+  <div class="modal fade" id="ent-{{ ms.id }}-{{ app_instance.id }}" tabindex="-1"
+       aria-labelledby="ent-{{ ms.id }}-{{ app_instance.id }}-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="ent-{{ ms.id }}-{{ app_instance.id }}-label">
+            Entitlements — {{ app.all_names|join:" / "|default:app_instance.bundle_path }}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">{{ app_instance.entitlements|jsonprettyprint }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% if app_instance.signed_by %}
+  <div class="modal fade" id="cert-{{ ms.id }}-{{ app_instance.id }}" tabindex="-1"
+       aria-labelledby="cert-{{ ms.id }}-{{ app_instance.id }}-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="cert-{{ ms.id }}-{{ app_instance.id }}-label">
+            Certificate chain — {{ app.all_names|join:" / "|default:app_instance.bundle_path }}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          {% for cert in app_instance.certificate_chain %}
+          <h6 class="mb-2">{{ forloop.counter }}. {{ cert.short_repr }}</h6>
+          <dl class="row small">
+            {% if cert.common_name %}<dt class="col-sm-3 text-md-end">Common name</dt><dd class="col-sm-9">{{ cert.common_name }}</dd>{% endif %}
+            {% if cert.organization %}<dt class="col-sm-3 text-md-end">Organization</dt><dd class="col-sm-9">{{ cert.organization }}</dd>{% endif %}
+            {% if cert.organizational_unit %}<dt class="col-sm-3 text-md-end">Organizational unit</dt><dd class="col-sm-9">{{ cert.organizational_unit }}</dd>{% endif %}
+            {% if cert.domain %}<dt class="col-sm-3 text-md-end">Domain</dt><dd class="col-sm-9">{{ cert.domain }}</dd>{% endif %}
+            {% if cert.sha_1 %}<dt class="col-sm-3 text-md-end">SHA-1</dt><dd class="col-sm-9"><code>{{ cert.sha_1 }}</code></dd>{% endif %}
+            {% if cert.sha_256 %}<dt class="col-sm-3 text-md-end">SHA-256</dt><dd class="col-sm-9"><code>{{ cert.sha_256 }}</code></dd>{% endif %}
+            {% if cert.valid_from %}<dt class="col-sm-3 text-md-end">Valid from</dt><dd class="col-sm-9">{{ cert.valid_from|date:'r' }}</dd>{% endif %}
+            {% if cert.valid_until %}<dt class="col-sm-3 text-md-end">Valid until</dt><dd class="col-sm-9">{{ cert.valid_until|date:'r' }}</dd>{% endif %}
+          </dl>
+          {% if not forloop.last %}<hr>{% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
 
   <dl class="row">
     <dt class="small" style="opacity:0.5">last change</dt>

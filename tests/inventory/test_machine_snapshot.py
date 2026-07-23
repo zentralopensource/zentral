@@ -79,6 +79,13 @@ class MachineSnapshotTestCase(TestCase):
                             'valid_until': parser.parse('2042/01/01 22:40:36 +0100')}
         cls.osx_app_instance = {'app': cls.osx_app,
                                 'bundle_path': "/Applications/Baller.app",
+                                'executable_path': "/Application/Baller_path",
+                                'team_id': "ABCDE12345",
+                                'cd_hash': "0123456789abcdef0123456789abcdef01234567",
+                                'entitlements': {"com.apple.security.app-sandbox": True,
+                                                 "com.apple.security.network.client": True},
+                                'signing_time': datetime(2024, 1, 2, 3, 4, 5),
+                                'secure_signing_time': datetime(2024, 1, 2, 3, 4, 6),
                                 'signed_by': cls.certificate
                                 }
         cls.osx_app_instance2 = {'app': cls.osx_app2,
