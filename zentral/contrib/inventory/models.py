@@ -392,6 +392,11 @@ class OSXAppInstance(AbstractMTObject):
     sha_256 = models.CharField(max_length=64, db_index=True, blank=True, null=True)
     type = models.TextField(blank=True, null=True)
     signed_by = models.ForeignKey(Certificate, on_delete=models.PROTECT, blank=True, null=True)
+    team_id = models.TextField(blank=True, null=True)
+    cd_hash = models.TextField(db_index=True, blank=True, null=True)
+    entitlements = models.JSONField(blank=True, null=True)
+    signing_time = models.DateTimeField(blank=True, null=True)
+    secure_signing_time = models.DateTimeField(blank=True, null=True)
 
     def certificate_chain(self):
         chain = []

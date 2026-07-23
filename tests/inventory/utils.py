@@ -86,6 +86,12 @@ def create_ms(computer_name=None):
                      'bundle_version': '123',
                      'bundle_version_str': '1.2.3'},
              'bundle_path': "/Applications/Baller.app",
+             'team_id': "ABCDE12345",
+             'cd_hash': "0123456789abcdef0123456789abcdef01234567",
+             'entitlements': {"com.apple.security.app-sandbox": True,
+                              "com.apple.security.network.client": True},
+             'signing_time': datetime(2024, 1, 2, 3, 4, 5),
+             'secure_signing_time': datetime(2024, 1, 2, 3, 4, 6),
              'signed_by': {
                  "common_name": "Developer ID Application: GODZILLA",
                  "organization": "GOZILLA INC",
