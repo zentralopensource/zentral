@@ -128,7 +128,7 @@ def export_machine_macos_app_instances(source_name=None):
     query = (
         "select cms.serial_number, s.module as source_module, s.name as source_name, cms.last_seen,"
         "oa.bundle_id, oa.bundle_name, oa.bundle_display_name, oa.bundle_version, oa.bundle_version_str,"
-        "oai.bundle_path, oai.path "
+        "oai.bundle_path, oai.path, oai.team_id, oai.cd_hash, oai.signing_time, oai.secure_signing_time "
         "from inventory_currentmachinesnapshot as cms "
         "join inventory_machinesnapshot as ms on ms.id = cms.machine_snapshot_id "
         "join inventory_source as s on ms.source_id = s.id "

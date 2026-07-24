@@ -2,6 +2,7 @@ import logging
 
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.generics import RetrieveAPIView
 
 from zentral.utils.http import user_agent_and_ip_address_from_request
 
@@ -75,3 +76,22 @@ class EnrollmentSecretAuthentication(BaseAuthentication):
             payload["enrollment"] = {"pk": enrollment_pk}
         post_enrollment_info_request_event(self.enrollment_event_type, user_agent, ip, payload)
         raise AuthenticationFailed(reason)
+
+
+class BaseEnrollmentInfoView(RetrieveAPIView):
+    """Return an enrollment's info from its secret in the `Authorization` header, and post the
+    enrollment-info request event. Subclasses set `authentication_classes` (an
+    `EnrollmentSecretAuthentication` subclass), `serializer_class` and `queryset`."""
+    permission_classes = []  # the auth class gates access; no Django user is attached
+
+    def get_object(self):
+        return self.request.auth  # the auth class resolves the header into the Enrollment
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        user_agent, ip = user_agent_and_ip_address_from_request(request)
+        serial_number = request.META.get("HTTP_X_ZENTRAL_SERIAL_NUMBER") or None
+        post_enrollment_info_request_event(
+            self.authentication_classes[0].enrollment_event_type, user_agent, ip,
+            {"status": "ok", "enrollment": {"pk": request.auth.pk}}, machine_serial_number=serial_number)
+        return response

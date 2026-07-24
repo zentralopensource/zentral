@@ -38,6 +38,7 @@
         <th>Bundle</th>
         <th>Version</th>
         <th>Path</th>
+        <th width="20%">Code signing</th>
       </tr>
     </thead>
     <tbody>
@@ -65,10 +66,55 @@
           {% endif %}
         </td>
         <td>{{ app_instance.bundle_path|default:"" }}</td>
+        <td>
+          <dl class="row small mb-0">
+            {% if app_instance.team_id %}
+            <dt>Team ID</dt>
+            <dd><code>{{ app_instance.team_id }}</code></dd>
+            {% endif %}
+            {% if app_instance.cd_hash %}
+            <dt>Cdhash</dt>
+            <dd><code>{{ app_instance.cd_hash }}</code></dd>
+            {% endif %}
+            {% if app_instance.signing_time %}
+            <dt>Signed</dt>
+            <dd><code>{{ app_instance.signing_time|date:'r' }}</code></dd>
+            {% endif %}
+            {% if app_instance.secure_signing_time %}
+            <dt>Secure signed</dt>
+            <dd><code>{{ app_instance.secure_signing_time|date:'r' }}</code></dd>
+            {% endif %}
+          </dl>
+          {% if app_instance.entitlements %}
+          <button class="btn btn-sm btn-outline-secondary small" type="button"
+                  data-bs-toggle="modal" data-bs-target="#ent-{{ ms.id }}-{{ app_instance.id }}">
+            <i class="bi bi-braces"></i> Entitlements
+          </button>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+
+  {% for app_instance, app, bundle_link, version_link in rows %}
+  {% if app_instance.entitlements %}
+  <div class="modal fade" id="ent-{{ ms.id }}-{{ app_instance.id }}" tabindex="-1"
+       aria-labelledby="ent-{{ ms.id }}-{{ app_instance.id }}-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="ent-{{ ms.id }}-{{ app_instance.id }}-label">
+            Entitlements — {{ app.all_names|join:" / "|default:app_instance.bundle_path }}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">{{ app_instance.entitlements|jsonprettyprint }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
 
   <dl class="row">
     <dt class="small" style="opacity:0.5">last change</dt>

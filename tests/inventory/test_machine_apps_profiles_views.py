@@ -103,6 +103,12 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "apps", status_code=200)
         self.assertContains(response, "Baller.app")
         self.assertContains(response, "io.zentral.baller")
+        # code signing fields
+        self.assertContains(response, "ABCDE12345")  # team_id
+        self.assertContains(response, "0123456789abcdef0123456789abcdef01234567")  # cd_hash
+        # entitlements: modal trigger + content
+        self.assertContains(response, "Entitlements")
+        self.assertContains(response, "com.apple.security.app-sandbox")
 
     # Profiles
 

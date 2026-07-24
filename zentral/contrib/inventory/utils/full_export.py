@@ -61,7 +61,8 @@ FULL_EXPORT_QUERIES = [
     ("macos_app", "select * from inventory_osxapp"),
     ("macos_app_instance",
      "select id, mt_hash, mt_created_at,"
-     "bundle_path, path, sha_1, sha_256, type, app_id macos_app_id, signed_by_id "
+     "bundle_path, path, sha_1, sha_256, type, app_id macos_app_id, signed_by_id,"
+     "team_id, cd_hash, entitlements, signing_time, secure_signing_time "
      "from inventory_osxappinstance"),
     ("machine_macos_app_instance",
      "select machinesnapshot_id ms_id, osxappinstance_id macos_app_instance_id "
