@@ -8,6 +8,7 @@ import requests
 from base.utils import deployment_info
 from django.core.cache import cache
 from django.db import connection, transaction
+from django.db.models import Q
 from django.urls import reverse
 from django.utils.functional import SimpleLazyObject
 
@@ -540,6 +541,34 @@ def sync_assets(location):
     for asset_d in client.iter_assets():
         for event in _sync_asset_d(location, client, asset_d):
             event.post()
+
+
+def iter_location_assets_to_refresh(location, only_without_metadata=True):
+    qs = Asset.objects.filter(locationasset__location=location)
+    if only_without_metadata:
+        qs = qs.filter(Q(name__isnull=True) | Q(name=""))
+    yield from qs.order_by("adam_id", "pricing_param")
+
+
+def refresh_asset_metadata(client, asset):
+    metadata = client.get_asset_metadata(asset.adam_id)
+    if not metadata:
+        return False
+    with transaction.atomic():
+        asset = Asset.objects.select_for_update().get(pk=asset.pk)
+        updated = False
+        for attr, new_val in (("metadata", metadata),
+                              ("name", metadata.get("name")),
+                              ("bundle_id", metadata.get("bundleId"))):
+            if getattr(asset, attr) != new_val:
+                setattr(asset, attr, new_val)
+                updated = True
+        if not updated:
+            return False
+        asset.save()
+        event = AssetUpdatedEvent(EventMetadata(), asset.serialize_for_event(keys_only=False))
+    event.post()
+    return True
 
 
 def _update_location_asset_counts(location_asset, updates, notification_id):

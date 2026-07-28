@@ -1,16 +1,16 @@
 import datetime
 import uuid
 from io import StringIO
-from unittest.mock import call, patch
+from unittest.mock import call, patch, Mock
 
 from django.core.management import call_command
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.mdm.dep_client import DEPClientError
-from zentral.contrib.mdm.models import ACMEIssuer, Location, SCEPIssuer
+from zentral.contrib.mdm.models import ACMEIssuer, Location, LocationAsset, SCEPIssuer
 
-from ..utils import force_dep_virtual_server
+from ..utils import force_asset, force_dep_virtual_server
 
 
 class MDMManagementCommandsTest(TestCase):
@@ -77,6 +77,120 @@ class MDMManagementCommandsTest(TestCase):
             f"Sync apps & books for location {location.pk} fomo\n"
         )
         sync_assets.assert_called_once_with(location)
+
+    # refresh_apps_books_asset_metadata
+
+    def _force_location_asset_without_metadata(self, location):
+        asset = force_asset()
+        LocationAsset.objects.create(asset=asset, location=location)
+        return asset
+
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.refresh_asset_metadata")
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.AppsBooksClient")
+    def test_refresh_apps_books_asset_metadata(self, AppsBooksClient, refresh_asset_metadata):
+        location = self._force_location(name="yolo")
+        asset = self._force_location_asset_without_metadata(location)
+        client = Mock()
+        AppsBooksClient.from_location.return_value = client
+        refresh_asset_metadata.return_value = True
+        out = StringIO()
+        call_command('refresh_apps_books_asset_metadata', stdout=out)
+        self.assertEqual(
+            out.getvalue(),
+            f"Location {location.pk} yolo, DE storefront\n"
+            f"Asset {asset.adam_id} {asset.pricing_param} refreshed\n"
+        )
+        refresh_asset_metadata.assert_called_once_with(client, asset)
+
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.refresh_asset_metadata")
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.AppsBooksClient")
+    def test_refresh_apps_books_asset_metadata_not_refreshed(self, AppsBooksClient, refresh_asset_metadata):
+        location = self._force_location(name="yolo")
+        asset = self._force_location_asset_without_metadata(location)
+        refresh_asset_metadata.return_value = False
+        out = StringIO()
+        call_command('refresh_apps_books_asset_metadata', stdout=out)
+        self.assertEqual(
+            out.getvalue(),
+            f"Location {location.pk} yolo, DE storefront\n"
+            f"Asset {asset.adam_id} {asset.pricing_param} not refreshed\n"
+        )
+
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.refresh_asset_metadata")
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.AppsBooksClient")
+    def test_refresh_apps_books_asset_metadata_skips_assets_with_metadata(
+        self, AppsBooksClient, refresh_asset_metadata
+    ):
+        location = self._force_location(name="yolo")
+        asset = self._force_location_asset_without_metadata(location)
+        asset.name = get_random_string(12)
+        asset.save()
+        out = StringIO()
+        call_command('refresh_apps_books_asset_metadata', stdout=out)
+        self.assertEqual(out.getvalue(), f"Location {location.pk} yolo, DE storefront\n")
+        refresh_asset_metadata.assert_not_called()
+        AppsBooksClient.from_location.assert_not_called()
+
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.refresh_asset_metadata")
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.AppsBooksClient")
+    def test_refresh_apps_books_asset_metadata_all(self, AppsBooksClient, refresh_asset_metadata):
+        location = self._force_location(name="yolo")
+        asset = self._force_location_asset_without_metadata(location)
+        asset.name = get_random_string(12)
+        asset.save()
+        refresh_asset_metadata.return_value = True
+        out = StringIO()
+        call_command('refresh_apps_books_asset_metadata', '--all', stdout=out)
+        self.assertEqual(
+            out.getvalue(),
+            f"Location {location.pk} yolo, DE storefront\n"
+            f"Asset {asset.adam_id} {asset.pricing_param} refreshed\n"
+        )
+
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.refresh_asset_metadata")
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.AppsBooksClient")
+    def test_refresh_apps_books_asset_metadata_dry_run(self, AppsBooksClient, refresh_asset_metadata):
+        location = self._force_location(name="yolo")
+        asset = self._force_location_asset_without_metadata(location)
+        out = StringIO()
+        call_command('refresh_apps_books_asset_metadata', '--dry-run', stdout=out)
+        self.assertEqual(
+            out.getvalue(),
+            f"Location {location.pk} yolo, DE storefront\n"
+            f"Asset {asset.adam_id} {asset.pricing_param} to refresh\n"
+        )
+        AppsBooksClient.from_location.assert_not_called()
+        refresh_asset_metadata.assert_not_called()
+
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.refresh_asset_metadata")
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.AppsBooksClient")
+    def test_refresh_apps_books_asset_metadata_one_location(self, AppsBooksClient, refresh_asset_metadata):
+        location = self._force_location(name="yolo")
+        self._force_location_asset_without_metadata(location)
+        other_location = self._force_location(name="fomo")
+        other_asset = self._force_location_asset_without_metadata(other_location)
+        refresh_asset_metadata.return_value = True
+        out = StringIO()
+        call_command('refresh_apps_books_asset_metadata', '--location', str(other_location.pk), stdout=out)
+        self.assertEqual(
+            out.getvalue(),
+            f"Location {other_location.pk} fomo, DE storefront\n"
+            f"Asset {other_asset.adam_id} {other_asset.pricing_param} refreshed\n"
+        )
+
+    @patch("zentral.contrib.mdm.management.commands.refresh_apps_books_asset_metadata.refresh_asset_metadata")
+    def test_refresh_apps_books_asset_metadata_list_locations(self, refresh_asset_metadata):
+        location1 = self._force_location(name="yolo")
+        location2 = self._force_location(name="fomo")
+        out = StringIO()
+        call_command('refresh_apps_books_asset_metadata', '--list-locations', stdout=out)
+        self.assertEqual(
+            out.getvalue(),
+            "Existing locations:\n"
+            f"{location2.pk} fomo\n"
+            f"{location1.pk} yolo\n"
+        )
+        refresh_asset_metadata.assert_not_called()
 
     # sync_dep_devices
 

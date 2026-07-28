@@ -10,6 +10,8 @@ from zentral.contrib.mdm.apps_books import (_sync_asset_d,
                                             associate_location_asset,
                                             bulk_assign_location_asset,
                                             disassociate_location_asset,
+                                            iter_location_assets_to_refresh,
+                                            refresh_asset_metadata,
                                             sync_asset, sync_assets,
                                             update_location_asset_counts)
 from zentral.contrib.mdm.events import (AssetCreatedEvent, AssetUpdatedEvent,
@@ -506,6 +508,84 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         client.iter_asset_device_assignments.return_value = [serial_number]
         sync_assets(location)
         self.assertEqual(len(post_event.call_args_list), 3)
+
+    # iter_location_assets_to_refresh
+
+    def test_iter_location_assets_to_refresh_only_without_metadata(self):
+        location = force_location()
+        asset_with_metadata = force_asset()
+        asset_with_metadata.name = get_random_string(12)
+        asset_with_metadata.save()
+        force_location_asset(asset=asset_with_metadata, location=location)
+        asset_without_metadata = force_location_asset(location=location).asset
+        asset_with_empty_name = force_asset()
+        asset_with_empty_name.name = ""
+        asset_with_empty_name.save()
+        force_location_asset(asset=asset_with_empty_name, location=location)
+        self.assertEqual(
+            set(iter_location_assets_to_refresh(location)),
+            {asset_without_metadata, asset_with_empty_name}
+        )
+
+    def test_iter_location_assets_to_refresh_all(self):
+        location = force_location()
+        asset = force_asset()
+        asset.name = get_random_string(12)
+        asset.save()
+        force_location_asset(asset=asset, location=location)
+        other_asset = force_location_asset(location=location).asset
+        self.assertEqual(
+            set(iter_location_assets_to_refresh(location, only_without_metadata=False)),
+            {asset, other_asset}
+        )
+
+    def test_iter_location_assets_to_refresh_other_location(self):
+        location = force_location()
+        force_location_asset()
+        self.assertEqual(list(iter_location_assets_to_refresh(location)), [])
+
+    # refresh_asset_metadata
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_refresh_asset_metadata(self, post_event):
+        asset = force_asset()
+        asset_name = get_random_string(12)
+        bundle_id = "pro.zentral.tests"
+        client = Mock()
+        client.get_asset_metadata.return_value = {"name": asset_name, "bundleId": bundle_id}
+        self.assertTrue(refresh_asset_metadata(client, asset))
+        client.get_asset_metadata.assert_called_once_with(asset.adam_id)
+        asset.refresh_from_db()
+        self.assertEqual(asset.name, asset_name)
+        self.assertEqual(asset.bundle_id, bundle_id)
+        self.assertEqual(asset.metadata, {"name": asset_name, "bundleId": bundle_id})
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AssetUpdatedEvent)
+        self.assertEqual(event.payload["name"], asset_name)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_refresh_asset_metadata_not_in_storefront(self, post_event):
+        asset = force_asset()
+        client = Mock()
+        client.get_asset_metadata.return_value = None
+        self.assertFalse(refresh_asset_metadata(client, asset))
+        asset.refresh_from_db()
+        self.assertIsNone(asset.name)
+        post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_refresh_asset_metadata_noop(self, post_event):
+        asset = force_asset()
+        metadata = {"name": get_random_string(12), "bundleId": "pro.zentral.tests"}
+        asset.metadata = metadata
+        asset.name = metadata["name"]
+        asset.bundle_id = metadata["bundleId"]
+        asset.save()
+        client = Mock()
+        client.get_asset_metadata.return_value = metadata
+        self.assertFalse(refresh_asset_metadata(client, asset))
+        post_event.assert_not_called()
 
     # _update_location_asset_counts
 
