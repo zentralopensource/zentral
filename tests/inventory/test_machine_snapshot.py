@@ -842,6 +842,8 @@ class MachineSnapshotTestCase(TestCase):
             with self.assertRaises(MTOError) as cm:
                 Source.objects.commit(tree)
         self.assertEqual(cm.exception.message, "Obj fomo Hash missmatch!!!")
+        # the row is rolled back with the mismatch, it is not left under the wrong identity
+        self.assertEqual(Source.objects.filter(name="fomo").count(), 0)
 
     # mt fields
 

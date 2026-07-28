@@ -256,6 +256,10 @@ class MTObjectManager(models.Manager):
                     # already been enforced by the DB, and the foreign keys committed above exist
                     # by construction → both checks are queries that cannot fail
                     obj.full_clean(exclude=committed_fks, validate_unique=False)
+                    # inside the transaction: a hash mismatch has to take the row down with it,
+                    # or it stays in the table under the wrong identity
+                    if not obj.hash(recursive=False) == obj.mt_hash:
+                        raise MTOError(f'Obj {obj} Hash missmatch!!!')
             except IntegrityError as integrity_error:
                 # the object has been concurrently created ?
                 try:
@@ -264,8 +268,6 @@ class MTObjectManager(models.Manager):
                     # that was not a key error:
                     raise integrity_error
             else:
-                if not obj.hash(recursive=False) == obj.mt_hash:
-                    raise MTOError(f'Obj {obj} Hash missmatch!!!')
                 created = True
         _cache.set(self.model, mt_hash, obj)
         return obj, created
