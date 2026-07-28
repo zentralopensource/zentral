@@ -15,6 +15,7 @@ from django.utils.functional import cached_property
 from zentral.conf import settings
 from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.base import BaseEventQueues
+from zentral.core.queues.compression import compress_raw_event_if_needed
 from zentral.core.queues.preprocessing import iter_preprocessed_events
 from zentral.utils.signals import setup_signal_handler
 from zentral.utils.time import naive_utcnow
@@ -513,7 +514,7 @@ class EventQueues(BaseEventQueues):
                 thread.start()
                 self._threads.append(thread)
                 self._raw_events_queue = raw_events_queue
-        self._raw_events_queue.put((None, routing_key, raw_event, time.monotonic()))
+        self._raw_events_queue.put((None, routing_key, compress_raw_event_if_needed(raw_event), time.monotonic()))
 
     def post_event(self, event):
         # see post_raw_event: one-time sender-thread creation under the lock, put() outside.

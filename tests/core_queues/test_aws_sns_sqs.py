@@ -26,9 +26,12 @@ from zentral.core.queues.backends.aws_sns_sqs import (
     ProcessWorker,
     SimpleStoreWorker,
 )
+from zentral.core.queues.compression import COMPRESSED_RAW_EVENT_KEY, decompress_raw_event
 from zentral.core.stores.backends.http import HTTPStoreSerializer
 from zentral.core.stores.backends.s3_parquet import S3ParquetStoreSerializer
 from zentral.core.stores.models import Store
+
+from .test_compression import build_big_raw_event
 
 
 class AWSSNSSQSQueuesTestCase(TestCase):
@@ -746,6 +749,19 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         self.assertIs(args[2], eq._raw_events_queue)
         SQSSendThread.return_value.start.assert_called_once()
         self.assertEqual(eq._raw_events_queue.qsize(), 2)
+
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues._setup_graceful_stop")
+    @patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.setup_queue")
+    @patch("zentral.core.queues.backends.aws_sns_sqs.SQSSendThread")
+    def test_post_raw_event_compresses_big_raw_event(self, SQSSendThread, setup_queue, setup_graceful_stop):
+        setup_queue.return_value = "https://example.com/rq"
+        eq = self.get_queues()
+        raw_event = build_big_raw_event()
+        eq.post_raw_event("routing-key", raw_event)
+        _, routing_key, posted_raw_event, _ = eq._raw_events_queue.get_nowait()
+        self.assertEqual(routing_key, "routing-key")
+        self.assertEqual(list(posted_raw_event), [COMPRESSED_RAW_EVENT_KEY])
+        self.assertEqual(decompress_raw_event(posted_raw_event), raw_event)
 
     @patch("zentral.core.queues.backends.aws_sns_sqs.setup_signal_handler")
     def test_setup_graceful_stop_wires_signals_once(self, setup_signal_handler):

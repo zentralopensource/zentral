@@ -6,6 +6,7 @@ from kombu import Connection, Consumer, Exchange, Queue
 from kombu.mixins import ConsumerMixin, ConsumerProducerMixin
 from kombu.pools import producers
 from zentral.core.queues.backends.base import BaseEventQueues
+from zentral.core.queues.compression import compress_raw_event_if_needed
 from zentral.core.queues.exceptions import RetryLater
 from zentral.core.queues.preprocessing import iter_preprocessed_events
 from zentral.utils.json import save_dead_letter
@@ -248,7 +249,7 @@ class EventQueues(BaseEventQueues):
 
     def post_raw_event(self, routing_key, raw_event):
         with producers[self.connection].acquire(block=True) as producer:
-            producer.publish(raw_event,
+            producer.publish(compress_raw_event_if_needed(raw_event),
                              serializer='json',
                              exchange=raw_events_exchange,
                              routing_key=routing_key,

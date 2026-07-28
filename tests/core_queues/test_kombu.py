@@ -1,7 +1,9 @@
 from unittest.mock import Mock, PropertyMock, patch
 from django.test import SimpleTestCase
-from zentral.core.queues.backends.kombu import PreprocessWorker
+from zentral.core.queues.backends.kombu import EventQueues, PreprocessWorker
+from zentral.core.queues.compression import COMPRESSED_RAW_EVENT_KEY, decompress_raw_event
 from zentral.core.queues.exceptions import RetryLater
+from .test_compression import build_big_raw_event
 
 
 class KombuPreprocessWorkerTestCase(SimpleTestCase):
@@ -33,3 +35,19 @@ class KombuPreprocessWorkerTestCase(SimpleTestCase):
             w.do_preprocess_raw_event({"foo": "bar"}, message)
         message.requeue.assert_called_once()
         message.ack.assert_not_called()
+
+
+class KombuEventQueuesTestCase(SimpleTestCase):
+    maxDiff = None
+
+    @patch("zentral.core.queues.backends.kombu.producers")
+    def test_post_raw_event_compresses_big_raw_event(self, producers):
+        eq = EventQueues({"backend_url": "memory://"})
+        raw_event = build_big_raw_event()
+        eq.post_raw_event("routing-key", raw_event)
+        publish = producers.__getitem__.return_value.acquire.return_value.__enter__.return_value.publish
+        publish.assert_called_once()
+        posted_raw_event = publish.call_args.args[0]
+        self.assertEqual(list(posted_raw_event), [COMPRESSED_RAW_EVENT_KEY])
+        self.assertEqual(decompress_raw_event(posted_raw_event), raw_event)
+        self.assertEqual(publish.call_args.kwargs["routing_key"], "routing-key")

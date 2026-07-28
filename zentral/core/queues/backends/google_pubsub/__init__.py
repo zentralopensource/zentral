@@ -11,6 +11,7 @@ from google.cloud import pubsub_v1
 from google.oauth2 import service_account
 from zentral.conf import settings
 from zentral.core.queues.backends.base import BaseEventQueues
+from zentral.core.queues.compression import compress_raw_event_if_needed
 from zentral.core.queues.exceptions import RetryLater
 from zentral.core.queues.preprocessing import iter_preprocessed_events
 from .consumer import BaseWorker, Consumer, ConsumerProducer
@@ -419,7 +420,7 @@ class EventQueues(BaseEventQueues):
         return worker_class(self.enriched_events_topic, self.credentials, event_store)
 
     def post_raw_event(self, routing_key, raw_event):
-        self._publish(self.raw_events_topic, raw_event, routing_key=routing_key)
+        self._publish(self.raw_events_topic, compress_raw_event_if_needed(raw_event), routing_key=routing_key)
 
     def post_event(self, event):
         self._publish(self.events_topic, event.serialize(machine_metadata=False), event_type=event.event_type)

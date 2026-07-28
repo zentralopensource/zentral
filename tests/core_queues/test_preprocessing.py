@@ -1,8 +1,11 @@
+from base64 import b64encode
 from unittest.mock import patch
 from django.db import InterfaceError, OperationalError
 from django.test import SimpleTestCase
+from zentral.core.queues.compression import COMPRESSED_RAW_EVENT_KEY, compress_raw_event_if_needed
 from zentral.core.queues.exceptions import RetryLater
 from zentral.core.queues.preprocessing import iter_preprocessed_events
+from .test_compression import build_big_raw_event
 
 CLOSE_OLD_CONNECTIONS = "zentral.core.queues.preprocessing.close_old_connections"
 
@@ -13,8 +16,10 @@ class _Preprocessor:
     def __init__(self, events=None, error=None):
         self._events = events or []
         self._error = error
+        self.raw_events = []
 
     def process_raw_event(self, raw_event):
+        self.raw_events.append(raw_event)
         yield from self._events
         if self._error is not None:
             raise self._error
@@ -36,6 +41,25 @@ class IterPreprocessedEventsTestCase(SimpleTestCase):
                 ["a", "b"],
             )
         close_old_connections.assert_not_called()
+
+    def test_compressed_raw_event_inflated_before_the_preprocessor(self):
+        pp = _Preprocessor(events=["a"])
+        raw_event = build_big_raw_event()
+        compressed_raw_event = compress_raw_event_if_needed(raw_event)
+        self.assertNotEqual(compressed_raw_event, raw_event)
+        self.assertEqual(
+            list(iter_preprocessed_events(self._preprocessors(pp), pp.routing_key, compressed_raw_event)),
+            ["a"],
+        )
+        self.assertEqual(pp.raw_events, [raw_event])
+
+    def test_undecompressable_raw_event_dropped(self):
+        pp = _Preprocessor(events=["a"])
+        raw_event = {COMPRESSED_RAW_EVENT_KEY: b64encode(b"not a zstd frame").decode("ascii")}
+        with self.assertLogs("zentral.core.queues.preprocessing", level="ERROR") as cm:
+            self.assertEqual(list(iter_preprocessed_events(self._preprocessors(pp), pp.routing_key, raw_event)), [])
+        self.assertIn(f"Preprocessor {pp.routing_key}: could not decompress raw event", cm.output[0])
+        self.assertEqual(pp.raw_events, [])
 
     def test_missing_routing_key_yields_nothing(self):
         pp = _Preprocessor(events=["a"])

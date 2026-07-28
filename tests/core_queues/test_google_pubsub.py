@@ -1,8 +1,11 @@
 from unittest.mock import Mock, patch
 from django.test import TestCase
+from kombu.utils import json
 from zentral.core.queues.backends.google_pubsub import EventQueues, PreprocessWorker
 from zentral.core.queues.backends.google_pubsub.consumer import BaseWorker
+from zentral.core.queues.compression import COMPRESSED_RAW_EVENT_KEY, decompress_raw_event
 from zentral.core.queues.exceptions import RetryLater
+from .test_compression import build_big_raw_event
 
 
 class GooglePubSubQueuesTestCase(TestCase):
@@ -78,6 +81,17 @@ class GooglePubSubQueuesTestCase(TestCase):
         self.assertIsInstance(publish.call_args_list[0].args[1], bytes)
         self.assertEqual(publish.call_args_list[0].kwargs, {"event_type": "yolo"})
         self.assertEqual(publish.call_args_list[1].kwargs, {"routing_key": "routing-key"})
+
+    @patch("zentral.core.queues.backends.google_pubsub.pubsub_v1.PublisherClient")
+    def test_post_raw_event_compresses_big_raw_event(self, PublisherClient):
+        eq = self.get_queues()
+        raw_event = build_big_raw_event()
+        eq.post_raw_event("routing-key", raw_event)
+        publish = PublisherClient.return_value.publish
+        publish.assert_called_once()
+        posted_raw_event = json.loads(publish.call_args.args[1])
+        self.assertEqual(list(posted_raw_event), [COMPRESSED_RAW_EVENT_KEY])
+        self.assertEqual(decompress_raw_event(posted_raw_event), raw_event)
 
 
 class GooglePubSubBaseWorkerTestCase(TestCase):
