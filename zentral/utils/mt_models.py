@@ -217,6 +217,7 @@ class MTObjectManager(models.Manager):
                 _cache.prefetch(collector)
             obj = self.model()
             m2m_fields = []
+            committed_fks = []
             for k, v in tree.items():
                 if k == 'mt_hash':  # special excluded field
                     obj.mt_hash = v
@@ -235,6 +236,7 @@ class MTObjectManager(models.Manager):
                     else:
                         fk_obj, _ = f.related_model.objects.commit(v, _cache=_cache)
                         setattr(obj, k, fk_obj)
+                        committed_fks.append(k)
                 elif isinstance(v, list):
                     f = obj.get_mt_field(k, many_to_many=True)
                     ol = []
@@ -250,7 +252,10 @@ class MTObjectManager(models.Manager):
                     obj.save(**extra_obj_save_kwargs)
                     for k, l in m2m_fields:
                         getattr(obj, k).set(l)
-                    obj.full_clean()
+                    # full_clean runs after a successful insert, so every unique constraint has
+                    # already been enforced by the DB, and the foreign keys committed above exist
+                    # by construction → both checks are queries that cannot fail
+                    obj.full_clean(exclude=committed_fks, validate_unique=False)
             except IntegrityError as integrity_error:
                 # the object has been concurrently created ?
                 try:

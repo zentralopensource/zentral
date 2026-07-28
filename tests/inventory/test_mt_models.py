@@ -1,7 +1,8 @@
 import copy
 from unittest.mock import patch
 
-from django.db import connection
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
@@ -59,6 +60,11 @@ class MTCommitCacheTestCase(TestCase):
         table = connection.ops.quote_name(model._meta.db_table)
         column = connection.ops.quote_name("mt_hash")
         return [q["sql"] for q in ctx.captured_queries if f"WHERE {table}.{column} " in q["sql"]]
+
+    @staticmethod
+    def _existence_checks(ctx):
+        # the shape of both the foreign key and the unique checks of full_clean()
+        return [q["sql"] for q in ctx.captured_queries if q["sql"].startswith("SELECT 1 AS")]
 
     # cache
 
@@ -156,6 +162,27 @@ class MTCommitCacheTestCase(TestCase):
         with patch("zentral.utils.mt_models.MAX_COMMIT_CACHE_SIZE", 0):
             cache.set(Source, "yolo", source)
         self.assertEqual(cache.get(Source, "yolo"), source)
+
+    # full_clean
+
+    def test_commit_skips_the_full_clean_existence_checks(self):
+        with CaptureQueriesContext(connection) as ctx:
+            snapshot, created = MachineSnapshot.objects.commit(self._snapshot(app_instance_count=5))
+        self.assertTrue(created)
+        self.assertEqual(snapshot.osx_app_instances.count(), 5)
+        self.assertEqual(self._existence_checks(ctx), [])
+
+    def test_commit_still_validates_fields(self):
+        with self.assertRaises(ValidationError) as cm:
+            MachineSnapshot.objects.commit(self._snapshot(platform="yolo"))
+        self.assertEqual(list(cm.exception.message_dict), ["platform"])
+
+    def test_commit_missing_required_foreign_key(self):
+        # save() runs before full_clean(): the not null constraint is what rejects a missing
+        # foreign key, which is why skipping its existence check loses nothing
+        with self.assertRaises(IntegrityError):
+            OSXAppInstance.objects.commit({"bundle_path": "/Applications/App.app",
+                                           "signed_by": self._certificate()})
 
     # collector
 
