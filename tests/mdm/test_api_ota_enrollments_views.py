@@ -256,7 +256,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                  "new_value": {
                      'created_at': oe.created_at,
                      'enrollment_secret': {
-                         'created_at': oe.enrollment_secret.created_at,
+                         'created_at': oe.enrollment_secret.created_at.isoformat(),
                          'is_expired': False,
                          'is_revoked': False,
                          'is_used_up': False,
@@ -364,7 +364,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                  "new_value": {
                      'created_at': oe.created_at,
                      'enrollment_secret': {
-                         'created_at': oe.enrollment_secret.created_at,
+                         'created_at': oe.enrollment_secret.created_at.isoformat(),
                          'is_expired': False,
                          'is_revoked': False,
                          'is_used_up': False,

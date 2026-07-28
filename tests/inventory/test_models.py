@@ -1,7 +1,11 @@
+import json
+from datetime import datetime
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from tests.mdm.utils import force_software_update_enforcement
+from tests.munki.utils import force_enrollment as force_munki_enrollment
 from zentral.contrib.inventory.models import (
     BusinessUnit,
     EnrollmentSecret,
@@ -156,6 +160,50 @@ class InventoryModelsTestCase(TestCase):
              "created_at": taxonomy.created_at,
              "updated_at": taxonomy.updated_at}
         )
+
+    # EnrollmentSecret / BaseEnrollment
+
+    def test_enrollment_secret_serialize_for_event(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(name=get_random_string(12))
+        secret = EnrollmentSecret.objects.create(meta_business_unit=mbu, quota=5)
+        secret.tags.set([tag])
+        self.assertEqual(
+            secret.serialize_for_event(),
+            {"enrollment_secret": {
+                "pk": secret.pk,
+                "quota": 5,
+                "request_count": 0,
+                "is_used_up": False,
+                "is_revoked": False,
+                "is_expired": False,
+                "created_at": secret.created_at.isoformat(),
+                "meta_business_unit": {"pk": mbu.pk, "name": mbu.name},
+                "tags": [{"pk": tag.pk, "name": tag.name}],
+            }}
+        )
+
+    def test_enrollment_secret_serialize_for_event_revoked_and_expired(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        revoked_at = datetime(2026, 7, 28, 10, 30)
+        expired_at = datetime(2026, 7, 27, 9, 15)
+        secret = EnrollmentSecret.objects.create(meta_business_unit=mbu,
+                                                 revoked_at=revoked_at, expired_at=expired_at)
+        d = secret.serialize_for_event()["enrollment_secret"]
+        self.assertEqual(d["revoked_at"], revoked_at.isoformat())
+        self.assertEqual(d["expired_at"], expired_at.isoformat())
+        self.assertTrue(d["is_revoked"])
+        self.assertTrue(d["is_expired"])
+
+    def test_enrollment_serialize_for_event_is_json_native(self):
+        # BaseEnrollment is abstract: munki's Enrollment is a plain concrete subclass of it. A datetime
+        # left in the payload does not raise in the pipeline — kombu envelopes it — so assert with the
+        # stdlib encoder, which does.
+        enrollment = force_munki_enrollment()
+        d = enrollment.serialize_for_event()
+        self.assertEqual(d["created_at"], enrollment.created_at.isoformat())
+        self.assertEqual(d["enrollment_secret"]["created_at"], enrollment.secret.created_at.isoformat())
+        json.dumps(d)
 
     # Tag
 
