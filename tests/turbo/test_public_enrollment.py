@@ -220,11 +220,12 @@ class TurboEnrollPublicTestCase(TurboPublicTestCase):
         self.assertEqual(event.metadata.machine_serial_number, serial_number)
         self.assertEqual(event.payload["action"], "enrollment")
         self.assertEqual(event.payload["enrollment"]["pk"], enrollment.pk)
-        self.assertEqual(event.payload["configuration"]["pk"], enrollment.configuration.pk)
+        self.assertEqual(event.payload["configuration"]["pk"], str(enrollment.configuration.pk))
         self.assertEqual(event.payload["configuration"]["name"], enrollment.configuration.name)
+        # these keys are read back from the payload, so the configuration pk is the serialized one
         self.assertEqual(event.get_linked_objects_keys(), {
             "turbo_enrollment": [(enrollment.pk,)],
-            "turbo_configuration": [(enrollment.configuration.pk,)],
+            "turbo_configuration": [(str(enrollment.configuration.pk),)],
         })
 
     # enrollment info endpoint

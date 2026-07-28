@@ -148,7 +148,7 @@ class TurboSetupConfigurationsTestCase(TurboSetupTestCase):
                  "model": "turbo.configuration",
                  "pk": str(configuration.pk),
                  "new_value": {
-                     "pk": configuration.pk,
+                     "pk": str(configuration.pk),
                      "name": name,
                      "description": description,
                      "collect_inventory": True,

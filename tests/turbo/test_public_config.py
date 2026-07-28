@@ -222,7 +222,7 @@ class TurboConfigPublicTestCase(TurboPublicTestCase):
         self.assertEqual(event.metadata.machine_serial_number, serial_number)
         self.assertEqual(event.payload["request_type"], "config")
         self.assertEqual(event.payload["enrollment"]["pk"], enrollment.pk)
-        self.assertEqual(event.payload["configuration"]["pk"], configuration.pk)
+        self.assertEqual(event.payload["configuration"]["pk"], str(configuration.pk))
         # the config request event is a marker — the served jobs are not listed on it
         self.assertNotIn("jobs", event.payload)
         metadata = event.metadata.serialize()

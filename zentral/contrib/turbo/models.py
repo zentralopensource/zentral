@@ -93,7 +93,7 @@ class Configuration(models.Model):
         return Configuration.objects.can_be_deleted().filter(pk=self.pk).exists()
 
     def serialize_for_event(self, keys_only=False):
-        d = {"pk": self.pk, "name": self.name}
+        d = {"pk": str(self.pk), "name": self.name}
         if keys_only:
             return d
         d.update({
@@ -299,7 +299,7 @@ class Script(models.Model):
 
     def serialize_for_event(self):
         d = {
-            "pk": self.pk,
+            "pk": str(self.pk),
             "name": self.name,
             "source": self.source,
             "version": self.job.version,
@@ -443,7 +443,7 @@ class MSCPCheck(models.Model):
 
     def serialize_for_event(self):
         d = {
-            "pk": self.pk,
+            "pk": str(self.pk),
             "rule_id": self.rule_id,
             "version": self.job.version,
             "compliance_check": self.compliance_check.serialize_for_event(),
@@ -554,9 +554,9 @@ class RecurringJob(JobScope):
 
     def serialize_for_event(self):
         d = {
-            "pk": self.pk,
+            "pk": str(self.pk),
             "configuration": self.configuration.serialize_for_event(keys_only=True),
-            "job": {"pk": self.job_id, "kind": self.job.kind, "version": self.job.version},
+            "job": {"pk": str(self.job_id), "kind": self.job.kind, "version": self.job.version},
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -602,9 +602,9 @@ class OneTimeJob(JobScope):
 
     def serialize_for_event(self):
         d = {
-            "pk": self.pk,
+            "pk": str(self.pk),
             "configuration": self.configuration.serialize_for_event(keys_only=True),
-            "job": {"pk": self.job_id, "kind": self.job.kind, "version": self.job.version},
+            "job": {"pk": str(self.job_id), "kind": self.job.kind, "version": self.job.version},
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

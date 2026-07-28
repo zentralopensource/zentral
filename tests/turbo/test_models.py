@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
@@ -111,6 +112,37 @@ class TurboSerializeForEventTestCase(TestCase):
         not_after = timezone.now() + timedelta(days=1)
         otj = force_one_time_job(not_after=not_after)
         self.assertEqual(otj.serialize_for_event()["not_after"], not_after.isoformat())
+
+    def test_uuid_pks_are_serialized_as_strings(self):
+        configuration = force_configuration()
+        script = force_script()
+        mscp_check = force_mscp_check()
+        recurring_job = force_recurring_job(configuration=configuration)
+        one_time_job = force_one_time_job(configuration=configuration)
+        for obj in (configuration, script, mscp_check, recurring_job, one_time_job):
+            with self.subTest(obj._meta.model_name):
+                self.assertEqual(obj.serialize_for_event()["pk"], str(obj.pk))
+        self.assertEqual(configuration.serialize_for_event(keys_only=True)["pk"], str(configuration.pk))
+        for job_scope in (recurring_job, one_time_job):
+            with self.subTest(f"{job_scope._meta.model_name} job"):
+                self.assertEqual(job_scope.serialize_for_event()["job"]["pk"], str(job_scope.job_id))
+
+    def test_serialize_for_event_is_json_native(self):
+        # a UUID or a datetime reaching an event payload does not raise: kombu's JSON encoder wraps it
+        # in a {"__type__", "__value__"} envelope, which then lands in the stores that dump the event
+        # themselves. Guard the whole shape with the stdlib encoder, which does raise.
+        configuration = force_configuration()
+        # the full Enrollment form is not covered here: it extends inventory's BaseEnrollment, whose
+        # serialize_for_event still returns raw datetimes (its own created_at + the enrollment secret's)
+        for obj in (configuration,
+                    force_script(compliance_check=True, tag=Tag.objects.create(name=get_random_string(12))),
+                    force_mscp_check(odv_int=10),
+                    force_recurring_job(configuration=configuration, interval=3600),
+                    force_one_time_job(configuration=configuration,
+                                       not_before=timezone.now(),
+                                       not_after=timezone.now() + timedelta(days=1))):
+            with self.subTest(obj._meta.model_name):
+                json.dumps(obj.serialize_for_event())
 
 
 class TurboMSCPCheckComplianceCheckNameTestCase(TestCase):

@@ -58,7 +58,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         self.assertEqual(event.payload["object"]["pk"], str(enrollment.pk))
         # the enrollment event carries the configuration with keys_only=True
         self.assertEqual(event.payload["object"]["new_value"]["configuration"],
-                         {"pk": configuration.pk, "name": configuration.name})
+                         {"pk": str(configuration.pk), "name": configuration.name})
         # both the enrollment and the configuration are linked objects
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {
@@ -105,7 +105,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         event = audit_events[0]
         self.assertEqual(event.payload["action"], "updated")
         self.assertEqual(event.payload["object"]["model"], "turbo.enrollment")
-        config_keys_only = {"pk": enrollment.configuration.pk, "name": enrollment.configuration.name}
+        config_keys_only = {"pk": str(enrollment.configuration.pk), "name": enrollment.configuration.name}
         self.assertEqual(event.payload["object"]["prev_value"]["configuration"], config_keys_only)
         self.assertEqual(event.payload["object"]["new_value"]["configuration"], config_keys_only)
         metadata = event.metadata.serialize()
@@ -164,7 +164,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         self.assertEqual(event.payload["action"], "deleted")
         self.assertEqual(event.payload["object"]["model"], "turbo.enrollment")
         self.assertEqual(event.payload["object"]["prev_value"]["configuration"],
-                         {"pk": configuration.pk, "name": configuration.name})
+                         {"pk": str(configuration.pk), "name": configuration.name})
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {
             "turbo_enrollment": [str(pk)],
