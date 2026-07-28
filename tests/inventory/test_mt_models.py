@@ -13,9 +13,10 @@ from zentral.contrib.inventory.models import (
     MachineSnapshot,
     OSXApp,
     OSXAppInstance,
+    OSXAppManager,
     Source,
 )
-from zentral.utils.mt_models import _NOT_CACHED, MTCommitCache, prepare_commit_tree
+from zentral.utils.mt_models import _NOT_CACHED, MTCommitCache, MTOError, prepare_commit_tree
 
 
 class MTCommitCacheTestCase(TestCase):
@@ -65,6 +66,11 @@ class MTCommitCacheTestCase(TestCase):
     def _existence_checks(ctx):
         # the shape of both the foreign key and the unique checks of full_clean()
         return [q["sql"] for q in ctx.captured_queries if q["sql"].startswith("SELECT 1 AS")]
+
+    @staticmethod
+    def _inserts(ctx, model):
+        table = connection.ops.quote_name(model._meta.db_table)
+        return [q["sql"] for q in ctx.captured_queries if q["sql"].startswith(f"INSERT INTO {table}")]
 
     # cache
 
@@ -155,7 +161,7 @@ class MTCommitCacheTestCase(TestCase):
     def test_cache_set_upgrades_cached_absence(self):
         cache = MTCommitCache()
         source, _ = Source.objects.commit(self._source())
-        cache.prefetch({Source: {source.mt_hash, "yolo"}})
+        cache.prefetch({Source: {source.mt_hash: {}, "yolo": {}}})
         self.assertEqual(cache.get(Source, source.mt_hash), source)
         self.assertIsNone(cache.get(Source, "yolo"))
         # a capped cache still replaces a cached absence, or the object would be inserted twice
@@ -184,6 +190,51 @@ class MTCommitCacheTestCase(TestCase):
             OSXAppInstance.objects.commit({"bundle_path": "/Applications/App.app",
                                            "signed_by": self._certificate()})
 
+    # bulk inserts
+
+    def test_one_insert_per_model(self):
+        with CaptureQueriesContext(connection) as ctx:
+            snapshot, created = MachineSnapshot.objects.commit(self._snapshot(app_instance_count=5))
+        self.assertTrue(created)
+        self.assertEqual(snapshot.osx_app_instances.count(), 5)
+        for model in (Source, Certificate, OSXApp, OSXAppInstance, MachineSnapshot):
+            self.assertEqual(len(self._inserts(ctx, model)), 1, model)
+
+    def test_bulk_and_per_object_paths_agree(self):
+        # content addressed: if the two paths built one object differently, its hash would differ
+        # and the other path would insert a second row instead of resolving the first
+        with patch("zentral.utils.mt_models._bulk_commit"):
+            first, _ = MachineSnapshot.objects.commit(self._snapshot(app_instance_count=3))
+        self.assertEqual(OSXApp.objects.count(), 3)
+        bulk_tree = self._snapshot(app_instance_count=3)
+        bulk_tree["serial_number"] = "9876543210"
+        second, created = MachineSnapshot.objects.commit(bulk_tree)
+        self.assertTrue(created)
+        self.assertEqual(set(second.osx_app_instances.all()), set(first.osx_app_instances.all()))
+        self.assertEqual(OSXApp.objects.count(), 3)
+        # and the other way round: a tree the per object path shares with the bulk inserted rows
+        per_object_tree = self._snapshot(app_instance_count=4)
+        per_object_tree["serial_number"] = "1111111111"
+        with patch("zentral.utils.mt_models._bulk_commit"):
+            third, _ = MachineSnapshot.objects.commit(per_object_tree)
+        self.assertEqual(OSXApp.objects.count(), 4)
+        self.assertLessEqual(set(first.osx_app_instances.all()), set(third.osx_app_instances.all()))
+
+    def test_bulk_insert_conflict_falls_back(self):
+        with patch.object(OSXAppManager, "bulk_create", side_effect=IntegrityError):
+            snapshot, created = MachineSnapshot.objects.commit(self._snapshot(app_instance_count=3))
+        self.assertTrue(created)
+        # the rolled back batch and everything depending on it went through the per object path
+        self.assertEqual(OSXApp.objects.count(), 3)
+        self.assertEqual(snapshot.osx_app_instances.count(), 3)
+        self.assertEqual(snapshot.hash(), snapshot.mt_hash)
+
+    def test_commit_non_dict_m2m_item(self):
+        with self.assertRaises(MTOError) as cm:
+            MachineSnapshot.objects.commit(self._snapshot(app_instance_count=0,
+                                                          certificates=["yolo"]))
+        self.assertEqual(cm.exception.message, "Commit tree is not a dict")
+
     # collector
 
     def test_prepare_commit_tree_collector(self):
@@ -191,11 +242,12 @@ class MTCommitCacheTestCase(TestCase):
         collector = {}
         prepare_commit_tree(tree, MachineSnapshot, collector)
         app_instance = tree["osx_app_instances"][0]
-        self.assertEqual(collector[MachineSnapshot], {tree["mt_hash"]})
-        self.assertEqual(collector[Source], {tree["source"]["mt_hash"]})
-        self.assertEqual(collector[OSXAppInstance], {app_instance["mt_hash"]})
-        self.assertEqual(collector[OSXApp], {app_instance["app"]["mt_hash"]})
-        self.assertEqual(collector[Certificate], {app_instance["signed_by"]["mt_hash"]})
+        signed_by = app_instance["signed_by"]
+        self.assertEqual(collector[MachineSnapshot], {tree["mt_hash"]: tree})
+        self.assertEqual(collector[Source], {tree["source"]["mt_hash"]: tree["source"]})
+        self.assertEqual(collector[OSXAppInstance], {app_instance["mt_hash"]: app_instance})
+        self.assertEqual(collector[OSXApp], {app_instance["app"]["mt_hash"]: app_instance["app"]})
+        self.assertEqual(collector[Certificate], {signed_by["mt_hash"]: signed_by})
         # the JSONField subtree is hashed without a model
         self.assertNotIn(None, collector)
 

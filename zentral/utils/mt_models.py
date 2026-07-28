@@ -148,7 +148,7 @@ def prepare_commit_tree(tree, model=None, collector=None):
     # an excluded foreign key can point at a model without a mt_hash (BusinessUnit.meta_business_unit):
     # collecting it would break the prefetch
     if collector is not None and model is not None and issubclass(model, AbstractMTObject):
-        collector.setdefault(model, set()).add(tree['mt_hash'])
+        collector.setdefault(model, {})[tree['mt_hash']] = tree
 
 
 def cleanup_commit_tree(tree):
@@ -180,17 +180,121 @@ class MTCommitCache:
             self._objects[key] = obj
 
     def prefetch(self, collector):
-        for model, mt_hashes in collector.items():
+        for model, trees in collector.items():
             free_slots = MAX_COMMIT_CACHE_SIZE - len(self._objects)
             if free_slots <= 0:
                 return
-            mt_hashes = sorted(mt_hashes)[:free_slots]
+            mt_hashes = sorted(trees)[:free_slots]
             for idx in range(0, len(mt_hashes), COMMIT_CACHE_CHUNK_SIZE):
                 chunk = mt_hashes[idx:idx + COMMIT_CACHE_CHUNK_SIZE]
                 found = {o.mt_hash: o for o in model.objects.filter(mt_hash__in=chunk)}
                 for mt_hash in chunk:
                     # None caches the absence: the object can be built without a wasted query
                     self._objects[(model, mt_hash)] = found.get(mt_hash)
+
+
+def _build_mt_object(model, tree, commit_subtree):
+    # commit_subtree returns None when it cannot resolve the subtree yet, which leaves the whole
+    # object for a later round — or for the per object path, which raises the proper errors
+    obj = model()
+    m2m_fields = []
+    committed_fks = []
+    for k, v in tree.items():
+        if k == 'mt_hash':  # special excluded field
+            obj.mt_hash = v
+        elif isinstance(v, dict):
+            try:
+                f = obj.get_mt_field(k, many_to_one=True)
+            except MTOError:
+                # JSONField ???
+                f = obj.get_mt_field(k)
+                if isinstance(f, models.JSONField):
+                    t = copy.deepcopy(v)
+                    cleanup_commit_tree(t)
+                    setattr(obj, k, t)
+                else:
+                    raise MTOError(f'Cannot set field "{k}" to dict value')
+            else:
+                fk_obj = commit_subtree(f.related_model, v)
+                if fk_obj is None:
+                    return None
+                setattr(obj, k, fk_obj)
+                committed_fks.append(k)
+        elif isinstance(v, list):
+            f = obj.get_mt_field(k, many_to_many=True)
+            ol = []
+            for sv in v:
+                m2m_obj = commit_subtree(f.related_model, sv)
+                if m2m_obj is None:
+                    return None
+                ol.append(m2m_obj)
+            m2m_fields.append((k, ol))
+        else:
+            obj.get_mt_field(k)
+            setattr(obj, k, v)
+    return obj, m2m_fields, committed_fks
+
+
+def _bulk_insert(model, batch, cache):
+    try:
+        with transaction.atomic():
+            model.objects.bulk_create([obj for obj, _, _ in batch], batch_size=COMMIT_CACHE_CHUNK_SIZE)
+            m2m_rows = {}
+            for obj, m2m_fields, _ in batch:
+                for k, ol in m2m_fields:
+                    f = model._meta.get_field(k)
+                    m2m_rows.setdefault(f.remote_field.through, []).extend(
+                        f.remote_field.through(**{f.m2m_field_name(): obj, f.m2m_reverse_field_name(): m2m_obj})
+                        for m2m_obj in ol
+                    )
+            for through, rows in m2m_rows.items():
+                # the objects were all inserted above, so none of them can have m2m rows yet
+                through.objects.bulk_create(rows, batch_size=COMMIT_CACHE_CHUNK_SIZE)
+            for obj, _, committed_fks in batch:
+                obj.full_clean(exclude=committed_fks, validate_unique=False)
+                if not obj.hash(recursive=False) == obj.mt_hash:
+                    raise MTOError(f'Obj {obj} Hash missmatch!!!')
+    except IntegrityError:
+        # one of them was concurrently created, and a single insert cannot say which: roll the
+        # batch back and let the per object path recover them one by one
+        return False
+    for obj, _, _ in batch:
+        cache.set(model, obj.mt_hash, obj)
+    return True
+
+
+def _bulk_commit(cache, collector):
+    def resolve(model, subtree):
+        if not isinstance(subtree, dict):
+            return None
+        obj = cache.get(model, subtree['mt_hash'])
+        return obj if isinstance(obj, model) else None
+
+    pending = {}
+    for model, trees in collector.items():
+        # bulk_create does not call save(), where AbstractMachineGroup computes its key
+        if model.save is not models.Model.save:
+            continue
+        missing = {h: t for h, t in trees.items() if cache.get(model, h) is None}
+        if missing:
+            pending[model] = missing
+    # an object can only be inserted once its subtrees hold a pk, so the models are drained in
+    # dependency order, one round per level — a self referencing model takes one round per link
+    while pending:
+        progress = False
+        for model, trees in list(pending.items()):
+            batch = []
+            for mt_hash in list(trees):
+                built = _build_mt_object(model, trees[mt_hash], resolve)
+                if built is not None:
+                    batch.append(built)
+                    del trees[mt_hash]
+            if not trees:
+                del pending[model]
+            if batch and _bulk_insert(model, batch, cache):
+                progress = True
+        if not progress:
+            return
 
 
 class MTObjectManager(models.Manager):
@@ -215,38 +319,16 @@ class MTObjectManager(models.Manager):
                 # an unchanged tree stops at the get above, without walking a single subtree:
                 # only pay for the prefetch once the root hash has missed
                 _cache.prefetch(collector)
-            obj = self.model()
-            m2m_fields = []
-            committed_fks = []
-            for k, v in tree.items():
-                if k == 'mt_hash':  # special excluded field
-                    obj.mt_hash = v
-                elif isinstance(v, dict):
-                    try:
-                        f = obj.get_mt_field(k, many_to_one=True)
-                    except MTOError:
-                        # JSONField ???
-                        f = obj.get_mt_field(k)
-                        if isinstance(f, models.JSONField):
-                            t = copy.deepcopy(v)
-                            cleanup_commit_tree(t)
-                            setattr(obj, k, t)
-                        else:
-                            raise MTOError(f'Cannot set field "{k}" to dict value')
-                    else:
-                        fk_obj, _ = f.related_model.objects.commit(v, _cache=_cache)
-                        setattr(obj, k, fk_obj)
-                        committed_fks.append(k)
-                elif isinstance(v, list):
-                    f = obj.get_mt_field(k, many_to_many=True)
-                    ol = []
-                    for sv in v:
-                        m2m_obj, _ = f.related_model.objects.commit(sv, _cache=_cache)
-                        ol.append(m2m_obj)
-                    m2m_fields.append((k, ol))
-                else:
-                    obj.get_mt_field(k)
-                    setattr(obj, k, v)
+                if not extra_obj_save_kwargs:
+                    # the save kwargs only apply to the root, and bulk_create cannot forward them
+                    _bulk_commit(_cache, collector)
+                    cached = _cache.get(self.model, mt_hash)
+                    if isinstance(cached, self.model):
+                        return cached, True
+            obj, m2m_fields, committed_fks = _build_mt_object(
+                self.model, tree,
+                lambda model, subtree: model.objects.commit(subtree, _cache=_cache)[0]
+            )
             try:
                 with transaction.atomic():
                     obj.save(**extra_obj_save_kwargs)
