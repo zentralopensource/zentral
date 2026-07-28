@@ -29,10 +29,11 @@ from zentral.contrib.inventory.models import (
     MachineTag,
     MetaMachine,
     Source,
+    SourceManager,
     Tag,
 )
 from zentral.contrib.inventory.utils.db import inventory_events_from_machine_snapshot_commit
-from zentral.utils.mt_models import MTOError, prepare_commit_tree
+from zentral.utils.mt_models import Hasher, MTOError, prepare_commit_tree
 from zentral.utils.time import naive_utcnow
 
 
@@ -780,3 +781,95 @@ class MachineSnapshotTestCase(TestCase):
                          ["ERROR:zentral.contrib.inventory.models:Commit tree last seen is not a str or a datetime"])
         self.assertTrue(t0 <= msc.last_seen <= naive_utcnow())
         self.assertEqual(msc.last_seen, last_seen)
+
+    # hasher
+
+    def test_hasher_invalid_field_name(self):
+        with self.assertRaises(ValueError) as cm:
+            Hasher().add_field(None, "yolo")
+        self.assertEqual(cm.exception.args[0], "Invalid field name None")
+
+    def test_hasher_field_already_added(self):
+        hasher = Hasher()
+        hasher.add_field("un", "yolo")
+        with self.assertRaises(ValueError) as cm:
+            hasher.add_field("un", "fomo")
+        self.assertEqual(cm.exception.args[0], "Field un already added")
+
+    def test_hasher_invalid_field_value(self):
+        with self.assertRaises(ValueError) as cm:
+            Hasher().add_field("un", 1.2)
+        self.assertEqual(cm.exception.args[0], "Invalid field value 1.2 for field un")
+
+    def test_hasher_aware_datetime(self):
+        hasher = Hasher()
+        hasher.add_field("un", parser.parse("2026-07-24T10:11:12+02:00"))
+        naive_hasher = Hasher()
+        naive_hasher.add_field("un", datetime(2026, 7, 24, 8, 11, 12))
+        self.assertEqual(hasher.hexdigest(), naive_hasher.hexdigest())
+
+    # commit tree
+
+    def test_prepare_commit_tree_not_a_dict(self):
+        with self.assertRaises(MTOError) as cm:
+            prepare_commit_tree(["yolo"])
+        self.assertEqual(cm.exception.message, "Commit tree is not a dict")
+
+    def test_commit_dict_value_for_text_field(self):
+        with self.assertRaises(MTOError) as cm:
+            Source.objects.commit({"module": {"un": 1}, "name": "yolo"})
+        self.assertEqual(cm.exception.message, 'Cannot set field "module" to dict value')
+
+    def test_commit_concurrently_created_object(self):
+        source, _ = Source.objects.commit(copy.deepcopy(self.source))
+        tree = dict(self.source, name="fomo")
+        with patch.object(SourceManager, "get", side_effect=[Source.DoesNotExist, source]), \
+             patch.object(Source, "save", side_effect=IntegrityError):
+            obj, created = Source.objects.commit(tree)
+        self.assertFalse(created)
+        self.assertEqual(obj, source)
+
+    def test_commit_integrity_error_not_a_key_error(self):
+        tree = dict(self.source, name="fomo")
+        with patch.object(SourceManager, "get", side_effect=Source.DoesNotExist), \
+             patch.object(Source, "save", side_effect=IntegrityError):
+            with self.assertRaises(IntegrityError):
+                Source.objects.commit(tree)
+
+    def test_commit_hash_mismatch(self):
+        tree = dict(self.source, name="fomo")
+        with patch.object(Source, "hash", return_value="yolo"):
+            with self.assertRaises(MTOError) as cm:
+                Source.objects.commit(tree)
+        self.assertEqual(cm.exception.message, "Obj fomo Hash missmatch!!!")
+
+    # mt fields
+
+    def test_get_mt_field_excluded(self):
+        with self.assertRaises(MTOError) as cm:
+            Source().get_mt_field("mt_hash")
+        self.assertEqual(cm.exception.message, "Field 'mt_hash' of Source is excluded")
+
+    def test_get_mt_field_auto_created(self):
+        with self.assertRaises(MTOError) as cm:
+            Source().get_mt_field("machinesnapshot")
+        self.assertEqual(cm.exception.message, "Field 'machinesnapshot' of Source auto created")
+
+    def test_serialize_unsupported_value_type(self):
+        source, _ = Source.objects.commit(copy.deepcopy(self.source))
+        source.config = [1, 2]
+        with self.assertRaises(ValueError) as cm:
+            source.serialize()
+        self.assertEqual(cm.exception.args[0], "Can't serialize Source.config value of type <class 'list'>")
+
+    def test_diff_different_model(self):
+        source, _ = Source.objects.commit(copy.deepcopy(self.source))
+        certificate, _ = Certificate.objects.commit(copy.deepcopy(self.certificate))
+        with self.assertRaises(MTOError) as cm:
+            source.diff(certificate)
+        self.assertEqual(cm.exception.message, "Can only compare to an object of the same model")
+
+    def test_diff_removed_mt_object(self):
+        ms, _ = MachineSnapshot.objects.commit(copy.deepcopy(self.machine_snapshot2))
+        ms2, _ = MachineSnapshot.objects.commit(copy.deepcopy(self.machine_snapshot))
+        self.assertEqual(ms2.diff(ms)["os_version"], {"removed": ms.os_version.serialize()})

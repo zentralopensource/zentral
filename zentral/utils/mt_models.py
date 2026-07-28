@@ -49,9 +49,7 @@ class Hasher(object):
         for k in sorted(self.fields.keys()):
             h.update(k.encode('utf-8'))
             v = self.fields[k]
-            if isinstance(v, bytes):
-                h.update(v)
-            elif isinstance(v, str):
+            if isinstance(v, str):
                 h.update(v.encode('utf-8'))
             elif isinstance(v, list):
                 for e in sorted(v):
