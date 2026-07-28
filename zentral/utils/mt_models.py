@@ -11,6 +11,14 @@ from django.db import IntegrityError, models, transaction
 logger = logging.getLogger("zentral.utils.mt_models")
 
 
+_NOT_CACHED = object()
+
+# The commit cache holds model instances, and a machine snapshot tree can carry tens of thousands
+# of subtrees → cap it. Past the cap, the extra subtrees simply take the uncached path.
+MAX_COMMIT_CACHE_SIZE = 10000
+COMMIT_CACHE_CHUNK_SIZE = 1000
+
+
 class MTOError(Exception):
     def __init__(self, message):
         super().__init__(message)
@@ -71,7 +79,7 @@ def _get_commit_tree_field(model, name):
     return f
 
 
-def prepare_commit_tree(tree, model=None):
+def prepare_commit_tree(tree, model=None, collector=None):
     if not isinstance(tree, dict):
         raise MTOError("Commit tree is not a dict")
     if tree.get('mt_hash', None):
@@ -83,7 +91,7 @@ def prepare_commit_tree(tree, model=None):
         else:
             f = _get_commit_tree_field(model, k)
             if isinstance(v, dict):
-                prepare_commit_tree(v, f.related_model if f is not None and f.many_to_one else None)
+                prepare_commit_tree(v, f.related_model if f is not None and f.many_to_one else None, collector)
                 v = v['mt_hash']
             elif isinstance(v, list):
                 related_model = f.related_model if f is not None and f.many_to_many else None
@@ -91,7 +99,7 @@ def prepare_commit_tree(tree, model=None):
                 skipped_item_idxs = None
                 for item_idx, item in enumerate(v):
                     if isinstance(item, dict):
-                        prepare_commit_tree(item, related_model)
+                        prepare_commit_tree(item, related_model, collector)
                         subtree_mt_hash = item['mt_hash']
                         if subtree_mt_hash in hash_list:
                             # a list of subtrees maps to a many to many relationship, i.e. a set:
@@ -137,6 +145,10 @@ def prepare_commit_tree(tree, model=None):
                 tree[k] = v = make_naive(v)
             h.add_field(k, v)
     tree['mt_hash'] = h.hexdigest()
+    # an excluded foreign key can point at a model without a mt_hash (BusinessUnit.meta_business_unit):
+    # collecting it would break the prefetch
+    if collector is not None and model is not None and issubclass(model, AbstractMTObject):
+        collector.setdefault(model, set()).add(tree['mt_hash'])
 
 
 def cleanup_commit_tree(tree):
@@ -151,13 +163,58 @@ def cleanup_commit_tree(tree):
                 cleanup_commit_tree(subtree)
 
 
+class MTCommitCache:
+    def __init__(self):
+        self._objects = {}
+
+    def get(self, model, mt_hash):
+        # the mt_hash is only unique per table: BusinessUnit and MachineGroup have the same hashable
+        # fields, and a machine snapshot tree carries both → the model is part of the key
+        return self._objects.get((model, mt_hash), _NOT_CACHED)
+
+    def set(self, model, mt_hash, obj):
+        key = (model, mt_hash)
+        # only new keys are capped: a cached absence must always be upgraded to the committed
+        # object, or the next occurrence of the subtree would try to insert it again
+        if key in self._objects or len(self._objects) < MAX_COMMIT_CACHE_SIZE:
+            self._objects[key] = obj
+
+    def prefetch(self, collector):
+        for model, mt_hashes in collector.items():
+            free_slots = MAX_COMMIT_CACHE_SIZE - len(self._objects)
+            if free_slots <= 0:
+                return
+            mt_hashes = sorted(mt_hashes)[:free_slots]
+            for idx in range(0, len(mt_hashes), COMMIT_CACHE_CHUNK_SIZE):
+                chunk = mt_hashes[idx:idx + COMMIT_CACHE_CHUNK_SIZE]
+                found = {o.mt_hash: o for o in model.objects.filter(mt_hash__in=chunk)}
+                for mt_hash in chunk:
+                    # None caches the absence: the object can be built without a wasted query
+                    self._objects[(model, mt_hash)] = found.get(mt_hash)
+
+
 class MTObjectManager(models.Manager):
-    def commit(self, tree, **extra_obj_save_kwargs):
-        prepare_commit_tree(tree, self.model)
+    def commit(self, tree, _cache=None, **extra_obj_save_kwargs):
+        collector = {} if _cache is None else None
+        prepare_commit_tree(tree, self.model, collector)
+        mt_hash = tree['mt_hash']
+        if _cache is None:
+            _cache = MTCommitCache()
+        cached = _cache.get(self.model, mt_hash)
+        if cached is not _NOT_CACHED and cached is not None:
+            return cached, False
         created = False
-        try:
-            obj = self.get(mt_hash=tree['mt_hash'])
-        except self.model.DoesNotExist:
+        obj = None
+        if cached is _NOT_CACHED:
+            try:
+                obj = self.get(mt_hash=mt_hash)
+            except self.model.DoesNotExist:
+                pass
+        if obj is None:
+            if collector is not None:
+                # an unchanged tree stops at the get above, without walking a single subtree:
+                # only pay for the prefetch once the root hash has missed
+                _cache.prefetch(collector)
             obj = self.model()
             m2m_fields = []
             for k, v in tree.items():
@@ -176,13 +233,13 @@ class MTObjectManager(models.Manager):
                         else:
                             raise MTOError(f'Cannot set field "{k}" to dict value')
                     else:
-                        fk_obj, _ = f.related_model.objects.commit(v)
+                        fk_obj, _ = f.related_model.objects.commit(v, _cache=_cache)
                         setattr(obj, k, fk_obj)
                 elif isinstance(v, list):
                     f = obj.get_mt_field(k, many_to_many=True)
                     ol = []
                     for sv in v:
-                        m2m_obj, _ = f.related_model.objects.commit(sv)
+                        m2m_obj, _ = f.related_model.objects.commit(sv, _cache=_cache)
                         ol.append(m2m_obj)
                     m2m_fields.append((k, ol))
                 else:
@@ -197,7 +254,7 @@ class MTObjectManager(models.Manager):
             except IntegrityError as integrity_error:
                 # the object has been concurrently created ?
                 try:
-                    obj = self.get(mt_hash=tree['mt_hash'])
+                    obj = self.get(mt_hash=mt_hash)
                 except self.model.DoesNotExist:
                     # that was not a key error:
                     raise integrity_error
@@ -205,6 +262,7 @@ class MTObjectManager(models.Manager):
                 if not obj.hash(recursive=False) == obj.mt_hash:
                     raise MTOError(f'Obj {obj} Hash missmatch!!!')
                 created = True
+        _cache.set(self.model, mt_hash, obj)
         return obj, created
 
 
