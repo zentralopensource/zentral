@@ -1,7 +1,13 @@
 import logging
 from zentral.core.exceptions import ImproperlyConfigured
+from zentral.utils.json import register_kombu_json_encoders
 
 logger = logging.getLogger('zentral.core.events')
+
+
+# every event class and both ends of the pipeline import this package, so it is the one place
+# guaranteed to be loaded before an event is serialized
+register_kombu_json_encoders()
 
 
 # Event deserializer

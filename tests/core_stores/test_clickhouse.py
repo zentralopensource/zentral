@@ -228,7 +228,7 @@ class TestClickHouseStore(TestCase):
               '',
               f'{{"id": "{event.metadata.uuid}", "index": 0, "namespace": "zentral"}}',
               f'{{"user": {{"username": "{username}"}}, '
-              '"dt": {"__type__": "datetime", "__value__": "1982-05-26T00:00:00"}}'))
+              '"dt": "1982-05-26T00:00:00"}'))
         )
 
     def test_event_serialization_max(self):
@@ -294,7 +294,7 @@ class TestClickHouseStore(TestCase):
               [],
               '',
               '{"id": "id", "index": "index",'
-              ' "bogus": {"__type__": "datetime", "__value__": "0001-02-03T00:00:00"}}',  # not ideal fallback
+              ' "bogus": "0001-02-03T00:00:00"}',  # the registered kombu encoder, not an envelope
               '{}'))
         )
 

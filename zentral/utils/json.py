@@ -1,13 +1,37 @@
 from base64 import b64encode
-from datetime import datetime
+from datetime import date, datetime, time
 import json
 import logging
 import os
+import uuid
 from django.utils import timezone
 from django.utils.text import get_valid_filename
+from kombu.utils.json import register_type
 
 
 logger = logging.getLogger("zentral.utils.json")
+
+
+def register_kombu_json_encoders():
+    """Last-resort net for datetimes & UUIDs that reach the event pipeline unserialized.
+
+    Every queue and (almost) every store backend serializes with kombu's JSON encoder, which wraps a
+    type it does not know in a {"__type__": …, "__value__": …} envelope instead of raising. Nothing
+    breaks — the envelope round-trips inside Zentral — but the envelope lands in the stores that dump
+    the event themselves (ClickHouse, Splunk, …), while the ES/OpenSearch client isoformats the same
+    value, so one payload field ends up with two shapes depending on the backend.
+
+    A None marker means "pure transformation, no envelope", so these encode to the plain strings a
+    store expects. The registration order matters: datetime is a date subclass, and the encoder picks
+    the first isinstance match, so registering date first would truncate datetimes to their date.
+
+    kombu's own decoders stay registered, so events already enveloped in a queue keep deserializing.
+    Serializing correctly at the source stays the rule — this only keeps a miss out of the stores.
+    """
+    register_type(datetime, None, datetime.isoformat)
+    register_type(date, None, date.isoformat)
+    register_type(time, None, time.isoformat)
+    register_type(uuid.UUID, None, str)
 
 
 def prepare_loaded_plist(obj):
