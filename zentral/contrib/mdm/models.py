@@ -1618,14 +1618,17 @@ class MDMEnrollment(models.Model):
         else:
             raise ValueError(f"{self.__class__.__name__} {self.pk} cannot be deleted")
 
-    def serialize_for_event(self):
-        return {
-            "pk": self.pk,
-            "name": self.name,
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
             "realm": self.realm.serialize_for_event(keys_only=True) if self.realm else None,
             "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat()
-        }
+            "updated_at": self.updated_at.isoformat(),
+        })
+        d.update(self.enrollment_secret.serialize_for_event())
+        return d
 
 
 # OTA Enrollment
@@ -1642,11 +1645,6 @@ class OTAEnrollment(MDMEnrollment):
 
     def __str__(self):
         return self.name
-
-    def serialize_for_event(self):
-        d = super().serialize_for_event()
-        d.update(self.enrollment_secret.serialize_for_event())
-        return d
 
     def get_absolute_url(self):
         return reverse("mdm:ota_enrollment", args=(self.pk,))
@@ -2042,17 +2040,8 @@ class DEPEnrollment(MDMEnrollment):
         return self.depdevice_set.exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
 
     def serialize_for_event(self, keys_only=False):
-        d = {
-            "pk": self.pk,
-            "uuid": str(self.uuid),
-            "name": self.name,
-        }
-        if keys_only:
-            return d
-        d.update({
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        })
+        d = super().serialize_for_event(keys_only)
+        d["uuid"] = str(self.uuid)
         return d
 
     def has_auto_admin(self):
@@ -2264,14 +2253,6 @@ class UserEnrollment(MDMEnrollment):
 
     def __str__(self):
         return self.name
-
-    def serialize_for_event(self):
-        d = {"pk": self.pk,
-             "name": self.name,
-             "created_at": self.created_at.isoformat(),
-             "updated_at": self.updated_at.isoformat()}
-        d.update(self.enrollment_secret.serialize_for_event())
-        return d
 
     def get_absolute_url(self):
         return reverse("mdm:user_enrollment", args=(self.pk,))
