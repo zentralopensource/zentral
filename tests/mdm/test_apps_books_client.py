@@ -44,6 +44,7 @@ class MDMAppsBooksClientTestCase(TestCase):
             str(location.mdm_info_id) if location else None,
             location.name if location else None,
             "enterprisestore",
+            location.country_code if location else None,
             location
         ), location
 
@@ -189,6 +190,31 @@ class MDMAppsBooksClientTestCase(TestCase):
         requests.get.return_value = resp
         client, location = self._get_client({"urls": {"contentMetadataLookup": "https://www.example.com"}}, True)
         self.assertEqual(client.get_asset_metadata("yolo"), {"ok": True})
+
+    @patch("zentral.contrib.mdm.apps_books.requests")
+    def test_get_asset_metadata_location_storefront(self, requests):
+        resp = Mock()
+        resp.json.return_value = {"results": {"yolo": {"ok": True}}}
+        requests.get.return_value = resp
+        client, _ = self._get_client({"urls": {"contentMetadataLookup": "https://www.example.com"}}, True)
+        self.assertEqual(client.get_asset_metadata("yolo"), {"ok": True})
+        _, kwargs = requests.get.call_args_list[0]
+        self.assertEqual(kwargs["params"]["cc"], "de")
+
+    def test_get_asset_metadata_default_storefront(self):
+        client, _ = self._get_client({}, False)
+        self.assertEqual(client.country_code, "us")
+
+    @patch("zentral.contrib.mdm.apps_books.requests")
+    def test_get_asset_metadata_not_in_storefront(self, requests):
+        resp = Mock()
+        resp.json.return_value = {"results": {}}
+        requests.get.return_value = resp
+        client, _ = self._get_client({"urls": {"contentMetadataLookup": "https://www.example.com"}}, True)
+        with self.assertLogs("zentral.contrib.mdm.apps_books", level="ERROR") as cm:
+            self.assertIsNone(client.get_asset_metadata("yolo"))
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn("no asset yolo metadata in the de storefront", cm.output[0])
 
     # iter_asset_device_assignments
 

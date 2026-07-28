@@ -59,6 +59,7 @@ class AppsBooksClient:
         mdm_info_id=None,
         location_name=None,
         platform=None,
+        country_code=None,
         location=None
     ):
         self.server_token = server_token
@@ -72,6 +73,7 @@ class AppsBooksClient:
         self.mdm_info_id = mdm_info_id
         self.location_name = location_name
         self.platform = platform or "enterprisestore"
+        self.country_code = (country_code or "us").lower()
         self._service_config = None
         self.location = location
 
@@ -81,6 +83,7 @@ class AppsBooksClient:
                    str(location.mdm_info_id),
                    location.name,
                    location.platform,
+                   location.country_code,
                    location)
 
     def make_request(self, path, retry_if_invalid_token=True, verify_mdm_info=False, **kwargs):
@@ -192,10 +195,10 @@ class AppsBooksClient:
             resp = requests.get(
                 url,
                 params={"version": 2,
-                        "p": "mdm-lockup",  # TODO: Really?
+                        "p": "mdm-lockup",  # Apple confirmed "mdm-lookup" in the protocol reference is a typo
                         "caller": "MDM",
                         "platform": self.platform,
-                        "cc": "us",
+                        "cc": self.country_code,
                         "l": "en",
                         "id": adam_id},
                 cookies={"itvt": self.server_token}
@@ -204,7 +207,12 @@ class AppsBooksClient:
         except Exception:
             logger.exception("Location %s: could not get asset %s metadata.", self.location_name, adam_id)
         else:
-            return resp.json().get("results", {}).get(adam_id)
+            metadata = resp.json().get("results", {}).get(adam_id)
+            if not metadata:
+                logger.error("Location %s: no asset %s metadata in the %s storefront.",
+                             self.location_name, adam_id, self.country_code)
+                return
+            return metadata
 
     # assignments
 
