@@ -126,8 +126,8 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
                         "description": description,
                         "html": html,
                         "requires_authentication": ecv.requires_authentication,
-                        "created_at": ecv.created_at,
-                        "updated_at": ecv.updated_at
+                        "created_at": ecv.created_at.isoformat(),
+                        "updated_at": ecv.updated_at.isoformat()
                     }
                 }
             },
@@ -260,8 +260,8 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
                         "description": new_description,
                         "html": new_html,
                         "requires_authentication": True,
-                        "created_at": ecv2.created_at,
-                        "updated_at": ecv2.updated_at
+                        "created_at": ecv2.created_at.isoformat(),
+                        "updated_at": ecv2.updated_at.isoformat()
                     },
                     "prev_value": prev_value,
                 }

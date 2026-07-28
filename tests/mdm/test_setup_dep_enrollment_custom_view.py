@@ -108,8 +108,8 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase, LoginCase):
                      "custom_view": {"pk": str(cv.pk),
                                      "name": cv.name},
                      "weight": 17,
-                     "created_at": decv.created_at,
-                     "updated_at": decv.updated_at,
+                     "created_at": decv.created_at.isoformat(),
+                     "updated_at": decv.updated_at.isoformat(),
                  }
               }}
         )
@@ -201,8 +201,8 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase, LoginCase):
                      "custom_view": {"pk": str(cv.pk),
                                      "name": cv.name},
                      "weight": 42,
-                     "created_at": decv2.created_at,
-                     "updated_at": decv2.updated_at,
+                     "created_at": decv2.created_at.isoformat(),
+                     "updated_at": decv2.updated_at.isoformat(),
                  },
                  "prev_value": prev_value,
               }}

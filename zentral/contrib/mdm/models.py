@@ -1577,8 +1577,8 @@ class EnrollmentCustomView(models.Model):
             "description": self.description,
             "html": self.html,
             "requires_authentication": self.requires_authentication,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -1623,8 +1623,8 @@ class MDMEnrollment(models.Model):
             "pk": self.pk,
             "name": self.name,
             "realm": self.realm.serialize_for_event(keys_only=True) if self.realm else None,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
         }
 
 
@@ -2050,8 +2050,8 @@ class DEPEnrollment(MDMEnrollment):
         if keys_only:
             return d
         d.update({
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -2242,8 +2242,8 @@ class DEPEnrollmentCustomView(models.Model):
             "dep_enrollment": self.dep_enrollment.serialize_for_event(keys_only=True),
             "custom_view": self.custom_view.serialize_for_event(keys_only=True),
             "weight": self.weight,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
@@ -2268,8 +2268,8 @@ class UserEnrollment(MDMEnrollment):
     def serialize_for_event(self):
         d = {"pk": self.pk,
              "name": self.name,
-             "created_at": self.created_at,
-             "updated_at": self.updated_at}
+             "created_at": self.created_at.isoformat(),
+             "updated_at": self.updated_at.isoformat()}
         d.update(self.enrollment_secret.serialize_for_event())
         return d
 

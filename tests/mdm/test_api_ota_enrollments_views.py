@@ -254,7 +254,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                  "model": "mdm.otaenrollment",
                  "pk": str(oe.pk),
                  "new_value": {
-                     'created_at': oe.created_at,
+                     'created_at': oe.created_at.isoformat(),
                      'enrollment_secret': {
                          'created_at': oe.enrollment_secret.created_at.isoformat(),
                          'is_expired': False,
@@ -272,7 +272,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                          'pk': str(realm.pk),
                          'name': realm.name,
                      },
-                     'updated_at': oe.updated_at,
+                     'updated_at': oe.updated_at.isoformat(),
                  }
              }}
         )
@@ -362,7 +362,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                  "model": "mdm.otaenrollment",
                  "pk": str(oe.pk),
                  "new_value": {
-                     'created_at': oe.created_at,
+                     'created_at': oe.created_at.isoformat(),
                      'enrollment_secret': {
                          'created_at': oe.enrollment_secret.created_at.isoformat(),
                          'is_expired': False,
@@ -377,7 +377,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'name': new_name,
                      'pk': oe.pk,
                      'realm': None,
-                     'updated_at': oe.updated_at,
+                     'updated_at': oe.updated_at.isoformat(),
                  },
                  "prev_value": prev_value,
              }}
