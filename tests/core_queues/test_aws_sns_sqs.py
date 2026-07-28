@@ -3,6 +3,7 @@ import os.path
 import queue
 import signal
 import threading
+import time
 from datetime import datetime
 from unittest.mock import Mock, patch
 
@@ -590,6 +591,56 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         w = eq.get_store_worker(store)
         self.assertIsInstance(w, SimpleStoreWorker)
         self.assertEqual(w._threads[0].visibility_timeout, 120)
+
+    # batching: SQS rejects a whole batch over its size cap, so the batch is split by bytes too
+
+    def _run_send_thread(self, event_ds):
+        """Drain event_ds through a real run() loop and return the sent batches."""
+        eq = self.get_queues()
+        stop_event = threading.Event()
+        in_queue = queue.Queue()
+        for event_d in event_ds:
+            in_queue.put((None, "routing-key", event_d, time.monotonic()))
+        thread = SQSSendThread("https://www.example.com/queue", stop_event, in_queue, None, eq.client_kwargs)
+        thread.client = Mock()
+        thread.client.send_message_batch = Mock(return_value={"Successful": [], "Failed": []})
+        # pre-set: run() drains the in_queue, then flushes and exits on the first empty get
+        stop_event.set()
+        thread.run()
+        return [c.kwargs["Entries"] for c in thread.client.send_message_batch.call_args_list]
+
+    def test_send_thread_batches_ten_small_messages_together(self):
+        batches = self._run_send_thread([{"i": i} for i in range(10)])
+        self.assertEqual([len(b) for b in batches], [10])
+
+    def test_send_thread_splits_batch_over_the_byte_limit(self):
+        # two messages that each fit on their own but not together
+        half = SQSSendThread.max_batch_byte_size // 2 + 1024
+        batches = self._run_send_thread([{"payload": "x" * half}, {"payload": "y" * half}])
+        self.assertEqual([len(b) for b in batches], [1, 1])
+        self.assertIn("x", batches[0][0]["MessageBody"])
+        self.assertIn("y", batches[1][0]["MessageBody"])
+
+    def test_send_thread_keeps_the_message_attributes_in_the_byte_count(self):
+        entry = {"Id": "entry-id-1",
+                 "MessageBody": '{"yolo": "fomo"}',
+                 "MessageAttributes": {"zentral.routing_key": {"DataType": "String",
+                                                               "StringValue": "inventory_machine_snapshot"}}}
+        self.assertEqual(
+            SQSSendThread._entry_byte_size(entry),
+            len(entry["MessageBody"]) + len("zentral.routing_key") + len("String")
+            + len("inventory_machine_snapshot")
+        )
+
+    def test_send_thread_sends_oversized_message_alone_and_logs_it(self):
+        oversized = {"payload": "x" * (SQSSendThread.max_batch_byte_size + 1024)}
+        with self.assertLogs("zentral.core.queues.backends.aws_sns_sqs.sqs", level="ERROR") as cm:
+            batches = self._run_send_thread([{"i": 1}, oversized, {"i": 2}])
+        # the small message before it is not batched with it, and it is not batched with the one after
+        self.assertEqual([len(b) for b in batches], [1, 1, 1])
+        self.assertGreater(len(batches[1][0]["MessageBody"]), SQSSendThread.max_batch_byte_size)
+        self.assertIn("byte message over the", cm.output[0])
+        self.assertIn("routing key routing-key", cm.output[0])
 
     # shutdown behavior: out_queue.put loops must observe stop_event
 

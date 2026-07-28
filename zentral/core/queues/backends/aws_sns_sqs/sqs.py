@@ -143,6 +143,11 @@ class SQSDeleteThread(threading.Thread):
 class SQSSendThread(threading.Thread):
     max_number_of_messages = 10
     max_event_age_seconds = 5
+    # SQS caps a single message and the sum of a batch at the same size, and rejects the batch as a
+    # whole when it is over: without this, one big message takes the nine it was batched with down
+    # with it. The margin covers the attribute accounting on the SQS side not being byte for byte
+    # the one in _entry_byte_size.
+    max_batch_byte_size = 1048576 - 10240
 
     def __init__(self, queue_url, stop_event, in_queue, out_queue, client_kwargs):
         self.client = boto3.client("sqs", **client_kwargs)
@@ -152,9 +157,20 @@ class SQSSendThread(threading.Thread):
         self.out_queue = out_queue
         super().__init__(name="SQS send thread", daemon=True)
 
+    @staticmethod
+    def _entry_byte_size(entry):
+        # the attributes count against the message size too, not only the body
+        size = len(entry["MessageBody"].encode("utf-8"))
+        for name, attribute in entry.get("MessageAttributes", {}).items():
+            size += (len(name.encode("utf-8"))
+                     + len(attribute["DataType"].encode("utf-8"))
+                     + len(attribute["StringValue"].encode("utf-8")))
+        return size
+
     def run(self):
         logger.info("[%s] start on queue %s", self.name, self.queue_url)
         self.entries = {}
+        self.batch_byte_size = 0
         self.min_event_ts = None
         while True:
             logger.debug("[%s] %s event(s) to send", self.name, len(self.entries))
@@ -186,9 +202,21 @@ class SQSSendThread(threading.Thread):
                             "StringValue": routing_key
                         }
                     }
+                entry_byte_size = self._entry_byte_size(entry)
+                if self.entries and self.batch_byte_size + entry_byte_size > self.max_batch_byte_size:
+                    logger.debug("[%s] send %s event(s) to keep the batch under %s bytes",
+                                 self.name, len(self.entries), self.max_batch_byte_size)
+                    self.send_entries()
+                if entry_byte_size > self.max_batch_byte_size:
+                    # nothing can be done about it here, but it is sent on its own, so it only
+                    # takes itself down when the queue rejects it
+                    logger.error("[%s] %s byte message over the %s byte limit, routing key %s",
+                                 self.name, entry_byte_size, self.max_batch_byte_size, routing_key or "-")
                 self.entries[entry_id] = (receipt_handle, entry)
+                self.batch_byte_size += entry_byte_size
                 self.min_event_ts = min(self.min_event_ts or event_ts, event_ts)
-                if len(self.entries) == self.max_number_of_messages:
+                if len(self.entries) == self.max_number_of_messages or \
+                   self.batch_byte_size >= self.max_batch_byte_size:
                     self.send_entries()
 
     def send_entries(self):
@@ -234,4 +262,5 @@ class SQSSendThread(threading.Thread):
                 logger.error("[%s] %s/%s event sending error(s)", self.name, failed_entry_count, entry_count)
         # update state
         self.entries = {}
+        self.batch_byte_size = 0
         self.min_event_ts = None
