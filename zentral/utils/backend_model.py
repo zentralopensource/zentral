@@ -120,8 +120,8 @@ class BackendInstance(models.Model):
                 "backend": str(self.backend),
                 "backend_kwargs": self.get_backend_kwargs_for_event(),
                 "description": self.description,
-                "created_at": self.created_at,
-                "updated_at": self.updated_at,
+                "created_at": self.created_at.isoformat(),
+                "updated_at": self.updated_at.isoformat(),
             })
         return d
 

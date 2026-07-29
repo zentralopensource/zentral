@@ -53,14 +53,14 @@ class PantherStoreTestCase(TestCase):
                  'bearer_token_hash': "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
                  'batch_size': 17,
              },
-             'created_at': store.instance.created_at,
+             'created_at': store.instance.created_at.isoformat(),
              'description': '',
              'event_filters': {},
              'events_url_authorized_roles': [{'name': role.name, 'pk': role.pk}],
              'name': store.instance.name,
              'pk': str(store.instance.pk),
              'provisioning_uid': store.instance.provisioning_uid,
-             'updated_at': store.instance.updated_at}
+             'updated_at': store.instance.updated_at.isoformat()}
         )
 
     # event serialization

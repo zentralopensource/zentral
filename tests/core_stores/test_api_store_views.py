@@ -255,13 +255,13 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                                          'request_timeout': 120,
                                                          'username': None,
                                                          'verify_tls': True},
-                                      'created_at': store.created_at,
+                                      'created_at': store.created_at.isoformat(),
                                       'description': description,
                                       'event_filters': {},
                                       'events_url_authorized_roles': [],
                                       'name': name,
                                       'pk': str(store.pk),
-                                      'updated_at': store.updated_at},
+                                      'updated_at': store.updated_at.isoformat()},
                         'pk': str(store.pk)}}
         )
         metadata = event.metadata.serialize()
@@ -321,13 +321,13 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                                          'max_retries': 3,
                                                          'request_timeout': 120,
                                                          'verify_tls': True},
-                                      'created_at': store.created_at,
+                                      'created_at': store.created_at.isoformat(),
                                       'description': description,
                                       'event_filters': {},
                                       'events_url_authorized_roles': [],
                                       'name': name,
                                       'pk': str(store.pk),
-                                      'updated_at': store.updated_at}}}
+                                      'updated_at': store.updated_at.isoformat()}}}
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"stores_store": [str(store.pk)]})
@@ -427,8 +427,8 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                         "concurrency": 1,
                         "verify_tls": True,
                     },
-                    "created_at": store.created_at,
-                    "updated_at": store.updated_at,
+                    "created_at": store.created_at.isoformat(),
+                    "updated_at": store.updated_at.isoformat(),
                   }
              }}
         )
@@ -588,13 +588,13 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                                    'max_retries': 5,
                                                    'request_timeout': 120,
                                                    'verify_tls': False},
-                                'created_at': store.created_at,
+                                'created_at': store.created_at.isoformat(),
                                 'description': description,
                                 'event_filters': {},
                                 'events_url_authorized_roles': [],
                                 'name': name,
                                 'pk': str(store.pk),
-                                'updated_at': store2.updated_at}
+                                'updated_at': store2.updated_at.isoformat()}
              }}
         )
         metadata = event.metadata.serialize()

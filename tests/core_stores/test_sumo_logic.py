@@ -51,14 +51,14 @@ class SumoLogicStoreTestCase(TestCase):
                  'collector_url_hash': "0fc69646d9b87df28701f8a6ec2cdd0a1aec97124cf1999c94556d6acc40279e",
                  'batch_size': 17,
              },
-             'created_at': store.instance.created_at,
+             'created_at': store.instance.created_at.isoformat(),
              'description': '',
              'event_filters': {},
              'events_url_authorized_roles': [{'name': role.name, 'pk': role.pk}],
              'name': store.instance.name,
              'pk': str(store.instance.pk),
              'provisioning_uid': store.instance.provisioning_uid,
-             'updated_at': store.instance.updated_at}
+             'updated_at': store.instance.updated_at.isoformat()}
         )
 
     # event serialization

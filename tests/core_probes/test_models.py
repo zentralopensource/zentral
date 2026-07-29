@@ -2,9 +2,10 @@ import uuid
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.core.probes.models import Action, ActionBackend
+from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 
 
-class TestProbesModels(TestCase):
+class TestProbesModels(TestCase, SerializeForEventAssertions):
     def test_http_post_backend_no_pk(self):
         action = Action(backend=ActionBackend.HTTP_POST)
         action.pk = None  # force the error
@@ -64,11 +65,11 @@ class TestProbesModels(TestCase):
                  'password_hash': '48ffcddb8b19a5f98d4b1b8c08b4024b12b6f24affeb50b1265aed528a2dd671',
                  'username': 'yolo'
              },
-             'created_at': action.created_at,
+             'created_at': action.created_at.isoformat(),
              'description': description,
              'name': name,
              'pk': str(action.pk),
-             'updated_at': action.updated_at}
+             'updated_at': action.updated_at.isoformat()}
         )
         # backend specific methods
         self.assertEqual(action.get_http_post_kwargs(), backend_kwargs)
@@ -106,12 +107,23 @@ class TestProbesModels(TestCase):
              'backend_kwargs': {
                  'url_hash': "3e2fe3b6026888d07d94e5b3a56372e10414792b1bc234482e4e8b798023799a"
              },
-             'created_at': action.created_at,
+             'created_at': action.created_at.isoformat(),
              'description': description,
              'name': name,
              'pk': str(action.pk),
-             'updated_at': action.updated_at}
+             'updated_at': action.updated_at.isoformat()}
         )
         # backend specific methods
         self.assertIsNone(action.get_http_post_kwargs())
         self.assertEqual(action.get_slack_incoming_webhook_kwargs(), backend_kwargs)
+
+    def test_serialize_for_event_is_json_native(self):
+        action = Action(
+            id=uuid.uuid4(),
+            name=get_random_string(12),
+            description=get_random_string(12),
+            backend=ActionBackend.HTTP_POST,
+        )
+        action.set_backend_kwargs({"url": "https://www.example.com/post"})
+        action.save()
+        self.assert_serialize_for_event_is_json_native(action)

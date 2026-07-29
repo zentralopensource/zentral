@@ -98,14 +98,14 @@ class TestElasticsearchStore(TestCase):
                  'kibana_discover_url': 'https://kibana',
                  'kibana_index_pattern_uuid': '00000000-0000-0000-0000-000000000000',
              },
-             'created_at': store.instance.created_at,
+             'created_at': store.instance.created_at.isoformat(),
              'description': '',
              'event_filters': {},
              'events_url_authorized_roles': [{'name': role.name, 'pk': role.pk}],
              'name': store.instance.name,
              'pk': str(store.instance.pk),
              'provisioning_uid': store.instance.provisioning_uid,
-             'updated_at': store.instance.updated_at}
+             'updated_at': store.instance.updated_at.isoformat()}
         )
 
     # event serialization

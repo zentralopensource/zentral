@@ -453,7 +453,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                         ),
                                         'url': 'https://example.com/ndes/',
                                         'username': 'yolo'},
-                     'created_at': acme_issuer.created_at,
+                     'created_at': acme_issuer.created_at.isoformat(),
                      'description': 'description',
                      'directory_url': acme_issuer.directory_url,
                      'extended_key_usage': [],
@@ -462,7 +462,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'key_type': 'ECSECPrimeRandom',
                      'name': acme_issuer.name,
                      'pk': str(acme_issuer.pk),
-                     'updated_at': acme_issuer.updated_at,
+                     'updated_at': acme_issuer.updated_at.isoformat(),
                      'usage_flags': 5,
                      'version': 1
                  },
@@ -537,7 +537,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                         'max_retries': 3,
                                         'request_timeout': 30,
                                         'url': 'https://example.com/ident/'},
-                     'created_at': acme_issuer.created_at,
+                     'created_at': acme_issuer.created_at.isoformat(),
                      'description': 'description',
                      'directory_url': acme_issuer.directory_url,
                      'extended_key_usage': [],
@@ -546,7 +546,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'key_type': 'ECSECPrimeRandom',
                      'name': acme_issuer.name,
                      'pk': str(acme_issuer.pk),
-                     'updated_at': acme_issuer.updated_at,
+                     'updated_at': acme_issuer.updated_at.isoformat(),
                      'usage_flags': 5,
                      'version': 1
                  },
@@ -657,7 +657,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'backend_kwargs': {'challenge_hash': (
                                             '48ffcddb8b19a5f98d4b1b8c08b4024b12b6f24affeb50b1265aed528a2dd671'
                                         )},
-                     'created_at': acme_issuer.created_at,
+                     'created_at': acme_issuer.created_at.isoformat(),
                      'description': 'description',
                      'directory_url': acme_issuer.directory_url,
                      'extended_key_usage': [
@@ -668,7 +668,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'key_type': 'RSA',
                      'name': acme_issuer.name,
                      'pk': str(acme_issuer.pk),
-                     'updated_at': acme_issuer.updated_at,
+                     'updated_at': acme_issuer.updated_at.isoformat(),
                      'usage_flags': 1,
                      'version': 2
                  },
