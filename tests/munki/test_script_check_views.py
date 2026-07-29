@@ -320,8 +320,8 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
                      "arch_arm64": True,
                      "min_os_version": "14",
                      "max_os_version": "15",
-                     "created_at": script_check.created_at,
-                     "updated_at": script_check.updated_at,
+                     "created_at": script_check.created_at.isoformat(),
+                     "updated_at": script_check.updated_at.isoformat(),
                  }
               }}
         )
@@ -481,8 +481,8 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
                      "arch_arm64": True,
                      "min_os_version": "14",
                      "max_os_version": "15",
-                     "created_at": script_check.created_at,
-                     "updated_at": script_check.updated_at,
+                     "created_at": script_check.created_at.isoformat(),
+                     "updated_at": script_check.updated_at.isoformat(),
                  }
               }}
         )

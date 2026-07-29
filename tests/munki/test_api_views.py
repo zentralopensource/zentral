@@ -212,8 +212,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                         'script_checks_run_interval_seconds': 86400,
                         'auto_reinstall_incidents': True,
                         'auto_failed_install_incidents': True,
-                        'created_at': configuration.created_at,
-                        'updated_at': configuration.updated_at,
+                        'created_at': configuration.created_at.isoformat(),
+                        'updated_at': configuration.updated_at.isoformat(),
                         'version': 0,
                     }
                 }
@@ -348,8 +348,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                         'auto_reinstall_incidents': False,
                         'auto_failed_install_incidents': False,
                         'version': 0,
-                        'created_at': configuration.created_at,
-                        'updated_at': prev_updated_at
+                        'created_at': configuration.created_at.isoformat(),
+                        'updated_at': prev_updated_at.isoformat()
                     },
                     "new_value": {
                         'pk': configuration.pk,
@@ -364,8 +364,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                         'auto_reinstall_incidents': True,
                         'auto_failed_install_incidents': True,
                         'version': 1,
-                        'created_at': configuration.created_at,
-                        'updated_at': configuration.updated_at
+                        'created_at': configuration.created_at.isoformat(),
+                        'updated_at': configuration.updated_at.isoformat()
                     }
                 }
             }
@@ -449,8 +449,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                         'auto_reinstall_incidents': False,
                         'auto_failed_install_incidents': False,
                         'version': 0,
-                        'created_at': configuration.created_at,
-                        'updated_at': configuration.updated_at
+                        'created_at': configuration.created_at.isoformat(),
+                        'updated_at': configuration.updated_at.isoformat()
                     }
                 }
             }
@@ -1051,8 +1051,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "excluded_tags": [],
                      "arch_amd64": True,
                      "arch_arm64": True,
-                     "created_at": script_check.created_at,
-                     "updated_at": script_check.updated_at,
+                     "created_at": script_check.created_at.isoformat(),
+                     "updated_at": script_check.updated_at.isoformat(),
                  }
               }}
         )
@@ -1207,8 +1207,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "excluded_tags": [{"pk": tag.pk, "name": tag.name} for tag in excluded_tags],
                      "arch_amd64": False,
                      "arch_arm64": True,
-                     "created_at": script_check.created_at,
-                     "updated_at": script_check.updated_at,
+                     "created_at": script_check.created_at.isoformat(),
+                     "updated_at": script_check.updated_at.isoformat(),
                  }
               }}
         )
