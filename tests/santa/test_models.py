@@ -1,6 +1,8 @@
 from django.test import TestCase
 from zentral.contrib.santa.models import Target
-from .utils import add_file_to_test_class
+from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
+from .utils import (add_file_to_test_class, force_ballot, force_configuration, force_realm_user,
+                    force_target, force_target_state, force_voting_group)
 
 
 class SantaTargetModelTestCase(TestCase):
@@ -87,3 +89,18 @@ class SantaTargetModelTestCase(TestCase):
             Target.objects.get_targets_display_strings([]),
             {}
         )
+
+
+class SantaSerializationTestCase(TestCase, SerializeForEventAssertions):
+    def test_serialize_for_event_is_json_native(self):
+        configuration = force_configuration()
+        _, realm_user = force_realm_user()
+        target = force_target()
+        ballot = force_ballot(target, realm_user, [(configuration, True, 1)])
+        for obj in (configuration,
+                    force_voting_group(configuration, realm_user),
+                    force_target_state(configuration=configuration),
+                    ballot,
+                    ballot.vote_set.first()):
+            with self.subTest(obj._meta.model_name):
+                self.assert_serialize_for_event_is_json_native(obj)

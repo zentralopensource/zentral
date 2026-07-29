@@ -370,8 +370,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "default_voting_weight": 0,
                      "globally_allowlisted_threshold": 50,
                      "partially_allowlisted_threshold": 5,
-                     "created_at": configuration.created_at,
-                     "updated_at": configuration.updated_at
+                     "created_at": configuration.created_at.isoformat(),
+                     "updated_at": configuration.updated_at.isoformat()
                  }
               }}
         )
@@ -462,8 +462,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "default_voting_weight": 0,
                      "globally_allowlisted_threshold": 50,
                      "partially_allowlisted_threshold": 5,
-                     "created_at": configuration.created_at,
-                     "updated_at": prev_updated_at
+                     "created_at": configuration.created_at.isoformat(),
+                     "updated_at": prev_updated_at.isoformat()
                  },
                  "new_value": {
                      "pk": configuration.pk,
@@ -488,8 +488,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "default_voting_weight": 1,
                      "globally_allowlisted_threshold": 500,
                      "partially_allowlisted_threshold": 100,
-                     "created_at": configuration.created_at,
-                     "updated_at": configuration.updated_at
+                     "created_at": configuration.created_at.isoformat(),
+                     "updated_at": configuration.updated_at.isoformat()
                  }
               }}
         )
@@ -575,8 +575,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "default_voting_weight": 0,
                      "globally_allowlisted_threshold": 50,
                      "partially_allowlisted_threshold": 5,
-                     "created_at": configuration.created_at,
-                     "updated_at": configuration.updated_at
+                     "created_at": configuration.created_at.isoformat(),
+                     "updated_at": configuration.updated_at.isoformat()
                  },
               }}
         )

@@ -917,9 +917,9 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(
             event.payload,
             {'configuration': {'name': configuration.name, 'pk': configuration.pk},
-             'created_at': ts.created_at,
+             'created_at': ts.created_at.isoformat(),
              'new_value': {'flagged': False,
-                           'reset_at': ts.reset_at,
+                           'reset_at': ts.reset_at.isoformat(),
                            'score': 0,
                            'state': 0,
                            'state_display': 'UNTRUSTED'},
@@ -930,7 +930,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                             'state_display': 'UNTRUSTED'},
              'target': {'sha256': self.file_sha256,
                         'type': 'BINARY'},
-             'updated_at': ts.updated_at}
+             'updated_at': ts.updated_at.isoformat()}
         )
         self.assertEqual(
             event.metadata.serialize()["objects"],
