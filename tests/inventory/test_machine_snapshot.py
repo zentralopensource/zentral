@@ -28,6 +28,7 @@ from zentral.contrib.inventory.models import (
     MachineSnapshotCommit,
     MachineTag,
     MetaMachine,
+    OSXAppInstance,
     Source,
     SourceManager,
     Tag,
@@ -375,6 +376,81 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(ms.extra_facts, {"un": [{"a": 1}, "deux"]})
         ms.refresh_from_db()
         self.assertEqual(ms.hash(), ms.mt_hash)
+
+    def test_multiple_duplicated_subtrees_in_json_field(self):
+        tree = copy.deepcopy(self.machine_snapshot)
+        tree["extra_facts"] = {"un": [{"a": 1}, {"a": 1}, {"a": 1}, "deux"]}
+        with self.assertLogs("zentral.utils.mt_models", level="WARNING") as cm:
+            ms, _ = MachineSnapshot.objects.commit(tree)
+        self.assertEqual(
+            cm.output,
+            ["WARNING:zentral.utils.mt_models:2 duplicated subtree(s) removed from key un"]
+        )
+        self.assertEqual(ms.extra_facts, {"un": [{"a": 1}, "deux"]})
+        ms.refresh_from_db()
+        self.assertEqual(ms.hash(), ms.mt_hash)
+
+    def test_json_field_empty_values_kept(self):
+        for entitlements in ({"a": {}},
+                             {"a": []},
+                             {"a": None},
+                             {"a": {"b": None}},
+                             {"a": {"b": {"c": []}}},
+                             {"a": {"b": None}, "c": 1}):
+            with self.subTest(entitlements=entitlements):
+                tree = copy.deepcopy(self.osx_app_instance)
+                tree["entitlements"] = copy.deepcopy(entitlements)
+                osx_app_instance, _ = OSXAppInstance.objects.commit(tree)
+                self.assertEqual(osx_app_instance.entitlements, entitlements)
+                osx_app_instance.refresh_from_db()
+                self.assertEqual(osx_app_instance.hash(), osx_app_instance.mt_hash)
+
+    def test_json_field_empty_values_stay_distinct(self):
+        mt_hashes = set()
+        for entitlements in ({"a": None}, {"a": []}, {"a": {}}, {"a": ""}, {"a": 0}, {"a": False}):
+            tree = copy.deepcopy(self.osx_app_instance)
+            tree["entitlements"] = entitlements
+            osx_app_instance, _ = OSXAppInstance.objects.commit(tree)
+            mt_hashes.add(osx_app_instance.mt_hash)
+        self.assertEqual(len(mt_hashes), 6)
+
+    def test_json_field_empty_value_changes_the_identity(self):
+        tree = copy.deepcopy(self.osx_app_instance)
+        tree["entitlements"] = {"com.apple.developer.associated-domains": [], "c": 1}
+        with_empty, _ = OSXAppInstance.objects.commit(tree)
+        tree = copy.deepcopy(self.osx_app_instance)
+        tree["entitlements"] = {"c": 1}
+        without, _ = OSXAppInstance.objects.commit(tree)
+        self.assertNotEqual(with_empty, without)
+
+    def test_json_field_empty_value_in_an_array(self):
+        tree = copy.deepcopy(self.osx_app_instance)
+        tree["entitlements"] = {"a": [{"b": None}, {"c": 1}]}
+        osx_app_instance, _ = OSXAppInstance.objects.commit(tree)
+        self.assertEqual(osx_app_instance.entitlements, {"a": [{"b": None}, {"c": 1}]})
+        osx_app_instance.refresh_from_db()
+        self.assertEqual(osx_app_instance.hash(), osx_app_instance.mt_hash)
+
+    def test_model_field_empty_value_pruned_json_key_kept(self):
+        # a model field maps to a column that cannot hold an empty value, so pruning it leaves the
+        # two trees describing the same row. A JSON key reaches its column, so it does not.
+        base = copy.deepcopy(self.osx_app_instance)
+        base.pop("entitlements")
+        reference, _ = OSXAppInstance.objects.commit(copy.deepcopy(base))
+        tree = copy.deepcopy(base)
+        tree["path"] = None
+        self.assertEqual(OSXAppInstance.objects.commit(tree)[0], reference)
+        tree = copy.deepcopy(base)
+        tree["entitlements"] = {"a": None}
+        self.assertNotEqual(OSXAppInstance.objects.commit(tree)[0], reference)
+
+    def test_json_field_mt_hash_key_ignored(self):
+        tree = copy.deepcopy(self.osx_app_instance)
+        tree["entitlements"] = {"mt_hash": "yolo", "c": 1}
+        osx_app_instance, _ = OSXAppInstance.objects.commit(tree)
+        self.assertEqual(osx_app_instance.entitlements, {"c": 1})
+        osx_app_instance.refresh_from_db()
+        self.assertEqual(osx_app_instance.hash(), osx_app_instance.mt_hash)
 
     def test_commit_certificate(self):
         tree = copy.deepcopy(self.certificate)
@@ -856,6 +932,15 @@ class MachineSnapshotTestCase(TestCase):
         with self.assertRaises(MTOError) as cm:
             Source().get_mt_field("machinesnapshot")
         self.assertEqual(cm.exception.message, "Field 'machinesnapshot' of Source auto created")
+
+    def test_commit_tree_auto_created_field(self):
+        # the hashing ignores the field, the commit is what rejects it
+        tree = copy.deepcopy(self.machine_snapshot)
+        tree["currentmachinesnapshot"] = "yolo"
+        with self.assertRaises(MTOError) as cm:
+            MachineSnapshot.objects.commit(tree)
+        self.assertEqual(cm.exception.message,
+                         "Field 'currentmachinesnapshot' of MachineSnapshot auto created")
 
     def test_serialize_unsupported_value_type(self):
         source, _ = Source.objects.commit(copy.deepcopy(self.source))

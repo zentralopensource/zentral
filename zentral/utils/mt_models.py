@@ -11,6 +11,62 @@ from django.db import IntegrityError, models, transaction
 logger = logging.getLogger("zentral.utils.mt_models")
 
 
+# Merkle tree objects
+#
+# An AbstractMTObject row is immutable and identified by its mt_hash: every commit of the same
+# subtree resolves to the same row. A tree is hashed bottom up — each subtree is hashed first, and
+# its parent hashes the resulting digest as if it were a plain field value:
+#
+#     {"app": {"bundle_id": "io.zentral"},   →   Hasher(app="4a1f…", bundle_path="/Applications")
+#      "bundle_path": "/Applications"}       →   mt_hash "9c3e…"
+#
+# commit() then compares the tree hash against AbstractMTObject.hash() on the row it just wrote. A
+# mismatch means the identity of the row does not describe its content, so the row is rolled back.
+#
+# For a subtree that maps to a model — a foreign key or a many to many — that digest is *stored*, in
+# the related row's own mt_hash column. hash() reads it straight back off the related object and
+# never recomputes it, so nothing about the way the tree was walked has to be reproducible.
+#
+# An empty value — None, {} or [] — is pruned from a model tree before it is hashed, because the
+# column it maps to cannot hold one: it ends up NULL, and hash() reads a NULL back as absent. Two
+# trees that differ only by an empty value describe the same row, so they hash the same.
+#
+# A JSONField subtree has no row and no mt_hash column, so there is no digest to read back: hash()
+# re-derives it by walking the stored value a second time. Whatever the first walk did therefore
+# has to be reproducible by the second, and the column *can* hold an empty value, so a JSON tree
+# is hashed by its own rules — that is what the json_tree argument carries down the recursion:
+#
+#   * empty values are kept and hashed, tagged so that None, [] and {} stay distinct. The value
+#     that reaches the column is the value that was hashed, which is what makes the second walk
+#     agree with the first, and an entitlement reported as an empty array is not lost.
+#   * a key literally named mt_hash is dropped, from the hash and from the column both. The digest
+#     of a subtree is written into that subtree, so a client supplied one cannot be told apart from
+#     the marker, and honouring it would let a payload pick its own identity. It is the one value
+#     the JSON path still loses.
+#
+# TODO
+#   * The digest is an in-band marker: prepare_commit_tree() writes it into the tree it walks, and
+#     cleanup_commit_tree() takes the markers back out, which is what costs a JSON key named
+#     mt_hash. Returning the digest instead of storing it would leave the JSON untouched, and no
+#     committed column holds such a key, so it would rehash nothing.
+#   * The digest stream is ambiguous. hexdigest() concatenates each key and its value with no
+#     separator and no type tag, so distinct payloads collide: {"ab": "c"} and {"a": "bc"}, {"a": 1}
+#     and {"a": "1"}, {"a": True} and {"a": "True"}. Colliding payloads silently resolve to one row.
+#     A pruned model field also lets its own name be absorbed by a neighbour: {"path": "a",
+#     "sha_1": "b"} and {"path": "asha_1b"} hash the same. Length prefixing the parts, or
+#     delimiting and type tagging them, closes it — and so does dropping the ∅ tags above.
+#   * A JSON array is hashed with the encoding a many to many set wants. Duplicate objects are
+#     dropped from it, only scalar items keep their order, an array of one object hashes as that
+#     object ({"a": X} and {"a": [X]} collide), and an item that is null or an array cannot be
+#     hashed at all. An object value that is a float cannot either, nor can a JSON value that is
+#     not an object.
+#   * sha1 could become sha256.
+#
+# Changing how something is hashed is only free while no committed column holds it. That is worth
+# checking first, and none of the above passes: each needs a transition that keeps the existing
+# identities resolvable, rather than orphaning every row that carries one.
+
+
 _NOT_CACHED = object()
 
 # The commit cache holds model instances, and a machine snapshot tree can carry tens of thousands
@@ -59,7 +115,8 @@ class Hasher(object):
             v = self.fields[k]
             if isinstance(v, str):
                 h.update(v.encode('utf-8'))
-            elif isinstance(v, list):
+            else:
+                # add_field only ever keeps a str or a list of hashes
                 for e in sorted(v):
                     h.update(e.encode('utf-8'))
         return h.hexdigest()
@@ -72,14 +129,22 @@ def _get_commit_tree_field(model, name):
         f = model._meta.get_field(name)
     except FieldDoesNotExist:
         return None
-    if f.auto_created or isinstance(f, models.JSONField):
-        # auto created fields are rejected later in the commit method,
-        # and JSONField values round-trip unchanged → their subtrees stay model-free
+    if f.auto_created:
+        # auto created fields are rejected later in the commit method
         return None
     return f
 
 
-def prepare_commit_tree(tree, model=None, collector=None):
+def _empty_json_value(v):
+    if v is None:
+        return "∅null"
+    elif isinstance(v, list):
+        return "∅[]"
+    else:
+        return "∅{}"
+
+
+def prepare_commit_tree(tree, model=None, collector=None, json_tree=False):
     if not isinstance(tree, dict):
         raise MTOError("Commit tree is not a dict")
     if tree.get('mt_hash', None):
@@ -87,19 +152,33 @@ def prepare_commit_tree(tree, model=None, collector=None):
     h = Hasher()
     for k, v in list(tree.items()):
         if h.is_empty_value(v):
-            tree.pop(k)
+            if json_tree:
+                # JSON: the column keeps it, so it is hashed instead of pruned
+                h.add_field(k, _empty_json_value(v))
+            else:
+                tree.pop(k)
         else:
             f = _get_commit_tree_field(model, k)
             if isinstance(v, dict):
-                prepare_commit_tree(v, f.related_model if f is not None and f.many_to_one else None, collector)
+                json_value = json_tree or isinstance(f, models.JSONField)
+                if json_value and not json_tree:
+                    # JSON, at its boundary: drop the client supplied mt_hash keys
+                    cleanup_commit_tree(v)
+                    if h.is_empty_value(v):
+                        # they were all it held: the column takes a NULL, read back as absent
+                        tree.pop(k)
+                        continue
+                related_model = f.related_model if f is not None and f.many_to_one else None
+                prepare_commit_tree(v, related_model, collector, json_value)
                 v = v['mt_hash']
             elif isinstance(v, list):
                 related_model = f.related_model if f is not None and f.many_to_many else None
+                json_value = json_tree or isinstance(f, models.JSONField)
                 hash_list = []
                 skipped_item_idxs = None
                 for item_idx, item in enumerate(v):
                     if isinstance(item, dict):
-                        prepare_commit_tree(item, related_model, collector)
+                        prepare_commit_tree(item, related_model, collector, json_value)
                         subtree_mt_hash = item['mt_hash']
                         if subtree_mt_hash in hash_list:
                             # a list of subtrees maps to a many to many relationship, i.e. a set:
@@ -122,9 +201,8 @@ def prepare_commit_tree(tree, model=None, collector=None):
                             item_to_hash = "s∅" + item
                         else:
                             raise MTOError("Unsupported list item type")
-                        # order is important. The position in the hash list — the item index in the
-                        # filtered list when subtrees have been skipped — keeps the hash consistent
-                        # with the stored value.
+                        # the position keeps a scalar item ordered, against the list that is stored:
+                        # the filtered one when subtrees have been skipped
                         item_to_hash = str(len(hash_list)) + item_to_hash
                         hash_list.append(hashlib.sha1(item_to_hash.encode('utf-8')).hexdigest())
                 if skipped_item_idxs is not None:
@@ -132,8 +210,7 @@ def prepare_commit_tree(tree, model=None, collector=None):
                     tree[k] = [item for item_idx, item in enumerate(v) if item_idx not in skipped_item_idxs]
                 v = hash_list
             elif isinstance(v, str) and isinstance(f, models.DateTimeField):
-                # replace a serialized datetime with the naive datetime that will resurface
-                # from the DB, so that the tree hash matches the committed object hash
+                # hash the naive datetime that will resurface from the DB, not the serialized string
                 try:
                     v = f.to_python(v)
                 except ValidationError:
@@ -256,8 +333,8 @@ class MTObjectManager(models.Manager):
                     # already been enforced by the DB, and the foreign keys committed above exist
                     # by construction → both checks are queries that cannot fail
                     obj.full_clean(exclude=committed_fks, validate_unique=False)
-                    # inside the transaction: a hash mismatch has to take the row down with it,
-                    # or it stays in the table under the wrong identity
+                    # inside the transaction: the row has to go down with the mismatch, or it stays
+                    # in the table under the wrong identity
                     if not obj.hash(recursive=False) == obj.mt_hash:
                         raise MTOError(f'Obj {obj} Hash missmatch!!!')
             except IntegrityError as integrity_error:
@@ -332,8 +409,9 @@ class AbstractMTObject(models.Model):
                 else:
                     v = [mto.mt_hash for mto in v]
             elif isinstance(f, models.JSONField) and v:
+                # JSON: the walk on the way out, there is no stored digest to read back
                 t = copy.deepcopy(v)
-                prepare_commit_tree(t)
+                prepare_commit_tree(t, json_tree=True)
                 v = t['mt_hash']
             h.add_field(f.name, v)
         return h.hexdigest()

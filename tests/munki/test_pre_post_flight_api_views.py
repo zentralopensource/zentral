@@ -723,7 +723,8 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(ms.system_info.computer_name, computer_name)
 
         # check extra facts
-        self.assertEqual(ms.extra_facts, {"yolo": "fomo"})
+        # a null value is part of the JSON, it is stored and it is hashed
+        self.assertEqual(ms.extra_facts, {"yolo": "fomo", "un": None})
 
         # check all events linked to machine
         for call_args in post_event.call_args_list:
@@ -888,7 +889,8 @@ class MunkiAPIViewsTestCase(TestCase):
         self.assertEqual(ms.system_info.computer_name, computer_name)
 
         # check extra facts
-        self.assertEqual(ms.extra_facts, {"yolo": "fomo"})
+        # a null value is part of the JSON, it is stored and it is hashed
+        self.assertEqual(ms.extra_facts, {"yolo": "fomo", "un": None})
 
         # check all events linked to machine
         for call_args in post_event.call_args_list:
