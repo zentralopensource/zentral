@@ -1,9 +1,16 @@
 from django.test import TestCase
+from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from .utils import force_realm, force_realm_group, force_realm_user
 
 
-class RealmModelsTestCase(TestCase):
+class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
     maxDiff = None
+
+    def test_serialize_for_event_is_json_native(self):
+        realm = force_realm()
+        for obj in (realm, force_realm_group(realm=realm)):
+            with self.subTest(obj._meta.model_name):
+                self.assert_serialize_for_event_is_json_native(obj)
 
     def test_realm_iter_user_claim_mappings(self):
         realm = force_realm()
@@ -29,7 +36,7 @@ class RealmModelsTestCase(TestCase):
                  'host': 'ldap.example.com',
                  'users_base_dn': 'ou=Users,o=yolo,dc=example,dc=com'
              },
-             'created_at': realm.created_at,
+             'created_at': realm.created_at.isoformat(),
              'custom_attr_1_claim': '',
              'custom_attr_2_claim': '',
              'email_claim': 'email',
@@ -41,7 +48,7 @@ class RealmModelsTestCase(TestCase):
              'name': realm.name,
              'pk': str(realm.pk),
              'scim_enabled': False,
-             'updated_at': realm.updated_at,
+             'updated_at': realm.updated_at.isoformat(),
              'username_claim': 'username'}
         )
 
@@ -50,7 +57,7 @@ class RealmModelsTestCase(TestCase):
         realm_group = force_realm_group(realm=parent_realm_group.realm, parent=parent_realm_group)
         self.assertEqual(
             realm_group.serialize_for_event(),
-            {'created_at': realm_group.created_at,
+            {'created_at': realm_group.created_at.isoformat(),
              'display_name': realm_group.display_name,
              'parent': {'display_name': parent_realm_group.display_name,
                         'pk': str(parent_realm_group.pk),
@@ -62,7 +69,7 @@ class RealmModelsTestCase(TestCase):
              'realm': {'name': realm_group.realm.name,
                        'pk': str(realm_group.realm.pk)},
              'scim_external_id': None,
-             'updated_at': realm_group.updated_at}
+             'updated_at': realm_group.updated_at.isoformat()}
         )
 
     def test_realm_user_serialize_for_event_keys_only(self):
