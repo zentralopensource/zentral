@@ -204,8 +204,7 @@ class AbstractMachineGroup(AbstractMTObject):
         source_dict.pop('name')
         data = {'source': source_dict,
                 'reference': self.reference}
-        prepare_commit_tree(data)
-        return data['mt_hash']
+        return prepare_commit_tree(data)
 
     def save(self, *args, **kwargs):
         self.key = self.generate_key()

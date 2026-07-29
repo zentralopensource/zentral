@@ -444,13 +444,31 @@ class MachineSnapshotTestCase(TestCase):
         tree["entitlements"] = {"a": None}
         self.assertNotEqual(OSXAppInstance.objects.commit(tree)[0], reference)
 
-    def test_json_field_mt_hash_key_ignored(self):
+    def test_json_field_mt_hash_key_is_data(self):
+        # the digest of a JSON subtree is never written into it, so the key is not a marker
+        for entitlements in ({"mt_hash": "yolo", "c": 1},
+                             {"mt_hash": "yolo"},
+                             {"a": {"mt_hash": "yolo", "b": 1}},
+                             # a second item, or the array hashes as the bare object above it
+                             {"a": [{"mt_hash": "yolo", "b": 1}, {"c": 2}]},
+                             {"mt_hash": {"a": 1}},
+                             {"mt_hash": None}):
+            with self.subTest(entitlements=entitlements):
+                tree = copy.deepcopy(self.osx_app_instance)
+                tree["entitlements"] = copy.deepcopy(entitlements)
+                osx_app_instance, _ = OSXAppInstance.objects.commit(tree)
+                self.assertEqual(osx_app_instance.entitlements, entitlements)
+                osx_app_instance.refresh_from_db()
+                self.assertEqual(osx_app_instance.hash(), osx_app_instance.mt_hash)
+
+    def test_json_field_mt_hash_key_is_not_the_identity(self):
         tree = copy.deepcopy(self.osx_app_instance)
-        tree["entitlements"] = {"mt_hash": "yolo", "c": 1}
-        osx_app_instance, _ = OSXAppInstance.objects.commit(tree)
-        self.assertEqual(osx_app_instance.entitlements, {"c": 1})
-        osx_app_instance.refresh_from_db()
-        self.assertEqual(osx_app_instance.hash(), osx_app_instance.mt_hash)
+        tree["entitlements"] = {"c": 1}
+        reference, _ = OSXAppInstance.objects.commit(tree)
+        tree = copy.deepcopy(self.osx_app_instance)
+        tree["entitlements"] = {"mt_hash": reference.mt_hash, "c": 1}
+        # a payload cannot claim the identity of another one by naming its hash
+        self.assertNotEqual(OSXAppInstance.objects.commit(tree)[0], reference)
 
     def test_commit_certificate(self):
         tree = copy.deepcopy(self.certificate)
