@@ -182,8 +182,8 @@ class ProbeSource(models.Model):
             "description": self.description,
             "active": self.active,
             "actions": [a.serialize_for_event(keys_only=True) for a in self.actions.all().order_by("pk")],
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
         if self.description:
             d["description"] = self.description

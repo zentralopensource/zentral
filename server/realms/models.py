@@ -99,8 +99,8 @@ class Realm(models.Model):
             "custom_attr_1_claim": self.custom_attr_1_claim,
             "custom_attr_2_claim": self.custom_attr_2_claim,
             "scim_enabled": self.scim_enabled,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -148,8 +148,8 @@ class RealmGroup(models.Model):
         d.update({
             "scim_external_id": self.scim_external_id,
             "parent": self.parent.serialize_for_event(keys_only=True) if self.parent else None,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 

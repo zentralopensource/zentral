@@ -431,8 +431,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                       '<integer>1</integer>\n'
                                       '</dict>\n'
                                       '</plist>\n',
-                     "created_at": ea_av.created_at,
-                     "updated_at": ea_av.updated_at
+                     "created_at": ea_av.created_at.isoformat(),
+                     "updated_at": ea_av.updated_at.isoformat()
                  }
               }}
         )
@@ -649,8 +649,8 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'install_as_managed': True,
                      'remove_on_unenroll': True,
                      'ios_app': False,
-                     "created_at": ea_av.created_at,
-                     "updated_at": ea_av.updated_at
+                     "created_at": ea_av.created_at.isoformat(),
+                     "updated_at": ea_av.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

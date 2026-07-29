@@ -273,8 +273,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "backend": "AZURE",
                      "backend_kwargs": {"storage_account": storage_account,
                                         "container": container},
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -317,8 +317,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "name": name,
                      "backend": "S3",
                      "backend_kwargs": {"bucket": bucket},
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -359,8 +359,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "name": name,
                      "backend": "VIRTUAL",
                      "backend_kwargs": {},
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -558,8 +558,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                          "secret_access_key_hash": "d70d4cbd04b6a3140c2ee642a40820abeacef01117ea9ce209de7c72452abe21",
                          "signature_version": "s3v2",
                      },
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -646,8 +646,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                          "client_id": client_id,
                          "client_secret_hash": hashlib.sha256(client_secret.encode("utf-8")).hexdigest(),
                      },
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -913,7 +913,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                  "new_value": {
                      "pk": pkg_info_name.pk,
                      "name": name,
-                     "created_at": pkg_info_name.created_at,
+                     "created_at": pkg_info_name.created_at.isoformat(),
                  }
               }}
         )
@@ -960,7 +960,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                  "prev_value": {
                      "pk": prev_pk,
                      "name": pkg_info_name.name,
-                     "created_at": pkg_info_name.created_at,
+                     "created_at": pkg_info_name.created_at.isoformat(),
                  }
               }}
         )
@@ -1122,8 +1122,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "requires": [],
                      "update_for": [],
                      "version": "1.0",
-                     "created_at": pkg_info.created_at,
-                     "updated_at": pkg_info.updated_at,
+                     "created_at": pkg_info.created_at.isoformat(),
+                     "updated_at": pkg_info.updated_at.isoformat(),
                  }
               }}
         )
@@ -1231,8 +1231,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "requires": [pkg_info_name_required.name],
                      "update_for": [pkg_info_name_update_for.name],
                      "version": "1.0",
-                     "created_at": pkg_info.created_at,
-                     "updated_at": pkg_info.updated_at,
+                     "created_at": pkg_info.created_at.isoformat(),
+                     "updated_at": pkg_info.updated_at.isoformat(),
                  }
               }}
         )
@@ -1320,8 +1320,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "requires": [],
                      "update_for": [],
                      "version": "1.0",
-                     "created_at": pkg_info.created_at,
-                     "updated_at": pkg_info.updated_at,
+                     "created_at": pkg_info.created_at.isoformat(),
+                     "updated_at": pkg_info.updated_at.isoformat(),
                  }
               }}
         )
@@ -1380,7 +1380,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         new_value = copy.deepcopy(prev_value)
-        new_value["updated_at"] = pkg_info.updated_at
+        new_value["updated_at"] = pkg_info.updated_at.isoformat()
         new_value["catalogs"] = [{"pk": catalog.pk, "name": catalog.name,
                                   "repository": {"pk": repository.pk,
                                                  "name": repository.name}}]
@@ -2079,8 +2079,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                         "name": name,
                         "description": name,
                         "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
-                        "created_at": submanifest.created_at,
-                        "updated_at": submanifest.updated_at,
+                        "created_at": submanifest.created_at.isoformat(),
+                        "updated_at": submanifest.updated_at.isoformat(),
                     }
                 }
             }
@@ -2133,8 +2133,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "name": new_name,
                      "description": "",
                      "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
-                     "created_at": sub_manifest.created_at,
-                     "updated_at": sub_manifest.updated_at,
+                     "created_at": sub_manifest.created_at.isoformat(),
+                     "updated_at": sub_manifest.updated_at.isoformat(),
                  },
                  "prev_value": prev_value,
               }}
@@ -2284,8 +2284,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                     "pkg_info_name": pkginfo_name.serialize_for_event(),
                     "featured_item": True,
                     "options": {},
-                    "created_at": smpi.created_at,
-                    "updated_at": smpi.updated_at,
+                    "created_at": smpi.created_at.isoformat(),
+                    "updated_at": smpi.updated_at.isoformat(),
                  }
               }}
         )
@@ -2344,8 +2344,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                     "pkg_info_name": smpi.pkg_info_name.serialize_for_event(),
                     "featured_item": False,
                     "options": {},
-                    "created_at": smpi.created_at,
-                    "updated_at": smpi.updated_at,
+                    "created_at": smpi.created_at.isoformat(),
+                    "updated_at": smpi.updated_at.isoformat(),
                 },
                 "prev_value": prev_value
              }}
@@ -2539,8 +2539,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "name": name,
                      "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
                      "version": 1,
-                     "created_at": manifest.created_at,
-                     "updated_at": manifest.updated_at,
+                     "created_at": manifest.created_at.isoformat(),
+                     "updated_at": manifest.updated_at.isoformat(),
                  }
               }}
         )
@@ -2590,8 +2590,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                      "name": new_name,
                      "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
                      "version": 1,  # not incremented!
-                     "created_at": manifest.created_at,
-                     "updated_at": manifest.updated_at,
+                     "created_at": manifest.created_at.isoformat(),
+                     "updated_at": manifest.updated_at.isoformat(),
                  },
                  "prev_value": prev_value,
               }}

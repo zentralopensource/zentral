@@ -199,8 +199,8 @@ class MDMProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'payload_display_name': 'iOS Restrictions',
                      'payload_identifier': 'com.example.my-profile',
                      'payload_uuid': '8846C027-9F51-4574-9042-33C118F3D43E',
-                     "created_at": profile_av.created_at,
-                     "updated_at": profile_av.updated_at
+                     "created_at": profile_av.created_at.isoformat(),
+                     "updated_at": profile_av.updated_at.isoformat()
                  }
               }}
         )
@@ -364,8 +364,8 @@ class MDMProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'payload_display_name': 'iOS Restrictions',
                      'payload_identifier': 'com.example.my-profile',
                      'payload_uuid': '8846C027-9F51-4574-9042-33C118F3D43E',
-                     "created_at": profile_av.created_at,
-                     "updated_at": profile_av.updated_at
+                     "created_at": profile_av.created_at.isoformat(),
+                     "updated_at": profile_av.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

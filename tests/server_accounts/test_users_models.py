@@ -4,8 +4,16 @@ from accounts.models import APIToken, OIDCAPITokenIssuer, User
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
+from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
+from zentral.utils.time import naive_utcnow
 
-class UsersModelsTestCase(TestCase):
+
+class UsersModelsTestCase(TestCase, SerializeForEventAssertions):
+
+    def test_api_token_serialize_for_event_is_json_native(self):
+        token, _ = APIToken.objects.create_for_user(
+            self.user, expiry=naive_utcnow() + timedelta(days=1), name=get_random_string(12))
+        self.assert_serialize_for_event_is_json_native(token)
 
     @classmethod
     def setUpTestData(cls):
@@ -48,7 +56,7 @@ class UsersModelsTestCase(TestCase):
 
         # Then
         self.assertEqual(actual, {
-            "pk": token.pk,
+            "pk": str(token.pk),
             "name": 'MyTestToken'
         })
 
@@ -57,11 +65,11 @@ class UsersModelsTestCase(TestCase):
 
         # Then
         self.assertEqual(actual, {
-            "pk": token.pk,
+            "pk": str(token.pk),
             "name": 'MyTestToken',
             "user": self.user.serialize_for_event(),
             "expiry": token.expiry,
-            "created_at": token.created_at,
+            "created_at": token.created_at.isoformat(),
             "hashed_key": token.hashed_key
         })
 

@@ -6,10 +6,14 @@ from django.utils.crypto import get_random_string
 
 from accounts.models import Policy
 from accounts.provisioning import PolicyProvisioner
+from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from .utils import force_policy, force_role
 
 
-class PolicyModelTestCase(TestCase):
+class PolicyModelTestCase(TestCase, SerializeForEventAssertions):
+
+    def test_serialize_for_event_is_json_native(self):
+        self.assert_serialize_for_event_is_json_native(force_policy())
     def test_clean_formats_valid_source(self):
         p = Policy(name=get_random_string(12), source='permit (principal,action,resource);')
         p.clean()
@@ -116,7 +120,7 @@ class PolicyModelTestCase(TestCase):
         p = force_policy(provisioning_uid="puid")
         self.assertEqual(
             p.serialize_for_event(),
-            {'created_at': p.created_at,
+            {'created_at': p.created_at.isoformat(),
              'description': p.description,
              'is_active': True,
              'name': p.name,
@@ -124,7 +128,7 @@ class PolicyModelTestCase(TestCase):
              'provisioning_uid': 'puid',
              'source': 'permit (\n  principal in Role::"0",\n  action,\n  resource\n);\n',
              'type': Policy.Type.CEDAR,
-             'updated_at': p.updated_at}
+             'updated_at': p.updated_at.isoformat()}
         )
 
     @patch("base.notifier.Notifier.send_notification")

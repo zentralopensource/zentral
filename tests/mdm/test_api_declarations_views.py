@@ -269,8 +269,8 @@ class MDMDeclarationsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'tvos_max_version': '',
                      'tvos_min_version': '',
                      'version': 17,
-                     "created_at": av.created_at,
-                     "updated_at": av.updated_at
+                     "created_at": av.created_at.isoformat(),
+                     "updated_at": av.updated_at.isoformat()
                  }
               }}
         )
@@ -500,8 +500,8 @@ class MDMDeclarationsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'tvos_max_version': '',
                      'tvos_min_version': '',
                      'version': 17,
-                     "created_at": av.created_at,
-                     "updated_at": av.updated_at
+                     "created_at": av.created_at.isoformat(),
+                     "updated_at": av.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

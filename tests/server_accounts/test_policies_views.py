@@ -246,7 +246,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
             event.payload,
             {'action': 'created',
              'object': {'model': 'accounts.policy',
-                        'new_value': {'created_at': policy.created_at,
+                        'new_value': {'created_at': policy.created_at.isoformat(),
                                       'description': description,
                                       'is_active': True,
                                       'name': name,
@@ -257,7 +257,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
                                                 '  resource\n'
                                                 ');\n',
                                       'type': Policy.Type.CEDAR,
-                                      'updated_at': policy.updated_at},
+                                      'updated_at': policy.updated_at.isoformat()},
                         'pk': str(policy.pk)}}
         )
         metadata = event.metadata.serialize()
@@ -474,7 +474,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
             event.payload,
             {'action': 'updated',
              'object': {'model': 'accounts.policy',
-                        'new_value': {'created_at': policy.created_at,
+                        'new_value': {'created_at': policy.created_at.isoformat(),
                                       'description': description,
                                       'is_active': False,
                                       'name': name,
@@ -485,7 +485,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
                                                 '  resource\n'
                                                 ');\n',
                                       'type': Policy.Type.CEDAR,
-                                      'updated_at': policy.updated_at},
+                                      'updated_at': policy.updated_at.isoformat()},
                         'pk': str(policy.pk),
                         'prev_value': prev_value}}
         )

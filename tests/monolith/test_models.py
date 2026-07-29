@@ -14,12 +14,16 @@ from zentral.contrib.monolith.models import (
 from zentral.contrib.munki.models import ManagedInstall
 from zentral.utils.time import naive_utcnow
 
+from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from .utils import (
     force_catalog,
     force_category,
+    force_condition,
+    force_manifest,
     force_manifest_enrollment_package,
     force_pkg_info,
     force_repository,
+    force_sub_manifest,
     force_sub_manifest_pkg_info,
 )
 
@@ -197,7 +201,7 @@ class MonolithModelsTestCase(TestCase):
         }
         d = category.serialize_for_event(keys_only=True)
         self.assertEqual(d, result)
-        result['created_at'] = category.created_at
+        result['created_at'] = category.created_at.isoformat()
         d = category.serialize_for_event(keys_only=False)
         self.assertEqual(d, result)
 
@@ -409,3 +413,19 @@ class MonolithModelsTestCase(TestCase):
         smpi = force_sub_manifest_pkg_info(sub_manifest=self.sub_manifest_1)
         d = smpi.serialize_for_event(keys_only=True)
         self.assertEqual(d, {'pk': smpi.pk})
+
+
+class MonolithSerializationTestCase(TestCase, SerializeForEventAssertions):
+    def test_serialize_for_event_is_json_native(self):
+        pkg_info = force_pkg_info(archived=True)
+        for obj in (force_repository(),
+                    force_catalog(archived=True),
+                    force_category(),
+                    pkg_info.name,
+                    pkg_info,
+                    force_sub_manifest(),
+                    force_condition(),
+                    force_sub_manifest_pkg_info(),
+                    force_manifest()):
+            with self.subTest(obj._meta.model_name):
+                self.assert_serialize_for_event_is_json_native(obj)

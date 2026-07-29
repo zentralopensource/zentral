@@ -25,7 +25,7 @@ class MDMLocationModelTestCase(TestCase):
             {
                 "pk": self.location.pk,
                 "mdm_info_id": str(self.location.mdm_info_id),
-                "server_token_expiration_date": self.location.server_token_expiration_date,
+                "server_token_expiration_date": self.location.server_token_expiration_date.isoformat(),
                 "organization_name": self.location.organization_name,
                 "country_code": self.location.country_code,
                 "library_uid": self.location.library_uid,

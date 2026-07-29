@@ -104,14 +104,14 @@ class TestSplunkStore(TestCase):
                  'serial_number_field': 'serial_number',
                  'verify_tls': True
              },
-             'created_at': store.instance.created_at,
+             'created_at': store.instance.created_at.isoformat(),
              'description': '',
              'event_filters': {},
              'events_url_authorized_roles': [{'name': role.name, 'pk': role.pk}],
              'name': store.instance.name,
              'pk': str(store.instance.pk),
              'provisioning_uid': store.instance.provisioning_uid,
-             'updated_at': store.instance.updated_at}
+             'updated_at': store.instance.updated_at.isoformat()}
         )
 
     def test_search_app_url_absent(self):

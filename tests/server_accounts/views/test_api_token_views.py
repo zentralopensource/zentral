@@ -145,11 +145,11 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
                  "model": "accounts.apitoken",
                  "pk": str(api_token.pk),
                  "new_value": {
-                     "pk": api_token.pk,
+                     "pk": str(api_token.pk),
                      "name": token_name,
                      "user": self.ui_user.serialize_for_event(),
-                     "expiry": expiry_date,
-                     "created_at": api_token.created_at,
+                     "expiry": expiry_date.isoformat(),
+                     "created_at": api_token.created_at.isoformat(),
                      "hashed_key": api_token.hashed_key
                  }
               }},
@@ -181,11 +181,11 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
                  "model": "accounts.apitoken",
                  "pk": str(api_token.pk),
                  "new_value": {
-                     "pk": api_token.pk,
+                     "pk": str(api_token.pk),
                      "name": api_token.name,
                      "user": user.serialize_for_event(),
                      "expiry": api_token.expiry,
-                     "created_at": api_token.created_at,
+                     "created_at": api_token.created_at.isoformat(),
                      "hashed_key": api_token.hashed_key
                  }
               }},
@@ -253,11 +253,11 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
                  "model": "accounts.apitoken",
                  "pk": str(api_token.pk),
                  "new_value": {
-                     "pk": api_token.pk,
+                     "pk": str(api_token.pk),
                      "name": new_token_name,
                      "user": self.service_account.serialize_for_event(),
-                     "expiry": expiry_date_new,
-                     "created_at": api_token.created_at,
+                     "expiry": expiry_date_new.isoformat(),
+                     "created_at": api_token.created_at.isoformat(),
                      "hashed_key": api_token.hashed_key
                  },
                  "prev_value": token.serialize_for_event()
@@ -294,11 +294,11 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
                  "model": "accounts.apitoken",
                  "pk": str(api_token.pk),
                  "new_value": {
-                     "pk": api_token.pk,
+                     "pk": str(api_token.pk),
                      "name": new_token_name,
                      "user": self.ui_user.serialize_for_event(),
-                     "expiry": expiry_date_new,
-                     "created_at": api_token.created_at,
+                     "expiry": expiry_date_new.isoformat(),
+                     "created_at": api_token.created_at.isoformat(),
                      "hashed_key": api_token.hashed_key
                  },
                  "prev_value": token.serialize_for_event()

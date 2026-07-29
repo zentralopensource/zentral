@@ -197,8 +197,8 @@ class MDMBlueprintsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "collect_certificates": 'NO',
                      "collect_profiles": 'NO',
                      "legacy_profiles_via_ddm": True,
-                     "created_at": blueprint.created_at,
-                     "updated_at": blueprint.updated_at
+                     "created_at": blueprint.created_at.isoformat(),
+                     "updated_at": blueprint.updated_at.isoformat()
                  }
               }}
         )
@@ -293,8 +293,8 @@ class MDMBlueprintsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "recovery_password_config": {"name": recovery_password_config.name,
                                                   "pk": recovery_password_config.pk},
                      "software_update_enforcements": [{"pk": sue.pk, "name": sue.name}],
-                     "created_at": blueprint.created_at,
-                     "updated_at": blueprint.updated_at
+                     "created_at": blueprint.created_at.isoformat(),
+                     "updated_at": blueprint.updated_at.isoformat()
                  },
                  "prev_value": prev_value
               }}

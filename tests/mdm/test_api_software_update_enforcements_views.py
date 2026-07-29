@@ -269,8 +269,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                      "max_os_version": "15",
                      "delay_days": 14,
                      "local_time": "09:30:00",
-                     "created_at": sue.created_at,
-                     "updated_at": sue.updated_at
+                     "created_at": sue.created_at.isoformat(),
+                     "updated_at": sue.updated_at.isoformat()
                  }
               }}
         )
@@ -331,8 +331,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                      "tags": [],
                      "os_version": "14.1.1",
                      "local_datetime": "2023-11-28T09:30:00",
-                     "created_at": sue.created_at,
-                     "updated_at": sue.updated_at
+                     "created_at": sue.created_at.isoformat(),
+                     "updated_at": sue.updated_at.isoformat()
                  }
               }}
         )
@@ -419,8 +419,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                      "max_os_version": "18.1.2",
                      "delay_days": 3,
                      "local_time": "11:11:00",
-                     "created_at": sue.created_at,
-                     "updated_at": sue.updated_at
+                     "created_at": sue.created_at.isoformat(),
+                     "updated_at": sue.updated_at.isoformat()
                  },
                  "prev_value": prev_value
               }}
@@ -490,8 +490,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                      "os_version": "18.1.2",
                      "build_version": "29B12",
                      "local_datetime": "2028-12-12T11:11:00",
-                     "created_at": sue.created_at,
-                     "updated_at": sue.updated_at
+                     "created_at": sue.created_at.isoformat(),
+                     "updated_at": sue.updated_at.isoformat()
                  },
                  "prev_value": prev_value
               }}

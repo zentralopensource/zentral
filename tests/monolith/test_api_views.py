@@ -299,8 +299,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "meta_business_unit": {"pk": self.mbu.pk, "name": self.mbu.name},
                      "backend": "S3",
                      "backend_kwargs": {"bucket": bucket},
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -381,8 +381,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "backend": "AZURE",
                      "backend_kwargs": {"storage_account": storage_account,
                                         "container": container},
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -435,8 +435,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "name": name,
                      "backend": "VIRTUAL",
                      "backend_kwargs": {},
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -633,8 +633,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                          "secret_access_key_hash": "d70d4cbd04b6a3140c2ee642a40820abeacef01117ea9ce209de7c72452abe21",
                          "signature_version": "s3v2",
                      },
-                     "created_at": repository.created_at,
-                     "updated_at": repository.updated_at,
+                     "created_at": repository.created_at.isoformat(),
+                     "updated_at": repository.updated_at.isoformat(),
                  }
               }}
         )
@@ -989,8 +989,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                     "pk": manifest.pk,
                     "name": name,
                     "version": 1,
-                    "created_at": manifest.created_at,
-                    "updated_at": manifest.updated_at,
+                    "created_at": manifest.created_at.isoformat(),
+                    "updated_at": manifest.updated_at.isoformat(),
                     "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
                  }
              }}
@@ -1076,16 +1076,16 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                         "pk": manifest.pk,
                         "name": prev_name,
                         "version": 1,
-                        "created_at": manifest.created_at,
-                        "updated_at": prev_updated_at,
+                        "created_at": manifest.created_at.isoformat(),
+                        "updated_at": prev_updated_at.isoformat(),
                         "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
                     },
                     "new_value": {
                         "pk": manifest.pk,
                         "name": new_name,
                         "version": 1,
-                        "created_at": manifest.created_at,
-                        "updated_at": manifest.updated_at,
+                        "created_at": manifest.created_at.isoformat(),
+                        "updated_at": manifest.updated_at.isoformat(),
                         "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
                     }
                 }
@@ -2668,8 +2668,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                     "pk": sub_manifest.pk,
                     "name": name,
                     "description": "",
-                    "created_at": sub_manifest.created_at,
-                    "updated_at": sub_manifest.updated_at
+                    "created_at": sub_manifest.created_at.isoformat(),
+                    "updated_at": sub_manifest.updated_at.isoformat()
                  }
              }}
         )
@@ -2733,8 +2733,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                         "pk": test_sub_manifest.pk,
                         "name": new_name,
                         "description": new_description,
-                        "created_at": test_sub_manifest.created_at,
-                        "updated_at": test_sub_manifest.updated_at,
+                        "created_at": test_sub_manifest.created_at.isoformat(),
+                        "updated_at": test_sub_manifest.updated_at.isoformat(),
                         "meta_business_unit": self.mbu.serialize_for_event(keys_only=True)
                     }
                 }
@@ -3007,8 +3007,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                     "pkg_info_name": pkg_info_name.serialize_for_event(),
                     "featured_item": True,
                     "options": {'shards': {'default': 100, 'modulo': 100}},
-                    "created_at": sub_manifest_pkg_info.created_at,
-                    "updated_at": sub_manifest_pkg_info.updated_at
+                    "created_at": sub_manifest_pkg_info.created_at.isoformat(),
+                    "updated_at": sub_manifest_pkg_info.updated_at.isoformat()
                  }
              }}
         )
@@ -3109,8 +3109,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                                                                           'modulo': 42,
                                                                                           'tags':
                                                                                           {str(shard_tag.name): 17}}},
-                        "created_at": test_sub_manifest_pkg_info.created_at,
-                        "updated_at": test_sub_manifest_pkg_info.updated_at
+                        "created_at": test_sub_manifest_pkg_info.created_at.isoformat(),
+                        "updated_at": test_sub_manifest_pkg_info.updated_at.isoformat()
                     }
                 }
             }

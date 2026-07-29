@@ -263,8 +263,8 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
                      "max_os_version": "19.0",
                      "delay_days": 12,
                      "local_time": "09:30:00",
-                     "created_at": sue.created_at,
-                     "updated_at": sue.updated_at
+                     "created_at": sue.created_at.isoformat(),
+                     "updated_at": sue.updated_at.isoformat()
                  }
               }}
         )
@@ -319,8 +319,8 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
                      "os_version": "14.1",
                      "build_version": "23B74",
                      "local_datetime": "2023-11-10T09:30:00",
-                     "created_at": sue.created_at,
-                     "updated_at": sue.updated_at
+                     "created_at": sue.created_at.isoformat(),
+                     "updated_at": sue.updated_at.isoformat()
                  }
               }}
         )
@@ -443,8 +443,8 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
                      "os_version": "14.1",
                      "build_version": "23B74",
                      "local_datetime": "2023-11-10T09:30:00",
-                     "created_at": sue2.created_at,
-                     "updated_at": sue2.updated_at
+                     "created_at": sue2.created_at.isoformat(),
+                     "updated_at": sue2.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

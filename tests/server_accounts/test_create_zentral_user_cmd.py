@@ -41,11 +41,11 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
 
     def _create_token_event_serialization(self, user, token):
         return {
-            "pk": token.pk,
+            "pk": str(token.pk),
             "name": token.name,
             "user": user.serialize_for_event(),
             "expiry": token.expiry,
-            "created_at": token.created_at,
+            "created_at": token.created_at.isoformat(),
             "hashed_key": token.hashed_key
         }
 

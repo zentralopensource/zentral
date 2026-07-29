@@ -207,8 +207,8 @@ class ProbeActionAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                     "description": description,
                     "backend": "HTTP_POST",
                     "backend_kwargs": {"url": "https://www.example.com/post"},
-                    "created_at": action.created_at,
-                    "updated_at": action.updated_at,
+                    "created_at": action.created_at.isoformat(),
+                    "updated_at": action.updated_at.isoformat(),
                   }
              }}
         )
@@ -259,8 +259,8 @@ class ProbeActionAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                     "description": description,
                     "backend": "HTTP_POST",
                     "backend_kwargs": {"url": "https://www.example.com/post"},
-                    "created_at": action.created_at,
-                    "updated_at": action.updated_at,
+                    "created_at": action.created_at.isoformat(),
+                    "updated_at": action.updated_at.isoformat(),
                   }
              }}
         )
@@ -335,8 +335,8 @@ class ProbeActionAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                              "value_hash": "8f6c811daa3b5698210b6cfd2d015061375a4b7c1cfc97eb6a44da34bdd4843f"},
                         ],
                     },
-                    "created_at": action.created_at,
-                    "updated_at": action.updated_at,
+                    "created_at": action.created_at.isoformat(),
+                    "updated_at": action.updated_at.isoformat(),
                   }
              }}
         )
@@ -416,8 +416,8 @@ class ProbeActionAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                         "cel_transformation":
                             '{"serial_number": metadata.machine_serial_number}'
                     },
-                    "created_at": action.created_at,
-                    "updated_at": action.updated_at,
+                    "created_at": action.created_at.isoformat(),
+                    "updated_at": action.updated_at.isoformat(),
                   }
              }}
         )
@@ -501,8 +501,8 @@ class ProbeActionAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                     "backend_kwargs": {
                         "url_hash": "265638c97b0030017b88a5fd7b3fb23b50f592edec664337d617863a2c2bd297"
                     },
-                    "created_at": action.created_at,
-                    "updated_at": action.updated_at,
+                    "created_at": action.created_at.isoformat(),
+                    "updated_at": action.updated_at.isoformat(),
                   }
              }}
         )
@@ -603,8 +603,8 @@ class ProbeActionAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                     "backend_kwargs": {
                         "url_hash": "265638c97b0030017b88a5fd7b3fb23b50f592edec664337d617863a2c2bd297"
                     },
-                    "created_at": action2.created_at,
-                    "updated_at": action2.updated_at,
+                    "created_at": action2.created_at.isoformat(),
+                    "updated_at": action2.updated_at.isoformat(),
                   }
              }}
         )

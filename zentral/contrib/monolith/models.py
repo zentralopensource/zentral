@@ -156,8 +156,8 @@ class Repository(models.Model):
             d.update({
                 "backend": str(self.backend),
                 "backend_kwargs": self.get_backend_kwargs_for_event(),
-                "created_at": self.created_at,
-                "updated_at": self.updated_at
+                "created_at": self.created_at.isoformat(),
+                "updated_at": self.updated_at.isoformat()
             })
         return d
 
@@ -235,10 +235,10 @@ class Catalog(models.Model):
              "repository": self.repository.serialize_for_event(keys_only=True),
              "name": self.name}
         if not keys_only:
-            d.update({"created_at": self.created_at,
-                      "updated_at": self.updated_at})
+            d.update({"created_at": self.created_at.isoformat(),
+                      "updated_at": self.updated_at.isoformat()})
             if self.archived_at:
-                d["archived_at"] = self.archived_at
+                d["archived_at"] = self.archived_at.isoformat()
         return d
 
 
@@ -265,7 +265,7 @@ class PkgInfoCategory(models.Model):
              "repository": self.repository.serialize_for_event(keys_only=True),
              "name": self.name}
         if not keys_only:
-            d["created_at"] = self.created_at
+            d["created_at"] = self.created_at.isoformat()
         return d
 
 
@@ -308,7 +308,7 @@ class PkgInfoName(models.Model):
         return reverse("monolith:pkg_info_name", args=(self.pk,))
 
     def serialize_for_event(self):
-        return {"pk": self.pk, "name": self.name, "created_at": self.created_at}
+        return {"pk": self.pk, "name": self.name, "created_at": self.created_at.isoformat()}
 
     # TODO: reevaluate for backward compatibility
     def linked_objects_keys_for_event(self):
@@ -565,11 +565,11 @@ class PkgInfo(models.Model):
             "update_for": [pin.name for pin in self.update_for.all().order_by("name")],
             "data": self.data,
             "local": self.local,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         if self.archived_at:
-            d["archived_at"] = self.archived_at
+            d["archived_at"] = self.archived_at.isoformat()
         if self.category:
             d["category"] = self.category.serialize_for_event(keys_only=True)
         return d
@@ -735,8 +735,8 @@ class SubManifest(models.Model):
             d["meta_business_unit"] = self.meta_business_unit.serialize_for_event(keys_only=True)
         d.update({
             "description": self.description,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
         })
         return d
 
@@ -777,8 +777,8 @@ class Condition(models.Model):
             return d
         d.update({
             "predicate": self.predicate,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
         })
         return d
 
@@ -846,8 +846,8 @@ class SubManifestPkgInfo(models.Model):
             "pkg_info_name": self.pkg_info_name.serialize_for_event(),
             "featured_item": self.featured_item,
             "options": self.options,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
         })
         return d
 
@@ -1180,8 +1180,8 @@ class Manifest(models.Model):
         d.update({
             "meta_business_unit": self.meta_business_unit.serialize_for_event(keys_only=True),
             "version": self.version,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
         })
         return d
 

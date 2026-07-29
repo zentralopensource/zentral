@@ -87,14 +87,14 @@ class S3ParquetStoreTestCase(TestCase):
                  'batch_size': 17,
                  'max_batch_age_seconds': 26,
              },
-             'created_at': store.instance.created_at,
+             'created_at': store.instance.created_at.isoformat(),
              'description': '',
              'event_filters': {},
              'events_url_authorized_roles': [{'name': role.name, 'pk': role.pk}],
              'name': store.instance.name,
              'pk': str(store.instance.pk),
              'provisioning_uid': store.instance.provisioning_uid,
-             'updated_at': store.instance.updated_at}
+             'updated_at': store.instance.updated_at.isoformat()}
         )
 
     def test_backend_serialize_for_event_with_role_arn(self):
@@ -115,14 +115,14 @@ class S3ParquetStoreTestCase(TestCase):
                  'batch_size': 17,
                  'max_batch_age_seconds': 26,
              },
-             'created_at': store.instance.created_at,
+             'created_at': store.instance.created_at.isoformat(),
              'description': '',
              'event_filters': {},
              'events_url_authorized_roles': [{'name': role.name, 'pk': role.pk}],
              'name': store.instance.name,
              'pk': str(store.instance.pk),
              'provisioning_uid': store.instance.provisioning_uid,
-             'updated_at': store.instance.updated_at}
+             'updated_at': store.instance.updated_at.isoformat()}
         )
 
     # event serialization

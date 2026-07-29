@@ -180,7 +180,7 @@ class ProbeAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                         'new_value': {'actions': [{'name': action.name,
                                                    'pk': str(action.pk)}],
                                       'active': True,
-                                      'created_at': probe_source.created_at,
+                                      'created_at': probe_source.created_at.isoformat(),
                                       'description': 'fomo',
                                       'incident_severity': 300,
                                       'metadata_filters': [{'event_types': ['zentral_login']}],
@@ -190,7 +190,7 @@ class ProbeAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                                             'values': ['fomo']}]],
                                       'pk': probe_source.pk,
                                       'slug': probe_source.slug,
-                                      'updated_at': probe_source.updated_at},
+                                      'updated_at': probe_source.updated_at.isoformat()},
                         'pk': str(probe_source.pk)}}
         )
         metadata = event.metadata.serialize()
@@ -310,7 +310,7 @@ class ProbeAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                         'new_value': {'actions': [{'name': action.name,
                                                    'pk': str(action.pk)}],
                                       'active': False,
-                                      'created_at': probe_source_2.created_at,
+                                      'created_at': probe_source_2.created_at.isoformat(),
                                       'description': 'fomo',
                                       'inventory_filters': [{'tag_ids': [tag.pk], 'types': ['DESKTOP']}],
                                       'metadata_filters': [{'event_types': ['zentral_login']}],
@@ -320,7 +320,7 @@ class ProbeAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                                             'values': ['fomo']}]],
                                       'pk': probe_source.pk,
                                       'slug': probe_source_2.slug,
-                                      'updated_at': probe_source_2.updated_at},
+                                      'updated_at': probe_source_2.updated_at.isoformat()},
                         'pk': str(probe_source.pk)}}
         )
         metadata = event.metadata.serialize()

@@ -200,8 +200,8 @@ class MDMArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "reinstall_interval": 0,
                      "reinstall_on_os_update": 'No',
                      "requires": [],
-                     "created_at": artifact.created_at,
-                     "updated_at": artifact.updated_at
+                     "created_at": artifact.created_at.isoformat(),
+                     "updated_at": artifact.updated_at.isoformat()
                  }
               }}
         )
@@ -295,8 +295,8 @@ class MDMArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "reinstall_interval": 1,
                      "reinstall_on_os_update": 'Patch',
                      "requires": [{"pk": str(required_artifact.pk), "name": required_artifact.name}],
-                     "created_at": artifact.created_at,
-                     "updated_at": artifact.updated_at
+                     "created_at": artifact.created_at.isoformat(),
+                     "updated_at": artifact.updated_at.isoformat()
                  },
                  "prev_value": prev_value
               }}

@@ -296,8 +296,8 @@ class MDMStoreAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                       '<integer>1</integer>\n'
                                       '</dict>\n'
                                       '</plist>\n',
-                     "created_at": sa_av.created_at,
-                     "updated_at": sa_av.updated_at
+                     "created_at": sa_av.created_at.isoformat(),
+                     "updated_at": sa_av.updated_at.isoformat()
                  }
               }}
         )
@@ -501,8 +501,8 @@ class MDMStoreAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'prevent_backup': True,
                      'removable': True,
                      'remove_on_unenroll': False,
-                     "created_at": sa_av.created_at,
-                     "updated_at": sa_av.updated_at
+                     "created_at": sa_av.created_at.isoformat(),
+                     "updated_at": sa_av.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

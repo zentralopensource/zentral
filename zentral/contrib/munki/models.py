@@ -106,8 +106,8 @@ class Configuration(models.Model):
                 "script_checks_run_interval_seconds": self.script_checks_run_interval_seconds,
                 "auto_reinstall_incidents": self.auto_reinstall_incidents,
                 "auto_failed_install_incidents": self.auto_failed_install_incidents,
-                "created_at": self.created_at,
-                "updated_at": self.updated_at,
+                "created_at": self.created_at.isoformat(),
+                "updated_at": self.updated_at.isoformat(),
                 "version": self.version,
             })
         return d
@@ -254,8 +254,8 @@ class ScriptCheck(models.Model):
             "type": str(self.type),
             "source": self.source,
             "expected_result": self.expected_result,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
         if self.min_os_version:
             d["min_os_version"] = self.min_os_version

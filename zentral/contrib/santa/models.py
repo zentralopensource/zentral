@@ -404,9 +404,9 @@ class TargetState(models.Model):
             "state": state.value,
             "state_display": state.name,
             "score": self.score,
-            "reset_at": self.reset_at,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "reset_at": self.reset_at.isoformat() if self.reset_at else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }
 
 
@@ -738,8 +738,8 @@ class Configuration(models.Model):
             "allow_unknown_shard": self.allow_unknown_shard,
             "enable_all_event_upload_shard": self.enable_all_event_upload_shard,
             "sync_incident_severity": self.sync_incident_severity,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
         })
         return d
 
@@ -776,8 +776,8 @@ class VotingGroup(models.Model):
             "can_reset_target": self.can_reset_target,
             "ballot_target_types": sorted(self.ballot_target_types),
             "voting_weight": self.voting_weight,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -924,7 +924,7 @@ class Ballot(models.Model):
                 vote.serialize_for_event()
                 for vote in self.vote_set.all()
             ],
-            "created_at": self.created_at,
+            "created_at": self.created_at.isoformat(),
         })
         return d
 
@@ -946,7 +946,7 @@ class Vote(models.Model):
             "configuration": self.configuration.serialize_for_event(keys_only=True),
             "was_yes_vote": self.was_yes_vote,
             "weight": self.weight,
-            "created_at": self.created_at,
+            "created_at": self.created_at.isoformat(),
         }
 
 

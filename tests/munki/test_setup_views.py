@@ -219,8 +219,8 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
                      "script_checks_run_interval_seconds": 7231,
                      "auto_reinstall_incidents": True,
                      "auto_failed_install_incidents": False,
-                     "created_at": configuration.created_at,
-                     "updated_at": configuration.updated_at,
+                     "created_at": configuration.created_at.isoformat(),
+                     "updated_at": configuration.updated_at.isoformat(),
                      "version": 0,
                  }
                 }
@@ -304,8 +304,8 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
                     "script_checks_run_interval_seconds": 86400,
                     "auto_failed_install_incidents": False,
                     "auto_reinstall_incidents": False,
-                    "created_at": configuration.created_at,
-                    "updated_at": prev_updated_at,
+                    "created_at": configuration.created_at.isoformat(),
+                    "updated_at": prev_updated_at.isoformat(),
                     "version": 0,
                  },
                  "new_value": {
@@ -320,8 +320,8 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
                     "script_checks_run_interval_seconds": 3600,
                     "auto_failed_install_incidents": True,
                     "auto_reinstall_incidents": False,
-                    "created_at": configuration2.created_at,
-                    "updated_at": configuration2.updated_at,
+                    "created_at": configuration2.created_at.isoformat(),
+                    "updated_at": configuration2.updated_at.isoformat(),
                     "version": configuration2.version,
                  }
                 }
