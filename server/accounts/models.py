@@ -294,14 +294,14 @@ class APIToken(models.Model):
         return APIToken.objects.is_expired().filter(pk=self.pk).exists()
 
     def serialize_for_event(self, keys_only=False):
-        d = {"pk": self.pk, "name": self.name}
+        d = {"pk": str(self.pk), "name": self.name}
         if keys_only:
             return d
 
         d.update({
             "user": self.user.serialize_for_event(),
-            "expiry": self.expiry,
-            "created_at": self.created_at,
+            "expiry": self.expiry.isoformat() if self.expiry else None,
+            "created_at": self.created_at.isoformat(),
             "hashed_key": self.hashed_key
         })
         return d
@@ -459,8 +459,8 @@ class Policy(models.Model):
             "description": self.description,
             "type": self.type,
             "source": self.source,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         if self.provisioning_uid:
             d["provisioning_uid"] = self.provisioning_uid
