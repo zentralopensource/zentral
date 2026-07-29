@@ -845,6 +845,15 @@ class MachineSnapshotTestCase(TestCase):
         # the row is rolled back with the mismatch, it is not left under the wrong identity
         self.assertEqual(Source.objects.filter(name="fomo").count(), 0)
 
+    def test_commit_hash_mismatch_per_object_path(self):
+        # BusinessUnit overrides save(), so it is never bulk inserted
+        tree = {"name": "fomo", "reference": "fomo 1", "source": copy.deepcopy(self.source)}
+        with patch.object(BusinessUnit, "hash", return_value="yolo"):
+            with self.assertRaises(MTOError) as cm:
+                BusinessUnit.objects.commit(tree)
+        self.assertEqual(cm.exception.message, "Obj fomo Hash missmatch!!!")
+        self.assertEqual(BusinessUnit.objects.filter(name="fomo").count(), 0)
+
     # mt fields
 
     def test_get_mt_field_excluded(self):
