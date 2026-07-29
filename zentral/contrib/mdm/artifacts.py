@@ -722,14 +722,14 @@ class Target:
                     },
                     "status": result_d["status"],
                     "extra_info": json.loads(extra_info) if extra_info else None,
-                    "installed_at": result_d["installed_at"],
+                    "installed_at": result_d["installed_at"].isoformat() if result_d["installed_at"] else None,
                     "os_version_at_install_time": result_d["os_version_at_install_time"],
                     "unique_install_identifier": result_d["unique_install_identifier"],
                     "install_count": result_d["install_count"],
                     "retry_count": result_d["retry_count"],
                     "max_retry_count": result_d["max_retry_count"],
-                    "created_at": result_d["created_at"],
-                    "updated_at": result_d["updated_at"],
+                    "created_at": result_d["created_at"].isoformat(),
+                    "updated_at": result_d["updated_at"].isoformat(),
                 }
             }
             if self.enrolled_user:

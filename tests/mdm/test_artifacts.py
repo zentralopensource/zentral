@@ -1551,16 +1551,16 @@ class TestMDMArtifacts(TestCase):
                                                    'type': 'Profile'},
                                       'pk': str(profile_av.pk),
                                       'version': 1},
-                 'created_at': datetime(2001, 2, 3, 4, 5, 6),
+                 'created_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'extra_info': {'active': True, 'valid': 'valid'},
                  'install_count': 1,
-                 'installed_at': datetime(2001, 2, 3, 4, 5, 6),
+                 'installed_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'max_retry_count': 2,
                  'os_version_at_install_time': '10.5.2',
                  'retry_count': 0,
                  'status': 'Installed',
                  'unique_install_identifier': str(profile_av.pk),
-                 'updated_at': datetime(2001, 2, 3, 4, 5, 6)
+                 'updated_at': datetime(2001, 2, 3, 4, 5, 6).isoformat()
              }}
         )
         metadata = event.metadata.serialize()
@@ -1591,16 +1591,16 @@ class TestMDMArtifacts(TestCase):
                                                    'type': 'Profile'},
                                       'pk': str(profile_av2.pk),
                                       'version': 2},
-                 'created_at': datetime(2002, 3, 4, 5, 6, 7),
+                 'created_at': datetime(2002, 3, 4, 5, 6, 7).isoformat(),
                  'extra_info': {'active': True, 'valid': 'valid'},
                  'install_count': 1,
-                 'installed_at': datetime(2002, 3, 4, 5, 6, 7),
+                 'installed_at': datetime(2002, 3, 4, 5, 6, 7).isoformat(),
                  'max_retry_count': 2,
                  'os_version_at_install_time': '10.5.3',
                  'retry_count': 0,
                  'status': 'Installed',
                  'unique_install_identifier': str(profile_av2.pk),
-                 'updated_at': datetime(2002, 3, 4, 5, 6, 7)
+                 'updated_at': datetime(2002, 3, 4, 5, 6, 7).isoformat()
              }}
         )
         metadata = created_event.metadata.serialize()
@@ -1618,16 +1618,16 @@ class TestMDMArtifacts(TestCase):
                                                    'type': 'Profile'},
                                       'pk': str(profile_av.pk),
                                       'version': 1},
-                 'created_at': datetime(2001, 2, 3, 4, 5, 6),
+                 'created_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'extra_info': {'active': True, 'valid': 'valid'},
                  'install_count': 1,
-                 'installed_at': datetime(2001, 2, 3, 4, 5, 6),
+                 'installed_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'max_retry_count': 2,
                  'os_version_at_install_time': '10.5.2',
                  'retry_count': 0,
                  'status': 'Installed',
                  'unique_install_identifier': str(profile_av.pk),
-                 'updated_at': datetime(2001, 2, 3, 4, 5, 6)
+                 'updated_at': datetime(2001, 2, 3, 4, 5, 6).isoformat()
              }}
         )
         metadata = deleted_event.metadata.serialize()
