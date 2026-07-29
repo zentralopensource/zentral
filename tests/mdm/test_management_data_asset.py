@@ -38,7 +38,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
             data_asset.serialize_for_event(),
             {'artifact': {'name': artifact.name,
                           'pk': str(artifact.pk)},
-             'created_at': artifact_version.created_at,
+             'created_at': artifact_version.created_at.isoformat(),
              'default_shard': 100,
              'excluded_tags': [],
              'file_sha256': data_asset.file_sha256,
@@ -60,7 +60,7 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
              'tvos_max_version': '',
              'tvos_min_version': '',
              'type': DataAsset.Type.ZIP,
-             'updated_at': artifact_version.updated_at,
+             'updated_at': artifact_version.updated_at.isoformat(),
              'version': 1}
         )
 

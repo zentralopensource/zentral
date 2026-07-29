@@ -224,8 +224,8 @@ class MDMProvisioningProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'uuid': str(pp_uuid),
                      'version': 17,
                      'source': hashlib.sha1(av.provisioning_profile.source).hexdigest(),
-                     "created_at": av.created_at,
-                     "updated_at": av.updated_at
+                     "created_at": av.created_at.isoformat(),
+                     "updated_at": av.updated_at.isoformat()
                  }
               }}
         )
@@ -389,8 +389,8 @@ class MDMProvisioningProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'uuid': str(pp_uuid),
                      'version': 17,
                      'source': hashlib.sha1(av.provisioning_profile.source).hexdigest(),
-                     "created_at": av.created_at,
-                     "updated_at": av.updated_at
+                     "created_at": av.created_at.isoformat(),
+                     "updated_at": av.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

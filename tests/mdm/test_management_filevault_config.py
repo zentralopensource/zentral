@@ -157,8 +157,8 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                      "show_recovery_key": True,
                      "destroy_key_on_standby": True,
                      "prk_rotation_interval_days": 90,
-                     "created_at": fv_config.created_at,
-                     "updated_at": fv_config.updated_at
+                     "created_at": fv_config.created_at.isoformat(),
+                     "updated_at": fv_config.updated_at.isoformat()
                  }
               }}
         )
@@ -278,8 +278,8 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                      "show_recovery_key": True,
                      "destroy_key_on_standby": True,
                      "prk_rotation_interval_days": 90,
-                     "created_at": fv_config2.created_at,
-                     "updated_at": fv_config2.updated_at
+                     "created_at": fv_config2.created_at.isoformat(),
+                     "updated_at": fv_config2.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

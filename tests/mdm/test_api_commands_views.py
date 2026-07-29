@@ -294,12 +294,12 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              "name": "DeviceLock",
              "artifact_version": av.serialize_for_event(),
              "artifact_operation": "Installation",
-             "not_before": db_command.created_at,
-             "time": db_command.created_at,
-             "result_time": db_command.created_at,
+             "not_before": db_command.created_at.isoformat(),
+             "time": db_command.created_at.isoformat(),
+             "result_time": db_command.created_at.isoformat(),
              "status": "Acknowledged",
-             "created_at": db_command.created_at,
-             "updated_at": db_command.updated_at,
+             "created_at": db_command.created_at.isoformat(),
+             "updated_at": db_command.updated_at.isoformat(),
              "enrolled_device": self.enrolled_device.serialize_for_event(keys_only=True)}
         )
         self.assertEqual(

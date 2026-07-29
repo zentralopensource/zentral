@@ -215,8 +215,8 @@ class MDMBlueprintArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'tvos': False,
                      'tvos_max_version': '',
                      'tvos_min_version': '',
-                     "created_at": blueprint_artifact.created_at,
-                     "updated_at": blueprint_artifact.updated_at
+                     "created_at": blueprint_artifact.created_at.isoformat(),
+                     "updated_at": blueprint_artifact.updated_at.isoformat()
                  }
               }}
         )
@@ -324,8 +324,8 @@ class MDMBlueprintArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'tvos': False,
                      'tvos_max_version': '',
                      'tvos_min_version': '',
-                     "created_at": blueprint_artifact.created_at,
-                     "updated_at": blueprint_artifact.updated_at
+                     "created_at": blueprint_artifact.created_at.isoformat(),
+                     "updated_at": blueprint_artifact.updated_at.isoformat()
                  },
                  "prev_value": prev_value
               }}

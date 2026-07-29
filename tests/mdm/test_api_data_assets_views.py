@@ -445,8 +445,8 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'tvos_min_version': '',
                      'type': 'ZIP',
                      'version': 17,
-                     "created_at": ea_av.created_at,
-                     "updated_at": ea_av.updated_at
+                     "created_at": ea_av.created_at.isoformat(),
+                     "updated_at": ea_av.updated_at.isoformat()
                  }
               }}
         )
@@ -633,8 +633,8 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'tvos_min_version': '',
                      'type': 'PLIST',
                      'version': 17,
-                     "created_at": ea_av.created_at,
-                     "updated_at": ea_av.updated_at
+                     "created_at": ea_av.created_at.isoformat(),
+                     "updated_at": ea_av.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

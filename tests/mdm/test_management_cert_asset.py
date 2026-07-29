@@ -52,7 +52,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase, LoginCase):
                     "pk": str(cert_asset.acme_issuer.pk),
                 },
                 "artifact": {"name": artifact.name, "pk": str(artifact.pk)},
-                "created_at": artifact_version.created_at,
+                "created_at": artifact_version.created_at.isoformat(),
                 "default_shard": 100,
                 "excluded_tags": [],
                 "ios": False,
@@ -81,7 +81,7 @@ class MDMCertAssetManagementViewsTestCase(TestCase, LoginCase):
                 "tvos": False,
                 "tvos_max_version": "",
                 "tvos_min_version": "",
-                "updated_at": artifact_version.updated_at,
+                "updated_at": artifact_version.updated_at.isoformat(),
                 "version": 1,
             },
         )

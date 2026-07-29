@@ -134,8 +134,8 @@ class BlueprintManagementViewsTestCase(TestCase, LoginCase):
                      "collect_certificates": "MANAGED_ONLY",
                      "collect_profiles": "NO",
                      "legacy_profiles_via_ddm": True,
-                     "created_at": blueprint.created_at,
-                     "updated_at": blueprint.updated_at
+                     "created_at": blueprint.created_at.isoformat(),
+                     "updated_at": blueprint.updated_at.isoformat()
                  }
               }}
         )
@@ -279,8 +279,8 @@ class BlueprintManagementViewsTestCase(TestCase, LoginCase):
                      "collect_profiles": "ALL",
                      "default_location": {"pk": location.pk, "mdm_info_id": str(location.mdm_info_id)},
                      "legacy_profiles_via_ddm": False,
-                     "created_at": blueprint2.created_at,
-                     "updated_at": blueprint2.updated_at
+                     "created_at": blueprint2.created_at.isoformat(),
+                     "updated_at": blueprint2.updated_at.isoformat()
                  },
                  "prev_value": prev_value,
               }}

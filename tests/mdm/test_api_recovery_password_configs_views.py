@@ -172,8 +172,8 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
                      "dynamic_password": False,
                      "rotation_interval_days": 0,
                      "rotate_firmware_password": False,
-                     "created_at": rp_config.created_at,
-                     "updated_at": rp_config.updated_at
+                     "created_at": rp_config.created_at.isoformat(),
+                     "updated_at": rp_config.updated_at.isoformat()
                  }
               }}
         )
@@ -287,8 +287,8 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
                      "dynamic_password": True,
                      "rotation_interval_days": 17,
                      "rotate_firmware_password": True,
-                     "created_at": rp_config.created_at,
-                     "updated_at": rp_config.updated_at
+                     "created_at": rp_config.created_at.isoformat(),
+                     "updated_at": rp_config.updated_at.isoformat()
                  },
                  "prev_value": prev_value
               }}

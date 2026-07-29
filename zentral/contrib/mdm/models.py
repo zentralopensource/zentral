@@ -214,8 +214,8 @@ class FileVaultConfig(models.Model):
             "show_recovery_key": self.show_recovery_key,
             "destroy_key_on_standby": self.destroy_key_on_standby,
             "prk_rotation_interval_days": self.prk_rotation_interval_days,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -286,8 +286,8 @@ class RecoveryPasswordConfig(models.Model):
             "dynamic_password": self.dynamic_password,
             "rotation_interval_days": self.rotation_interval_days,
             "rotate_firmware_password": self.rotate_firmware_password,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -369,8 +369,8 @@ class SoftwareUpdateEnforcement(models.Model):
             "platforms": self.platforms,
             "tags": [t.serialize_for_event(keys_only=True)
                      for t in self.tags.select_related("taxonomy", "meta_business_unit").all().order_by("pk")],
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         for attr in ("details_url",
                      "os_version", "build_version", "local_datetime",
@@ -487,8 +487,8 @@ class Blueprint(models.Model):
             "collect_certificates": self.get_collect_certificates_display(),
             "collect_profiles": self.get_collect_profiles_display(),
             "legacy_profiles_via_ddm": self.legacy_profiles_via_ddm,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat()
         })
         if self.default_location:
             d["default_location"] = self.default_location.serialize_for_event(keys_only=True)
@@ -696,7 +696,7 @@ class Location(models.Model):
         }
         if not keys_only:
             d.update({
-                "server_token_expiration_date": self.server_token_expiration_date,
+                "server_token_expiration_date": self.server_token_expiration_date.isoformat(),
                 "organization_name": self.organization_name,
                 "country_code": self.country_code,
                 "library_uid": self.library_uid,
@@ -2617,8 +2617,8 @@ class Artifact(models.Model):
             "auto_update": self.auto_update,
             "reinstall_interval": self.reinstall_interval,
             "reinstall_on_os_update": self.reinstall_on_os_update,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -2730,8 +2730,8 @@ class BlueprintArtifact(FilteredBlueprintItem):
             "pk": self.pk,
             "blueprint": self.blueprint.serialize_for_event(keys_only=True),
             "artifact": self.artifact.serialize_for_event(keys_only=True),
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -2781,8 +2781,8 @@ class ArtifactVersion(FilteredBlueprintItem):
             "pk": str(self.id),
             "artifact": self.artifact.serialize_for_event(keys_only=True),
             "version": self.version,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
@@ -3158,8 +3158,8 @@ class Package(models.Model):
             "product_version": self.product_version,
             "bundles": self.bundles,
             "manifest": self.manifest,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         })
         if self.source_uri:
             d["source_uri"] = self.source_uri
@@ -3364,11 +3364,11 @@ class Command(models.Model):
         for attr in ("not_before", "time", "result_time"):
             value = getattr(self, attr)
             if value:
-                d[attr] = value
+                d[attr] = value.isoformat()
         if self.status:
             d["status"] = self.status
-        d["created_at"] = self.created_at
-        d["updated_at"] = self.updated_at
+        d["created_at"] = self.created_at.isoformat()
+        d["updated_at"] = self.updated_at.isoformat()
         return d
 
     def linked_objects_keys_for_event(self):
@@ -3479,6 +3479,8 @@ class SoftwareUpdate(models.Model):
         ):
             val = getattr(self, attr)
             if val != "" and val is not None:
+                if isinstance(val, datetime.datetime):
+                    val = val.isoformat()
                 d[attr] = val
         if isinstance(self.availability, tuple):
             # Set during creation or update
@@ -3488,9 +3490,9 @@ class SoftwareUpdate(models.Model):
             available_from = self.availability.lower
             available_until = self.availability.upper
         if available_from:
-            d["available_from"] = available_from
+            d["available_from"] = available_from.isoformat()
         if available_until:
-            d["available_until"] = available_until
+            d["available_until"] = available_until.isoformat()
         return d
 
 
