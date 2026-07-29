@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.core.probes.models import Action, ActionBackend
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
+from .utils import force_probe_source
 
 
 class TestProbesModels(TestCase, SerializeForEventAssertions):
@@ -127,3 +128,6 @@ class TestProbesModels(TestCase, SerializeForEventAssertions):
         action.set_backend_kwargs({"url": "https://www.example.com/post"})
         action.save()
         self.assert_serialize_for_event_is_json_native(action)
+
+    def test_probe_source_serialize_for_event_is_json_native(self):
+        self.assert_serialize_for_event_is_json_native(force_probe_source())
