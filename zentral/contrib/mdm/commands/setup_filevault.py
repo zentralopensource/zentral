@@ -112,6 +112,7 @@ class SetupFileVault(Command):
     request_type = "InstallProfile"
     db_name = "SetupFileVault"
     reschedule_notnow = True
+    audit_public_kwargs = ("filevault_config_pk", "filevault_config_uuid")
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

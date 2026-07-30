@@ -19,6 +19,7 @@ def get_secret_engine_kwargs(uuid):
 
 class AccountConfiguration(Command):
     request_type = "AccountConfiguration"
+    audit_secret_kwargs = ("admin_password",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

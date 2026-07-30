@@ -36,6 +36,7 @@ class SetFirmwarePassword(Command):
     display_name = "Set firmware password"
     reschedule_notnow = True
     form_class = SetFirmwarePasswordForm
+    audit_secret_kwargs = ("new_password",)
 
     @classmethod
     def create_for_automatic_scheduling(cls, target, password=None):

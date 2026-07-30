@@ -10,6 +10,7 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.reenroll")
 class Reenroll(Command):
     request_type = "InstallProfile"
     db_name = "Reenroll"
+    audit_public_kwargs = ("session_id",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

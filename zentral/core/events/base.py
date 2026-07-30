@@ -560,7 +560,7 @@ class AuditEvent(BaseEvent):
         cls,
         instance, action, prev_value=None,
         event_uuid=None, event_index=None,
-        event_request=None
+        event_request=None, machine_serial_number=None
     ):
         em_kwargs = {"tags": [instance._meta.app_label]}
         if event_uuid is not None:
@@ -569,6 +569,8 @@ class AuditEvent(BaseEvent):
             em_kwargs["index"] = event_index
         if event_request:
             em_kwargs["request"] = event_request
+        if machine_serial_number:
+            em_kwargs["machine_serial_number"] = machine_serial_number
         metadata = EventMetadata(**em_kwargs)
         try:
             metadata.add_objects(instance.linked_objects_keys_for_event())
@@ -592,10 +594,12 @@ class AuditEvent(BaseEvent):
         return cls(metadata, payload)
 
     @classmethod
-    def build_from_request_and_instance(cls, request, instance, action, prev_value=None):
+    def build_from_request_and_instance(cls, request, instance, action, prev_value=None,
+                                        machine_serial_number=None):
         event_request = EventRequest.build_from_request(request)
         return cls.build(
-            instance, action, prev_value, event_request=event_request
+            instance, action, prev_value, event_request=event_request,
+            machine_serial_number=machine_serial_number
         )
 
 

@@ -87,6 +87,8 @@ class DeviceLock(Command):
     reschedule_notnow = True
     form_class = DeviceLockForm
     serializer_class = DeviceLockSerializer
+    audit_public_kwargs = ("Message", "PhoneNumber")
+    audit_secret_kwargs = ("PIN",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

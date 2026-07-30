@@ -1,3 +1,4 @@
+import json
 import plistlib
 from datetime import datetime
 from unittest.mock import patch
@@ -20,6 +21,7 @@ from zentral.contrib.mdm.events import (
     RecoveryPasswordViewedEvent,
 )
 from zentral.contrib.mdm.models import Platform
+from zentral.core.events.base import AuditEvent
 
 from .utils import force_dep_enrollment_session, force_enrolled_user
 
@@ -808,6 +810,77 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             {"RequestType": "DeviceLock",
              "PIN": "012345"}
         )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_lock_enrolled_device_audit_event(self, post_event):
+        self.set_permissions("mdm.add_devicecommand")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,)),
+                                 {"pin": "012345", "message": "lost mac"}, ip="1.2.3.4")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        db_command = self.enrolled_device.commands.first()
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["model"], "mdm.devicecommand")
+        self.assertEqual(event.payload["object"]["pk"], str(db_command.pk))
+        new_value = event.payload["object"]["new_value"]
+        self.assertEqual(new_value["name"], "DeviceLock")
+        self.assertEqual(new_value["kwargs"], {"Message": "lost mac", "PIN": "<redacted>"})
+        # the PIN reaches the device but never the audit trail
+        self.assertNotIn("012345", json.dumps(event.payload))
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(db_command.uuid)]})
+        self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+        request = metadata["request"]
+        self.assertEqual(request["method"], "POST")
+        self.assertEqual(request["ip"], "1.2.3.4")
+        self.assertEqual(request["view"], "mdm_api:lock_enrolled_device")
+        self.assertEqual(
+            request["path"],
+            reverse("mdm_api:lock_enrolled_device", args=(self.enrolled_device.pk,))
+        )
+        self.assertEqual(request["user"]["username"], self.service_account.username)
+        self.assertTrue(request["user"]["session"]["token_authenticated"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_erase_enrolled_device_audit_event(self, post_event):
+        self.set_permissions("mdm.add_devicecommand")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("mdm_api:erase_enrolled_device", args=(self.enrolled_device.pk,)),
+                                 {"pin": "012345"})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        new_value = event.payload["object"]["new_value"]
+        self.assertEqual(new_value["name"], "EraseDevice")
+        self.assertEqual(new_value["kwargs"], {"PIN": "<redacted>"})
+        self.assertNotIn("012345", json.dumps(event.payload))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_send_custom_enrolled_device_command_audit_event(self, post_event):
+        self.set_permissions("mdm.add_devicecommand")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(
+                reverse("mdm_api:send_custom_enrolled_device_command", args=(self.enrolled_device.pk,)),
+                {"command": plistlib.dumps({"RequestType": "ClearPasscode",
+                                            "UnlockToken": "s3cr3t-token"}).decode("utf-8")}
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        new_value = event.payload["object"]["new_value"]
+        self.assertEqual(new_value["name"], "CustomCommand")
+        # only the shape of the operator supplied payload is audited
+        self.assertEqual(
+            new_value["kwargs"],
+            {"command": {"RequestType": "ClearPasscode", "keys": ["UnlockToken"]}}
+        )
+        self.assertNotIn("s3cr3t-token", json.dumps(event.payload))
 
     def test_lock_enrolled_device_ios_default(self):
         self.enrolled_device.platform = Platform.IOS

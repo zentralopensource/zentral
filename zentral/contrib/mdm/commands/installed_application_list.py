@@ -11,6 +11,7 @@ class InstalledApplicationList(Command):
     request_type = "InstalledApplicationList"
     reschedule_notnow = True
     store_result = True
+    audit_public_kwargs = ("managed_only", "retries", "update_inventory", "apps_to_check")
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

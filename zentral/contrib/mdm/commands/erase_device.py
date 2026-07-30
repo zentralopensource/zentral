@@ -85,6 +85,8 @@ class EraseDevice(Command):
     reschedule_notnow = True
     form_class = EraseDeviceForm
     serializer_class = EraseDeviceSerializer
+    audit_public_kwargs = ("DisallowProximitySetup", "PreserveDataPlan")
+    audit_secret_kwargs = ("PIN",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

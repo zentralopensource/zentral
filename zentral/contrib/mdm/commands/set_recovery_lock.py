@@ -58,6 +58,7 @@ class SetRecoveryLock(Command):
     display_name = "Set recovery lock"
     reschedule_notnow = True
     form_class = SetRecoveryLockForm
+    audit_secret_kwargs = ("new_password",)
 
     @classmethod
     def create_for_automatic_scheduling(cls, target, password=None):

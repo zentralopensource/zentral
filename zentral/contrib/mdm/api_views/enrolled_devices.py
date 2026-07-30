@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from accounts.api_authentication import APITokenAuthentication
+from django.db import transaction
 from django.db.models import Exists, JSONField, OuterRef
 from django.db.models.expressions import RawSQL
 from django.shortcuts import get_object_or_404
@@ -25,6 +26,7 @@ from zentral.contrib.mdm.serializers import (
     EnrolledDeviceDeviceLockPinSerializer,
     EnrolledDeviceSerializer,
 )
+from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (
     DefaultDjangoModelPermissions,
     DjangoPermissionRequired,
@@ -189,6 +191,15 @@ class CreateEnrolledDeviceCommandView(APIView):
             queue=True,
             uuid=uuid
         )
+
+        def on_commit_callback():
+            AuditEvent.build_from_request_and_instance(
+                request, command.db_command,
+                action=AuditEvent.Action.CREATED,
+                machine_serial_number=enrolled_device.serial_number,
+            ).post()
+
+        transaction.on_commit(on_commit_callback)
         serializer = DeviceCommandSerializer(command.db_command)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 

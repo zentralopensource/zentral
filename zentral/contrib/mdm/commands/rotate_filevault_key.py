@@ -52,6 +52,7 @@ class RotateFileVaultKey(Command):
     request_type = "RotateFileVaultKey"
     display_name = "Rotate FileVault key"
     form_class = RotateFileVaultKeyForm
+    audit_secret_kwargs = ("encryption_key",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

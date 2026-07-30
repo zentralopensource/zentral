@@ -13,6 +13,7 @@ class CertificateList(Command):
     request_type = "CertificateList"
     reschedule_notnow = True
     store_result = True
+    audit_public_kwargs = ("managed_only", "update_inventory")
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

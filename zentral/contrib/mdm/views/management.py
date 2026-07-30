@@ -56,6 +56,7 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.contrib.mdm.tasks import bulk_assign_location_asset_task
+from zentral.core.events.base import AuditEvent
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 
@@ -1529,12 +1530,21 @@ class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):
 
     def form_valid(self, form):
         uuid = uuid4()
-        self.command_class.create_for_device(
+        command = self.command_class.create_for_device(
             self.enrolled_device,
             kwargs=form.get_command_kwargs(uuid),
             queue=True,
             uuid=uuid,
         )
+
+        def on_commit_callback():
+            AuditEvent.build_from_request_and_instance(
+                self.request, command.db_command,
+                action=AuditEvent.Action.CREATED,
+                machine_serial_number=self.enrolled_device.serial_number,
+            ).post()
+
+        transaction.on_commit(on_commit_callback)
         messages.info(self.request, f"{self.command_class.get_display_name()} command successfully created")
         return redirect(self.enrolled_device)
 

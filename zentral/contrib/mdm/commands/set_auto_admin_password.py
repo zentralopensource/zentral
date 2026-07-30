@@ -61,6 +61,7 @@ class SetAutoAdminPassword(Command):
     display_name = "Set auto admin password"
     reschedule_notnow = True
     form_class = SetAutoAdminPasswordForm
+    audit_secret_kwargs = ("new_password",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

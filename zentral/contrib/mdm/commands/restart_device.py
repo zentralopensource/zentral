@@ -29,6 +29,7 @@ class RestartDevice(Command):
     request_type = "RestartDevice"
     display_name = "Restart device"
     form_class = RestartDeviceForm
+    audit_public_kwargs = ("NotifyUser",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

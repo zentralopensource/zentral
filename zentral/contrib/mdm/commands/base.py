@@ -13,6 +13,10 @@ from zentral.contrib.mdm.models import Channel, Command as DBCommand, DeviceComm
 logger = logging.getLogger("zentral.contrib.mdm.commands.base")
 
 
+AUDIT_REDACTED = "<redacted>"
+AUDIT_OMITTED = "<omitted>"
+
+
 class Command:
     request_type = None
     db_name = None
@@ -22,6 +26,26 @@ class Command:
     reschedule_notnow = False
     form_class = None
     serializer_class = None
+
+    # Audit trail. A kwarg is only serialized if it is declared in audit_public_kwargs,
+    # so a command class that forgets to declare anything is silent instead of leaky —
+    # adding a new secret kwarg cannot leak it by omission. Keys in audit_secret_kwargs
+    # are reported as redacted, which tells an auditor the value was there without
+    # disclosing it; anything undeclared is reported as omitted.
+    audit_public_kwargs = ()
+    audit_secret_kwargs = ()
+
+    @classmethod
+    def build_audit_kwargs(cls, kwargs):
+        audit_kwargs = {}
+        for key, value in kwargs.items():
+            if key in cls.audit_public_kwargs:
+                audit_kwargs[key] = value
+            elif key in cls.audit_secret_kwargs:
+                audit_kwargs[key] = AUDIT_REDACTED
+            else:
+                audit_kwargs[key] = AUDIT_OMITTED
+        return audit_kwargs
 
     @classmethod
     def get_db_name(cls):

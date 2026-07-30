@@ -9,6 +9,7 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.declarative_management"
 
 class DeclarativeManagement(Command):
     request_type = "DeclarativeManagement"
+    audit_public_kwargs = ("blueprint_pk",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

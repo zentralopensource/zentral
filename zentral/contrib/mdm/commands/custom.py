@@ -3,7 +3,7 @@ import plistlib
 from django import forms
 from django.core.exceptions import ValidationError
 from rest_framework import serializers
-from .base import register_command, Command, CommandBaseForm, CommandBaseSerializer
+from .base import AUDIT_OMITTED, register_command, Command, CommandBaseForm, CommandBaseSerializer
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.custom")
@@ -67,6 +67,24 @@ class CustomCommand(Command):
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return True
+
+    @classmethod
+    def build_audit_kwargs(cls, kwargs):
+        # The payload is a property list typed by an operator and can hold anything,
+        # a password included, so only its shape is auditable: the request type and
+        # the names of the other top level keys, never their values.
+        audit_kwargs = super().build_audit_kwargs({k: v for k, v in kwargs.items() if k != "command"})
+        command = kwargs.get("command")
+        if command is None:
+            return audit_kwargs
+        try:
+            loaded_command = plistlib.loads(command.encode("utf-8"))
+            request_type = loaded_command.pop("RequestType")
+        except Exception:
+            audit_kwargs["command"] = AUDIT_OMITTED
+        else:
+            audit_kwargs["command"] = {"RequestType": request_type, "keys": sorted(loaded_command)}
+        return audit_kwargs
 
     def load_kwargs(self):
         self.command = plistlib.loads(self.db_command.kwargs["command"].encode("utf-8"))

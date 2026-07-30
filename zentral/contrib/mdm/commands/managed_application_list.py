@@ -9,6 +9,7 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.managed_application_lis
 class ManagedApplicationList(Command):
     request_type = "ManagedApplicationList"
     reschedule_notnow = True
+    audit_public_kwargs = ("identifiers", "retries")
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

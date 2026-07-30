@@ -3353,6 +3353,16 @@ class Command(models.Model):
     def __str__(self):
         return " - ".join(s for s in (self.name, str(self.uuid), self.status) if s)
 
+    def build_audit_kwargs(self):
+        # Imported here because zentral.contrib.mdm.commands imports this module. Importing
+        # the submodule runs the package __init__, which is what registers every command.
+        from zentral.contrib.mdm.commands.base import AUDIT_OMITTED, registered_commands
+        command_class = registered_commands.get(self.name)
+        if command_class is None:
+            # Unknown command class, so nothing is declared as safe to serialize.
+            return {key: AUDIT_OMITTED for key in self.kwargs}
+        return command_class.build_audit_kwargs(self.kwargs)
+
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "uuid": str(self.uuid), "name": self.name}
         if keys_only:
@@ -3361,6 +3371,8 @@ class Command(models.Model):
             d["artifact_version"] = self.artifact_version.serialize_for_event()
         if self.artifact_operation:
             d["artifact_operation"] = self.artifact_operation
+        if self.kwargs:
+            d["kwargs"] = self.build_audit_kwargs()
         for attr in ("not_before", "time", "result_time"):
             value = getattr(self, attr)
             if value:

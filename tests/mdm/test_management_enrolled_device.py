@@ -1,3 +1,4 @@
+import json
 import plistlib
 from unittest.mock import patch
 
@@ -17,6 +18,7 @@ from zentral.contrib.mdm.models import (
     Platform,
     TargetArtifact,
 )
+from zentral.core.events.base import AuditEvent
 
 from .utils import (
     force_artifact,
@@ -593,6 +595,57 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             {"RequestType": "InstalledApplicationList",
              "ManagedAppsOnly": False}
         )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_enrolled_device_custom_command_audit_event(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        self.login("mdm.view_enrolleddevice", "mdm.add_devicecommand")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:create_enrolled_device_command",
+                        args=(enrolled_device.pk, "CustomCommand")),
+                {"command": plistlib.dumps({"RequestType": "ClearPasscode",
+                                            "UnlockToken": "s3cr3t-token"}).decode("utf-8")}
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(callbacks), 1)
+        db_command = enrolled_device.commands.first()
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["model"], "mdm.devicecommand")
+        new_value = event.payload["object"]["new_value"]
+        self.assertEqual(new_value["name"], "CustomCommand")
+        self.assertEqual(
+            new_value["kwargs"],
+            {"command": {"RequestType": "ClearPasscode", "keys": ["UnlockToken"]}}
+        )
+        self.assertNotIn("s3cr3t-token", json.dumps(event.payload))
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(db_command.uuid)]})
+        self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+        request = metadata["request"]
+        self.assertEqual(request["method"], "POST")
+        self.assertEqual(request["view"], "mdm:create_enrolled_device_command")
+        self.assertEqual(request["user"]["username"], self.user.username)
+        self.assertFalse(request["user"]["session"]["token_authenticated"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_enrolled_device_command_invalid_form_posts_no_audit_event(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.add_devicecommand")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:create_enrolled_device_command",
+                        args=(session.enrolled_device.pk, "CustomCommand")),
+                {"command": "YOLO"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(session.enrolled_device.commands.count(), 0)
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
 
     # create device information command
 
