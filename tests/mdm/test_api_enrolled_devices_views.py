@@ -471,14 +471,17 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         post_event.assert_not_called()
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_block_enrolled_device_audit_event(self, post_event):
+    @patch("zentral.contrib.mdm.api_views.enrolled_devices.send_enrolled_device_notification")
+    def test_block_enrolled_device_audit_event(self, send_enrolled_device_notification, post_event):
         self.enrolled_device.unblock()
         self.set_permissions("mdm.change_enrolleddevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)),
                                  None, ip="1.2.3.4")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(callbacks), 1)
+        # the push notification and the audit event
+        self.assertEqual(len(callbacks), 2)
+        send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
         self.enrolled_device.refresh_from_db()
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
@@ -499,14 +502,17 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertTrue(request["user"]["session"]["token_authenticated"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_unblock_enrolled_device_audit_event(self, post_event):
+    @patch("zentral.contrib.mdm.api_views.enrolled_devices.send_enrolled_device_notification")
+    def test_unblock_enrolled_device_audit_event(self, send_enrolled_device_notification, post_event):
         self.enrolled_device.block()
         blocked_at = self.enrolled_device.blocked_at
         self.set_permissions("mdm.change_enrolleddevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 200)
+        # only the audit event: a blocked device cannot be pinged
         self.assertEqual(len(callbacks), 1)
+        send_enrolled_device_notification.assert_not_called()
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         self.assertEqual(event.payload["action"], "updated")

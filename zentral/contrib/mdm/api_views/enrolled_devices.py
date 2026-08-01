@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from zentral.contrib.inventory.models import MachineTag, Tag
+from zentral.contrib.mdm.apns import send_enrolled_device_notification
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import CustomCommand, DeviceLock, EraseDevice
 from zentral.contrib.mdm.events import (
@@ -175,6 +176,9 @@ class BlockEnrolledDevice(UpdateEnrolledDeviceBlockView):
 
     def update_block_state(self, enrolled_device):
         enrolled_device.block()
+        # The device is still reachable at this point: notify it so that it connects and
+        # gets the 401 now, instead of staying managed until its next check-in.
+        transaction.on_commit(lambda: send_enrolled_device_notification(enrolled_device))
 
 
 class UnblockEnrolledDevice(UpdateEnrolledDeviceBlockView):
@@ -183,6 +187,8 @@ class UnblockEnrolledDevice(UpdateEnrolledDeviceBlockView):
             return "Device not blocked."
 
     def update_block_state(self, enrolled_device):
+        # No notification here, on purpose: a blocked device is no longer managed and
+        # cannot be pinged. It comes back on its own.
         enrolled_device.unblock()
 
 

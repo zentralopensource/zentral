@@ -1424,6 +1424,8 @@ class UnblockEnrolledDeviceView(UpdateEnrolledDeviceBlockView):
         return EnrolledDevice.objects.blocked()
 
     def update_block_state(self, enrolled_device):
+        # No notification here, on purpose: a blocked device is no longer managed and
+        # cannot be pinged. It comes back on its own.
         enrolled_device.unblock()
 
 

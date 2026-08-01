@@ -887,7 +887,7 @@ Response:
  * method: `POST`
  * PBAC action: `MDM::Action::"updateEnrolledDevice"`
 
-Blocks an enrolled device. Releases it from the MDM and denies further MDM enrollments. A serialized device is returned.
+Blocks an enrolled device. Releases it from the MDM and denies further MDM enrollments. The device is notified, so that it connects and is released straight away instead of staying managed until its next check-in. A serialized device is returned.
 
 Example:
 
