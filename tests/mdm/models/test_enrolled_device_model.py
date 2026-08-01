@@ -4,11 +4,12 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from tests.mdm.utils import force_push_certificate
+from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from zentral.contrib.mdm.models import EnrolledDevice
 from zentral.utils.time import naive_utcnow
 
 
-class TestMDMEnrolledDeviceModel(TestCase):
+class TestMDMEnrolledDeviceModel(TestCase, SerializeForEventAssertions):
 
     def test_enrolled_device_get_secret_engine_kwargs(self):
         uid = uuid.uuid4()
@@ -202,6 +203,28 @@ class TestMDMEnrolledDeviceModel(TestCase):
             enrolled_device.serialize_for_event(keys_only=True),
             {"pk": enrolled_device.pk, "udid": enrolled_device.udid, "serial_number": "SN123"},
         )
+
+    def test_enrolled_device_serialize_for_event_blocked_at(self):
+        enrolled_device = EnrolledDevice.objects.create(
+            udid=str(uuid.uuid4()),
+            serial_number="SN123",
+            platform="macOS",
+            name="Workstation",
+            push_certificate=force_push_certificate(),
+        )
+        self.assertEqual(
+            enrolled_device.serialize_for_event(),
+            {"pk": enrolled_device.pk, "udid": enrolled_device.udid, "serial_number": "SN123",
+             "platform": "macOS", "name": "Workstation", "blocked_at": None},
+        )
+        self.assert_serialize_for_event_is_json_native(enrolled_device)
+        enrolled_device.block()
+        self.assertEqual(
+            enrolled_device.serialize_for_event()["blocked_at"],
+            enrolled_device.blocked_at.isoformat(),
+        )
+        # a raw datetime would be enveloped by kombu instead of reaching the stores as a string
+        self.assert_serialize_for_event_is_json_native(enrolled_device)
 
     def test_enrolled_user_serialize_for_event_keys_only(self):
         from zentral.contrib.mdm.models import EnrolledUser

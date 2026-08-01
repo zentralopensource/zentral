@@ -1421,7 +1421,9 @@ class EnrolledDevice(models.Model):
         d = {"pk": self.pk, "udid": self.udid, "serial_number": self.serial_number}
         if keys_only:
             return d
-        d.update({"platform": self.platform, "name": self.name})
+        d.update({"platform": self.platform,
+                  "name": self.name,
+                  "blocked_at": self.blocked_at.isoformat() if self.blocked_at else None})
         return d
 
 

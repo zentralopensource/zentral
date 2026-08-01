@@ -142,32 +142,48 @@ class EnrolledDeviceList(ListAPIView):
     pagination_class = MaxLimitOffsetPagination
 
 
-class BlockEnrolledDevice(APIView):
+class UpdateEnrolledDeviceBlockView(APIView):
     permission_required = "mdm.change_enrolleddevice"
     permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        error = self.verify_block_state(enrolled_device)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        prev_value = enrolled_device.serialize_for_event()
+        self.update_block_state(enrolled_device)
+        enrolled_device.refresh_from_db()
+
+        def on_commit_callback():
+            AuditEvent.build_from_request_and_instance(
+                request, enrolled_device,
+                action=AuditEvent.Action.UPDATED,
+                prev_value=prev_value,
+                machine_serial_number=enrolled_device.serial_number,
+            ).post()
+
+        transaction.on_commit(on_commit_callback)
+        serializer = EnrolledDeviceSerializer(enrolled_device)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class BlockEnrolledDevice(UpdateEnrolledDeviceBlockView):
+    def verify_block_state(self, enrolled_device):
         if enrolled_device.blocked_at:
-            return Response({"detail": "Device already blocked."}, status=status.HTTP_400_BAD_REQUEST)
+            return "Device already blocked."
+
+    def update_block_state(self, enrolled_device):
         enrolled_device.block()
-        enrolled_device.refresh_from_db()
-        serializer = EnrolledDeviceSerializer(enrolled_device)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class UnblockEnrolledDevice(APIView):
-    permission_required = "mdm.change_enrolleddevice"
-    permission_classes = [DjangoPermissionRequired]
-
-    def post(self, request, *args, **kwargs):
-        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+class UnblockEnrolledDevice(UpdateEnrolledDeviceBlockView):
+    def verify_block_state(self, enrolled_device):
         if not enrolled_device.blocked_at:
-            return Response({"detail": "Device not blocked."}, status=status.HTTP_400_BAD_REQUEST)
+            return "Device not blocked."
+
+    def update_block_state(self, enrolled_device):
         enrolled_device.unblock()
-        enrolled_device.refresh_from_db()
-        serializer = EnrolledDeviceSerializer(enrolled_device)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class CreateEnrolledDeviceCommandView(APIView):

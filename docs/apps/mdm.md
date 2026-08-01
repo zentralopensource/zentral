@@ -504,18 +504,22 @@ A Recovery Password Configuration can only be deleted if it is not linked to any
 3. Use the *Delete* button in the list view or on the configuration details page.
 4. Confirm the deletion when prompted.
 
-## Command audit trail
+## Audit trail
 
-Every command an operator creates is recorded as a `zentral_audit` event with the `created` action. This covers both entry points:
+Operator actions on a device are recorded as `zentral_audit` events. Each one carries the full request context — the authenticated user (including whether an API token was used, and which one), the source IP, the user agent, the HTTP method, the path and the resolved view name — and is tagged with the device serial number, so it also appears in the device's event timeline.
+
+Actions Zentral takes on its own — the inventory refreshes, artifact installations and other work scheduled while a device checks in — are not part of this audit trail. It records operator actions.
+
+### Commands
+
+Every command an operator creates is recorded with the `created` action. This covers both entry points:
 
 - the *New command* forms in the web interface, under a device's detail page
 - the `erase/`, `lock/` and `send_custom_command/` HTTP API endpoints
 
-Each event carries the full request context — the authenticated user (including whether an API token was used, and which one), the source IP, the user agent, the HTTP method, the path and the resolved view name — alongside the serialized command. Events are tagged with the device serial number, so they also appear in the device's event timeline, and are linked to the command UUID.
+Command events are linked to the command UUID, and carry the serialized command. Deleting a queued command is audited the same way, with the `deleted` action.
 
-Deleting a queued command is audited the same way, with the `deleted` action.
-
-### Command parameters and secrets
+#### Command parameters and secrets
 
 The command parameters are included in the audit event, but a parameter is only serialized verbatim if the command explicitly declares it as safe to log. Every other parameter is reported by name with a placeholder value, so the audit trail records that a parameter was supplied without disclosing it:
 
@@ -541,7 +545,25 @@ Commands that carry no parameters have no parameters entry at all.
 }
 ```
 
-Note that commands Zentral creates on its own — the inventory refreshes, artifact installations and other work scheduled while a device checks in — are not part of this audit trail. It records operator actions.
+### Blocking a device
+
+Blocking and unblocking a device are recorded with the `updated` action, from the *Block*/*Unblock* buttons on the device detail page as well as from the `block/` and `unblock/` HTTP API endpoints. The transition is visible in the `blocked_at` field, which is `null` when the device is not blocked:
+
+```json
+{
+  "action": "updated",
+  "object": {
+    "model": "mdm.enrolleddevice",
+    "pk": "42",
+    "prev_value": {"serial_number": "C02...", "blocked_at": null},
+    "new_value": {"serial_number": "C02...", "blocked_at": "2026-08-01T09:15:22"}
+  }
+}
+```
+
+A request that would not change anything — blocking a blocked device, or unblocking one that is not blocked — is rejected and records nothing.
+
+Note that a device can also become unblocked without an operator: a full state purge, which happens when a device re-enrolls, clears `blocked_at` along with the rest of the device state. That is not an operator action and is not audited here, so a device that appears blocked in the audit trail may since have been released by re-enrolling.
 
 ## HTTP API
 

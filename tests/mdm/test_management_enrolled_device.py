@@ -1849,23 +1849,52 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 404)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.views.management.send_enrolled_device_notification")
-    def test_block_enrolled_device_post(self, send_enrolled_device_notification):
+    def test_block_enrolled_device_post(self, send_enrolled_device_notification, post_event):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.assertIsNone(session.enrolled_device.blocked_at)
+        enrolled_device = session.enrolled_device
+        self.assertIsNone(enrolled_device.blocked_at)
         self.login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
-                reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)),
+                reverse("mdm:block_enrolled_device", args=(enrolled_device.pk,)),
                 follow=True
             )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
-        self.assertEqual(len(callbacks), 1)
-        send_enrolled_device_notification.assert_called_once_with(session.enrolled_device)
-        session.enrolled_device.refresh_from_db()
-        self.assertIsNotNone(session.enrolled_device.blocked_at)
+        # the push notification and the audit event
+        self.assertEqual(len(callbacks), 2)
+        send_enrolled_device_notification.assert_called_once_with(enrolled_device)
+        enrolled_device.refresh_from_db()
+        self.assertIsNotNone(enrolled_device.blocked_at)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "mdm.enrolleddevice")
+        self.assertIsNone(event.payload["object"]["prev_value"]["blocked_at"])
+        self.assertEqual(
+            event.payload["object"]["new_value"]["blocked_at"],
+            enrolled_device.blocked_at.isoformat()
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+        self.assertEqual(metadata["request"]["view"], "mdm:block_enrolled_device")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.views.management.send_enrolled_device_notification")
+    def test_block_blocked_enrolled_device_posts_no_event(self, send_enrolled_device_notification, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.block()
+        self.login("mdm.change_enrolleddevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,))
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
 
     # ununblock
 
@@ -1894,15 +1923,40 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_unblock_enrolled_device_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_unblock_enrolled_device_post(self, post_event):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        session.enrolled_device.block()
+        enrolled_device = session.enrolled_device
+        enrolled_device.block()
+        blocked_at = enrolled_device.blocked_at
         self.login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
-        response = self.client.post(
-            reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)),
-            follow=True
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:unblock_enrolled_device", args=(enrolled_device.pk,)),
+                follow=True
+            )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
-        session.enrolled_device.refresh_from_db()
-        self.assertIsNone(session.enrolled_device.blocked_at)
+        self.assertEqual(len(callbacks), 1)
+        enrolled_device.refresh_from_db()
+        self.assertIsNone(enrolled_device.blocked_at)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["prev_value"]["blocked_at"], blocked_at.isoformat())
+        self.assertIsNone(event.payload["object"]["new_value"]["blocked_at"])
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+        self.assertEqual(metadata["request"]["view"], "mdm:unblock_enrolled_device")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_unblock_unblocked_enrolled_device_posts_no_event(self, post_event):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.change_enrolleddevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,))
+            )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()

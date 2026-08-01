@@ -1385,33 +1385,46 @@ class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-class BlockEnrolledDeviceView(PermissionRequiredMixin, DetailView):
+class UpdateEnrolledDeviceBlockView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.change_enrolleddevice"
     model = EnrolledDevice
+
+    def post(self, request, *args, **kwargs):
+        enrolled_device = self.get_object()
+        prev_value = enrolled_device.serialize_for_event()
+        self.update_block_state(enrolled_device)
+
+        def on_commit_callback():
+            AuditEvent.build_from_request_and_instance(
+                self.request, enrolled_device,
+                action=AuditEvent.Action.UPDATED,
+                prev_value=prev_value,
+                machine_serial_number=enrolled_device.serial_number,
+            ).post()
+
+        transaction.on_commit(on_commit_callback)
+        return redirect(enrolled_device)
+
+
+class BlockEnrolledDeviceView(UpdateEnrolledDeviceBlockView):
     template_name = "mdm/enrolleddevice_confirm_block.html"
 
     def get_queryset(self):
         return EnrolledDevice.objects.allowed()
 
-    def post(self, request, *args, **kwargs):
-        enrolled_device = self.get_object()
+    def update_block_state(self, enrolled_device):
         enrolled_device.block()
         transaction.on_commit(lambda: send_enrolled_device_notification(enrolled_device))
-        return redirect(enrolled_device)
 
 
-class UnblockEnrolledDeviceView(PermissionRequiredMixin, DetailView):
-    permission_required = "mdm.change_enrolleddevice"
-    model = EnrolledDevice
+class UnblockEnrolledDeviceView(UpdateEnrolledDeviceBlockView):
     template_name = "mdm/enrolleddevice_confirm_unblock.html"
 
     def get_queryset(self):
         return EnrolledDevice.objects.blocked()
 
-    def post(self, request, *args, **kwargs):
-        enrolled_device = self.get_object()
+    def update_block_state(self, enrolled_device):
         enrolled_device.unblock()
-        return redirect(enrolled_device)
 
 
 class EnrolledUserView(PermissionRequiredMixin, DetailView):

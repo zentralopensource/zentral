@@ -459,12 +459,72 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 403)
 
-    def test_block_enrolled_device_already_blocked(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_block_enrolled_device_already_blocked(self, post_event):
         self.enrolled_device.block()
         self.set_permissions("mdm.change_enrolleddevice")
-        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"detail": "Device already blocked."})
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_block_enrolled_device_audit_event(self, post_event):
+        self.enrolled_device.unblock()
+        self.set_permissions("mdm.change_enrolleddevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)),
+                                 None, ip="1.2.3.4")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.enrolled_device.refresh_from_db()
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "mdm.enrolleddevice")
+        self.assertIsNone(event.payload["object"]["prev_value"]["blocked_at"])
+        self.assertEqual(
+            event.payload["object"]["new_value"]["blocked_at"],
+            self.enrolled_device.blocked_at.isoformat()
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+        request = metadata["request"]
+        self.assertEqual(request["method"], "POST")
+        self.assertEqual(request["ip"], "1.2.3.4")
+        self.assertEqual(request["view"], "mdm_api:block_enrolled_device")
+        self.assertTrue(request["user"]["session"]["token_authenticated"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_unblock_enrolled_device_audit_event(self, post_event):
+        self.enrolled_device.block()
+        blocked_at = self.enrolled_device.blocked_at
+        self.set_permissions("mdm.change_enrolleddevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["prev_value"]["blocked_at"], blocked_at.isoformat())
+        self.assertIsNone(event.payload["object"]["new_value"]["blocked_at"])
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["request"]["view"], "mdm_api:unblock_enrolled_device")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_unblock_enrolled_device_not_blocked_posts_no_event(self, post_event):
+        self.enrolled_device.unblock()
+        self.set_permissions("mdm.change_enrolleddevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
 
     def test_block_enrolled_device(self):
         self.enrolled_device.unblock()
