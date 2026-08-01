@@ -35,6 +35,25 @@ class UserPaginationListView(UserPaginationMixin, ListView):
         return ctx
 
 
+def post_audit_event(request, instance, action, prev_value=None, machine_serial_number=None):
+    """Post an audit event once the surrounding transaction has committed.
+
+    For the views that cannot use the mixins below, typically because they drive more than
+    one form and so implement post() themselves. Note that on an update the prev_value has
+    to be serialized before the forms are validated: a ModelForm writes the posted data
+    onto its instance during validation, not in save().
+    """
+    def on_commit_callback():
+        AuditEvent.build_from_request_and_instance(
+            request, instance,
+            action=action,
+            prev_value=prev_value,
+            machine_serial_number=machine_serial_number,
+        ).post()
+
+    transaction.on_commit(on_commit_callback)
+
+
 class CreateViewWithAudit(CreateView):
     def on_commit_callback_extra(self):
         pass

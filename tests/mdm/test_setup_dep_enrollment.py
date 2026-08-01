@@ -507,7 +507,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
-        self.assertEqual(len(callbacks), 1)
+        # the DEP profile push and the audit event
+        self.assertEqual(len(callbacks), 2)
         self.assertContains(response, new_name)
         self.assertContains(response, new_display_name)
         self.assertContains(response, realm.name)
@@ -545,7 +546,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
-        self.assertEqual(len(callbacks), 1)
+        # the DEP profile push and the audit event
+        self.assertEqual(len(callbacks), 2)
         define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
         enrollment.refresh_from_db()
         self.assertIsNone(enrollment.admin_full_name)
@@ -577,7 +579,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
-        self.assertEqual(len(callbacks), 1)
+        # the DEP profile push and the audit event
+        self.assertEqual(len(callbacks), 2)
         define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.admin_full_name, "yolo2")
@@ -617,7 +620,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
-        self.assertEqual(len(callbacks), 0)  # the DEP profile has not changed
+        # the DEP profile has not changed, so only the audit event is queued
+        self.assertEqual(len(callbacks), 1)
         define_dep_profile_task.apply_async.assert_not_called()
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.admin_full_name, "yolo2")

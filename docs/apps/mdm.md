@@ -575,6 +575,26 @@ Artifacts decide which profiles, apps and declarations get installed, and linkin
 
 Blueprints themselves, along with the FileVault, recovery password and software update enforcement configurations, are audited the same way.
 
+### Enrollments
+
+An enrollment is the path onto the MDM, so creating one, changing it and revoking it are all audited, for the Automated Device Enrollment, OTA and user enrollment types alike, from the web interface as well as the HTTP API. A revocation is reported with the `updated` action, and shows up as the `is_revoked` and `revoked_at` fields of the enrollment secret changing:
+
+```json
+{
+  "action": "updated",
+  "object": {
+    "model": "mdm.otaenrollment",
+    "prev_value": {"name": "…", "enrollment_secret": {"is_revoked": false}},
+    "new_value": {"name": "…", "enrollment_secret": {"is_revoked": true,
+                                                     "revoked_at": "2026-08-01T09:15:22"}}
+  }
+}
+```
+
+The enrollment secret itself is never included — only its metadata, such as its quota, request count, expiry, revocation and the business unit, tags and serial numbers it is restricted to. Revoking an already revoked enrollment changes nothing and records nothing.
+
+For Automated Device Enrollment, the enrollment only exists once Apple has accepted the profile, so a failed call to Apple records nothing either.
+
 ## HTTP API
 
 ### `/api/mdm/dep/devices/`

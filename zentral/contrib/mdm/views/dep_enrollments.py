@@ -10,7 +10,9 @@ from zentral.contrib.mdm.forms import CreateDEPEnrollmentForm, DEPEnrollmentCust
 from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentCustomView
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.tasks import define_dep_profile_task
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
+from zentral.core.events.base import AuditEvent
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
+                                 UpdateViewWithAudit)
 
 
 logger = logging.getLogger("zentral.contrib.mdm.views.dep_enrollments")
@@ -53,6 +55,7 @@ class CreateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
             except DEPClientError as error:
                 dep_enrollment_form.add_error(None, str(error))
             else:
+                post_audit_event(request, dep_enrollment, AuditEvent.Action.CREATED)
                 return redirect(dep_enrollment)
         return self.render_to_response(
             self.get_context_data(
@@ -128,6 +131,7 @@ class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         prev_dep_profile = serialize_dep_profile(self.object)
+        prev_value = self.object.serialize_for_event()
         dep_enrollment_form = UpdateDEPEnrollmentForm(
             request.POST, prefix="de", instance=self.object
         )
@@ -147,6 +151,7 @@ class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
                 transaction.on_commit(lambda: define_dep_profile_task.apply_async((dep_enrollment.pk,)))
             else:
                 logger.info("DEP profile %s unchanged", dep_enrollment.pk)
+            post_audit_event(request, dep_enrollment, AuditEvent.Action.UPDATED, prev_value=prev_value)
             return redirect(dep_enrollment)
         return self.render_to_response(
             self.get_context_data(

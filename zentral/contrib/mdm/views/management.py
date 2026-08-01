@@ -57,7 +57,8 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.contrib.mdm.tasks import bulk_assign_location_asset_task
 from zentral.core.events.base import AuditEvent
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
+                                 UpdateViewWithAudit, UserPaginationListView)
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 
 
@@ -119,6 +120,7 @@ class CreateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
             ota_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             ota_enrollment.save()
+            post_audit_event(request, ota_enrollment, AuditEvent.Action.CREATED)
             return redirect(ota_enrollment)
         else:
             return self.render_to_response(
@@ -181,7 +183,13 @@ class RevokeOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
-        self.ota_enrollment.revoke()
+        # revoke() is a no-op on an already revoked enrollment, and an audit event whose
+        # prev_value and new_value match records nothing
+        if not self.ota_enrollment.enrollment_secret.revoked_at:
+            prev_value = self.ota_enrollment.serialize_for_event()
+            self.ota_enrollment.revoke()
+            post_audit_event(request, self.ota_enrollment, AuditEvent.Action.UPDATED,
+                             prev_value=prev_value)
         return redirect(self.ota_enrollment)
 
 
@@ -216,6 +224,7 @@ class UpdateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        prev_value = self.ota_enrollment.serialize_for_event()
         ota_enrollment_form = OTAEnrollmentForm(
             request.POST,
             instance=self.ota_enrollment,
@@ -231,6 +240,7 @@ class UpdateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
             ota_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             ota_enrollment.save()
+            post_audit_event(request, ota_enrollment, AuditEvent.Action.UPDATED, prev_value=prev_value)
             return redirect(ota_enrollment)
         else:
             return self.render_to_response(
@@ -275,6 +285,7 @@ class CreateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
             user_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             user_enrollment.save()
+            post_audit_event(request, user_enrollment, AuditEvent.Action.CREATED)
             return redirect(user_enrollment)
         else:
             return self.render_to_response(
@@ -317,7 +328,13 @@ class RevokeUserEnrollmentView(PermissionRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
-        self.user_enrollment.revoke()
+        # revoke() is a no-op on an already revoked enrollment, and an audit event whose
+        # prev_value and new_value match records nothing
+        if not self.user_enrollment.enrollment_secret.revoked_at:
+            prev_value = self.user_enrollment.serialize_for_event()
+            self.user_enrollment.revoke()
+            post_audit_event(request, self.user_enrollment, AuditEvent.Action.UPDATED,
+                             prev_value=prev_value)
         return redirect(self.user_enrollment)
 
 
@@ -354,6 +371,7 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        prev_value = self.user_enrollment.serialize_for_event()
         user_enrollment_form = UserEnrollmentForm(
             request.POST,
             instance=self.user_enrollment,
@@ -371,6 +389,7 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
             user_enrollment.enrollment_secret = enrollment_secret_form.save()
             enrollment_secret_form.save_m2m()
             user_enrollment.save()
+            post_audit_event(request, user_enrollment, AuditEvent.Action.UPDATED, prev_value=prev_value)
             return redirect(user_enrollment)
         else:
             return self.render_to_response(
