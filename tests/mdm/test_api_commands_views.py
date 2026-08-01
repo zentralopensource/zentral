@@ -256,6 +256,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              }}
         )
         metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
         self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 

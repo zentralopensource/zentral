@@ -33,6 +33,8 @@ class EnrolledDeviceCommand(RetrieveDestroyAPIView):
             raise ValidationError("This command has already been sent to the device and cannot be deleted")
         prev_value = command.serialize_for_event()
         prev_pk = command.pk
+        # resolved here rather than in the callback, which runs outside the transaction
+        serial_number = command.enrolled_device.serial_number
         command.delete()
 
         def on_commit_callback():
@@ -41,6 +43,7 @@ class EnrolledDeviceCommand(RetrieveDestroyAPIView):
                 self.request, command,
                 action=AuditEvent.Action.DELETED,
                 prev_value=prev_value,
+                machine_serial_number=serial_number,
             ).post()
 
         transaction.on_commit(on_commit_callback)
