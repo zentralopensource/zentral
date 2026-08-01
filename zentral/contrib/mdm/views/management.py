@@ -473,6 +473,14 @@ class BaseCreateArtifactView(PermissionRequiredMixin, FormView):
 
     def form_valid(self, form):
         self.artifact = form.save()
+
+        def on_commit_callback():
+            AuditEvent.build_from_request_and_instance(
+                self.request, self.artifact,
+                action=AuditEvent.Action.CREATED,
+            ).post()
+
+        transaction.on_commit(on_commit_callback)
         messages.info(self.request, "Artifact created")
         return redirect(self.artifact)
 
@@ -603,13 +611,13 @@ class ArtifactView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateArtifactView(PermissionRequiredMixin, UpdateView):
+class UpdateArtifactView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_artifact"
     model = Artifact
     form_class = UpdateArtifactForm
 
 
-class DeleteArtifactView(PermissionRequiredMixin, DeleteView):
+class DeleteArtifactView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_artifact"
     model = Artifact
     success_url = reverse_lazy("mdm:artifacts")
@@ -621,7 +629,7 @@ class DeleteArtifactView(PermissionRequiredMixin, DeleteView):
 # Blueprint artifacts
 
 
-class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateView):
+class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "mdm.add_blueprintartifact"
     model = BlueprintArtifact
     form_class = BlueprintArtifactForm
@@ -651,7 +659,7 @@ class CreateBlueprintArtifactView(PermissionRequiredMixin, CreateView):
         return response
 
 
-class UpdateBlueprintArtifactView(PermissionRequiredMixin, UpdateView):
+class UpdateBlueprintArtifactView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_blueprintartifact"
     model = BlueprintArtifact
     form_class = BlueprintArtifactForm
@@ -674,7 +682,7 @@ class UpdateBlueprintArtifactView(PermissionRequiredMixin, UpdateView):
         return ctx
 
 
-class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteView):
+class DeleteBlueprintArtifactView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_blueprintartifact"
     model = BlueprintArtifact
 
@@ -734,7 +742,7 @@ class ArtifactVersionView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateArtifactVersionView(PermissionRequiredMixin, UpdateView):
+class UpdateArtifactVersionView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_artifactversion"
     model = ArtifactVersion
     form_class = ArtifactVersionForm
@@ -807,6 +815,14 @@ class BaseUpgradeArtifactVersionView(PermissionRequiredMixin, TemplateView):
         object_form.save(artifact_version=artifact_version)
         for blueprint in self.artifact.blueprints():
             update_blueprint_serialized_artifacts(blueprint)
+
+        def on_commit_callback():
+            AuditEvent.build_from_request_and_instance(
+                self.request, artifact_version,
+                action=AuditEvent.Action.CREATED,
+            ).post()
+
+        transaction.on_commit(on_commit_callback)
         return HttpResponseRedirect(artifact_version.get_absolute_url())
 
     def forms_invalid(self, object_form, version_form):
@@ -878,7 +894,7 @@ class UpgradeStoreAppView(BaseUpgradeArtifactVersionView):
     model_display = "Store app"
 
 
-class DeleteArtifactVersionView(PermissionRequiredMixin, DeleteView):
+class DeleteArtifactVersionView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_artifactversion"
     model = ArtifactVersion
 
@@ -1042,8 +1058,17 @@ class CreateAssetArtifactView(PermissionRequiredMixin, FormView):
 
     def form_valid(self, form):
         store_app = form.save()
+        artifact = store_app.artifact_version.artifact
+
+        def on_commit_callback():
+            AuditEvent.build_from_request_and_instance(
+                self.request, artifact,
+                action=AuditEvent.Action.CREATED,
+            ).post()
+
+        transaction.on_commit(on_commit_callback)
         messages.info(self.request, "Artifact created")
-        return redirect(store_app.artifact_version.artifact)
+        return redirect(artifact)
 
 
 # Blueprints

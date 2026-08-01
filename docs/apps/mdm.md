@@ -506,7 +506,7 @@ A Recovery Password Configuration can only be deleted if it is not linked to any
 
 ## Audit trail
 
-Operator actions on a device are recorded as `zentral_audit` events. Each one carries the full request context — the authenticated user (including whether an API token was used, and which one), the source IP, the user agent, the HTTP method, the path and the resolved view name — and is tagged with the device serial number, so it also appears in the device's event timeline.
+Operator actions are recorded as `zentral_audit` events. Each one carries the full request context — the authenticated user (including whether an API token was used, and which one), the source IP, the user agent, the HTTP method, the path and the resolved view name. Actions that target a single device are also tagged with its serial number, so they appear in that device's event timeline.
 
 Actions Zentral takes on its own — the inventory refreshes, artifact installations and other work scheduled while a device checks in — are not part of this audit trail. It records operator actions.
 
@@ -564,6 +564,16 @@ Blocking and unblocking a device are recorded with the `updated` action, from th
 A request that would not change anything — blocking a blocked device, or unblocking one that is not blocked — is rejected and records nothing.
 
 Note that a device can also become unblocked without an operator: a full state purge, which happens when a device re-enrolls, clears `blocked_at` along with the rest of the device state. That is not an operator action and is not audited here, so a device that appears blocked in the audit trail may since have been released by re-enrolling.
+
+### Artifacts and blueprints
+
+Artifacts decide which profiles, apps and declarations get installed, and linking one to a blueprint deploys it to every device using that blueprint. Both are audited with the `created`, `updated` and `deleted` actions, from the web interface as well as from the HTTP API:
+
+- creating, updating and deleting an **artifact**, whichever form was used — declaration, certificate asset, data asset, enterprise app, profile, provisioning profile or an app from the Apps and Books catalog
+- creating a new **artifact version**, through the upgrade forms, and updating or deleting an existing one
+- linking an artifact to a **blueprint**, changing how it is scoped there, and unlinking it
+
+Blueprints themselves, along with the FileVault, recovery password and software update enforcement configurations, are audited the same way.
 
 ## HTTP API
 
