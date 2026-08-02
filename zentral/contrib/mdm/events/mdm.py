@@ -1,6 +1,6 @@
 import logging
 from zentral.core.events import register_event_type
-from zentral.core.events.base import BaseEvent, EventMetadata
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 
 
 logger = logging.getLogger('zentral.contrib.mdm.events.mdm')
@@ -46,8 +46,14 @@ class MDMDeviceNotificationEvent(BaseEvent):
 register_event_type(MDMDeviceNotificationEvent)
 
 
-def build_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success, user_id=None):
-    event_metadata = EventMetadata(machine_serial_number=serial_number)
+def build_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success,
+                                        user_id=None, request=None):
+    # request is only set when an operator asked for the notification, so that poking a device,
+    # which changes nothing and therefore has no audit event, is still attributable
+    event_metadata = EventMetadata(
+        machine_serial_number=serial_number,
+        request=EventRequest.build_from_request(request) if request else None,
+    )
     event_payload = {
         "udid": udid,
         "apns_priority": priority,
@@ -59,6 +65,9 @@ def build_mdm_device_notification_event(serial_number, udid, priority, expiratio
     return MDMDeviceNotificationEvent(event_metadata, event_payload)
 
 
-def post_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success, user_id=None):
-    event = build_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success, user_id)
+def post_mdm_device_notification_event(serial_number, udid, priority, expiration_seconds, success,
+                                       user_id=None, request=None):
+    event = build_mdm_device_notification_event(
+        serial_number, udid, priority, expiration_seconds, success, user_id, request
+    )
     event.post()

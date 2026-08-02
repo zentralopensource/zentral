@@ -549,6 +549,12 @@ Commands that carry no parameters have no parameters entry at all.
 
 Assigning a device to another blueprint, or removing it from one, is recorded with the `updated` action, with the previous and the new blueprint in the event.
 
+### Poking a device
+
+Poking a device or a user sends it an APNs notification so that it checks in. It changes nothing, so there is no audit event for it — but the `mdm_device_notification` event it produces carries the request context of the operator who asked, alongside the device serial number and whether Apple accepted the notification.
+
+The notifications Zentral sends on its own, while reconciling artifacts or handling an Apps and Books notification, carry no request, which is how an operator poke can be told apart from one Zentral decided on.
+
 ### Blocking a device
 
 Blocking and unblocking a device are recorded with the `updated` action, from the *Block*/*Unblock* buttons on the device detail page as well as from the `block/` and `unblock/` HTTP API endpoints. The transition is visible in the `blocked_at` field, which is `null` when the device is not blocked:

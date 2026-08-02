@@ -178,7 +178,9 @@ class BlockEnrolledDevice(UpdateEnrolledDeviceBlockView):
         enrolled_device.block()
         # The device is still reachable at this point: notify it so that it connects and
         # gets the 401 now, instead of staying managed until its next check-in.
-        transaction.on_commit(lambda: send_enrolled_device_notification(enrolled_device))
+        transaction.on_commit(
+            lambda: send_enrolled_device_notification(enrolled_device, request=self.request)
+        )
 
 
 class UnblockEnrolledDevice(UpdateEnrolledDeviceBlockView):

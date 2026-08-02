@@ -112,7 +112,8 @@ apns_client_cache = SimpleLazyObject(lambda: APNSClientCache())
 # utils
 
 
-def _send_target_notification(enrolled_device, token, user_id=None, priority=10, expiration_seconds=3600):
+def _send_target_notification(enrolled_device, token, user_id=None, priority=10, expiration_seconds=3600,
+                              request=None):
     target_type = "device" if user_id is None else "user"
     target_pk = enrolled_device.pk if user_id is None else user_id
     if not enrolled_device.can_be_poked() or not token:
@@ -123,22 +124,22 @@ def _send_target_notification(enrolled_device, token, user_id=None, priority=10,
     return success, build_mdm_device_notification_event(
         enrolled_device.serial_number, enrolled_device.udid,
         priority, expiration_seconds,
-        success, user_id
+        success, user_id, request
     )
 
 
-def send_enrolled_user_notification(enrolled_user, post_event=True):
+def send_enrolled_user_notification(enrolled_user, post_event=True, request=None):
     success, event = _send_target_notification(
-        enrolled_user.enrolled_device, enrolled_user.token, enrolled_user.user_id
+        enrolled_user.enrolled_device, enrolled_user.token, enrolled_user.user_id, request=request
     )
     if post_event and event:
         event.post()
     return success, event
 
 
-def send_enrolled_device_notification(enrolled_device, post_event=True):
+def send_enrolled_device_notification(enrolled_device, post_event=True, request=None):
     success, event = _send_target_notification(
-        enrolled_device, enrolled_device.token
+        enrolled_device, enrolled_device.token, request=request
     )
     if post_event and event:
         event.post()

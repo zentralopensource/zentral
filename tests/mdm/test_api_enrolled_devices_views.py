@@ -481,7 +481,10 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         # the push notification and the audit event
         self.assertEqual(len(callbacks), 2)
-        send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
+        send_enrolled_device_notification.assert_called_once()
+        self.assertEqual(send_enrolled_device_notification.call_args.args, (self.enrolled_device,))
+        # the operator request travels with the notification, so its event is attributable
+        self.assertEqual(send_enrolled_device_notification.call_args.kwargs["request"].method, "POST")
         self.enrolled_device.refresh_from_db()
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)

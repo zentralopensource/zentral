@@ -1412,7 +1412,7 @@ class PokeEnrolledDeviceView(PermissionRequiredMixin, View):
 
     def post(self, request, *args, **kwargs):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
-        send_enrolled_device_notification(enrolled_device)
+        send_enrolled_device_notification(enrolled_device, request=request)
         messages.info(request, "Device poked!")
         return redirect(enrolled_device)
 
@@ -1428,7 +1428,9 @@ class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateViewWithA
     def form_valid(self, form):
         old_blueprint = EnrolledDevice.objects.get(pk=self.object.pk).blueprint
         if self.object.blueprint != old_blueprint:
-            transaction.on_commit(lambda: send_enrolled_device_notification(self.object))
+            transaction.on_commit(
+                lambda: send_enrolled_device_notification(self.object, request=self.request)
+            )
         return super().form_valid(form)
 
 
@@ -1461,7 +1463,9 @@ class BlockEnrolledDeviceView(UpdateEnrolledDeviceBlockView):
 
     def update_block_state(self, enrolled_device):
         enrolled_device.block()
-        transaction.on_commit(lambda: send_enrolled_device_notification(enrolled_device))
+        transaction.on_commit(
+            lambda: send_enrolled_device_notification(enrolled_device, request=self.request)
+        )
 
 
 class UnblockEnrolledDeviceView(UpdateEnrolledDeviceBlockView):
@@ -1548,7 +1552,7 @@ class PokeEnrolledUserView(PermissionRequiredMixin, View):
             EnrolledUser.objects.select_related("enrolled_device__push_certificate"),
             pk=kwargs["pk"]
         )
-        send_enrolled_user_notification(enrolled_user)
+        send_enrolled_user_notification(enrolled_user, request=request)
         messages.info(request, "User poked!")
         return redirect(enrolled_user)
 
