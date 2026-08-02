@@ -2114,6 +2114,20 @@ class DEPEnrollment(MDMEnrollment):
         return self.depenrollmentsession_set.count() == 0 and self.reenrollmentsession_set.count() == 0
 
 
+def _dep_device_isoformat(t):
+    """Isoformat a DEP device datetime as naive UTC.
+
+    dep_device_update_dict() assigns the datetimes it parses from the DEP API straight onto the
+    model, so they are aware, while the same field read back from the database is naive because
+    USE_TZ is off. An event payload must not depend on which of the two it was built from.
+    """
+    if t is None:
+        return None
+    if timezone.is_aware(t):
+        t = timezone.make_naive(t)
+    return t.isoformat()
+
+
 class DEPDevice(models.Model):
     PROFILE_STATUS_EMPTY = "empty"
     PROFILE_STATUS_ASSIGNED = "assigned"
@@ -2187,6 +2201,35 @@ class DEPDevice(models.Model):
 
     def get_urlsafe_serial_number(self):
         return MetaMachine(self.serial_number).get_urlsafe_serial_number()
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "serial_number": self.serial_number}
+        if keys_only:
+            return d
+        # every attribute dep_device_update_dict() can change, so that assigning a profile or
+        # refreshing the record from Apple shows what moved
+        d.update({
+            "virtual_server": self.virtual_server.serialize_for_event(keys_only=True),
+            "enrollment": self.enrollment.serialize_for_event(keys_only=True) if self.enrollment else None,
+            "asset_tag": self.asset_tag,
+            "color": self.color,
+            "description": self.description,
+            "device_family": self.device_family,
+            "model": self.model,
+            "os": self.os,
+            "device_assigned_by": self.device_assigned_by,
+            "device_assigned_date": _dep_device_isoformat(self.device_assigned_date),
+            "last_op_type": self.last_op_type,
+            "last_op_date": _dep_device_isoformat(self.last_op_date),
+            "profile_status": self.profile_status,
+            "profile_uuid": str(self.profile_uuid) if self.profile_uuid else None,
+            "profile_assign_time": _dep_device_isoformat(self.profile_assign_time),
+            "profile_push_time": _dep_device_isoformat(self.profile_push_time),
+            "disowned_at": _dep_device_isoformat(self.disowned_at),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
 
 
 class DEPEnrollmentSessionManager(models.Manager):

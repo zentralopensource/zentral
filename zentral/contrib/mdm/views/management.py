@@ -1689,13 +1689,18 @@ class AssignDEPDeviceProfileView(PermissionRequiredMixin, UpdateView):
     form_class = AssignDEPDeviceEnrollmentForm
 
     def form_valid(self, form):
+        prev_value = self.get_object().serialize_for_event()
         dep_device = form.save(commit=False)
         try:
             assign_dep_device_profile(dep_device, dep_device.enrollment)
         except DEPClientError as e:
+            # nothing was saved
             form.add_error(None, str(e))
             return self.form_invalid(form)
         else:
+            post_audit_event(self.request, dep_device, AuditEvent.Action.UPDATED,
+                             prev_value=prev_value,
+                             machine_serial_number=dep_device.serial_number)
             messages.info(self.request, "Profile {} successfully assigned to device {}.".format(
                 dep_device.enrollment, dep_device.serial_number
             ))
@@ -1707,10 +1712,16 @@ class RefreshDEPDeviceView(PermissionRequiredMixin, View):
 
     def post(self, request, *args, **kwargs):
         dep_device = get_object_or_404(DEPDevice, pk=kwargs["pk"])
+        prev_value = dep_device.serialize_for_event()
         try:
             refresh_dep_device(dep_device)
         except DEPClientError as error:
+            # refresh_dep_device() marks the record deleted and saves it before raising when
+            # Apple no longer knows the serial number, so this path changes it too
             messages.error(request, str(error))
         else:
             messages.info(request, "DEP device refreshed.")
+        post_audit_event(request, dep_device, AuditEvent.Action.UPDATED,
+                         prev_value=prev_value,
+                         machine_serial_number=dep_device.serial_number)
         return redirect(dep_device)

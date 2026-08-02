@@ -575,6 +575,14 @@ A request that would not change anything — blocking a blocked device, or unblo
 
 Note that a device can also become unblocked without an operator: a full state purge, which happens when a device re-enrolls, clears `blocked_at` along with the rest of the device state. That is not an operator action and is not audited here, so a device that appears blocked in the audit trail may since have been released by re-enrolling.
 
+### Automated Device Enrollment devices
+
+Assigning an enrollment profile to a device, and refreshing its record from Apple, are recorded with the `updated` action, tagged with the device serial number. The event reports every attribute Apple can change on the record, so a refresh shows what actually moved.
+
+A refresh that Apple answers with an unknown serial number still marks the record as deleted, so it is recorded too. A profile assignment Apple refuses changes nothing and records nothing.
+
+Disowning a device has its own event, `dep_device_disowned`, rather than an audit event.
+
 ### Artifacts and blueprints
 
 Artifacts decide which profiles, apps and declarations get installed, and linking one to a blueprint deploys it to every device using that blueprint. Both are audited with the `created`, `updated` and `deleted` actions, from the web interface as well as from the HTTP API:

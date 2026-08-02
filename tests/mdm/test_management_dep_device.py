@@ -9,6 +9,7 @@ from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import DEPDevice
+from zentral.core.events.base import AuditEvent
 from .utils import force_dep_device, force_dep_enrollment
 
 
@@ -258,6 +259,63 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
         client.assign_profile.assert_called_once_with(enrollment.uuid, [device.serial_number])
         client.get_devices.assert_called_once_with([device.serial_number])
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_profile_post_audit_event(self, from_dep_virtual_server, post_event):
+        enrollment = force_dep_enrollment(self.mbu)
+        device = force_dep_device(server=enrollment.virtual_server)
+        client = Mock()
+        client.assign_profile.return_value = {"devices": {device.serial_number: "SUCCESS"}}
+        client.get_devices.return_value = {
+            device.serial_number: {
+                "serial_number": device.serial_number,
+                "profile_status": DEPDevice.PROFILE_STATUS_ASSIGNED,
+                "profile_uuid": str(enrollment.uuid).upper().replace("-", ""),
+                "profile_assign_time": "2023-06-17T15:41:06Z",
+            }
+        }
+        from_dep_virtual_server.return_value = client
+        self.login("mdm.change_depdevice", "mdm.view_depdevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:assign_dep_device_profile", args=(device.pk,)),
+                {"enrollment": enrollment.pk},
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "mdm.depdevice")
+        prev_value = event.payload["object"]["prev_value"]
+        new_value = event.payload["object"]["new_value"]
+        self.assertIsNone(prev_value["enrollment"])
+        self.assertEqual(new_value["enrollment"]["pk"], enrollment.pk)
+        self.assertEqual(new_value["profile_status"], DEPDevice.PROFILE_STATUS_ASSIGNED)
+        self.assertEqual(new_value["profile_assign_time"], "2023-06-17T15:41:06")
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], device.serial_number)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_profile_post_err_posts_no_event(self, from_dep_virtual_server, post_event):
+        enrollment = force_dep_enrollment(self.mbu)
+        device = force_dep_device(server=enrollment.virtual_server)
+        client = Mock()
+        client.assign_profile.return_value = {"devices": {device.serial_number: "FAILED"}}
+        from_dep_virtual_server.return_value = client
+        self.login("mdm.change_depdevice", "mdm.view_depdevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("mdm:assign_dep_device_profile", args=(device.pk,)),
+                {"enrollment": enrollment.pk},
+            )
+        self.assertEqual(response.status_code, 200)
+        # assign_dep_device_profile() raises before saving, so nothing changed
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
+
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_assign_profile_post_err(self, from_dep_virtual_server):
         enrollment = force_dep_enrollment(self.mbu)
@@ -336,3 +394,52 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
         device.refresh_from_db()
         self.assertFalse(device.is_deleted())
         self.assertEqual(device.model, "iPhone 14333")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_refresh_audit_event(self, from_dep_virtual_server, post_event):
+        device = force_dep_device()
+        client = Mock()
+        client.get_devices.return_value = {
+            device.serial_number: {
+                "serial_number": device.serial_number,
+                "model": "iPhone 14333",
+                "profile_status": "empty",
+            }
+        }
+        from_dep_virtual_server.return_value = client
+        self.login("mdm.change_depdevice", "mdm.view_depdevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:refresh_dep_device", args=(device.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "mdm.depdevice")
+        self.assertEqual(event.payload["object"]["new_value"]["model"], "iPhone 14333")
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], device.serial_number)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_refresh_deleted_audit_event(self, from_dep_virtual_server, post_event):
+        # the failure path saves too: refresh_dep_device() marks the record deleted before it
+        # raises, so it has to be audited as well
+        client = Mock()
+        client.get_devices.return_value = {"devices": {}}
+        from_dep_virtual_server.return_value = client
+        device = force_dep_device()
+        self.assertFalse(device.is_deleted())
+        self.login("mdm.change_depdevice", "mdm.view_depdevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:refresh_dep_device", args=(device.pk,)), follow=True)
+        self.assertContains(response, "Could not find the device.")
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertNotEqual(event.payload["object"]["prev_value"]["last_op_type"],
+                            DEPDevice.OP_TYPE_DELETED)
+        self.assertEqual(event.payload["object"]["new_value"]["last_op_type"],
+                         DEPDevice.OP_TYPE_DELETED)
