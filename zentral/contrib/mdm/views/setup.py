@@ -5,7 +5,7 @@ from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, TemplateView, UpdateView, View
+from django.views.generic import DetailView, ListView, TemplateView, View
 from zentral.contrib.mdm.crypto import generate_push_certificate_csr_der_bytes
 from zentral.contrib.mdm.dep import add_dep_token_certificate
 from zentral.contrib.mdm.forms import (CreatePushCertificateForm,
@@ -18,6 +18,7 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
 from zentral.contrib.mdm.push_csr_signers import signer as push_csr_signer
 from zentral.contrib.mdm.terraform import iter_resources
 from zentral.utils.terraform import build_config_response
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
@@ -64,13 +65,13 @@ class PushCertificatesView(PermissionRequiredMixin, ListView):
     model = PushCertificate
 
 
-class UploadPushCertificateView(PermissionRequiredMixin, CreateView):
+class UploadPushCertificateView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "mdm.add_pushcertificate"
     model = PushCertificate
     form_class = PushCertificateForm
 
 
-class CreatePushCertificateView(PermissionRequiredMixin, CreateView):
+class CreatePushCertificateView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "mdm.add_pushcertificate"
     model = PushCertificate
     form_class = CreatePushCertificateForm
@@ -120,19 +121,19 @@ class PushCertificateSignedCSRView(PermissionRequiredMixin, View):
                             filename=f"push_certificate_{push_certificate.pk}_signed_csr.b64")
 
 
-class UploadPushCertificateCertificateView(PermissionRequiredMixin, UpdateView):
+class UploadPushCertificateCertificateView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_pushcertificate"
     model = PushCertificate
     form_class = PushCertificateCertificateForm
 
 
-class RenewPushCertificateView(PermissionRequiredMixin, UpdateView):
+class RenewPushCertificateView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_pushcertificate"
     model = PushCertificate
     form_class = PushCertificateForm
 
 
-class DeletePushCertificateView(PermissionRequiredMixin, DeleteView):
+class DeletePushCertificateView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_pushcertificate"
     model = PushCertificate
     success_url = reverse_lazy("mdm:push_certificates")
@@ -166,7 +167,7 @@ class DownloadDEPTokenPublicKeyView(PermissionRequiredMixin, View):
                             filename=filename)
 
 
-class RenewDEPTokenView(PermissionRequiredMixin, UpdateView):
+class RenewDEPTokenView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_depvirtualserver"
     model = DEPToken
     template_name = "mdm/deptoken_renew.html"
@@ -268,7 +269,7 @@ class DEPVirtualServerView(PermissionRequiredMixin, DetailView):
         return context
 
 
-class UpdateDEPVirtualServerView(PermissionRequiredMixin, UpdateView):
+class UpdateDEPVirtualServerView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_depvirtualserver"
     model = DEPVirtualServer
     form_class = UpdateDEPVirtualServerForm
@@ -282,7 +283,7 @@ class LocationsView(PermissionRequiredMixin, ListView):
     model = Location
 
 
-class CreateLocationView(PermissionRequiredMixin, CreateView):
+class CreateLocationView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "mdm.add_location"
     model = Location
     form_class = LocationForm
@@ -293,13 +294,13 @@ class LocationView(PermissionRequiredMixin, DetailView):
     model = Location
 
 
-class UpdateLocationView(PermissionRequiredMixin, UpdateView):
+class UpdateLocationView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_location"
     model = Location
     form_class = LocationForm
 
 
-class DeleteLocationView(PermissionRequiredMixin, DeleteView):
+class DeleteLocationView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_location"
     model = Location
     success_url = reverse_lazy("mdm:locations")

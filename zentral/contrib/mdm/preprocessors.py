@@ -48,7 +48,7 @@ class AppsBooksNotificationPreprocessor:
             self._get_event_metadata(raw_event),
             {"asset": {"adam_id": adam_id,
                        "pricing_param": pricing_param},
-             "location": location.serialize_for_event(),
+             "location": location.serialize_for_event(keys_only=True),
              "count_delta": count_delta,
              "notification_id": notification_id}
         )
@@ -92,7 +92,7 @@ class AppsBooksNotificationPreprocessor:
             return
         event_metadata = self._get_event_metadata(raw_event)
         payload = {
-            "location": location.serialize_for_event(),
+            "location": location.serialize_for_event(keys_only=True),
             "notification_id": notification_id,
         }
         event_id = notification.get("eventId")

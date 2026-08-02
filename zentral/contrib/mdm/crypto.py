@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import os
 import subprocess
 from tempfile import NamedTemporaryFile
@@ -209,6 +210,18 @@ def encrypt_cms_payload(payload, public_key_bytes, raw_output=False):
 
 
 # push certificate
+
+
+def certificate_sha256_fingerprint(certificate_bytes):
+    """Hex SHA-256 of a certificate, for the event payloads.
+
+    A certificate is public, but it is also bulky and binary, so the audit trail carries its
+    fingerprint instead: enough to tell a certificate that was replaced from one that was
+    uploaded again unchanged.
+    """
+    if not certificate_bytes:
+        return None
+    return hashlib.sha256(bytes(certificate_bytes)).hexdigest()
 
 
 def generate_push_certificate_key_bytes(key_size=2048):

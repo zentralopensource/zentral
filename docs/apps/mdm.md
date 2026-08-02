@@ -585,6 +585,24 @@ Artifacts decide which profiles, apps and declarations get installed, and linkin
 
 Blueprints themselves, along with the FileVault, recovery password and software update enforcement configurations, are audited the same way, as are the realm group tag mappings, which decide the tags a device inherits from its user's groups.
 
+### Push certificates, DEP tokens and locations
+
+Creating, replacing and deleting the credentials Zentral uses to manage and enroll devices are audited: the APNs push certificate, the Automated Device Enrollment token, and the Apps and Books locations.
+
+**No key material is ever recorded.** The push certificate's private key, and the DEP token's private key, consumer secret and access secret, are left out of the events entirely, as are the OAuth consumer key and access token. What is recorded is the metadata an auditor can act on — the certificate's topic and validity window, the token's expiry and last sync — and a SHA-256 fingerprint of the certificate in place of the certificate itself:
+
+```json
+{"action": "updated",
+ "object": {"model": "mdm.pushcertificate",
+            "prev_value": {"name": "APNS", "topic": null, "certificate_sha256": "6b86b273…"},
+            "new_value": {"name": "APNS", "topic": "com.apple.mgmt.External.…",
+                          "certificate_sha256": "d4735e3a…"}}}
+```
+
+The fingerprint is what makes a renewal legible: it tells a certificate that was genuinely replaced from one that was uploaded again unchanged.
+
+Connecting a new Automated Device Enrollment virtual server is not audited yet.
+
 ### Enrollments
 
 An enrollment is the path onto the MDM, so creating one, changing it and revoking it are all audited, for the Automated Device Enrollment, OTA and user enrollment types alike, from the web interface as well as the HTTP API. A revocation is reported with the `updated` action, and shows up as the `is_revoked` and `revoked_at` fields of the enrollment secret changing:

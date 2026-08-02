@@ -32,6 +32,7 @@ from zentral.contrib.inventory.models import (
     MetaMachine,
     Tag,
 )
+from zentral.contrib.mdm.crypto import certificate_sha256_fingerprint
 from zentral.core.incidents.models import Severity
 from zentral.core.secret_engines import (
     decrypt,
@@ -135,6 +136,23 @@ class PushCertificate(models.Model):
 
     def rewrap_secrets(self):
         self.private_key = rewrap(self.private_key, **self._get_secret_engine_kwargs("private_key"))
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        # the fields PushCertificateSerializer already exposes over the HTTP API, except that
+        # the certificate is reported by fingerprint and the private key not at all
+        d.update({
+            "provisioning_uid": self.provisioning_uid,
+            "topic": self.topic,
+            "not_before": self.not_before.isoformat() if self.not_before else None,
+            "not_after": self.not_after.isoformat() if self.not_after else None,
+            "certificate_sha256": certificate_sha256_fingerprint(self.certificate),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
 
 
 # FileVault
@@ -689,7 +707,7 @@ class Location(models.Model):
     def get_absolute_url(self):
         return reverse("mdm:location", args=(self.pk,))
 
-    def serialize_for_event(self, keys_only=True):
+    def serialize_for_event(self, keys_only=False):
         d = {
             "pk": self.pk,
             "mdm_info_id": str(self.mdm_info_id),
@@ -781,7 +799,7 @@ class Asset(models.Model):
             platforms.append(Platform.IPADOS)
         return platforms
 
-    def serialize_for_event(self, keys_only=True):
+    def serialize_for_event(self, keys_only=False):
         d = {
             "pk": self.pk,
             "adam_id": self.adam_id,
@@ -1900,6 +1918,25 @@ class DEPToken(models.Model):
         if self.access_secret:
             self.access_secret = rewrap(self.access_secret, **self._get_secret_engine_kwargs("access_secret"))
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk}
+        if keys_only:
+            return d
+        # Only the metadata an auditor can act on. The three secrets are left out, and so are
+        # consumer_key and access_token: they are the public halves of the OAuth credential,
+        # but there is one token per virtual server, so naming them tells an auditor nothing.
+        # sync_cursor is operational state.
+        d.update({
+            "certificate_sha256": certificate_sha256_fingerprint(self.certificate),
+            "access_token_expiry": self.access_token_expiry.isoformat() if self.access_token_expiry else None,
+            "has_expired": bool(self.has_expired()),
+            "expires_soon": bool(self.expires_soon()),
+            "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
+
 
 class DEPVirtualServer(models.Model):
     name = models.TextField(editable=False)
@@ -1921,7 +1958,17 @@ class DEPVirtualServer(models.Model):
         return reverse("mdm:dep_virtual_server", args=(self.pk,))
 
     def serialize_for_event(self, keys_only=False):
-        return {"pk": self.pk, "uuid": str(self.uuid), "name": self.name}
+        d = {"pk": self.pk, "uuid": str(self.uuid), "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "default_enrollment": (self.default_enrollment.serialize_for_event(keys_only=True)
+                                   if self.default_enrollment else None),
+            "token": self.token.serialize_for_event(keys_only=True) if self.token else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
 
 
 class DEPEnrollment(MDMEnrollment):
