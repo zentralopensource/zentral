@@ -1,6 +1,6 @@
 import json
 import plistlib
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
@@ -18,6 +18,7 @@ from zentral.contrib.mdm.models import (
     Platform,
     TargetArtifact,
 )
+from zentral.contrib.mdm.events import MDMDeviceNotificationEvent
 from zentral.core.events.base import AuditEvent
 
 from .utils import (
@@ -25,6 +26,8 @@ from .utils import (
     force_blueprint,
     force_blueprint_artifact,
     force_dep_enrollment_session,
+    force_enrolled_user,
+    force_push_certificate,
     force_ota_enrollment_session,
     force_user_enrollment_session,
 )
@@ -38,6 +41,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         cls.user.groups.set([cls.group])
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+        # the reduced key size the other fixtures use cannot build an SSL context
+        cls.apns_push_certificate = force_push_certificate(with_material=True, reduced_key_size=False)
 
     # LoginCase implementation
 
@@ -1820,7 +1825,10 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         # the push notification and the audit event
         self.assertEqual(len(callbacks), 2)
-        send_enrolled_device_notification.assert_called_once_with(enrolled_device)
+        send_enrolled_device_notification.assert_called_once()
+        self.assertEqual(send_enrolled_device_notification.call_args.args, (enrolled_device,))
+        # the operator request travels with the notification, so its event is attributable
+        self.assertEqual(send_enrolled_device_notification.call_args.kwargs["request"].method, "POST")
         enrolled_device.refresh_from_db()
         self.assertEqual(enrolled_device.blueprint, blueprint)
         self.assertContains(response, blueprint.name)
@@ -1836,6 +1844,71 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         # get_audit_machine_serial_number(), so the change lands on the device timeline
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+
+    # poke
+
+    def test_poke_enrolled_device_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login_redirect("poke_enrolled_device", session.enrolled_device.pk)
+
+    def test_poke_enrolled_device_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login()
+        response = self.client.post(reverse("mdm:poke_enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.mdm.apns.httpx.Client.post")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_poke_enrolled_device_post_event_is_attributable(self, post_event, post):
+        # poking changes nothing, so the notification event is the only record of it: it has to
+        # say who asked
+        mocked_response = Mock()
+        mocked_response.status_code = 200
+        post.return_value = mocked_response
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True,
+                                                     push_certificate=self.apns_push_certificate)
+        enrolled_device = session.enrolled_device
+        self.login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
+        response = self.client.post(reverse("mdm:poke_enrolled_device", args=(enrolled_device.pk,)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Device poked!")
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MDMDeviceNotificationEvent)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+        self.assertEqual(metadata["request"]["user"]["username"], self.user.username)
+        self.assertEqual(metadata["request"]["method"], "POST")
+        self.assertEqual(metadata["request"]["view"], "mdm:poke_enrolled_device")
+
+    def test_poke_enrolled_user_redirect(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_user = force_enrolled_user(session.enrolled_device)
+        self.login_redirect("poke_enrolled_user", session.enrolled_device.pk, enrolled_user.pk)
+
+    @patch("zentral.contrib.mdm.apns.httpx.Client.post")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_poke_enrolled_user_post_event_is_attributable(self, post_event, post):
+        mocked_response = Mock()
+        mocked_response.status_code = 200
+        post.return_value = mocked_response
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True,
+                                                     push_certificate=self.apns_push_certificate)
+        enrolled_device = session.enrolled_device
+        enrolled_user = force_enrolled_user(enrolled_device)
+        self.login("mdm.change_enrolleduser", "mdm.view_enrolleduser")
+        response = self.client.post(
+            reverse("mdm:poke_enrolled_user", args=(enrolled_device.pk, enrolled_user.pk)),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MDMDeviceNotificationEvent)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+        self.assertEqual(metadata["request"]["user"]["username"], self.user.username)
+        self.assertEqual(metadata["request"]["view"], "mdm:poke_enrolled_user")
+        self.assertEqual(event.payload["user_id"], enrolled_user.user_id)
 
     # block
 
@@ -1881,7 +1954,10 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
         # the push notification and the audit event
         self.assertEqual(len(callbacks), 2)
-        send_enrolled_device_notification.assert_called_once_with(enrolled_device)
+        send_enrolled_device_notification.assert_called_once()
+        self.assertEqual(send_enrolled_device_notification.call_args.args, (enrolled_device,))
+        # the operator request travels with the notification, so its event is attributable
+        self.assertEqual(send_enrolled_device_notification.call_args.kwargs["request"].method, "POST")
         enrolled_device.refresh_from_db()
         self.assertIsNotNone(enrolled_device.blocked_at)
         event = post_event.call_args_list[0].args[0]
