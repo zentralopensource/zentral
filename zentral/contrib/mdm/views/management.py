@@ -10,7 +10,7 @@ from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.functional import cached_property
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
@@ -420,7 +420,7 @@ class RealmGroupTagMappingListView(PermissionRequiredMixin, UserPaginationListVi
         return ctx
 
 
-class CreateRealmGroupTagMappingView(PermissionRequiredMixin, CreateView):
+class CreateRealmGroupTagMappingView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "mdm.add_realmgrouptagmapping"
     model = RealmGroupTagMapping
     fields = "__all__"
@@ -431,7 +431,7 @@ class CreateRealmGroupTagMappingView(PermissionRequiredMixin, CreateView):
         return response
 
 
-class UpdateRealmGroupTagMappingView(PermissionRequiredMixin, UpdateView):
+class UpdateRealmGroupTagMappingView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_realmgrouptagmapping"
     model = RealmGroupTagMapping
     fields = "__all__"
@@ -446,7 +446,7 @@ class UpdateRealmGroupTagMappingView(PermissionRequiredMixin, UpdateView):
         return response
 
 
-class DeleteRealmGroupTagMappingView(PermissionRequiredMixin, DeleteView):
+class DeleteRealmGroupTagMappingView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "mdm.delete_realmgrouptagmapping"
     model = RealmGroupTagMapping
     success_url = reverse_lazy("mdm:realm_group_tag_mappings")
@@ -1417,10 +1417,13 @@ class PokeEnrolledDeviceView(PermissionRequiredMixin, View):
         return redirect(enrolled_device)
 
 
-class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateView):
+class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_enrolleddevice"
     model = EnrolledDevice
     fields = ("blueprint",)
+
+    def get_audit_machine_serial_number(self):
+        return self.object.serial_number
 
     def form_valid(self, form):
         old_blueprint = EnrolledDevice.objects.get(pk=self.object.pk).blueprint

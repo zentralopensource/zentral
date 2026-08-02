@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
+from zentral.core.events.base import AuditEvent
 from .utils import force_realm_group, force_realm_group_tag_mapping
 
 
@@ -29,6 +30,13 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         return "mdm"
 
     # list
+
+    def get_audit_event(self, post_event):
+        # update_realm_tags() posts its own machine tag events, so the audit event is not
+        # necessarily the first one
+        events = [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], AuditEvent)]
+        self.assertEqual(len(events), 1)
+        return events[0]
 
     def test_realm_group_tag_mappings_redirect(self):
         self.login_redirect("realm_group_tag_mappings")
@@ -72,18 +80,27 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_form.html")
         self.assertContains(response, "Create Group → Tag mapping")
 
-    def test_create_realm_group_tag_mapping_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_realm_group_tag_mapping_post(self, post_event):
         realm_group = force_realm_group()
         tag = Tag.objects.create(name=get_random_string(12))
         self.login("mdm.add_realmgrouptagmapping", "mdm.view_realmgrouptagmapping")
-        response = self.client.post(reverse("mdm:create_realm_group_tag_mapping"),
-                                    {"realm_group": realm_group.pk,
-                                     "tag": tag.pk},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:create_realm_group_tag_mapping"),
+                                        {"realm_group": realm_group.pk,
+                                         "tag": tag.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_list.html")
         self.assertContains(response, realm_group.display_name)
         self.assertContains(response, tag.name)
+        self.assertTrue(callbacks)
+        event = self.get_audit_event(post_event)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["model"], "mdm.realmgrouptagmapping")
+        new_value = event.payload["object"]["new_value"]
+        self.assertEqual(new_value["realm_group"]["pk"], str(realm_group.pk))
+        self.assertEqual(new_value["tag"], {"pk": tag.pk, "name": tag.name})
 
     # update rgtm
 
@@ -107,19 +124,27 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, rgtm.realm_group.display_name)
         self.assertContains(response, rgtm.tag.name)
 
-    def test_update_realm_group_tag_mapping_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_realm_group_tag_mapping_post(self, post_event):
         rgtm = force_realm_group_tag_mapping()
+        prev_tag = rgtm.tag
         new_realm_group = force_realm_group()
         new_tag = Tag.objects.create(name=get_random_string(12))
         self.login("mdm.change_realmgrouptagmapping", "mdm.view_realmgrouptagmapping")
-        response = self.client.post(reverse("mdm:update_realm_group_tag_mapping", args=(rgtm.pk,)),
-                                    {"realm_group": new_realm_group.pk,
-                                     "tag": new_tag.pk},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:update_realm_group_tag_mapping", args=(rgtm.pk,)),
+                                        {"realm_group": new_realm_group.pk,
+                                         "tag": new_tag.pk},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_list.html")
         self.assertContains(response, new_realm_group.display_name)
         self.assertContains(response, new_tag.name)
+        self.assertTrue(callbacks)
+        event = self.get_audit_event(post_event)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["prev_value"]["tag"]["pk"], prev_tag.pk)
+        self.assertEqual(event.payload["object"]["new_value"]["tag"]["pk"], new_tag.pk)
 
     # delete rgtm
 
@@ -141,11 +166,19 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_confirm_delete.html")
         self.assertContains(response, "Delete Group → Tag mapping")
 
-    def test_delete_realm_group_tag_mapping_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_realm_group_tag_mapping_post(self, post_event):
         rgtm = force_realm_group_tag_mapping()
         group_display_name = rgtm.realm_group.display_name
         self.login("mdm.delete_realmgrouptagmapping", "mdm.view_realmgrouptagmapping")
-        response = self.client.post(reverse("mdm:delete_realm_group_tag_mapping", args=(rgtm.pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:delete_realm_group_tag_mapping", args=(rgtm.pk,)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_list.html")
         self.assertNotContains(response, group_display_name)
+        self.assertTrue(callbacks)
+        event = self.get_audit_event(post_event)
+        self.assertEqual(event.payload["action"], "deleted")
+        self.assertEqual(event.payload["object"]["prev_value"]["realm_group"]["display_name"],
+                         group_display_name)

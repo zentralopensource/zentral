@@ -215,7 +215,7 @@ class TestMDMEnrolledDeviceModel(TestCase, SerializeForEventAssertions):
         self.assertEqual(
             enrolled_device.serialize_for_event(),
             {"pk": enrolled_device.pk, "udid": enrolled_device.udid, "serial_number": "SN123",
-             "platform": "macOS", "name": "Workstation", "blocked_at": None},
+             "platform": "macOS", "name": "Workstation", "blueprint": None, "blocked_at": None},
         )
         self.assert_serialize_for_event_is_json_native(enrolled_device)
         enrolled_device.block()
@@ -224,6 +224,23 @@ class TestMDMEnrolledDeviceModel(TestCase, SerializeForEventAssertions):
             enrolled_device.blocked_at.isoformat(),
         )
         # a raw datetime would be enveloped by kombu instead of reaching the stores as a string
+        self.assert_serialize_for_event_is_json_native(enrolled_device)
+
+    def test_enrolled_device_serialize_for_event_blueprint(self):
+        from zentral.contrib.mdm.models import Blueprint
+        enrolled_device = EnrolledDevice.objects.create(
+            udid=str(uuid.uuid4()),
+            serial_number=get_random_string(12),
+            push_certificate=force_push_certificate(),
+        )
+        self.assertIsNone(enrolled_device.serialize_for_event()["blueprint"])
+        blueprint = Blueprint.objects.create(name=get_random_string(12))
+        enrolled_device.blueprint = blueprint
+        enrolled_device.save()
+        self.assertEqual(
+            enrolled_device.serialize_for_event()["blueprint"],
+            {"pk": blueprint.pk, "name": blueprint.name},
+        )
         self.assert_serialize_for_event_is_json_native(enrolled_device)
 
     def test_enrolled_user_serialize_for_event_keys_only(self):

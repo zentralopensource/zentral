@@ -54,10 +54,20 @@ def post_audit_event(request, instance, action, prev_value=None, machine_serial_
     transaction.on_commit(on_commit_callback)
 
 
-class CreateViewWithAudit(CreateView):
+class AuditViewMixin:
+    """Default for the audit views below and their DRF counterparts in zentral.utils.drf.
+
+    A view whose audited object belongs to a single machine overrides this, so that its
+    events also land on that machine's event timeline.
+    """
+    def get_audit_machine_serial_number(self):
+        return None
+
     def on_commit_callback_extra(self):
         pass
 
+
+class CreateViewWithAudit(AuditViewMixin, CreateView):
     def form_valid(self, form):
         response = super().form_valid(form)
 
@@ -65,6 +75,7 @@ class CreateViewWithAudit(CreateView):
             event = AuditEvent.build_from_request_and_instance(
                 self.request, self.object,
                 action=AuditEvent.Action.CREATED,
+                machine_serial_number=self.get_audit_machine_serial_number(),
             )
             event.post()
             self.on_commit_callback_extra()
@@ -73,10 +84,7 @@ class CreateViewWithAudit(CreateView):
         return response
 
 
-class UpdateViewWithAudit(UpdateView):
-    def on_commit_callback_extra(self):
-        pass
-
+class UpdateViewWithAudit(AuditViewMixin, UpdateView):
     def form_valid(self, form):
         obj = self.get_object()  # self.object is already updated
         prev_value = obj.serialize_for_event()
@@ -86,7 +94,8 @@ class UpdateViewWithAudit(UpdateView):
             event = AuditEvent.build_from_request_and_instance(
                 self.request, self.object,
                 action=AuditEvent.Action.UPDATED,
-                prev_value=prev_value
+                prev_value=prev_value,
+                machine_serial_number=self.get_audit_machine_serial_number(),
             )
             event.post()
             self.on_commit_callback_extra()
@@ -95,16 +104,14 @@ class UpdateViewWithAudit(UpdateView):
         return response
 
 
-class DeleteViewWithAudit(DeleteView):
-    def on_commit_callback_extra(self):
-        pass
-
+class DeleteViewWithAudit(AuditViewMixin, DeleteView):
     def form_valid(self, form):
         # build the event before the object is deleted
         event = AuditEvent.build_from_request_and_instance(
             self.request, self.object,
             action=AuditEvent.Action.DELETED,
-            prev_value=self.object.serialize_for_event()
+            prev_value=self.object.serialize_for_event(),
+            machine_serial_number=self.get_audit_machine_serial_number(),
         )
 
         def on_commit_callback():

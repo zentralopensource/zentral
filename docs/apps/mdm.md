@@ -545,6 +545,10 @@ Commands that carry no parameters have no parameters entry at all.
 }
 ```
 
+### Changing a device's blueprint
+
+Assigning a device to another blueprint, or removing it from one, is recorded with the `updated` action, with the previous and the new blueprint in the event.
+
 ### Blocking a device
 
 Blocking and unblocking a device are recorded with the `updated` action, from the *Block*/*Unblock* buttons on the device detail page as well as from the `block/` and `unblock/` HTTP API endpoints. The transition is visible in the `blocked_at` field, which is `null` when the device is not blocked:
@@ -573,7 +577,7 @@ Artifacts decide which profiles, apps and declarations get installed, and linkin
 - creating a new **artifact version**, through the upgrade forms, and updating or deleting an existing one
 - linking an artifact to a **blueprint**, changing how it is scoped there, and unlinking it
 
-Blueprints themselves, along with the FileVault, recovery password and software update enforcement configurations, are audited the same way.
+Blueprints themselves, along with the FileVault, recovery password and software update enforcement configurations, are audited the same way, as are the realm group tag mappings, which decide the tags a device inherits from its user's groups.
 
 ### Enrollments
 

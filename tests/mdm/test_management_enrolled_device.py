@@ -1802,25 +1802,40 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/enrolleddevice_form.html")
         self.assertContains(response, "Change blueprint")
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.views.management.send_enrolled_device_notification")
-    def test_change_enrolled_device_blueprint_post(self, send_enrolled_device_notification):
+    def test_change_enrolled_device_blueprint_post(self, send_enrolled_device_notification, post_event):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.assertIsNone(session.enrolled_device.blueprint)
+        enrolled_device = session.enrolled_device
+        self.assertIsNone(enrolled_device.blueprint)
         self.login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
         blueprint = Blueprint.objects.create(name=get_random_string(12))
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
-                reverse("mdm:change_enrolled_device_blueprint", args=(session.enrolled_device.pk,)),
+                reverse("mdm:change_enrolled_device_blueprint", args=(enrolled_device.pk,)),
                 {"blueprint": blueprint.pk},
                 follow=True
             )
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
-        self.assertEqual(len(callbacks), 1)
-        send_enrolled_device_notification.assert_called_once_with(session.enrolled_device)
-        session.enrolled_device.refresh_from_db()
-        self.assertEqual(session.enrolled_device.blueprint, blueprint)
+        # the push notification and the audit event
+        self.assertEqual(len(callbacks), 2)
+        send_enrolled_device_notification.assert_called_once_with(enrolled_device)
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.blueprint, blueprint)
         self.assertContains(response, blueprint.name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "mdm.enrolleddevice")
+        self.assertIsNone(event.payload["object"]["prev_value"]["blueprint"])
+        self.assertEqual(
+            event.payload["object"]["new_value"]["blueprint"],
+            {"pk": blueprint.pk, "name": blueprint.name}
+        )
+        # get_audit_machine_serial_number(), so the change lands on the device timeline
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
 
     # block
 

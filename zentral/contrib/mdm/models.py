@@ -1423,6 +1423,7 @@ class EnrolledDevice(models.Model):
             return d
         d.update({"platform": self.platform,
                   "name": self.name,
+                  "blueprint": self.blueprint.serialize_for_event(keys_only=True) if self.blueprint else None,
                   "blocked_at": self.blocked_at.isoformat() if self.blocked_at else None})
         return d
 
@@ -1537,6 +1538,16 @@ class RealmGroupTagMapping(models.Model):
 
     def get_absolute_url(self):
         return reverse("mdm:realm_group_tag_mappings") + f"#rgtm-{self.pk}"
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk}
+        if keys_only:
+            return d
+        d.update({
+            "realm_group": self.realm_group.serialize_for_event(keys_only=True),
+            "tag": self.tag.serialize_for_event(keys_only=True),
+        })
+        return d
 
 
 class EnrollmentCustomViewManager(models.Manager):

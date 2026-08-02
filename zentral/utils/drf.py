@@ -52,6 +52,9 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
 
+    def get_audit_machine_serial_number(self):
+        return None
+
     def on_commit_callback_extra(self, instance):
         pass
 
@@ -63,6 +66,7 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
             event = AuditEvent.build_from_request_and_instance(
                 self.request, instance,
                 action=AuditEvent.Action.CREATED,
+                machine_serial_number=self.get_audit_machine_serial_number(),
             )
             event.post()
             self.on_commit_callback_extra(instance)
@@ -75,6 +79,9 @@ class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIVie
     # Zentral only does full updates — PATCH is a 405 everywhere, so the serializers' update()
     # methods can rely on every declared field being present in validated_data
     http_method_names = ["delete", "get", "head", "options", "put"]
+
+    def get_audit_machine_serial_number(self):
+        return None
 
     def on_commit_callback_extra(self, instance):
         pass
@@ -89,6 +96,7 @@ class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIVie
                 self.request, instance,
                 action=AuditEvent.Action.UPDATED,
                 prev_value=prev_value,
+                machine_serial_number=self.get_audit_machine_serial_number(),
             )
             event.post()
             self.on_commit_callback_extra(instance)
@@ -106,6 +114,7 @@ class RetrieveUpdateDestroyAPIViewWithAudit(generics.RetrieveUpdateDestroyAPIVie
                 self.request, instance,
                 action=AuditEvent.Action.DELETED,
                 prev_value=prev_value,
+                machine_serial_number=self.get_audit_machine_serial_number(),
             )
             event.post()
             self.on_commit_callback_extra(instance)
