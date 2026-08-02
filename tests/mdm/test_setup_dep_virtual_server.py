@@ -13,6 +13,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.dep import add_dep_token_certificate
 from zentral.contrib.mdm.models import DEPToken, DEPVirtualServer
+from zentral.core.events.base import AuditEvent
 from .utils import force_dep_enrollment, force_dep_virtual_server
 
 
@@ -289,6 +290,81 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(dep_token.virtual_server.uuid, server_uuid)
         self.assertEqual(dep_token.virtual_server.organization.name, "Example ORG")
         mock_dep_client.get_account.assert_called_once()
+
+    @patch("zentral.contrib.mdm.forms.DEPClient")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_connect_dep_virtual_server_post_audit_event(self, post_event, DEPClient):
+        mock_dep_client, server_name, server_uuid = self._build_mock_dep_client()
+        DEPClient.return_value = mock_dep_client
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        session = self.client.session
+        dep_token = DEPToken.objects.create()
+        add_dep_token_certificate(dep_token)
+        session["current_dep_token_id"] = dep_token.pk
+        session.save()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:connect_dep_virtual_server"),
+                                        {"action": "upload",
+                                         "encrypted_token": self._build_encrypted_token(dep_token)})
+        dep_token.refresh_from_db()
+        self.assertRedirects(response, dep_token.virtual_server.get_absolute_url())
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["model"], "mdm.depvirtualserver")
+        new_value = event.payload["object"]["new_value"]
+        self.assertEqual(new_value["name"], server_name)
+        self.assertEqual(new_value["uuid"], str(server_uuid))
+        self.assertEqual(new_value["token"], {"pk": dep_token.pk})
+        # the decrypted token never reaches the event
+        serialized = json.dumps(event.payload)
+        for secret in ("csecret", "asecret", "ckey", "atoken",
+                       dep_token.consumer_secret, dep_token.access_secret):
+            with self.subTest(secret=secret[:12]):
+                self.assertNotIn(secret, serialized)
+
+    @patch("zentral.contrib.mdm.forms.DEPClient")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_reconnect_dep_virtual_server_post_audit_event(self, post_event, DEPClient):
+        # uploading a token for an already connected server swaps its token instead of making a
+        # new server, so the event has to say updated and show the token changing
+        virtual_server = force_dep_virtual_server()
+        old_token = virtual_server.token
+        mock_dep_client, server_name, _ = self._build_mock_dep_client()
+        mock_dep_client.get_account.return_value["server_uuid"] = str(virtual_server.uuid)
+        DEPClient.return_value = mock_dep_client
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        session = self.client.session
+        dep_token = DEPToken.objects.create()
+        add_dep_token_certificate(dep_token)
+        session["current_dep_token_id"] = dep_token.pk
+        session.save()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:connect_dep_virtual_server"),
+                                        {"action": "upload",
+                                         "encrypted_token": self._build_encrypted_token(dep_token)})
+        virtual_server.refresh_from_db()
+        self.assertRedirects(response, virtual_server.get_absolute_url())
+        self.assertEqual(virtual_server.token, dep_token)
+        self.assertEqual(DEPToken.objects.filter(pk=old_token.pk).count(), 0)  # the old one is gone
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["prev_value"]["token"], {"pk": old_token.pk})
+        self.assertEqual(event.payload["object"]["new_value"]["token"], {"pk": dep_token.pk})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_connect_dep_virtual_server_post_cancel_posts_no_event(self, post_event):
+        # the token the flow creates up front has no credential and no server, so abandoning
+        # the flow deletes scaffolding rather than anything an auditor would look for
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:connect_dep_virtual_server"), {"action": "cancel"})
+        self.assertRedirects(response, reverse("mdm:dep_virtual_servers"))
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
 
     # download DEP token public key
 

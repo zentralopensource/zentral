@@ -601,7 +601,7 @@ Creating, replacing and deleting the credentials Zentral uses to manage and enro
 
 The fingerprint is what makes a renewal legible: it tells a certificate that was genuinely replaced from one that was uploaded again unchanged.
 
-Connecting a new Automated Device Enrollment virtual server is not audited yet.
+Connecting a virtual server is audited too. Uploading a server token for an account Zentral does not know yet is recorded as a `created` virtual server; uploading one for an account it already has replaces that server's token instead, and is recorded as an `updated` virtual server with the token changing. Starting the connect flow and cancelling it records nothing, because the token it prepares up front carries no credential and no server.
 
 ### Enrollments
 

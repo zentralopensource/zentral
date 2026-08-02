@@ -18,7 +18,9 @@ from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
 from zentral.contrib.mdm.push_csr_signers import signer as push_csr_signer
 from zentral.contrib.mdm.terraform import iter_resources
 from zentral.utils.terraform import build_config_response
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
+from zentral.core.events.base import AuditEvent
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
+                                 UpdateViewWithAudit)
 
 
 logger = logging.getLogger('zentral.contrib.mdm.views.setup')
@@ -240,9 +242,22 @@ class ConnectDEPVirtualServerView(PermissionRequiredMixin, View):
             form = EncryptedDEPTokenForm(instance=self.current_dep_token,
                                          data=request.POST, files=request.FILES)
             if form.is_valid():
+                # The form either connects a new virtual server or swaps the token of the one
+                # that already has this uuid, deleting the old token, so which action the event
+                # carries depends on that. server_uuid has to be read before save(), which pops
+                # it, and the prev_value before it too.
+                server_uuid = form.cleaned_data["account"]["server_uuid"]
+                prev_virtual_server = DEPVirtualServer.objects.filter(uuid=server_uuid).first()
+                prev_value = prev_virtual_server.serialize_for_event() if prev_virtual_server else None
                 dep_token = form.save()
                 request.session.pop("current_dep_token_id")
-                return HttpResponseRedirect(dep_token.virtual_server.get_absolute_url())
+                virtual_server = dep_token.virtual_server
+                post_audit_event(
+                    request, virtual_server,
+                    AuditEvent.Action.UPDATED if prev_value else AuditEvent.Action.CREATED,
+                    prev_value=prev_value,
+                )
+                return HttpResponseRedirect(virtual_server.get_absolute_url())
         else:
             # start
             form = EncryptedDEPTokenForm(instance=self.current_dep_token)
