@@ -48,7 +48,12 @@ def force_repository(
     )
     if not virtual:
         kwargs = {
-            "bucket": get_random_string(12),
+            # Lowercase on purpose, which is also what S3 requires of a real bucket. boto3 picks
+            # the addressing style from the name: virtual hosted for a DNS compatible name, path
+            # style otherwise. get_random_string()'s default alphabet includes uppercase, so this
+            # used to draw a path style name in all but about one run in seven hundred, and the
+            # redirect assertions in test_munki_api_views expected that style.
+            "bucket": get_random_string(12, "abcdefghijklmnopqrstuvwxyz0123456789"),
             "region_name": "us-east1",
             "prefix": "munki_repo/",
             "access_key_id": get_random_string(20),

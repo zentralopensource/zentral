@@ -522,13 +522,13 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 302)
         p = urlparse(response.url)
         self.assertEqual(p.scheme, "https")
-        self.assertEqual(p.netloc, "s3.amazonaws.com")
         s3_repo_kwargs = self.s3_repository.get_backend_kwargs()
+        # a DNS compatible bucket name puts the bucket in the host, not in the path
+        self.assertEqual(p.netloc, s3_repo_kwargs["bucket"] + ".s3.amazonaws.com")
         self.assertEqual(
             p.path,
             os.path.join(
                 "/",
-                s3_repo_kwargs["bucket"],
                 s3_repo_kwargs["prefix"],
                 "pkgs",
                 pkg_info.data["installer_item_location"]
@@ -586,13 +586,12 @@ class MonolithAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 302)
         p = urlparse(response.url)
         self.assertEqual(p.scheme, "https")
-        self.assertEqual(p.netloc, "s3.amazonaws.com")
         s3_repo_kwargs = repository.get_backend_kwargs()
+        self.assertEqual(p.netloc, s3_repo_kwargs["bucket"] + ".s3.amazonaws.com")
         self.assertEqual(
             p.path,
             os.path.join(
                 "/",
-                s3_repo_kwargs["bucket"],
                 s3_repo_kwargs.get("prefix", ""),
                 "client_resources",
                 "yolo.zip"
