@@ -24,6 +24,7 @@ class TurboScriptAPITestCase(TurboAPITestCase):
         self.assertFalse(data["compliance_check_enabled"])
         script = Script.objects.get(pk=data["id"])
         self.assertEqual(script.job.kind, "script")
+        self.assertEqual(data["job_id"], str(script.job_id))
         self.assertIsNone(script.compliance_check)
 
     def test_create_script_compliance(self):
