@@ -3,7 +3,7 @@ import logging
 import os.path
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
-from django.db import models, connection
+from django.db import models
 from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
@@ -649,14 +649,15 @@ class DistributedQuery(models.Model):
             return (0, 0, 0)
 
     def result_columns(self):
-        query = (
-            "select distinct jsonb_object_keys(row) as col "
-            "from osquery_distributedqueryresult where distributed_query_id = %s "
-            "order by col"
-        )
-        cursor = connection.cursor()
-        cursor.execute(query, [self.pk])
-        return [t[0] for t in cursor.fetchall()]
+        from zentral.contrib.osquery.distributed_query_result_stores import get_distributed_query_result_store
+        return get_distributed_query_result_store().get_result_columns(self.pk)
+
+    def delete(self, *args, **kwargs):
+        from zentral.contrib.osquery.distributed_query_result_stores import get_distributed_query_result_store
+        distributed_query_pk = self.pk
+        result = super().delete(*args, **kwargs)
+        get_distributed_query_result_store().delete_results(distributed_query_pk)
+        return result
 
 
 class DistributedQueryMachine(models.Model):
