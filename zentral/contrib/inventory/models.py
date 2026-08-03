@@ -661,9 +661,12 @@ class MachineSnapshot(AbstractMTObject):
         return self.ios_apps.all().order_by('name', 'version', 'pk')
 
     def ordered_osx_app_instances(self):
-        return self.osx_app_instances.select_related('app').all().order_by('app__bundle_name',
-                                                                           'app__bundle_version_str',
-                                                                           'bundle_path')
+        # select the whole signing chain (leaf → intermediate → root) so that
+        # certificate_chain() doesn't issue a query per certificate per app instance
+        return self.osx_app_instances.select_related(
+            'app',
+            'signed_by__signed_by__signed_by',
+        ).order_by('app__bundle_name', 'app__bundle_version_str', 'bundle_path')
 
     def ordered_program_instances(self):
         return self.program_instances.select_related('program').all().order_by('program__name',

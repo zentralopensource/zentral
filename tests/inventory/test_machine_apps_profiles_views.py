@@ -1,10 +1,14 @@
+from accounts.models import User
 from django.contrib.auth.models import Group
+from django.db import connection
+from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from django.test import TestCase
 
-from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.inventory.models import MachineSnapshotCommit
+
 from .utils import create_ms
 
 
@@ -110,6 +114,62 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
         # entitlements: modal trigger + content
         self.assertContains(response, "Entitlements")
         self.assertContains(response, "com.apple.security.app-sandbox")
+
+    def _create_ms_with_signed_osx_app_instances(self, serial_number, count):
+        source = {"module": "tests.zentral.io", "name": "Zentral Tests"}
+        _, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
+            "source": source,
+            "serial_number": serial_number,
+            "osx_app_instances": [
+                {"app": {"bundle_id": f"io.zentral.app{i}",
+                         "bundle_name": f"App{i}.app",
+                         "bundle_version_str": "1.0"},
+                 "bundle_path": f"/Applications/App{i}.app",
+                 "signed_by": {"common_name": "Developer ID Application: GODZILLA",
+                               "sha_256": 64 * "a",
+                               "signed_by": {"common_name": "Developer ID Certification Authority",
+                                             "sha_256": 64 * "b",
+                                             "signed_by": {"common_name": "Apple Root CA",
+                                                           "sha_256": 64 * "c"}}}}
+                for i in range(count)
+            ],
+        })
+        return ms
+
+    def test_machine_macos_app_instances_without_details(self):
+        self.login("inventory.view_machinesnapshot")
+        _, ms, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
+            "source": {"module": "tests.zentral.io", "name": "Zentral Tests"},
+            "serial_number": "0000000003",
+            "osx_app_instances": [
+                {"app": {"bundle_id": "io.zentral.bare",
+                         "bundle_name": "Bare.app",
+                         "bundle_version_str": "1.0"}}
+            ],
+        })
+        response = self.client.get(reverse("inventory:machine_macos_app_instances", args=(ms.serial_number,)))
+        self.assertContains(response, "Bare.app", status_code=200)
+        # no expandable row, no reveal target (the collapse id only exists for detail rows)
+        self.assertNotContains(response, "app-instance-summary app-instance-expandable")
+        self.assertNotContains(response, "ai-details-")
+        # muted placeholder marks the row as having nothing to reveal
+        self.assertContains(response, "app-instance-no-details")
+
+    def test_machine_macos_app_instances_no_n_plus_1(self):
+        self.login("inventory.view_machinesnapshot")
+        ms_one = self._create_ms_with_signed_osx_app_instances("0000000001", 1)
+        ms_many = self._create_ms_with_signed_osx_app_instances("0000000002", 5)
+        url_one = reverse("inventory:machine_macos_app_instances", args=(ms_one.serial_number,))
+        url_many = reverse("inventory:machine_macos_app_instances", args=(ms_many.serial_number,))
+        # warm up the permission/content-type caches so they don't skew the first measured request
+        self.client.get(url_one)
+        with CaptureQueriesContext(connection) as ctx_one:
+            self.assertEqual(self.client.get(url_one).status_code, 200)
+        with CaptureQueriesContext(connection) as ctx_many:
+            self.assertEqual(self.client.get(url_many).status_code, 200)
+        # the certificate chain is select_related, so the query count must not grow with the
+        # number of signed app instances
+        self.assertEqual(len(ctx_one.captured_queries), len(ctx_many.captured_queries))
 
     # Profiles
 
