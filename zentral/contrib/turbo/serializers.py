@@ -1,8 +1,10 @@
 from django.urls import reverse
 from rest_framework import serializers
+
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
 from .models import Configuration, Enrollment, MSCPCheck, OneTimeJob, RecurringJob, Script
 
@@ -69,6 +71,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
 class ScriptSerializer(serializers.ModelSerializer):
     version = serializers.IntegerField(source="job.version", read_only=True)
+    job_id = serializers.UUIDField(read_only=True)
     # declared with the model default so they are always in validated_data — validate() can then check
     # them without special-casing "omitted on create"
     arch_amd64 = serializers.BooleanField(default=True)
@@ -80,7 +83,7 @@ class ScriptSerializer(serializers.ModelSerializer):
         model = Script
         fields = ("id", "name", "description", "source", "tag",
                   "arch_amd64", "arch_arm64", "min_os_version", "max_os_version",
-                  "version", "compliance_check_enabled", "compliance_check_id",
+                  "version", "job_id", "compliance_check_enabled", "compliance_check_id",
                   "created_at", "updated_at")
 
     def validate(self, data):
@@ -112,13 +115,14 @@ class ScriptSerializer(serializers.ModelSerializer):
 class MSCPCheckSerializer(serializers.ModelSerializer):
     version = serializers.IntegerField(source="job.version", read_only=True)
     compliance_check_id = serializers.IntegerField(read_only=True)
+    job_id = serializers.UUIDField(read_only=True)
     # blank=True alone keeps a CharField required in DRF (unlike Django forms); default "" makes it optional
     baseline = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
 
     class Meta:
         model = MSCPCheck
         fields = ("id", "rule_id", "baseline", "odv_int", "odv_string", "odv_bool",
-                  "version", "compliance_check_id", "created_at", "updated_at")
+                  "version", "job_id", "compliance_check_id", "created_at", "updated_at")
 
     def validate_odv_string(self, value):
         # an empty override is no override (defer to the baseline default), not the empty string

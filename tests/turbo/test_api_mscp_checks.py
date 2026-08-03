@@ -111,6 +111,7 @@ class TurboMSCPCheckAPITestCase(TurboAPITestCase):
         self.assertEqual(data["rule_id"], mscp_check.rule_id)
         self.assertEqual(data["odv_int"], 10)
         self.assertEqual(data["version"], 1)
+        self.assertEqual(data["job_id"], str(mscp_check.job_id))
         self.assertEqual(data["compliance_check_id"], mscp_check.compliance_check.pk)
 
     def test_update_mscp_check_bumps_version(self):
