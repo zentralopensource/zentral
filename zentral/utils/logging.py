@@ -3,6 +3,7 @@ import logging
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpRequest
 from django.http.request import split_domain_port
+from django.views.debug import get_exception_reporter_filter
 
 from zentral.utils.time import naive_utcnow
 
@@ -24,7 +25,11 @@ class JSONFormatter(logging.Formatter):
 
     @staticmethod
     def add_request(rd, request):
-        rd["request"] = request.META
+        # Django's filter redacts the values of the META keys matching API|AUTH|TOKEN|KEY|SECRET|
+        # PASS|SIGNATURE|HTTP_COOKIE, so a new credential-carrying header cannot leak by omission.
+        # The keys are kept: on a 401, "header present but rejected" vs. "header absent" is the
+        # whole diagnosis.
+        rd["request"] = get_exception_reporter_filter(request).get_safe_request_meta(request)
 
     @staticmethod
     def add_status_code(rd, status_code):
