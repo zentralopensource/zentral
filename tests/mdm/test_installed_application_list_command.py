@@ -4,11 +4,17 @@ from datetime import datetime
 from unittest.mock import call, patch
 
 from django.test import TestCase
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import InstalledApplicationList
+from zentral.contrib.mdm.commands.installed_application_list import (
+    FIRST_RETRY_DELAY_SECONDS,
+    MAX_RETRIES,
+    get_retry_delay_seconds,
+)
 from zentral.contrib.mdm.commands.scheduling import _update_extra_inventory, load_command
 from zentral.contrib.mdm.models import (
     Artifact,
@@ -309,7 +315,7 @@ class InstalledApplicationListCommandTestCase(TestCase):
             target,
             artifact_version,
             kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}],
-                    "retries": 10},
+                    "retries": MAX_RETRIES},
             queue=False,
         )
         cmd.process_response(
@@ -327,6 +333,67 @@ class InstalledApplicationListCommandTestCase(TestCase):
             [call("Artifact version %s was not found.", artifact_version.pk),
              call("Stop rescheduling %s command for artifact version %s", cmd.request_type, artifact_version.pk)]
         )
+
+    # retry delay
+
+    def test_get_retry_delay_seconds_grows(self):
+        self.assertEqual(
+            [get_retry_delay_seconds(r) for r in range(8)],
+            [15, 20, 27, 37, 50, 67, 91, 123]
+        )
+
+    def test_get_retry_delay_seconds_starts_at_first_delay(self):
+        self.assertEqual(get_retry_delay_seconds(0), FIRST_RETRY_DELAY_SECONDS)
+
+    def test_get_retry_delay_seconds_is_not_capped(self):
+        delays = [get_retry_delay_seconds(r) for r in range(MAX_RETRIES)]
+        self.assertEqual(delays, sorted(delays))
+        self.assertGreater(delays[-1], delays[-2])
+
+    def test_get_retry_delay_seconds_total_window_about_a_week(self):
+        total = sum(get_retry_delay_seconds(r) for r in range(MAX_RETRIES))
+        self.assertGreater(total, 7 * 86400)
+        self.assertLess(total, 8 * 86400)
+
+    def test_get_retry_delay_seconds_keeps_the_previous_early_cadence(self):
+        # the schedule this replaces grew linearly and stopped after 10 retries. Every check it used
+        # to make must still happen at least as early, so nothing regresses for a quick install.
+        elapsed = previous_elapsed = 0
+        for r in range(10):
+            elapsed += get_retry_delay_seconds(r)
+            previous_elapsed += FIRST_RETRY_DELAY_SECONDS * (r + 1)
+            self.assertLessEqual(elapsed, previous_elapsed)
+
+    def test_update_device_artifact_reschedule_uses_backoff_delay(self):
+        _, artifact, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,
+                                                                   blueprint=self.blueprint)
+        target = Target(self.enrolled_device)
+        target.update_target_artifact(
+            artifact_version,
+            TargetArtifact.Status.AWAITING_CONFIRMATION
+        )
+        cmd = InstalledApplicationList.create_for_target(
+            target,
+            artifact_version,
+            kwargs={"apps_to_check": [{"Identifier": "yolo.fomo", "ShortVersion": "1.0"}],
+                    "retries": 6},
+            queue=False,
+        )
+        cmd.process_response(
+            {"Status": "Acknowledged",
+             "InstalledApplicationList": [
+                 {"Identifier": "yolo.fomo", "ShortVersion": "1.0", "Installing": True}
+             ]},
+            self.dep_enrollment_session,
+            self.mbu
+        )
+        db_command = DeviceCommand.objects.get(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        delay = (db_command.not_before - timezone.now()).total_seconds()
+        self.assertAlmostEqual(delay, get_retry_delay_seconds(6), delta=30)
+        self.assertEqual(load_command(db_command).retries, 7)
 
     def test_update_device_artifact_installing_new_command(self):
         _, artifact, [artifact_version] = force_blueprint_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP,

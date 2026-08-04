@@ -7,6 +7,25 @@ from .base import register_command, Command
 logger = logging.getLogger("zentral.contrib.mdm.commands.installed_application_list")
 
 
+# An app install can take much longer than the install command takes to acknowledge, and a device can
+# stay unreachable for days. The previous schedule grew linearly and gave up after ~14 minutes, so a
+# slow install was never observed and the target artifact stayed at AwaitingConfirmation even though
+# the app did install, with nothing to revisit it.
+#
+# The growth factor is well below the one used for store apps: it keeps the early cadence of the
+# linear schedule it replaces — every check in the first quarter hour happens at least as early as it
+# used to — while still reaching about a week. Deliberately not shared with ManagedApplicationList:
+# enterprise apps are locally hosted packages rather than App Store downloads, so there is no reason
+# for the two to move together, and only the install check path retries at all here.
+FIRST_RETRY_DELAY_SECONDS = 15
+RETRY_DELAY_GROWTH_FACTOR = 1.35
+MAX_RETRIES = 32
+
+
+def get_retry_delay_seconds(retries):
+    return round(FIRST_RETRY_DELAY_SECONDS * RETRY_DELAY_GROWTH_FACTOR ** retries)
+
+
 class InstalledApplicationList(Command):
     request_type = "InstalledApplicationList"
     reschedule_notnow = True
@@ -87,19 +106,18 @@ class InstalledApplicationList(Command):
         else:
             if not found:
                 logger.warning("Artifact version %s was not found.", self.artifact_version.pk)
-            if self.retries >= 10:  # TODO hardcoded
+            if self.retries >= MAX_RETRIES:
                 logger.warning("Stop rescheduling %s command for artifact version %s",
                                self.request_type,
                                self.artifact_version.pk)
                 return
             # queue a new installed application list command
-            first_delay_seconds = 15  # TODO hardcoded
             self.create_for_target(
                 self.target,
                 self.artifact_version,
                 kwargs={"apps_to_check": self.apps_to_check,
                         "retries": self.retries + 1},
-                queue=True, delay=first_delay_seconds * (self.retries + 1)
+                queue=True, delay=get_retry_delay_seconds(self.retries)
             )
 
     def get_inventory_partial_tree(self):
