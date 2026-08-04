@@ -6,6 +6,24 @@ from .base import register_command, Command
 logger = logging.getLogger("zentral.contrib.mdm.commands.managed_application_list")
 
 
+# An app install can take much longer than the install command takes to acknowledge, and a device
+# can stay unreachable for days. Poll densely at first, since most installs complete within minutes,
+# then double the delay so the schedule spans about a week. A fixed short delay stops observing the
+# device long before a slow install finishes, which leaves the target artifact stuck at
+# AwaitingConfirmation even though the app did install, and nothing ever revisits it.
+#
+# There is no ceiling, so the last gap — half the window, with doubling — is what bounds how stale a
+# status can get. Retries are cheap because the chain stops as soon as the device reports a terminal
+# status, so only an install that never resolves walks the whole schedule.
+FIRST_RETRY_DELAY_SECONDS = 20
+RETRY_DELAY_GROWTH_FACTOR = 2
+MAX_RETRIES = 15
+
+
+def get_retry_delay_seconds(retries):
+    return FIRST_RETRY_DELAY_SECONDS * RETRY_DELAY_GROWTH_FACTOR ** retries
+
+
 class ManagedApplicationList(Command):
     request_type = "ManagedApplicationList"
     reschedule_notnow = True
@@ -70,20 +88,19 @@ class ManagedApplicationList(Command):
             logger.warning("Artifact version %s was not found on device %s.",
                            self.artifact_version.pk, self.enrolled_device.serial_number)
         if retry:
-            if self.retries >= 10:  # TODO hardcoded
+            if self.retries >= MAX_RETRIES:
                 logger.warning("Stop rescheduling %s command on device %s for artifact version %s.",
                                self.request_type,
                                self.enrolled_device.serial_number,
                                self.artifact_version.pk)
             else:
                 # queue a new managed application list command
-                delay_seconds = 15  # TODO hardcoded
                 self.create_for_target(
                     self.target,
                     self.artifact_version,
                     kwargs={"identifiers": self.identifiers,
                             "retries": self.retries + 1},
-                    queue=True, delay=delay_seconds
+                    queue=True, delay=get_retry_delay_seconds(self.retries)
                 )
 
     def command_acknowledged(self):
