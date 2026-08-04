@@ -130,6 +130,8 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 During a sync, monolith will import all the available [pkginfo files](https://github.com/munki/munki/wiki/Glossary#info-file-or-pkginfo-file), their [catalogs](https://github.com/munki/munki/wiki/Glossary#catalog), categories, and make them available to the app. It will also import the icon hashes, and get a list of the client resources.
 
+The sync is carried out in the background. A task ID and a URL to poll the task status are returned.
+
 * method: POST
 * Content-Type: application/json
 * PBAC action:
@@ -146,7 +148,40 @@ curl -X POST \
 Response:
 
 ```json
-{"status": 0}
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
+}
+```
+
+Poll the `task_result_url` until `unready` is `false`. The result of a successful sync contains the number of objects created or updated per model:
+
+```json
+{
+  "name": "zentral.contrib.monolith.tasks.sync_repository_task",
+  "id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
+  "status": "SUCCESS",
+  "unready": false,
+  "result": {
+    "repository": {"pk": 1, "name": "Main repository"},
+    "operations": {
+      "catalog": {"created": 1},
+      "manifest": {"updated": 2},
+      "pkginfo": {"created": 12, "updated": 3},
+      "pkginfoname": {"created": 5}
+    },
+    "status": "SUCCESS"
+  }
+}
+```
+
+Only one sync runs at a time for a given repository. If a sync is already in progress, the task returns immediately with a `SKIPPED` status, and no second sync is carried out:
+
+```json
+{
+  "repository": {"pk": 1, "name": "Main repository"},
+  "status": "SKIPPED"
+}
 ```
 
 ### /api/monolith/manifests/

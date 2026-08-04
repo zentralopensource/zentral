@@ -9,9 +9,9 @@ logger = logging.getLogger("zentral.contrib.monolith.repository_backends.virtual
 
 
 class VirtualRepository(BaseRepository):
-    def sync_catalogs(self, audit_callback=None):
+    def sync_catalogs(self, serialized_event_request=None):
         # NOOP
-        return
+        return {}
 
     @cached_property
     def _file_storage(self):

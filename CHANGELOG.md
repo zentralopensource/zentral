@@ -1,9 +1,25 @@
 ## 2026.5
 
 
+### Features
+
+#### Monolith
+
+Repository syncs now run in the background. Repositories that need more than the request timeout to sync are supported, and concurrent syncs of the same repository are prevented.
+
+
+### Backward incompatibilities
+
+#### 🧨 Monolith repository sync API endpoint
+
+`/api/monolith/repositories/<int:pk>/sync/` launches a background task instead of syncing the repository during the request. It responds with `201` and a `task_id`/`task_result_url` pair, in place of the `200 {"status": 0}` and `500 {"status": 1, "error": "…"}` responses it used to return. Poll `task_result_url` to know the outcome of the sync.
+
+
 ### Bug fixes
 
 Fixed a 500 error on bulk machine tag changes made through the API with an expiring token.
+
+Monolith repository syncs launched via the API now refresh the caches, like the ones launched in the UI already did.
 
 
 ## 2026.4

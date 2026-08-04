@@ -2,6 +2,7 @@ import logging
 
 from accounts.api_authentication import APITokenAuthentication
 from base.notifier import notifier
+from base.serializers import TaskSerializer
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
@@ -13,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import ModelSerializer
 from rest_framework.views import APIView
 
+from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (
     DefaultDjangoModelPermissions,
     DjangoPermissionRequired,
@@ -36,7 +38,6 @@ from .models import (
     SubManifest,
     SubManifestPkgInfo,
 )
-from .repository_backends import load_repository_backend
 from .serializers import (
     CatalogSerializer,
     ConditionSerializer,
@@ -49,6 +50,7 @@ from .serializers import (
     SubManifestPkgInfoSerializer,
     SubManifestSerializer,
 )
+from .tasks import sync_repository_task
 from .utils import build_configuration_plist, build_configuration_profile
 
 logger = logging.getLogger("zentral.contrib.monolith.api_views")
@@ -89,28 +91,22 @@ class UpdateCacheServer(APIView):
 # repositories
 
 
-class SyncRepository(APIView):
+class SyncRepository(generics.GenericAPIView):
+    authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "monolith.sync_repository"
     permission_classes = [DjangoPermissionRequired]
+    serializer_class = TaskSerializer
 
     def post(self, request, *args, **kwargs):
         db_repository = get_object_or_404(Repository, pk=kwargs["pk"])
         post_monolith_sync_catalogs_request(request, db_repository)
-        repository = load_repository_backend(db_repository)
-        error = None
-        status_code = status.HTTP_200_OK
-        try:
-            repository.sync_catalogs(request)
-        except Exception as e:
-            logger.exception("Could not sync repository %s", db_repository.pk)
-            error = str(e)
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        response = {
-            "status": 0 if error is None else 1,
-        }
-        if error:
-            response["error"] = error
-        return Response(response, status=status_code)
+        task = sync_repository_task.apply_async(
+            (db_repository.pk,),
+            {"serialized_event_request": EventRequest.build_from_request(request).serialize(),
+             "task_user": request.user.id}
+        )
+        serializer = self.serializer_class.from_task(task=task)
+        return Response(serializer.initial_data, status=status.HTTP_201_CREATED)
 
 
 class RepositoryList(ListCreateAPIViewWithAudit):

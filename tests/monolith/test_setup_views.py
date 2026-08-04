@@ -14,7 +14,6 @@ from django.utils.text import slugify
 from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
-from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
 from zentral.contrib.monolith.models import (
     Catalog,
     Condition,
@@ -398,7 +397,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, repository.get_backend_kwargs()["secret_access_key"])
         self.assertContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
-        self.assertContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+        self.assertContains(response, reverse("monolith_api:sync_repository", args=(repository.pk,)))
 
     def test_provisioned_repository_get_sync_only_no_secrets(self):
         repository = force_repository(provisioning_uid=get_random_string(12))
@@ -415,7 +414,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, repository.get_backend_kwargs()["secret_access_key"])
         self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
-        self.assertContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+        self.assertContains(response, reverse("monolith_api:sync_repository", args=(repository.pk,)))
 
     def test_repository_get_no_links(self):
         repository = force_repository()
@@ -426,7 +425,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, repository.name)
         self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
-        self.assertNotContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith_api:sync_repository", args=(repository.pk,)))
 
     def test_repository_get_update_only(self):
         repository = force_repository()
@@ -437,7 +436,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, repository.name)
         self.assertContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
-        self.assertNotContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith_api:sync_repository", args=(repository.pk,)))
 
     def test_repository_get_delete_only(self):
         repository = force_repository()
@@ -448,7 +447,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, repository.name)
         self.assertNotContains(response, reverse("monolith:update_repository", args=(repository.pk,)))
         self.assertContains(response, reverse("monolith:delete_repository", args=(repository.pk,)))
-        self.assertNotContains(response, reverse("monolith:sync_repository", args=(repository.pk,)))
+        self.assertNotContains(response, reverse("monolith_api:sync_repository", args=(repository.pk,)))
 
     # update repository
 
@@ -727,60 +726,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
         send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
-
-    # sync repository
-
-    def test_sync_repository_redirect(self):
-        repository = force_repository()
-        self.login_redirect("sync_repository", repository.pk)
-
-    def test_sync_repository_permission_denied(self):
-        repository = force_repository()
-        self.login("monolith.change_repository")
-        response = self.client.get(reverse("monolith:sync_repository", args=(repository.pk,)))
-        self.assertEqual(response.status_code, 403)
-
-    @patch("base.notifier.Notifier.send_notification")
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.contrib.monolith.views.load_repository_backend")
-    def test_sync_repository(self, load_repository_backend, post_event, send_notification):
-        repository = force_repository()
-        self.login("monolith.sync_repository", "monolith.view_repository")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse("monolith:sync_repository", args=(repository.pk,)), follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(callbacks), 1)
-        self.assertTemplateUsed(response, "monolith/repository_detail.html")
-        self.assertContains(response, repository.name)
-        self.assertContains(response, "Repository synced")
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, MonolithSyncCatalogsRequestEvent)
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
-        send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
-
-    @patch("base.notifier.Notifier.send_notification")
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.contrib.monolith.views.load_repository_backend")
-    def test_sync_repository_error(self, load_repository_backend, post_event, send_notification):
-        load_repository_backend.return_value.sync_catalogs.side_effect = ValueError("YoLoFoMo")
-        repository = force_repository()
-        self.login("monolith.sync_repository", "monolith.view_repository")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse("monolith:sync_repository", args=(repository.pk,)), follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(callbacks), 0)
-        self.assertTemplateUsed(response, "monolith/repository_detail.html")
-        self.assertContains(response, repository.name)
-        self.assertNotContains(response, "Repository synced")
-        self.assertContains(response, "Could not sync repository: YoLoFoMo")
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, MonolithSyncCatalogsRequestEvent)
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
-        send_notification.assert_not_called()
 
     # pkg infos
 

@@ -61,7 +61,7 @@ class MonolithRepositoriesTestCase(TestCase):
               "version": "3.0",
               "yolo": now}]
         )
-        repository.sync_catalogs(audit_callback)
+        repository.sync_catalogs()
         pkg_info = PkgInfo.objects.get(name__name=name, version="3.0")
         pin = PkgInfoName.objects.get(name=name)
         category = PkgInfoCategory.objects.get(repository=db_repository, name=category_name)
@@ -98,7 +98,7 @@ class MonolithRepositoriesTestCase(TestCase):
             [{"name": get_random_string(12),
               "version": "1.0"}]
         )
-        repository.sync_catalogs(audit_callback)
+        repository.sync_catalogs()
         self.assertEqual(len(audit_callback.call_args_list), 0)
 
     @patch("zentral.contrib.monolith.repository_backends.base.SyncEventManager.audit_callback")
@@ -118,7 +118,7 @@ class MonolithRepositoriesTestCase(TestCase):
               "name": pkg_info.name.name,
               "version": "1.0"}]
         )
-        repository.sync_catalogs(audit_callback)
+        repository.sync_catalogs()
         self.assertEqual(
             audit_callback.call_args_list,
             [call(new_catalog, AuditEvent.Action.UPDATED, nc_prev_value),
@@ -149,7 +149,7 @@ class MonolithRepositoriesTestCase(TestCase):
               "name": new_name,
               "version": "3.0"}]
         )
-        repository.sync_catalogs(audit_callback)
+        repository.sync_catalogs()
         pkg_info = PkgInfo.objects.get(name__name=new_name, version="3.0")
         self.assertEqual(
             audit_callback.call_args_list,
@@ -183,7 +183,7 @@ class MonolithRepositoriesTestCase(TestCase):
               "name": pkg_info_to_unarchive.name.name,
               "version": pkg_info_to_unarchive.version}]
         )
-        repository.sync_catalogs(audit_callback)
+        repository.sync_catalogs()
         # pkg_info_to_unarchive archived at is None, because present in the catalog
         pkg_info_to_unarchive.refresh_from_db()
         self.assertIsNone(pkg_info_to_unarchive.archived_at)

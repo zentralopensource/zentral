@@ -3,6 +3,7 @@ from django.core.management.base import BaseCommand
 from base.notifier import notifier
 from zentral.contrib.monolith.models import Repository
 from zentral.contrib.monolith.repository_backends import load_repository_backend
+from zentral.contrib.monolith.tasks import try_lock_repository_sync
 from zentral.core.queues import queues
 
 
@@ -19,6 +20,9 @@ class Command(BaseCommand):
             for db_repository in Repository.objects.all():
                 repository = load_repository_backend(db_repository)
                 self.write(f"Sync {repository.name} repository")
+                if not try_lock_repository_sync(db_repository.pk):
+                    self.stderr.write(f"Could not sync {repository.name}: a sync is already running")
+                    continue
                 try:
                     repository.sync_catalogs()
                 except Exception as e:

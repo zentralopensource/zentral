@@ -2,6 +2,7 @@ import hashlib
 import logging
 import plistlib
 import uuid
+from collections import Counter, defaultdict
 from datetime import datetime
 
 from django.db import transaction
@@ -16,12 +17,15 @@ logger = logging.getLogger('zentral.contrib.monolith.repository_backends.base')
 
 
 class SyncEventManager:
-    def __init__(self, repository, request=None):
+    def __init__(self, repository, serialized_event_request=None):
         self.repository_pk = repository.pk
-        self.event_request = EventRequest.build_from_request(request) if request else None
+        self.event_request = (
+            EventRequest.deserialize(serialized_event_request) if serialized_event_request else None
+        )
         self.events = []
         self.event_uuid = uuid.uuid4()
         self.event_index = 0
+        self.operations = defaultdict(Counter)
 
     def audit_callback(self, instance, action, prev_value=None):
         event = AuditEvent.build(
@@ -32,6 +36,10 @@ class SyncEventManager:
         event.metadata.add_objects({"monolith_repository": ((self.repository_pk,),)})
         self.events.append(event)
         self.event_index += 1
+        self.operations[instance._meta.model_name][action.value] += 1
+
+    def serialize_operations(self):
+        return {model_name: dict(counter) for model_name, counter in self.operations.items()}
 
     def post_events(self):
         for event in self.events:
@@ -226,9 +234,9 @@ class BaseRepository:
         manifest.bump_version()
         audit_callback(manifest, AuditEvent.Action.UPDATED, prev_value)
 
-    def sync_catalogs(self, event_request=None):
+    def sync_catalogs(self, serialized_event_request=None):
         # initialize sync event manager
-        sync_event_manager = SyncEventManager(self.repository, event_request)
+        sync_event_manager = SyncEventManager(self.repository, serialized_event_request)
         audit_callback = sync_event_manager.audit_callback
 
         found_pkg_info_pks = set([])
@@ -273,6 +281,8 @@ class BaseRepository:
 
         # post events
         transaction.on_commit(lambda: sync_event_manager.post_events())
+
+        return sync_event_manager.serialize_operations()
 
     # to implement in the subclasses
 

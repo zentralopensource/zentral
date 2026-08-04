@@ -1,7 +1,9 @@
 from io import StringIO
 from unittest.mock import patch
 from django.core.management import call_command
+from django.db import connections
 from django.test import TestCase
+from zentral.contrib.monolith.tasks import SYNC_REPOSITORY_LOCK_ID
 from .utils import force_repository
 
 
@@ -42,6 +44,23 @@ class SyncMonolithRepositoriesTestCase(TestCase):
         sync_catalogs.assert_called_once()
         self.assertEqual(len(callbacks), 1)
         send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+
+    @patch("zentral.contrib.monolith.management.commands.sync_monolith_repositories.notifier.send_notification")
+    @patch("zentral.contrib.monolith.repository_backends.base.BaseRepository.sync_catalogs")
+    def test_sync_already_running(self, sync_catalogs, send_notification):
+        repository = force_repository()
+        # a second connection is required: advisory locks are only conflicting between sessions
+        lock_connection = connections.create_connection("default")
+        with lock_connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_lock(%s, %s)", [SYNC_REPOSITORY_LOCK_ID, repository.pk])
+        self.addCleanup(lock_connection.close)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            stdout, stderr = self.call_command()
+        self.assertEqual(stdout, f"Sync {repository.name} repository\n")
+        self.assertEqual(stderr, f"Could not sync {repository.name}: a sync is already running\n")
+        sync_catalogs.assert_not_called()
+        self.assertEqual(len(callbacks), 0)
+        send_notification.assert_not_called()
 
     @patch("zentral.contrib.monolith.management.commands.sync_monolith_repositories.notifier.send_notification")
     @patch("zentral.contrib.monolith.repository_backends.base.BaseRepository.sync_catalogs")

@@ -1,4 +1,5 @@
 import plistlib
+import uuid
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
@@ -21,8 +22,6 @@ from zentral.contrib.monolith.models import (
     Manifest,
     ManifestCatalog,
     ManifestSubManifest,
-    PkgInfo,
-    PkgInfoName,
     Repository,
     SubManifest,
     SubManifestPkgInfo,
@@ -750,76 +749,44 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.post(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
-    @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.sync_catalogs")
-    def test_sync_repository_internal_server_error(self, sync_catalogs):
-        sync_catalogs.side_effect = Exception("yolo")
+    @patch("zentral.contrib.monolith.tasks.sync_repository_task.apply_async")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_sync_repository(self, post_event, apply_async):
+        task_id = uuid.uuid4()
+        apply_async.return_value.id = task_id
         repository = force_repository()
         self.set_permissions("monolith.sync_repository")
         response = self.post(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
-        self.assertEqual(response.status_code, 500)
-        self.assertEqual(response.json(), {"status": 1, "error": "yolo"})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.json(),
+            {"task_id": str(task_id),
+             "task_result_url": f"/api/task_result/{task_id}/"}
+        )
+        task_args, task_kwargs = apply_async.call_args.args
+        self.assertEqual(task_args, (repository.pk,))
+        # the task carries the request, so that the audit events stay linked to the caller
+        self.assertEqual(task_kwargs["task_user"], self.service_account.pk)
+        self.assertEqual(
+            task_kwargs["serialized_event_request"]["user"]["username"],
+            self.service_account.username
+        )
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, MonolithSyncCatalogsRequestEvent)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"monolith_repository": [str(repository.pk)]})
 
+    @patch("zentral.contrib.monolith.tasks.sync_repository_task.apply_async")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.get_all_catalog_content")
-    @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.get_icon_hashes_content")
-    @patch("zentral.contrib.monolith.repository_backends.s3.S3Repository.iter_client_resources")
-    def test_sync_repository(
-        self,
-        iter_client_resources,
-        get_icon_hashes_content,
-        get_all_catalog_content,
-        post_event
-    ):
+    def test_sync_repository_session_authentication(self, post_event, apply_async):
+        apply_async.return_value.id = uuid.uuid4()
         repository = force_repository()
-        catalog_name = get_random_string(12)
-        pkg_info_name = get_random_string(12)
-        iter_client_resources.return_value = ["site_default.zip",]
-        get_icon_hashes_content.return_value = plistlib.dumps({
-            f"{pkg_info_name}.png": "a" * 64
-        })
-        get_all_catalog_content.return_value = plistlib.dumps([
-            {"catalogs": [catalog_name],
-             "name": pkg_info_name,
-             "version": "1.0"}
-        ])
-        self.set_permissions("monolith.sync_repository")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.post(reverse("monolith_api:sync_repository", args=(repository.pk,)), {})
-        self.assertEqual(response.status_code, 200)
-        json_response = response.json()
-        self.assertEqual(json_response, {"status": 0})
-        pkg_infos = PkgInfo.objects.filter(name__name=pkg_info_name)
-        self.assertEqual(pkg_infos.count(), 1)
-        pkg_info = pkg_infos.first()
-        self.assertEqual(pkg_info.repository, repository)
-        self.assertEqual(list(c.name for c in pkg_info.catalogs.filter(repository=repository)),
-                         [catalog_name])
-        repository.refresh_from_db()
-        self.assertEqual(repository.client_resources, ["site_default.zip"])
-        self.assertEqual(repository.icon_hashes, {f"icon.{pkg_info.pk}.{pkg_info_name}.png": "a" * 64})
-        self.assertEqual(len(callbacks), 1)
-        self.assertEqual(len(post_event.call_args_list), 4)
-        mscr_evt = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(mscr_evt, MonolithSyncCatalogsRequestEvent)
-        mca_evt = post_event.call_args_list[1].args[0]
-        self.assertIsInstance(mca_evt, AuditEvent)
-        self.assertEqual(mca_evt.payload["action"], "created")
-        self.assertEqual(mca_evt.payload["object"]["model"], "monolith.catalog")
-        self.assertEqual(mca_evt.payload["object"]["pk"],
-                         str(Catalog.objects.get(name=catalog_name).pk))
-        mpina_evt = post_event.call_args_list[2].args[0]
-        self.assertIsInstance(mpina_evt, AuditEvent)
-        self.assertEqual(mpina_evt.payload["action"], "created")
-        self.assertEqual(mpina_evt.payload["object"]["model"], "monolith.pkginfoname")
-        self.assertEqual(mpina_evt.payload["object"]["pk"],
-                         str(PkgInfoName.objects.get(name=pkg_info_name).pk))
-        mpia_evt = post_event.call_args_list[3].args[0]
-        self.assertIsInstance(mpia_evt, AuditEvent)
-        self.assertEqual(mpia_evt.payload["action"], "created")
-        self.assertEqual(mpia_evt.payload["object"]["model"], "monolith.pkginfo")
-        self.assertEqual(mpia_evt.payload["object"]["pk"],
-                         str(PkgInfo.objects.get(name__name=pkg_info_name,
-                                                 version="1.0").pk))
+        self.login("monolith.sync_repository")
+        response = self.client.post(reverse("monolith_api:sync_repository", args=(repository.pk,)))
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(sorted(response.json().keys()), ["task_id", "task_result_url"])
+        _, task_kwargs = apply_async.call_args.args
+        self.assertEqual(task_kwargs["task_user"], self.user.pk)
 
     # update cache server
 
