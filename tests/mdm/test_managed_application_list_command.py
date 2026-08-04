@@ -5,10 +5,16 @@ import plistlib
 import uuid
 from unittest.mock import patch
 from django.test import TestCase
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import ManagedApplicationList
 from zentral.contrib.mdm.commands.base import load_command
+from zentral.contrib.mdm.commands.managed_application_list import (
+    FIRST_RETRY_DELAY_SECONDS,
+    MAX_RETRIES,
+    get_retry_delay_seconds,
+)
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -377,9 +383,9 @@ class ManagedApplicationListCommandTestCase(TestCase):
             self.enrolled_device,
             artifact_version,
             kwargs={"identifiers": [store_app.location_asset.asset.bundle_id],
-                    "retries": 10}
+                    "retries": MAX_RETRIES}
         )
-        self.assertEqual(cmd.retries, 10)
+        self.assertEqual(cmd.retries, MAX_RETRIES)
         response = self._get_response(cmd, status="Installing")
         cmd.process_response(response, self.dep_enrollment_session, self.mbu)
         self.assertEqual(da_qs.count(), 1)
@@ -395,3 +401,51 @@ class ManagedApplicationListCommandTestCase(TestCase):
             time__isnull=True
         )
         self.assertEqual(dcmd_qs.count(), 0)
+
+    # retry delay
+
+    def test_get_retry_delay_seconds_grows(self):
+        self.assertEqual(
+            [get_retry_delay_seconds(r) for r in range(8)],
+            [20, 40, 80, 160, 320, 640, 1280, 2560]
+        )
+
+    def test_get_retry_delay_seconds_starts_at_first_delay(self):
+        self.assertEqual(get_retry_delay_seconds(0), FIRST_RETRY_DELAY_SECONDS)
+
+    def test_get_retry_delay_seconds_is_not_capped(self):
+        # no ceiling: the last delay is the largest one
+        delays = [get_retry_delay_seconds(r) for r in range(MAX_RETRIES)]
+        self.assertEqual(delays, sorted(delays))
+        self.assertGreater(delays[-1], delays[-2])
+
+    def test_get_retry_delay_seconds_total_window_about_a_week(self):
+        total = sum(get_retry_delay_seconds(r) for r in range(MAX_RETRIES))
+        self.assertGreater(total, 7 * 86400)
+        self.assertLess(total, 8.5 * 86400)
+
+    def test_get_retry_delay_seconds_last_gap_bounds_staleness(self):
+        # with no ceiling the last gap is what bounds how stale a status can get
+        self.assertLess(get_retry_delay_seconds(MAX_RETRIES - 1), 4 * 86400)
+
+    def test_update_device_artifact_reschedule_uses_backoff_delay(self):
+        artifact_version, store_app = self._force_store_app(
+            status=TargetArtifact.Status.AWAITING_CONFIRMATION
+        )
+        cmd = ManagedApplicationList.create_for_device(
+            self.enrolled_device,
+            artifact_version,
+            kwargs={"identifiers": [store_app.location_asset.asset.bundle_id],
+                    "retries": 5}
+        )
+        response = self._get_response(cmd, status="Installing")
+        cmd.process_response(response, self.dep_enrollment_session, self.mbu)
+        dcmd_qs = DeviceCommand.objects.filter(
+            enrolled_device=self.enrolled_device,
+            time__isnull=True
+        )
+        self.assertEqual(dcmd_qs.count(), 1)
+        db_command = dcmd_qs.first()
+        delay = (db_command.not_before - timezone.now()).total_seconds()
+        self.assertAlmostEqual(delay, get_retry_delay_seconds(5), delta=30)
+        self.assertEqual(load_command(db_command).retries, 6)
