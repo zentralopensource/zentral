@@ -223,6 +223,15 @@ def _post_events(msn, user_agent, ip, event_cls, records):
     )
 
 
+# osquery batches its status log, so one upload can carry tens of thousands of
+# records, and each record would otherwise become an event. Identical records are
+# collapsed into one carrying a count, and at most STATUS_LOG_MAX_EVENTS distinct
+# records are kept, so the work one request can create is bounded.
+STATUS_LOG_MAX_EVENTS = 100
+STATUS_LOG_TRUNCATION_SEVERITY = 2
+STATUS_LOG_TRUNCATION_FILENAME = "zentral"
+
+
 def _filter_status_logs(logs, min_severity):
     for log in logs:
         try:
@@ -235,12 +244,40 @@ def _filter_status_logs(logs, min_severity):
                 yield log
 
 
+def _iter_grouped_status_logs(records, max_events=STATUS_LOG_MAX_EVENTS):
+    groups = {}
+    dropped_records = unix_time = 0
+    for record in records:
+        key = (record.get("severity"), record.get("filename"),
+               record.get("line"), record.get("message"))
+        group = groups.get(key)
+        if group is not None:
+            group["count"] += 1
+        elif len(groups) < max_events:
+            record["count"] = 1
+            groups[key] = record
+        else:
+            dropped_records += 1
+            unix_time = record.get("unixTime", 0)
+    yield from groups.values()
+    if dropped_records:
+        # a cap that hides what it removed makes the events lie about scope
+        yield {"unixTime": unix_time,
+               "severity": STATUS_LOG_TRUNCATION_SEVERITY,
+               "filename": STATUS_LOG_TRUNCATION_FILENAME,
+               "line": 0,
+               "message": f"Status log truncated, {dropped_records} record(s) dropped",
+               "count": 1}
+
+
 def post_status_logs(msn, user_agent, ip, logs, min_severity=1):
     # See https://github.com/osquery/osquery/blob/fe9e6249c12fa87ea31f298b7e831d97c760013b/osquery/core/plugins/logger.h#L40  # NOQA
     # 0 = INFO, by default min = 1 = WARNING
     OsqueryStatusEvent.post_machine_request_payloads(
         msn, user_agent, ip,
-        _iter_cleaned_up_records(_filter_status_logs(logs, min_severity)),
+        _iter_grouped_status_logs(
+            _iter_cleaned_up_records(_filter_status_logs(logs, min_severity))
+        ),
         _get_record_created_at
     )
 
