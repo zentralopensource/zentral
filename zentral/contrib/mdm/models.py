@@ -210,6 +210,15 @@ class FileVaultConfig(models.Model):
         default=0,
         help_text="Interval in days after which the PRK will be automatically rotated and escrowed to Zentral."
     )
+    prk_reveal_rotation_delay = models.IntegerField(
+        verbose_name="PRK rotation delay after reveal (min)",
+        validators=[MinValueValidator(0), MaxValueValidator(REVEAL_ROTATION_DELAY_MAX),
+                    validate_reveal_rotation_delay],
+        default=60,
+        help_text="When a PRK is read, delay in minutes after which a command to rotate the PRK on the device "
+                  "will be scheduled. 60 min by default, 5 min min., 1 day max (1440 min). "
+                  "If 0, no automatic PRK rotation will be scheduled."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -227,6 +236,8 @@ class FileVaultConfig(models.Model):
 
     @property
     def uuid(self):
+        # a change of this value makes the devices receive the configuration again,
+        # so prk_reveal_rotation_delay, which is only used server side, is left out
         h = hashlib.md5(f"{self.pk}|{self.name}|{self.escrow_location_display_name}|"
                         f"{self.at_login_only}|{self.bypass_attempts}|{self.show_recovery_key}|"
                         f"{self.destroy_key_on_standby}|{self.prk_rotation_interval_days}".encode("utf-8"))
@@ -246,6 +257,7 @@ class FileVaultConfig(models.Model):
             "show_recovery_key": self.show_recovery_key,
             "destroy_key_on_standby": self.destroy_key_on_standby,
             "prk_rotation_interval_days": self.prk_rotation_interval_days,
+            "prk_reveal_rotation_delay": self.prk_reveal_rotation_delay,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         })

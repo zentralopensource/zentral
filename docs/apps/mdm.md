@@ -239,6 +239,7 @@ To set up a FileVault configuration in Zentral, follow these steps:
    - *Show Recovery Key*: Choose whether to display the PRK to users when FileVault is enabled.
    - *Destroy Key on Standby*: Enable this to require a FileVault unlock after hibernation.
    - *PRK Rotation Interval (days)*: Specify an interval for automatic PRK rotation and escrow to Zentral. A value of 0 means no rotation.
+   - *PRK Rotation Delay After Reveal (min)*: Specify the delay after which the PRK of a device is rotated and escrowed to Zentral, once it has been revealed. A value of 0 means no rotation after reveal, 5 min is the minimum, and 1440 min (1 day) the maximum. Multiple reveals do not queue up multiple rotations.
 3. Click *Save* to apply the configuration.
 
 ### Using FileVault Configuration Across Blueprints

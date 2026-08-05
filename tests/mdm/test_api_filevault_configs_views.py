@@ -69,6 +69,7 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
               'show_recovery_key': False,
               'destroy_key_on_standby': False,
               'prk_rotation_interval_days': 0,
+              'prk_reveal_rotation_delay': 0,
               'created_at': fv_config.created_at.isoformat(),
               'updated_at': fv_config.updated_at.isoformat()}]
         )
@@ -89,6 +90,7 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
               'show_recovery_key': False,
               'destroy_key_on_standby': False,
               'prk_rotation_interval_days': 0,
+              'prk_reveal_rotation_delay': 0,
               'created_at': fv_config.created_at.isoformat(),
               'updated_at': fv_config.updated_at.isoformat()}]
         )
@@ -121,6 +123,7 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'show_recovery_key': False,
              'destroy_key_on_standby': False,
              'prk_rotation_interval_days': 0,
+             'prk_reveal_rotation_delay': 0,
              'created_at': fv_config.created_at.isoformat(),
              'updated_at': fv_config.updated_at.isoformat()}
         )
@@ -137,6 +140,18 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.post(reverse("mdm_api:filevault_configs"),
                              {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 403)
+
+    def test_create_filevault_config_prk_reveal_rotation_delay_too_short(self):
+        self.set_permissions("mdm.add_filevaultconfig")
+        response = self.post(reverse("mdm_api:filevault_configs"),
+                             {"name": get_random_string(12),
+                              "escrow_location_display_name": get_random_string(12),
+                              "prk_reveal_rotation_delay": 4})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'prk_reveal_rotation_delay': ['Must be 0, or at least 5 minutes.']}
+        )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_filevault_config(self, post_event):
@@ -160,6 +175,7 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'show_recovery_key': False,
              'destroy_key_on_standby': False,
              'prk_rotation_interval_days': 0,
+             'prk_reveal_rotation_delay': 60,
              'created_at': fv_config.created_at.isoformat(),
              'updated_at': fv_config.updated_at.isoformat()}
         )
@@ -180,6 +196,7 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "show_recovery_key": False,
                      "destroy_key_on_standby": False,
                      "prk_rotation_interval_days": 0,
+                     "prk_reveal_rotation_delay": 60,
                      "created_at": fv_config.created_at.isoformat(),
                      "updated_at": fv_config.updated_at.isoformat()
                  }
@@ -264,6 +281,7 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'show_recovery_key': True,
              'destroy_key_on_standby': True,
              'prk_rotation_interval_days': 90,
+             'prk_reveal_rotation_delay': 0,
              'created_at': fv_config.created_at.isoformat(),
              'updated_at': fv_config.updated_at.isoformat()}
         )
@@ -284,6 +302,7 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      "show_recovery_key": True,
                      "destroy_key_on_standby": True,
                      "prk_rotation_interval_days": 90,
+                     "prk_reveal_rotation_delay": 0,
                      "created_at": fv_config.created_at.isoformat(),
                      "updated_at": fv_config.updated_at.isoformat()
                  },

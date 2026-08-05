@@ -13,7 +13,12 @@ from django.utils.crypto import get_random_string
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
-from zentral.contrib.mdm.commands import SetAutoAdminPassword, SetFirmwarePassword, SetRecoveryLock
+from zentral.contrib.mdm.commands import (
+    RotateFileVaultKey,
+    SetAutoAdminPassword,
+    SetFirmwarePassword,
+    SetRecoveryLock,
+)
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.events import (
     AdminPasswordViewedEvent,
@@ -28,6 +33,7 @@ from .utils import (
     force_blueprint,
     force_dep_enrollment_session,
     force_enrolled_user,
+    force_filevault_config,
     force_recovery_password_config,
 )
 
@@ -1168,6 +1174,55 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, FileVaultPRKViewedEvent)
         self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+
+    # enrolled device FileVault PRK auto rotation
+
+    def _reveal_filevault_prk(self, **config_kwargs):
+        self.enrolled_device.set_filevault_prk("123456")
+        self.enrolled_device.blueprint = force_blueprint(
+            filevault_config=force_filevault_config(**config_kwargs)
+        )
+        self.enrolled_device.save()
+        self.set_permissions("mdm.view_filevault_prk")
+        response = self.get(reverse("mdm_api:enrolled_device_filevault_prk", args=(self.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_filevault_prk_auto_rotation(self, post_event):
+        self._reveal_filevault_prk(prk_reveal_rotation_delay=60)
+        db_cmd_qs = self.enrolled_device.commands.all()
+        self.assertEqual(db_cmd_qs.count(), 1)
+        db_cmd = db_cmd_qs.first()
+        self.assertIsInstance(load_command(db_cmd), RotateFileVaultKey)
+        self.assertIsNone(db_cmd.time)
+        self.assertAlmostEqual(db_cmd.not_before, timezone.now() + timedelta(minutes=60),
+                               delta=timedelta(seconds=30))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_filevault_prk_auto_rotation_not_queued_twice(self, post_event):
+        self._reveal_filevault_prk(prk_reveal_rotation_delay=60)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        self.get(reverse("mdm_api:enrolled_device_filevault_prk", args=(self.enrolled_device.pk,)))
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_filevault_prk_no_auto_rotation(self, post_event):
+        self._reveal_filevault_prk(prk_reveal_rotation_delay=0)
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_filevault_prk_no_auto_rotation_without_blueprint(self, post_event):
+        self.enrolled_device.set_filevault_prk("123456")
+        self.enrolled_device.save()
+        self.set_permissions("mdm.view_filevault_prk")
+        self.get(reverse("mdm_api:enrolled_device_filevault_prk", args=(self.enrolled_device.pk,)))
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_filevault_prk_no_auto_rotation_user_enrollment(self, post_event):
+        self.enrolled_device.user_enrollment = True
+        self._reveal_filevault_prk(prk_reveal_rotation_delay=60)
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
 
     # enrolled device recovery password
 

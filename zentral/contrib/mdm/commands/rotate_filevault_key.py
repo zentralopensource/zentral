@@ -85,6 +85,13 @@ class RotateFileVaultKey(Command):
             uuid=uuid,
         )
 
+    @classmethod
+    def create_for_auto_rotation(cls, target, delay_min):
+        if cls.is_queued_for_target(target):
+            logger.warning("Rotate FileVault key command for device %s already scheduled", target.enrolled_device)
+            return
+        return cls.create_for_target(target, queue=True, delay=delay_min * 60)
+
     def load_encryption_key(self):
         encrypted_encryption_key = self.db_command.kwargs["encryption_key"]
         encryption_key = decrypt(encrypted_encryption_key,

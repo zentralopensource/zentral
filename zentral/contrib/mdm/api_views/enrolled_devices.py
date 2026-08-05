@@ -19,6 +19,7 @@ from zentral.contrib.mdm.commands import (
     CustomCommand,
     DeviceLock,
     EraseDevice,
+    RotateFileVaultKey,
     SetFirmwarePassword,
     SetRecoveryLock,
 )
@@ -267,11 +268,24 @@ class EnrolledDeviceFileVaultPRK(APIView):
     permission_required = "mdm.view_filevault_prk"
     permission_classes = [DjangoPermissionRequired]
 
+    def schedule_prk_rotation(self, enrolled_device):
+        blueprint = enrolled_device.blueprint
+        if not blueprint:
+            return
+        filevault_config = blueprint.filevault_config
+        if not filevault_config or not filevault_config.prk_reveal_rotation_delay:
+            return
+        target = Target(enrolled_device)
+        if not RotateFileVaultKey.verify_target(target):
+            return
+        RotateFileVaultKey.create_for_auto_rotation(target, filevault_config.prk_reveal_rotation_delay)
+
     def get(self, request, *args, **kwargs):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
         filevault_prk = enrolled_device.get_filevault_prk()
         if filevault_prk:
             post_filevault_prk_viewed_event(request, enrolled_device)
+            self.schedule_prk_rotation(enrolled_device)
         return Response({
             "id": enrolled_device.pk,
             "serial_number": enrolled_device.serial_number,

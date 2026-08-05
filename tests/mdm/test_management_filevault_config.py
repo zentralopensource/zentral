@@ -91,7 +91,8 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                                      "bypass_attempts": 10000,
                                      "show_recovery_key": "on",
                                      "destroy_key_on_standby": "on",
-                                     "prk_rotation_interval_days": 90},
+                                     "prk_rotation_interval_days": 90,
+                                     "prk_reveal_rotation_delay": 30},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/filevaultconfig_form.html")
@@ -107,12 +108,27 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                                      "bypass_attempts": 1,
                                      "show_recovery_key": "on",
                                      "destroy_key_on_standby": "on",
-                                     "prk_rotation_interval_days": 367},
+                                     "prk_rotation_interval_days": 367,
+                                     "prk_reveal_rotation_delay": 30},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/filevaultconfig_form.html")
         self.assertFormError(response.context["form"], "prk_rotation_interval_days",
                              'Ensure this value is less than or equal to 366.')
+
+    def test_create_filevault_configuration_post_prk_reveal_rotation_delay_too_short(self):
+        self.login("mdm.add_filevaultconfig")
+        response = self.client.post(reverse("mdm:create_filevault_config"),
+                                    {"name": get_random_string(12),
+                                     "escrow_location_display_name": get_random_string(12),
+                                     "bypass_attempts": -1,
+                                     "prk_rotation_interval_days": 0,
+                                     "prk_reveal_rotation_delay": 4},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/filevaultconfig_form.html")
+        self.assertFormError(response.context["form"], "prk_reveal_rotation_delay",
+                             'Must be 0, or at least 5 minutes.')
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_filevault_configuration_post(self, post_event):
@@ -127,7 +143,8 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                                          "bypass_attempts": 1,
                                          "show_recovery_key": "on",
                                          "destroy_key_on_standby": "on",
-                                         "prk_rotation_interval_days": 90},
+                                         "prk_rotation_interval_days": 90,
+                                         "prk_reveal_rotation_delay": 30},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -157,6 +174,7 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                      "show_recovery_key": True,
                      "destroy_key_on_standby": True,
                      "prk_rotation_interval_days": 90,
+                     "prk_reveal_rotation_delay": 30,
                      "created_at": fv_config.created_at.isoformat(),
                      "updated_at": fv_config.updated_at.isoformat()
                  }
@@ -247,7 +265,8 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                                          "bypass_attempts": 1,
                                          "show_recovery_key": "on",
                                          "destroy_key_on_standby": "on",
-                                         "prk_rotation_interval_days": 90},
+                                         "prk_rotation_interval_days": 90,
+                                         "prk_reveal_rotation_delay": 30},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -278,6 +297,7 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
                      "show_recovery_key": True,
                      "destroy_key_on_standby": True,
                      "prk_rotation_interval_days": 90,
+                     "prk_reveal_rotation_delay": 30,
                      "created_at": fv_config2.created_at.isoformat(),
                      "updated_at": fv_config2.updated_at.isoformat()
                  },

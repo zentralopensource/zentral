@@ -66,6 +66,16 @@
         </td>
         </tr>
         <tr>
+        <th>PRK rotation after reveal</th>
+        <td>
+            {% if not object.prk_reveal_rotation_delay %}
+            never
+            {% else %}
+            {{ object.prk_reveal_rotation_delay }} min after a reveal
+            {% endif %}
+        </td>
+        </tr>
+        <tr>
         <th>Blueprint{{ blueprint_count|pluralize }} ({{ blueprint_count }})</th>
         <td>
             {% if blueprint_count %}

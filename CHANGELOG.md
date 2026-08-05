@@ -7,6 +7,8 @@
 
 Recovery password configurations can schedule a password rotation after each reveal of the password, like DEP enrollments already do for the auto admin password.
 
+FileVault configurations can schedule a PRK rotation after each reveal of the PRK.
+
 
 #### Monolith
 

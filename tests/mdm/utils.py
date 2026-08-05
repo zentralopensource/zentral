@@ -644,11 +644,12 @@ def build_provisioning_profile_file(raw_content=None, content=None, signed=True)
 # artifacts
 
 
-def force_filevault_config(prk_rotation_interval_days=0):
+def force_filevault_config(prk_rotation_interval_days=0, prk_reveal_rotation_delay=0):
     return FileVaultConfig.objects.create(
         name=get_random_string(12),
         escrow_location_display_name=get_random_string(12),
-        prk_rotation_interval_days=prk_rotation_interval_days
+        prk_rotation_interval_days=prk_rotation_interval_days,
+        prk_reveal_rotation_delay=prk_reveal_rotation_delay,
     )
 
 
