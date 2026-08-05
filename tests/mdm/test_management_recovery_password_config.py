@@ -90,6 +90,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                                     {"name": get_random_string(12),
                                      "dynamic_password": False,
                                      "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 0,
                                      "rotate_firmware_password": False},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -104,6 +105,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                                      "dynamic_password": False,
                                      "static_password": "1",
                                      "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 0,
                                      "rotate_firmware_password": False},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -118,6 +120,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                                      "dynamic_password": False,
                                      "static_password": 33 * "1",
                                      "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 0,
                                      "rotate_firmware_password": False},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -132,6 +135,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                                      "dynamic_password": False,
                                      "static_password": 8 * "é",
                                      "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 0,
                                      "rotate_firmware_password": False},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -149,13 +153,61 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                                     {"name": get_random_string(12),
                                      "dynamic_password": True,
                                      "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 0,
                                      "rotate_firmware_password": True},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_form.html")
         self.assertFormError(
-            response.context["form"], "rotate_firmware_password", "Cannot be set without a rotation interval."
+            response.context["form"], "rotate_firmware_password",
+            "Cannot be set without a rotation interval or a rotation delay after reveal."
         )
+
+    def test_create_recovery_password_configuration_reveal_rotation_delay_too_short_error(self):
+        self.login("mdm.add_recoverypasswordconfig")
+        response = self.client.post(reverse("mdm:create_recovery_password_config"),
+                                    {"name": get_random_string(12),
+                                     "dynamic_password": True,
+                                     "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 4,
+                                     "rotate_firmware_password": False},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_form.html")
+        self.assertFormError(
+            response.context["form"], "reveal_rotation_delay", "Must be 0, or at least 5 minutes."
+        )
+
+    def test_create_recovery_password_configuration_firmware_rotation_after_reveal_only(self):
+        self.login("mdm.add_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
+        name = get_random_string(12)
+        response = self.client.post(reverse("mdm:create_recovery_password_config"),
+                                    {"name": name,
+                                     "dynamic_password": True,
+                                     "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 5,
+                                     "rotate_firmware_password": True},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_detail.html")
+        rp_config = response.context["object"]
+        self.assertEqual(rp_config.rotation_interval_days, 0)
+        self.assertEqual(rp_config.reveal_rotation_delay, 5)
+        self.assertTrue(rp_config.rotate_firmware_password)
+
+    def test_create_recovery_password_configuration_static_password_no_reveal_rotation(self):
+        self.login("mdm.add_recoverypasswordconfig", "mdm.view_recoverypasswordconfig")
+        response = self.client.post(reverse("mdm:create_recovery_password_config"),
+                                    {"name": get_random_string(12),
+                                     "dynamic_password": False,
+                                     "static_password": "12345678",
+                                     "rotation_interval_days": 0,
+                                     "reveal_rotation_delay": 60,
+                                     "rotate_firmware_password": False},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/recoverypasswordconfig_detail.html")
+        self.assertEqual(response.context["object"].reveal_rotation_delay, 0)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_recovery_password_configuration_post(self, post_event):
@@ -166,6 +218,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                                         {"name": name,
                                          "dynamic_password": True,
                                          "rotation_interval_days": 90,
+                                         "reveal_rotation_delay": 0,
                                          "rotate_firmware_password": True},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
@@ -190,6 +243,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                      "name": name,
                      "dynamic_password": True,
                      "rotation_interval_days": 90,
+                     "reveal_rotation_delay": 0,
                      "rotate_firmware_password": True,
                      "created_at": rp_config.created_at.isoformat(),
                      "updated_at": rp_config.updated_at.isoformat()
@@ -277,6 +331,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                                          "dynamic_password": False,
                                          "static_password": "12345678",
                                          "rotation_interval_days": 0,
+                                         "reveal_rotation_delay": 0,
                                          "rotate_firmware_password": False},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
@@ -302,6 +357,7 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
                      "name": new_name,
                      "dynamic_password": False,
                      "rotation_interval_days": 0,
+                     "reveal_rotation_delay": 0,
                      "rotate_firmware_password": False,
                      "created_at": rp_config2.created_at.isoformat(),
                      "updated_at": rp_config2.updated_at.isoformat()

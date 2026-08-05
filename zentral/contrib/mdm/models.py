@@ -7,6 +7,7 @@ import plistlib
 import uuid
 
 from django.contrib.postgres.fields import ArrayField, DateRangeField
+from django.core.exceptions import ValidationError
 from django.core.validators import (
     MaxValueValidator,
     MinLengthValidator,
@@ -155,6 +156,19 @@ class PushCertificate(models.Model):
         return d
 
 
+# Secret reveal rotations
+
+
+REVEAL_ROTATION_DELAY_MIN = 5
+REVEAL_ROTATION_DELAY_MAX = 1440
+
+
+def validate_reveal_rotation_delay(value):
+    # a very short delay would rotate the secret before the operator had a chance to use it
+    if value and value < REVEAL_ROTATION_DELAY_MIN:
+        raise ValidationError(f"Must be 0, or at least {REVEAL_ROTATION_DELAY_MIN} minutes.")
+
+
 # FileVault
 
 
@@ -256,6 +270,15 @@ class RecoveryPasswordConfig(models.Model):
         default=0,
         help_text="Interval in days after which the recovery password will be automatically rotated."
     )
+    reveal_rotation_delay = models.IntegerField(
+        verbose_name="Rotation delay after reveal (min)",
+        validators=[MinValueValidator(0), MaxValueValidator(REVEAL_ROTATION_DELAY_MAX),
+                    validate_reveal_rotation_delay],
+        default=60,
+        help_text="When a recovery password is read, delay in minutes after which a command to rotate "
+                  "the password on the device will be scheduled. 60 min by default, 5 min min., "
+                  "1 day max (1440 min). If 0, no automatic password rotation will be scheduled."
+    )
     rotate_firmware_password = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -303,6 +326,7 @@ class RecoveryPasswordConfig(models.Model):
         d.update({
             "dynamic_password": self.dynamic_password,
             "rotation_interval_days": self.rotation_interval_days,
+            "reveal_rotation_delay": self.reveal_rotation_delay,
             "rotate_firmware_password": self.rotate_firmware_password,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),

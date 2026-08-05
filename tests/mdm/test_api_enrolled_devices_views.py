@@ -1,18 +1,19 @@
 import json
 import plistlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from accounts.models import APIToken, User
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
-from zentral.contrib.mdm.commands import SetAutoAdminPassword
+from zentral.contrib.mdm.commands import SetAutoAdminPassword, SetFirmwarePassword, SetRecoveryLock
 from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.events import (
     AdminPasswordViewedEvent,
@@ -23,7 +24,12 @@ from zentral.contrib.mdm.events import (
 from zentral.contrib.mdm.models import Platform
 from zentral.core.events.base import AuditEvent
 
-from .utils import force_dep_enrollment_session, force_enrolled_user
+from .utils import (
+    force_blueprint,
+    force_dep_enrollment_session,
+    force_enrolled_user,
+    force_recovery_password_config,
+)
 
 
 class APIViewsTestCase(TestCase, LoginCase, RequestCase):
@@ -1226,6 +1232,77 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, RecoveryPasswordViewedEvent)
         self.assertEqual(event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+
+    # enrolled device recovery password auto rotation
+
+    def _reveal_recovery_password(self, apple_silicon=True, **config_kwargs):
+        self.enrolled_device.set_recovery_password("123456")
+        self.enrolled_device.apple_silicon = apple_silicon
+        self.enrolled_device.blueprint = force_blueprint(
+            recovery_password_config=force_recovery_password_config(**config_kwargs)
+        )
+        self.enrolled_device.save()
+        self.set_permissions("mdm.view_recovery_password")
+        response = self.get(reverse("mdm_api:enrolled_device_recovery_password",
+                                    args=(self.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_auto_rotation(self, post_event):
+        self._reveal_recovery_password(reveal_rotation_delay=60)
+        db_cmd_qs = self.enrolled_device.commands.all()
+        self.assertEqual(db_cmd_qs.count(), 1)
+        db_cmd = db_cmd_qs.first()
+        self.assertIsInstance(load_command(db_cmd), SetRecoveryLock)
+        self.assertIsNone(db_cmd.time)
+        self.assertAlmostEqual(db_cmd.not_before, timezone.now() + timedelta(minutes=60),
+                               delta=timedelta(seconds=30))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_auto_rotation_not_queued_twice(self, post_event):
+        self._reveal_recovery_password(reveal_rotation_delay=60)
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+        self.get(reverse("mdm_api:enrolled_device_recovery_password", args=(self.enrolled_device.pk,)))
+        self.assertEqual(self.enrolled_device.commands.count(), 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_no_auto_rotation(self, post_event):
+        self._reveal_recovery_password(reveal_rotation_delay=0)
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_no_auto_rotation_static_password(self, post_event):
+        self._reveal_recovery_password(reveal_rotation_delay=60, static_password="12345678")
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_no_auto_rotation_without_blueprint(self, post_event):
+        self.enrolled_device.set_recovery_password("123456")
+        self.enrolled_device.apple_silicon = True
+        self.enrolled_device.save()
+        self.set_permissions("mdm.view_recovery_password")
+        self.get(reverse("mdm_api:enrolled_device_recovery_password", args=(self.enrolled_device.pk,)))
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_auto_rotation_firmware_password(self, post_event):
+        self._reveal_recovery_password(apple_silicon=False, reveal_rotation_delay=60,
+                                       rotate_firmware_password=True)
+        db_cmd_qs = self.enrolled_device.commands.all()
+        self.assertEqual(db_cmd_qs.count(), 1)
+        self.assertIsInstance(load_command(db_cmd_qs.first()), SetFirmwarePassword)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_no_auto_rotation_firmware_password(self, post_event):
+        self._reveal_recovery_password(apple_silicon=False, reveal_rotation_delay=60)
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_enrolled_device_recovery_password_no_auto_rotation_pending_firmware_password(self, post_event):
+        self.enrolled_device.set_pending_firmware_password("12345678")
+        self._reveal_recovery_password(apple_silicon=False, reveal_rotation_delay=60,
+                                       rotate_firmware_password=True)
+        self.assertEqual(self.enrolled_device.commands.count(), 0)
 
     # enrolled device admin password
 

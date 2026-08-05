@@ -463,7 +463,7 @@ Apple rotates beta enrollment tokens between OS upgrade periods. When that happe
 
 Recovery Password Configuration manages both **recoveryOS password protection** for Apple Silicon Macs and **firmware password protection** for Intel-based Macs via MDM. This prevents unauthorized access when Macs are started in recovery mode.
 
-There are two types of passwords, static passwords, which set the same password for all devices, and dynamic passwords, which generate unique passwords for each device. A password rotation can be set only for dynamic passwords, the password rotation interval can be set in days (a value of `0` disables rotation). For Intel-based Macs, there is an extra checkbox to enable firmware password rotation, as Zentral needs to send a reboot command via MDM to apply the new password.
+There are two types of passwords, static passwords, which set the same password for all devices, and dynamic passwords, which generate unique passwords for each device. A password rotation can be set only for dynamic passwords, the password rotation interval can be set in days (a value of `0` disables rotation). A rotation can also be scheduled after each reveal of the password, either in the Zentral UI or via the API, with a delay in minutes long enough for the password to be used first (a value of `0` disables it, `5` min minimum, `1440` min – 1 day – maximum). Multiple reveals do not queue up multiple rotations. For Intel-based Macs, there is an extra checkbox to enable firmware password rotation, as Zentral needs to send a reboot command via MDM to apply the new password.
 
 ### Configuring a Recovery Password
 
@@ -474,6 +474,7 @@ There are two types of passwords, static passwords, which set the same password 
    - **Dynamic Password**: Enable to generate unique passwords for each device.
    - **Static Password**: Provide a static password for all devices *(only available when Dynamic Password is disabled)*.
    - **Rotation Interval (days)**: Set the interval for automatic password rotation. Enter `0` to disable rotation.
+   - **Rotation Delay After Reveal (min)**: Set the delay after which the password of a device is rotated, once it has been revealed. Enter `0` to disable rotation after reveal.
    - **Rotate Firmware Password**: Enable firmware password rotation *(only for Intel-based Macs; a reboot is required to apply the new password)*.
 4. Click *Save* to apply the configuration.
 

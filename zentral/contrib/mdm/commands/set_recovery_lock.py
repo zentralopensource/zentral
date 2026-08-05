@@ -72,6 +72,20 @@ class SetRecoveryLock(Command):
             uuid=uuid,
         )
 
+    @classmethod
+    def create_for_auto_rotation(cls, target, delay_min):
+        if cls.is_queued_for_target(target):
+            logger.warning("Set recovery lock command for device %s already scheduled", target.enrolled_device)
+            return
+        uuid = uuid4()
+        password = generate_password()
+        return super().create_for_target(
+            target,
+            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid))},
+            queue=True, delay=delay_min * 60,
+            uuid=uuid,
+        )
+
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
         return (

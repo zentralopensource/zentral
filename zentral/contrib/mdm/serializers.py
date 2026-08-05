@@ -375,13 +375,14 @@ class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
         model = RecoveryPasswordConfig
         fields = ("id", "name",
                   "dynamic_password", "static_password",
-                  "rotation_interval_days", "rotate_firmware_password",
+                  "rotation_interval_days", "reveal_rotation_delay", "rotate_firmware_password",
                   "created_at", "updated_at")
 
     def validate(self, data):
         dynamic_password = data.get("dynamic_password", True)
         static_password = data.get("get_static_password")
         rotation_interval_days = data.get("rotation_interval_days")
+        reveal_rotation_delay = data.get("reveal_rotation_delay")
         rotate_firmware_password = data.get("rotate_firmware_password")
         errors = {}
         if dynamic_password:
@@ -392,10 +393,16 @@ class RecoveryPasswordConfigSerializer(serializers.ModelSerializer):
                 errors["static_password"] = "Required when dynamic_password is false"
             if rotation_interval_days:
                 errors["rotation_interval_days"] = "Cannot be set with a static password"
+            if reveal_rotation_delay:
+                errors["reveal_rotation_delay"] = "Cannot be set with a static password"
+            else:
+                # the field is not required, and its model default is not 0
+                data["reveal_rotation_delay"] = 0
             if rotate_firmware_password:
                 errors["rotate_firmware_password"] = "Cannot be set with a static password"
-        if rotate_firmware_password and not rotation_interval_days:
-            errors["rotate_firmware_password"] = "Cannot be set without a rotation interval"
+        if rotate_firmware_password and not rotation_interval_days and not reveal_rotation_delay:
+            errors["rotate_firmware_password"] = ("Cannot be set without a rotation interval "
+                                                  "or a rotation delay after reveal")
         if errors:
             raise serializers.ValidationError(errors)
         return data

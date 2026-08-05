@@ -66,6 +66,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
               'dynamic_password': rp_config.dynamic_password,
               'static_password': rp_config.static_password,
               'rotation_interval_days': 0,
+              'reveal_rotation_delay': 0,
               'rotate_firmware_password': False,
               'created_at': rp_config.created_at.isoformat(),
               'updated_at': rp_config.updated_at.isoformat()}]
@@ -85,6 +86,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
               'dynamic_password': rp_config.dynamic_password,
               'static_password': static_password,
               'rotation_interval_days': 0,
+              'reveal_rotation_delay': 0,
               'rotate_firmware_password': False,
               'created_at': rp_config.created_at.isoformat(),
               'updated_at': rp_config.updated_at.isoformat()}]
@@ -116,6 +118,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
              'dynamic_password': rp_config.dynamic_password,
              'static_password': static_password,
              'rotation_interval_days': 17,
+             'reveal_rotation_delay': 0,
              'rotate_firmware_password': False,
              'created_at': rp_config.created_at.isoformat(),
              'updated_at': rp_config.updated_at.isoformat()}
@@ -154,6 +157,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
              'dynamic_password': False,
              'static_password': "12345678",
              'rotation_interval_days': 0,
+             'reveal_rotation_delay': 0,
              'rotate_firmware_password': False,
              'created_at': rp_config.created_at.isoformat(),
              'updated_at': rp_config.updated_at.isoformat()}
@@ -171,6 +175,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
                      "name": name,
                      "dynamic_password": False,
                      "rotation_interval_days": 0,
+                     "reveal_rotation_delay": 0,
                      "rotate_firmware_password": False,
                      "created_at": rp_config.created_at.isoformat(),
                      "updated_at": rp_config.updated_at.isoformat()
@@ -209,8 +214,63 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
         self.assertEqual(
             response.json(),
             {'static_password': ['Cannot be set when dynamic_password is true'],
-             'rotate_firmware_password': ['Cannot be set without a rotation interval']}
+             'rotate_firmware_password': [
+                'Cannot be set without a rotation interval or a rotation delay after reveal'
+            ]}
         )
+
+    def test_update_recovery_password_reveal_rotation_delay_too_short_error(self):
+        rp_config = force_recovery_password_config()
+        self.set_permissions("mdm.change_recoverypasswordconfig")
+        response = self.put(reverse("mdm_api:recovery_password_config", args=(rp_config.pk,)),
+                            {"name": get_random_string(12),
+                             "dynamic_password": True,
+                             "reveal_rotation_delay": 4})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'reveal_rotation_delay': ['Must be 0, or at least 5 minutes.']}
+        )
+
+    def test_update_recovery_password_static_reveal_rotation_delay_error(self):
+        rp_config = force_recovery_password_config()
+        self.set_permissions("mdm.change_recoverypasswordconfig")
+        response = self.put(reverse("mdm_api:recovery_password_config", args=(rp_config.pk,)),
+                            {"name": get_random_string(12),
+                             "dynamic_password": False,
+                             "static_password": "12345678",
+                             "reveal_rotation_delay": 60})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'reveal_rotation_delay': ['Cannot be set with a static password']}
+        )
+
+    def test_update_recovery_password_firmware_rotation_after_reveal_only(self):
+        rp_config = force_recovery_password_config()
+        self.set_permissions("mdm.change_recoverypasswordconfig")
+        response = self.put(reverse("mdm_api:recovery_password_config", args=(rp_config.pk,)),
+                            {"name": get_random_string(12),
+                             "dynamic_password": True,
+                             "rotation_interval_days": 0,
+                             "reveal_rotation_delay": 60,
+                             "rotate_firmware_password": True})
+        self.assertEqual(response.status_code, 200)
+        rp_config.refresh_from_db()
+        self.assertEqual(rp_config.rotation_interval_days, 0)
+        self.assertEqual(rp_config.reveal_rotation_delay, 60)
+        self.assertTrue(rp_config.rotate_firmware_password)
+
+    def test_create_recovery_password_config_static_password_no_reveal_rotation(self):
+        self.set_permissions("mdm.add_recoverypasswordconfig")
+        name = get_random_string(12)
+        response = self.post(reverse("mdm_api:recovery_password_configs"),
+                             {"name": name,
+                              "dynamic_password": False,
+                              "static_password": "12345678"})
+        self.assertEqual(response.status_code, 201)
+        # the model default would otherwise apply
+        self.assertEqual(RecoveryPasswordConfig.objects.get(name=name).reveal_rotation_delay, 0)
 
     def test_update_recovery_password_required_static_password_error(self):
         rp_config = force_recovery_password_config()
@@ -269,6 +329,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
              'dynamic_password': True,
              'static_password': None,
              'rotation_interval_days': 17,
+             'reveal_rotation_delay': 0,
              'rotate_firmware_password': True,
              'created_at': rp_config.created_at.isoformat(),
              'updated_at': rp_config.updated_at.isoformat()}
@@ -286,6 +347,7 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
                      "name": new_name,
                      "dynamic_password": True,
                      "rotation_interval_days": 17,
+                     "reveal_rotation_delay": 0,
                      "rotate_firmware_password": True,
                      "created_at": rp_config.created_at.isoformat(),
                      "updated_at": rp_config.updated_at.isoformat()

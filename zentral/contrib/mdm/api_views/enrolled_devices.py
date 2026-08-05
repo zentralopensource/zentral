@@ -15,7 +15,13 @@ from rest_framework.views import APIView
 from zentral.contrib.inventory.models import MachineTag, Tag
 from zentral.contrib.mdm.apns import send_enrolled_device_notification
 from zentral.contrib.mdm.artifacts import Target
-from zentral.contrib.mdm.commands import CustomCommand, DeviceLock, EraseDevice
+from zentral.contrib.mdm.commands import (
+    CustomCommand,
+    DeviceLock,
+    EraseDevice,
+    SetFirmwarePassword,
+    SetRecoveryLock,
+)
 from zentral.contrib.mdm.events import (
     post_filevault_prk_viewed_event,
     post_recovery_password_viewed_event,
@@ -278,11 +284,34 @@ class EnrolledDeviceRecoveryPassword(APIView):
     permission_required = "mdm.view_recovery_password"
     permission_classes = [DjangoPermissionRequired]
 
+    def schedule_password_rotation(self, enrolled_device):
+        blueprint = enrolled_device.blueprint
+        if not blueprint:
+            return
+        recovery_password_config = blueprint.recovery_password_config
+        if (
+            not recovery_password_config
+            or not recovery_password_config.dynamic_password
+            or not recovery_password_config.reveal_rotation_delay
+        ):
+            return
+        target = Target(enrolled_device)
+        for cmd_class in (SetRecoveryLock, SetFirmwarePassword):
+            if cmd_class.verify_target(target):
+                break
+        else:
+            return
+        if cmd_class is SetFirmwarePassword and not recovery_password_config.rotate_firmware_password:
+            # a firmware password change requires a reboot, only rotate it if it is explicitly configured
+            return
+        cmd_class.create_for_auto_rotation(target, recovery_password_config.reveal_rotation_delay)
+
     def get(self, request, *args, **kwargs):
         enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
         recovery_password = enrolled_device.get_recovery_password()
         if recovery_password:
             post_recovery_password_viewed_event(request, enrolled_device)
+            self.schedule_password_rotation(enrolled_device)
         return Response({
             "id": enrolled_device.pk,
             "serial_number": enrolled_device.serial_number,

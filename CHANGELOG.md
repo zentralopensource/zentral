@@ -3,6 +3,11 @@
 
 ### Features
 
+#### MDM
+
+Recovery password configurations can schedule a password rotation after each reveal of the password, like DEP enrollments already do for the auto admin password.
+
+
 #### Monolith
 
 Repository syncs now run in the background. Repositories that need more than the request timeout to sync are supported, and concurrent syncs of the same repository are prevented.
