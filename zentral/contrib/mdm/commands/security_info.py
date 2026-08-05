@@ -15,6 +15,9 @@ from .restart_device import RestartDevice
 logger = logging.getLogger("zentral.contrib.mdm.commands.security_info")
 
 
+PRK_ESCROW_DELAY = 10 * 60  # TODO hardcoded
+
+
 class SecurityInfoForm(CommandBaseForm):
     pass
 
@@ -34,6 +37,14 @@ class SecurityInfo(Command):
                 or enrolled_device.platform in (Platform.IOS, Platform.IPADOS, Platform.MACOS)
             )
         )
+
+    @classmethod
+    def create_for_prk_escrow(cls, target):
+        # the device escrows the PRK on its own, FDE_PersonalRecoveryKeyCMS carries it back:
+        # a delayed security info picks the new key up without waiting for the next inventory
+        if cls.is_queued_for_target(target):
+            return
+        return cls.create_for_target(target, queue=True, delay=PRK_ESCROW_DELAY)
 
     def command_acknowledged(self):
         security_info = self.response.get("SecurityInfo")

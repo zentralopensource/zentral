@@ -155,12 +155,7 @@ class SetupFileVault(Command):
     def command_acknowledged(self):
         self.enrolled_device.filevault_config_uuid = self.filevault_config_uuid
         self.enrolled_device.save()
-        # schedule a delayed SecurityInfo command to fetch the PRK
-        filevault_prk_escrow_delay = 10 * 60  # 10 min. TODO hardcoded
-        SecurityInfo.create_for_target(
-            self.target,
-            queue=True, delay=filevault_prk_escrow_delay
-        )
+        SecurityInfo.create_for_prk_escrow(self.target)
 
 
 register_command(SetupFileVault)

@@ -6,12 +6,14 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import load_der_x509_certificate
 from django.test import TestCase
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import RotateFileVaultKey
 from zentral.contrib.mdm.commands.scheduling import _rotate_filevault_key
+from zentral.contrib.mdm.commands.security_info import PRK_ESCROW_DELAY
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.events import FileVaultPRKUpdatedEvent
 from zentral.contrib.mdm.models import Channel, Command, Platform, RequestStatus
@@ -126,6 +128,7 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
         self.enrolled_device.refresh_from_db()
         self.assertEqual(self.enrolled_device.get_filevault_prk(), "BBBB-BBBB-BBBB-BBBB-BBBB-BBBB")
+        self.assertEqual(self.enrolled_device.commands.filter(name="SecurityInfo").count(), 0)
         # event
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 1)
@@ -140,6 +143,44 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
         self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
         self.assertEqual(metadata["tags"], ["mdm"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_without_new_key_schedules_prk_escrow(self, post_event):
+        self.enrolled_device.user_enrollment = False
+        self.enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        self.enrolled_device.save()
+        cmd = RotateFileVaultKey.create_for_target(Target(self.enrolled_device))
+        with self.captureOnCommitCallbacks(execute=True):
+            cmd.process_response(
+                {"UDID": self.enrolled_device.udid,
+                 "Status": "Acknowledged",
+                 "CommandUUID": str(cmd.uuid).upper()},
+                self.dep_enrollment_session,
+                self.mbu
+            )
+        db_cmd_qs = self.enrolled_device.commands.filter(name="SecurityInfo")
+        self.assertEqual(db_cmd_qs.count(), 1)
+        db_cmd = db_cmd_qs.first()
+        self.assertIsNone(db_cmd.time)
+        self.assertAlmostEqual(db_cmd.not_before, timezone.now() + timedelta(seconds=PRK_ESCROW_DELAY),
+                               delta=timedelta(seconds=30))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_process_acknowledged_response_prk_escrow_not_queued_twice(self, post_event):
+        self.enrolled_device.user_enrollment = False
+        self.enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        self.enrolled_device.save()
+        for _ in range(2):
+            cmd = RotateFileVaultKey.create_for_target(Target(self.enrolled_device))
+            with self.captureOnCommitCallbacks(execute=True):
+                cmd.process_response(
+                    {"UDID": self.enrolled_device.udid,
+                     "Status": "Acknowledged",
+                     "CommandUUID": str(cmd.uuid).upper()},
+                    self.dep_enrollment_session,
+                    self.mbu
+                )
+        self.assertEqual(self.enrolled_device.commands.filter(name="SecurityInfo").count(), 1)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_process_acknowledged_cms_error_response(self, post_event):
@@ -161,6 +202,7 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
         self.enrolled_device.refresh_from_db()
         self.assertEqual(self.enrolled_device.get_filevault_prk(), "AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        self.assertEqual(self.enrolled_device.commands.filter(name="SecurityInfo").count(), 1)
         # no events
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 0)
@@ -191,6 +233,7 @@ class RotateFileVaultKeyCommandTestCase(TestCase):
         self.assertEqual(cmd.db_command.status, Command.Status.ACKNOWLEDGED)
         self.enrolled_device.refresh_from_db()
         self.assertEqual(self.enrolled_device.get_filevault_prk(), "AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
+        self.assertEqual(self.enrolled_device.commands.filter(name="SecurityInfo").count(), 0)
         # no events
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 0)

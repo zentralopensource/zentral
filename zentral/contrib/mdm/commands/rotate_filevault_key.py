@@ -16,6 +16,7 @@ from zentral.core.secret_engines import decrypt, encrypt
 from zentral.utils.time import naive_utcnow
 
 from .base import Command, CommandBaseForm, register_command
+from .security_info import SecurityInfo
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.rotate_filevault_key")
 
@@ -108,6 +109,7 @@ class RotateFileVaultKey(Command):
         }
 
     def command_acknowledged(self):
+        prk = None
         prk_cms = self.response.get("RotateResult", {}).get("EncryptedNewRecoveryKey")
         if prk_cms:
             encryption_key = self.load_encryption_key()
@@ -116,11 +118,15 @@ class RotateFileVaultKey(Command):
             except Exception:
                 logger.exception("Could not decrypt enrolled device %s new FileVault PRK",
                                  self.enrolled_device.serial_number)
-            else:
-                if prk and prk != self.enrolled_device.get_filevault_prk():
-                    self.enrolled_device.set_filevault_prk(prk)
-                    self.enrolled_device.save()
-                    transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
+        if prk:
+            if prk != self.enrolled_device.get_filevault_prk():
+                self.enrolled_device.set_filevault_prk(prk)
+                self.enrolled_device.save()
+                transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
+        else:
+            # the new key is optional in the response, and it can fail to decrypt:
+            # fall back on the escrowed key, which the security info reports
+            SecurityInfo.create_for_prk_escrow(self.target)
 
 
 register_command(RotateFileVaultKey)
