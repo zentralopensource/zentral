@@ -51,6 +51,7 @@ def get_encryption_cert_der_bytes(encryption_key):
 class RotateFileVaultKey(Command):
     request_type = "RotateFileVaultKey"
     display_name = "Rotate FileVault key"
+    verify_target_before_delivery = True
     form_class = RotateFileVaultKeyForm
     audit_secret_kwargs = ("encryption_key",)
 

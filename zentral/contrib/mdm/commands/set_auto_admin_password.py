@@ -60,6 +60,7 @@ class SetAutoAdminPassword(Command):
     request_type = "SetAutoAdminPassword"
     display_name = "Set auto admin password"
     reschedule_notnow = True
+    verify_target_before_delivery = True
     form_class = SetAutoAdminPasswordForm
     audit_secret_kwargs = ("new_password",)
 

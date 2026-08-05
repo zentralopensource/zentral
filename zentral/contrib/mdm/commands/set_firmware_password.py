@@ -35,6 +35,7 @@ class SetFirmwarePassword(Command):
     request_type = "SetFirmwarePassword"
     display_name = "Set firmware password"
     reschedule_notnow = True
+    verify_target_before_delivery = True
     form_class = SetFirmwarePasswordForm
     audit_secret_kwargs = ("new_password",)
 

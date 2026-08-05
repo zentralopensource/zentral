@@ -57,6 +57,7 @@ class SetRecoveryLock(Command):
     request_type = "SetRecoveryLock"
     display_name = "Set recovery lock"
     reschedule_notnow = True
+    verify_target_before_delivery = True
     form_class = SetRecoveryLockForm
     audit_secret_kwargs = ("new_password",)
 

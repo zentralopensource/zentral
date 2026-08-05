@@ -24,6 +24,10 @@ class Command:
     artifact_operation = None
     store_result = False
     reschedule_notnow = False
+    # A queued command is only verified when it is created. For commands whose channel and device
+    # requirements cover mutable device state, set this to have the target verified again just
+    # before delivery: the command stays queued until the device is a valid target again.
+    verify_target_before_delivery = False
     form_class = None
     serializer_class = None
 

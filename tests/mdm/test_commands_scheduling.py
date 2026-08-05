@@ -5,7 +5,7 @@ from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
-from zentral.contrib.mdm.commands import DeviceInformation
+from zentral.contrib.mdm.commands import DeviceInformation, SetFirmwarePassword
 from zentral.contrib.mdm.commands.scheduling import (
     _get_next_queued_command,
     _update_base_inventory,
@@ -92,6 +92,58 @@ class TestMDMCommandsScheduling(TestCase):
             RequestStatus.IDLE,
         )
         self.assertEqual(cmd, cmd2)
+
+    def test_queued_command_stays_queued_while_target_not_verified(self):
+        cmd = SetFirmwarePassword.create_for_device(self.enrolled_device, queue=True)
+        self.enrolled_device.set_pending_firmware_password("12345678")
+        self.enrolled_device.save()
+        self.assertIsNone(
+            _get_next_queued_command(
+                Target(self.enrolled_device),
+                self.dep_enrollment_session,
+                RequestStatus.IDLE,
+            )
+        )
+        cmd.db_command.refresh_from_db()
+        self.assertIsNone(cmd.db_command.time)
+
+    def test_queued_command_delivered_when_target_verified_again(self):
+        cmd = SetFirmwarePassword.create_for_device(self.enrolled_device, queue=True)
+        self.enrolled_device.set_pending_firmware_password("12345678")
+        self.enrolled_device.save()
+        self.assertIsNone(
+            _get_next_queued_command(
+                Target(self.enrolled_device),
+                self.dep_enrollment_session,
+                RequestStatus.IDLE,
+            )
+        )
+        self.enrolled_device.set_pending_firmware_password(None)
+        self.enrolled_device.save()
+        self.assertEqual(
+            cmd,
+            _get_next_queued_command(
+                Target(self.enrolled_device),
+                self.dep_enrollment_session,
+                RequestStatus.IDLE,
+            )
+        )
+
+    def test_unverified_queued_command_does_not_block_the_next_one(self):
+        skipped_cmd = SetFirmwarePassword.create_for_device(self.enrolled_device, queue=True)
+        cmd = DeviceInformation.create_for_device(self.enrolled_device, queue=True)
+        self.enrolled_device.set_pending_firmware_password("12345678")
+        self.enrolled_device.save()
+        self.assertEqual(
+            cmd,
+            _get_next_queued_command(
+                Target(self.enrolled_device),
+                self.dep_enrollment_session,
+                RequestStatus.IDLE,
+            )
+        )
+        skipped_cmd.db_command.refresh_from_db()
+        self.assertIsNone(skipped_cmd.db_command.time)
 
     # update inventory
 

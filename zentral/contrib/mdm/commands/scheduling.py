@@ -139,9 +139,12 @@ def _get_next_queued_command(target, enrollment_session, status):
         queryset = queryset.filter(
             Q(time__isnull=True) | Q(status=RequestStatus.NOT_NOW, name__in=reschedule_db_names)
         )
-    db_command = queryset.filter(**kwargs).order_by("created_at").first()
-    if db_command:
+    for db_command in queryset.filter(**kwargs).order_by("created_at"):
         command = load_command(db_command)
+        if command.verify_target_before_delivery and not command.verify_target(target):
+            logger.warning("Enrolled device %s is not a valid target for queued command %s anymore",
+                           target.enrolled_device.udid, db_command.uuid)
+            continue
         command.set_time()
         return command
 
