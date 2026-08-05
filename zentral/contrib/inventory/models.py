@@ -4,7 +4,7 @@ import logging
 import re
 import urllib.parse
 from collections import Counter
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -28,7 +28,7 @@ from zentral.core.compliance_checks.utils import get_machine_compliance_check_st
 from zentral.core.incidents.models import MachineIncident, Status
 from zentral.utils.model_extras import find_all_related_objects
 from zentral.utils.mt_models import AbstractMTObject, MTObjectManager, prepare_commit_tree
-from zentral.utils.time import naive_utcnow, naive_utc_fromisoformat
+from zentral.utils.time import naive_utc_fromisoformat, naive_utcnow
 
 from .conf import (
     PLATFORM_CHOICES,

@@ -389,3 +389,48 @@ td > p:last-child, td > table:last-child {
 select#id_permissions {
   height: 60vh;
 }
+
+.app-instance-expandable {
+    cursor: pointer;
+}
+
+.app-instance-toggle {
+    pointer-events: none;
+    .bi {
+        display: inline-block;
+        transition: transform .15s ease-in-out;
+
+        &::before {
+            font-size: 10px;
+        }
+    }
+}
+
+.app-instance-toggle:not(.collapsed) .bi {
+    transform: rotate(90deg);
+}
+
+// non-expandable rows: muted placeholder in the chevron slot, so it reads as "no details"
+.app-instance-no-details {
+    color: var(--bs-secondary-color, #6c757d);
+    opacity: .4;
+    .bi {
+        display: inline-block;
+
+        &::before {
+            font-size: 10px;
+        }
+    }
+}
+
+.app-instance-details>td {
+    border-bottom-width: 0;
+}
+
+.app-instance-summary:has(+ .app-instance-details .collapse.show)>td {
+    border-bottom-width: 0;
+}
+
+.app-instance-details:has(.collapse.show)>td {
+    border-bottom: 1px solid var(--bs-border-color);
+}
