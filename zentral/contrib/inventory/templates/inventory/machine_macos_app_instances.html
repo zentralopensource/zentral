@@ -32,19 +32,27 @@
 
 {% for ms, rows in tabs %}
 <div class="table-reponsive appstab" id="apps-{{ ms.id }}" style="margin-top:10px;{% if not forloop.first %} display:none{% endif %}">
-  <table class="table table-striped align-middle table-hover table-filtered table-app-instances">
+  <table class="table align-middle table-hover table-filtered table-app-instances">
     <thead>
       <tr>
-        <th width="30%">Bundle</th>
-        <th width="10%">Version</th>
-        <th width="30%">Path</th>
-        <th width="30%">Code signing</th>
+        <th width="70%">Bundle</th>
+        <th width="30%">Version</th>
       </tr>
     </thead>
     <tbody>
       {% for app_instance, app, bundle_link, version_link in rows %}
-      <tr>
+      <tr class="app-instance-summary{% if app_instance.bundle_path %} app-instance-expandable{% endif %}">
         <td class="search-cell align-top">
+          {% if app_instance.bundle_path %}
+          <span class="me-1 app-instance-toggle collapsed" role="button"
+                data-bs-toggle="collapse" data-bs-target="#ai-details-{{ ms.id }}-{{ app_instance.id }}"
+                aria-expanded="false" aria-controls="ai-details-{{ ms.id }}-{{ app_instance.id }}"
+                aria-label="Toggle details">
+            <i class="bi bi-chevron-right"></i>
+          </span>
+          {% else %}
+          <span class="me-1 app-instance-no-details" aria-hidden="true"><i class="bi bi-dash"></i></span>
+          {% endif %}
           {% if bundle_link %}
           <a href="{{ bundle_link }}">{{ app.all_names|join:" / "|default:"-" }}</a>
           {% else %}
@@ -65,67 +73,85 @@
           </a>
           {% endif %}
         </td>
-        <td class="align-top">
-          <dl class="row small mb-0">
-            {% if app_instance.bundle_path %}
-            <dt>Bundle path</dt>
-            <dd><code>{{ app_instance.bundle_path }}</code></dd>
+      </tr>
+      {% if app_instance.bundle_path %}
+      <tr class="app-instance-details">
+        <td colspan="2" class="p-0 search-cell">
+          <div class="collapse" id="ai-details-{{ ms.id }}-{{ app_instance.id }}">
+            <div class="row small p-4 pb-0">
+              <div class="col-md-6">
+                <dl class="row mb-0">
+                  {% if app_instance.bundle_path %}
+                  <dt class="col-sm-3">Bundle path</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.bundle_path }}</code></dd>
+                  {% endif %}
+                  {% if app_instance.executable_path %}
+                  <dt class="col-sm-3">Executable path</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.executable_path }}</code></dd>
+                  {% endif %}
+                  {% if app_instance.sha_1 %}
+                  <dt class="col-sm-3">SHA</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.sha_1 }}</code></dd>
+                  {% endif %}
+                  {% if app_instance.sha_256 %}
+                  <dt class="col-sm-3">SHA 256</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.sha_256 }}</code></dd>
+                  {% endif %}
+                </dl>
+              </div>
+              <div class="col-md-6">
+                <dl class="row mb-0">
+                  {% if app_instance.team_id %}
+                  <dt class="col-sm-3">Team ID</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.team_id }}</code></dd>
+                  {% endif %}
+                  {% if app_instance.cd_hash %}
+                  <dt class="col-sm-3">Cdhash</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.cd_hash }}</code></dd>
+                  {% endif %}
+                  {% if app_instance.signing_time %}
+                  <dt class="col-sm-3">Signed</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.signing_time|date:'r' }}</code></dd>
+                  {% endif %}
+                  {% if app_instance.secure_signing_time %}
+                  <dt class="col-sm-3">Secure signed</dt>
+                  <dd class="col-sm-9"><code>{{ app_instance.secure_signing_time|date:'r' }}</code></dd>
+                  {% endif %}
+                  {% if app_instance.signed_by %}
+                  <dt class="col-sm-3">Signed by</dt>
+                  <dd class="col-sm-9">
+                    {% for cert in app_instance.certificate_chain %}
+                    {% if not forloop.first %} → {% endif %}<code>{{ cert.short_repr }}</code>
+                    {% endfor %}
+                  </dd>
+                  {% endif %}
+                </dl>
+              </div>
+            </div>
+            {% if app_instance.entitlements or app_instance.signed_by %}
+            <div class="row small p-4">
+              <div class="col-md-6 text-center">
+                {% if app_instance.entitlements %}
+                  <button class="btn btn-sm btn-outline-secondary small" type="button"
+                        data-bs-toggle="modal" data-bs-target="#ent-{{ ms.id }}-{{ app_instance.id }}">
+                    <i class="bi bi-braces"></i> Entitlements
+                  </button>
+                {% endif %}
+              </div>
+              <div class="col-md-6 text-center">
+                {% if app_instance.signed_by %}
+                  <button class="btn btn-sm btn-outline-secondary small" type="button"
+                          data-bs-toggle="modal" data-bs-target="#cert-{{ ms.id }}-{{ app_instance.id }}">
+                    <i class="bi bi-patch-check"></i> Certificates
+                  </button>
+                {% endif %}
+              </div>
+            </div>
             {% endif %}
-            {% if app_instance.executable_path %}
-            <dt>Executable path</dt>
-            <dd><code>{{ app_instance.executable_path }}</code></dd>
-            {% endif %}
-            {% if app_instance.sha_1 %}
-            <dt>SHA</dt>
-            <dd><code>{{ app_instance.sha_1 }}</code></dd>
-            {% endif %}
-            {% if app_instance.sha_256 %}
-            <dt>SHA 256</dt>
-            <dd><code>{{ app_instance.sha_256 }}</code></dd>
-            {% endif %}
-          </dl>
-        </td>
-        <td class="align-top">
-          <dl class="row small mb-0">
-            {% if app_instance.team_id %}
-            <dt>Team ID</dt>
-            <dd><code>{{ app_instance.team_id }}</code></dd>
-            {% endif %}
-            {% if app_instance.cd_hash %}
-            <dt>Cdhash</dt>
-            <dd><code>{{ app_instance.cd_hash }}</code></dd>
-            {% endif %}
-            {% if app_instance.signing_time %}
-            <dt>Signed</dt>
-            <dd><code>{{ app_instance.signing_time|date:'r' }}</code></dd>
-            {% endif %}
-            {% if app_instance.secure_signing_time %}
-            <dt>Secure signed</dt>
-            <dd><code>{{ app_instance.secure_signing_time|date:'r' }}</code></dd>
-            {% endif %}
-            {% if app_instance.signed_by %}
-            <dt>Signed by</dt>
-            <dd>
-              {% for cert in app_instance.certificate_chain %}
-              {% if not forloop.first %} → {% endif %}<code>{{ cert.short_repr }}</code>
-              {% endfor %}
-            </dd>
-            {% endif %}
-          </dl>
-          {% if app_instance.signed_by %}
-          <button class="btn btn-sm btn-outline-secondary small" type="button"
-                  data-bs-toggle="modal" data-bs-target="#cert-{{ ms.id }}-{{ app_instance.id }}">
-            <i class="bi bi-patch-check"></i> Certificates
-          </button>
-          {% endif %}
-          {% if app_instance.entitlements %}
-          <button class="btn btn-sm btn-outline-secondary small" type="button"
-                  data-bs-toggle="modal" data-bs-target="#ent-{{ ms.id }}-{{ app_instance.id }}">
-            <i class="bi bi-braces"></i> Entitlements
-          </button>
-          {% endif %}
+          </div>
         </td>
       </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>
@@ -193,7 +219,7 @@
     </dd>
     {% endif %}
   </dl>
-</div><!-- snapshot apps tab end -->
+</div><!-- snapshot apps {{ms.source.name}} tab end -->
 {% endfor %}
 {% endif %}
 {% endblock %}
@@ -210,23 +236,33 @@
   }
 
   function filterTables(tables, $input) {
-    var filter, tr, td, i, txtValue, lineMatched;
+    var filter, summaries, summary, details, rows, matched, td, i, k, j, txtValue;
     filter = $input.val().toUpperCase();
     tables.forEach(function(table) {
-      tr = table.getElementsByTagName("tr");
-      for (i = 1; i < tr.length; i++) {
-        lineMatched = false;
-        td = tr[i].getElementsByClassName("search-cell");
-        for (j=0; j < td.length; j++) {
-          txtValue = td[j].textContent || td[j].innerText;
-          if (txtValue.toUpperCase().indexOf(filter) > -1) {
-            tr[i].style.display = "";
-            lineMatched = true;
-            break
+      summaries = table.getElementsByClassName("app-instance-summary");
+      for (i = 0; i < summaries.length; i++) {
+        summary = summaries[i];
+        // an app instance is a summary row plus its (optional) details row: search and
+        // toggle them as one unit so a match never orphans one row from the other
+        details = summary.nextElementSibling;
+        if (details && !details.classList.contains("app-instance-details")) {
+          details = null;
+        }
+        rows = details ? [summary, details] : [summary];
+        matched = false;
+        for (k = 0; k < rows.length && !matched; k++) {
+          td = rows[k].getElementsByClassName("search-cell");
+          for (j = 0; j < td.length; j++) {
+            txtValue = td[j].textContent || td[j].innerText;
+            if (txtValue.toUpperCase().indexOf(filter) > -1) {
+              matched = true;
+              break;
+            }
           }
         }
-        if (lineMatched === false) {
-            tr[i].style.display = "none";
+        summary.style.display = matched ? "" : "none";
+        if (details) {
+          details.style.display = matched ? "" : "none";
         }
       }
     });
@@ -240,6 +276,14 @@
     var tables = document.querySelectorAll(".table-filtered");
     $("#search-input").keyup(function (event) {
       filterTables(tables, $(this));
+    });
+    $(".app-instance-expandable").click(function (event) {
+      // let the dedicated links navigate instead of toggling the details, and
+      // ignore the synthetic click we forward to the toggle (it bubbles back here)
+      if ($(event.target).closest("a, .app-instance-toggle").length) {
+        return;
+      }
+      this.querySelector(".app-instance-toggle").click();
     });
   });
 </script>
