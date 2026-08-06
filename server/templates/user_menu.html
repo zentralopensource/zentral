@@ -66,6 +66,9 @@
             {% if perms.terraform.view_state %}
             <li><a class="dropdown-item" href="{% url 'terraform:index' %}">Terraform</a></li>
             {% endif %}
+            {% if zentral_openapi %}
+            <li><a class="dropdown-item" href="{% url 'elements' %}" target="openapi">API documentation</a></li>
+            {% endif %}
         </ul>
     </li>
     <li class="nav-item dropdown">

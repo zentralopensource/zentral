@@ -6,9 +6,11 @@ from django.db.models import Exists, JSONField, OuterRef
 from django.db.models.expressions import RawSQL
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -16,6 +18,7 @@ from zentral.contrib.inventory.models import MachineTag, Tag
 from zentral.contrib.mdm.apns import send_enrolled_device_notification
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import CustomCommand, DeviceLock, EraseDevice
+from zentral.contrib.mdm.commands.device_lock import DeviceLockSerializer
 from zentral.contrib.mdm.events import (
     post_filevault_prk_viewed_event,
     post_recovery_password_viewed_event,
@@ -194,24 +197,26 @@ class UnblockEnrolledDevice(UpdateEnrolledDeviceBlockView):
         enrolled_device.unblock()
 
 
-class CreateEnrolledDeviceCommandView(APIView):
+class CreateEnrolledDeviceCommandView(CreateAPIView):
     permission_required = "mdm.add_devicecommand"
     permission_classes = [DjangoPermissionRequired]
+    serializer_class = DeviceCommandSerializer
+    queryset = EnrolledDevice.objects.all()
 
-    def post(self, request, *args, **kwargs):
-        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+    def create(self, request, *args, **kwargs):
+        enrolled_device = self.get_object()
         if not self.command_class.verify_target(Target(enrolled_device)):
             return Response({"detail": "Invalid target."}, status=status.HTTP_400_BAD_REQUEST)
-        serializer = self.command_class.serializer_class(
+        command_serializer = self.command_class.serializer_class(
             channel=Channel.DEVICE,
             enrolled_device=enrolled_device,
             data=request.data
         )
-        serializer.is_valid(raise_exception=True)
+        command_serializer.is_valid(raise_exception=True)
         uuid = uuid4()
         command = self.command_class.create_for_device(
             enrolled_device,
-            kwargs=serializer.get_command_kwargs(uuid),
+            kwargs=command_serializer.get_command_kwargs(uuid),
             queue=True,
             uuid=uuid
         )
@@ -232,6 +237,30 @@ class EraseEnrolledDevice(CreateEnrolledDeviceCommandView):
     command_class = EraseDevice
 
 
+@extend_schema_view(
+    post=extend_schema(
+        summary="Lock enrolled device",
+        description="Queue a DeviceLock command for the enrolled device.",
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                required=True,
+                description='The devices ID.',
+                examples=[
+                    OpenApiExample('ID', value='23'),
+                ]
+            ),
+        ],
+        request=DeviceLockSerializer,
+        responses={
+            201: DeviceCommandSerializer,
+            400: OpenApiResponse(description="Invalid target or request body."),
+            404: OpenApiResponse(description="Device not found."),
+        },
+    )
+)
 class LockEnrolledDevice(CreateEnrolledDeviceCommandView):
     command_class = DeviceLock
 
