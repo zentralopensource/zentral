@@ -1,21 +1,23 @@
 import base64
 import logging
 import plistlib
+
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.template import Context, Engine
 from django.urls import reverse
 from django.views.generic import View
+
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
-from zentral.contrib.mdm.models import DEPEnrollmentSession, DEPEnrollment, EnrolledDevice
+from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentSession, EnrolledDevice
 from zentral.contrib.mdm.payloads import build_configuration_profile_response, build_mdm_configuration_profile
 from zentral.contrib.mdm.software_updates import best_available_software_update_for_device_id_and_build
 from zentral.utils.os_version import make_comparable_os_version
-from .base import PostEventMixin
 
+from .base import PostEventMixin
 
 logger = logging.getLogger('zentral.contrib.mdm.public_views.dep')
 
@@ -218,12 +220,14 @@ class DEPWebEnrollView(DEPEnrollMixin, View):
     # https://developer.apple.com/documentation/devicemanagement/device_assignment/authenticating_through_web_views
 
     def get_payload_data(self):
-        try:
-            return base64.b64decode(self.request.META["HTTP_X_APPLE_ASPEN_DEVICEINFO"])
-        except KeyError:
-            self.abort("Missing x-apple-aspen-deviceinfo header")
+        return base64.b64decode(self.request.META["HTTP_X_APPLE_ASPEN_DEVICEINFO"])
 
     def get(self, request, *args, **kwargs):
+        if "HTTP_X_APPLE_ASPEN_DEVICEINFO" not in request.META:
+            reason = "Missing x-apple-aspen-deviceinfo header"
+            logger.error(reason)
+            self.post_event("failure", reason=reason)
+            return render(request, "mdm/dep_missing_device_info.html", status=400)
         self.get_payload()
         err_response = self.verify()
         if err_response:

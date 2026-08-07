@@ -1,17 +1,25 @@
 import base64
 import datetime
 import plistlib
-from unittest.mock import Mock, patch
 import uuid
+from unittest.mock import Mock, patch
+
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
-from zentral.contrib.mdm.public_views.dep import dep_web_enroll_callback, DEP_ENROLLMENT_SESSION_KEY
-from .utils import (force_dep_enrollment, force_dep_enrollment_custom_view, force_dep_enrollment_session,
-                    force_realm_user, force_software_update)
+from zentral.contrib.mdm.public_views.dep import DEP_ENROLLMENT_SESSION_KEY, dep_web_enroll_callback
+
+from .utils import (
+    force_dep_enrollment,
+    force_dep_enrollment_custom_view,
+    force_dep_enrollment_session,
+    force_realm_user,
+    force_software_update,
+)
 
 
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -347,7 +355,13 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         enrollment = session.dep_enrollment
         response = self.client.get(reverse("mdm_public:dep_web_enroll", args=(enrollment.enrollment_secret.secret,)))
         self.assertEqual(response.status_code, 400)
-        self.assertAbort(post_event, "Missing x-apple-aspen-deviceinfo header")
+        self.assertTemplateUsed(response, "mdm/dep_missing_device_info.html")
+        self.assertContains(response, "Missing Device Information", status_code=400)
+        self.assertContains(response, "Restart the enrollment, or contact your IT support.", status_code=400)
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
+        self.assertEqual(last_event.payload["status"], "failure")
+        self.assertEqual(last_event.payload["reason"], "Missing x-apple-aspen-deviceinfo header")
 
     def test_dep_web_enroll_no_realm(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
