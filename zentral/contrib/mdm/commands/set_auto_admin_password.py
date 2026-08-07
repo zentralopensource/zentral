@@ -4,7 +4,7 @@ from django import forms
 from django.db import transaction
 from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.events import post_admin_password_updated_event
-from zentral.contrib.mdm.models import Channel, DEPEnrollment, DeviceCommand, Platform
+from zentral.contrib.mdm.models import Channel, DEPEnrollment, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
 from zentral.utils.passwords import build_password_hash_dict, serialize_password_hash_dict
 from .base import register_command, Command, CommandBaseForm
@@ -75,13 +75,7 @@ class SetAutoAdminPassword(Command):
 
     @classmethod
     def create_for_auto_rotation(cls, target, delay_min):
-        if (
-            DeviceCommand.objects.filter(
-                name=cls.get_db_name(),
-                enrolled_device=target.enrolled_device,
-                time__isnull=True
-            ).exists()
-        ):
+        if cls.is_queued_for_target(target):
             logger.warning("Set auto admin password command for device %s already scheduled", target.enrolled_device)
             return
         uuid = uuid4()

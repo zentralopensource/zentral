@@ -68,6 +68,13 @@ class Command:
         return cls.verify_channel_and_device(target.channel, target.enrolled_device)
 
     @classmethod
+    def is_queued_for_target(cls, target):
+        db_command_model, db_command_kwargs = target.get_db_command_model_and_kwargs()
+        return db_command_model.objects.filter(
+            name=cls.get_db_name(), time__isnull=True, **db_command_kwargs
+        ).exists()
+
+    @classmethod
     def create_for_target(
         cls,
         target,
