@@ -595,7 +595,22 @@ Each synchronization also posts one `dep_virtual_server_synced` event summarizin
 }
 ```
 
-All the events of a single synchronization share the same metadata `id`, with the summary at index 0, so a run can be pulled back together.
+All the events of a single synchronization share the same metadata `id`, with the summary at index 0, so a run can be pulled back together. A synchronization triggered from the web interface or the HTTP API carries the request of the user who triggered it, on the summary as well as on the device events; one Zentral runs on its own carries no request.
+
+A synchronization that fails posts the summary with a `failure` status, the error and, for an error Apple named, its code:
+
+```json
+{
+  "dep_virtual_server": {"pk": 1, "uuid": "…", "name": "…"},
+  "sync_type": "delta",
+  "status": "failure",
+  "error": "DEP cursor expired, error code: EXPIRED_CURSOR",
+  "error_code": "EXPIRED_CURSOR",
+  "duration_seconds": 0.412
+}
+```
+
+It carries no `operations`: a failed synchronization is rolled back, so none of the devices it had already read were written, and no device event is posted for them. Note that an expired cursor is retried as a full synchronization, so a `failure` with the `EXPIRED_CURSOR` code is normally followed by a successful full run.
 
 Disowning a device has its own event, `dep_device_disowned`, rather than an audit event.
 

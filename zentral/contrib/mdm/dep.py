@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from zentral.conf import settings
-from zentral.core.events.base import AuditEvent
+from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.time import naive_utcnow, parse_naive_datetime
 
@@ -195,7 +195,8 @@ def dep_device_update_dict(device, known_enrollments=None):
     return update_d
 
 
-def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_timeout=600):
+def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_timeout=600,
+                                    serialized_event_request=None):
     PG_ADVISORY_LOCK_ID = 12345678
     with transaction.atomic():
         with connection.cursor() as cursor:
@@ -206,7 +207,8 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_
                            [PG_ADVISORY_LOCK_ID, dep_virtual_server.pk])
             logger.info("Advisory lock %s for DEP virtual server %s acquired",
                         PG_ADVISORY_LOCK_ID, dep_virtual_server.pk)
-        return (yield from _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch))
+        return (yield from _sync_dep_virtual_server_devices(
+            dep_virtual_server, force_fetch, serialized_event_request))
 
 
 class SyncCounters(object):
@@ -247,22 +249,41 @@ def _dep_device_changed(dep_device, defaults):
     return False
 
 
-def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
+def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, serialized_event_request=None):
+    started_at = time.monotonic()
+    event_request = EventRequest.deserialize(serialized_event_request) if serialized_event_request else None
+    # read inside the advisory lock: a sync that just finished may have moved the cursor
     dep_token = dep_virtual_server.token
+    fetch = force_fetch or not dep_token.sync_cursor
+    try:
+        return (yield from _iter_dep_virtual_server_sync(
+            dep_virtual_server, dep_token, fetch, started_at, event_request))
+    except Exception as e:
+        # the surrounding transaction is rolling back, so nothing was written and the device
+        # events never happened: report the failure alone, and not through transaction.on_commit
+        payload = {"dep_virtual_server": dep_virtual_server.serialize_for_event(keys_only=True),
+                   "sync_type": "full" if fetch else "delta",
+                   "status": "failure",
+                   "error": str(e),
+                   "duration_seconds": round(time.monotonic() - started_at, 3)}
+        error_code = getattr(e, "error_code", None)
+        if error_code:
+            payload["error_code"] = error_code
+        build_dep_virtual_server_synced_event(
+            dep_virtual_server, payload, uuid.uuid4(), 0, event_request
+        ).post()
+        raise
+
+
+def _iter_dep_virtual_server_sync(dep_virtual_server, dep_token, fetch, started_at, event_request):
     client = DEPClient.from_dep_token(dep_token)
-    if force_fetch or not dep_token.sync_cursor:
-        fetch = True
-        devices = client.fetch_devices()
-    else:
-        fetch = False
-        devices = client.sync_devices(dep_token.sync_cursor)
+    devices = client.fetch_devices() if fetch else client.sync_devices(dep_token.sync_cursor)
 
     known_enrollments = {e.uuid: e for e in dep_virtual_server.depenrollment_set.all()}
 
     found_serial_numbers = []
     unassigned_serial_numbers = []
 
-    started_at = time.monotonic()
     events = []
     event_uuid = uuid.uuid4()
     counters = {"created": 0, "updated": 0, "unchanged": 0, "marked_deleted": 0, "profiles_assigned": 0}
@@ -271,6 +292,7 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         # index 0 is kept for the summary event, which is only complete once the sync is over
         events.append(AuditEvent.build(dep_device, action, prev_value=prev_value,
                                        event_uuid=event_uuid, event_index=len(events) + 1,
+                                       event_request=event_request,
                                        machine_serial_number=dep_device.serial_number))
 
     for device in devices:
@@ -372,9 +394,11 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
 
     payload = {"dep_virtual_server": dep_virtual_server.serialize_for_event(keys_only=True),
                "sync_type": "full" if fetch else "delta",
+               "status": "success",
                "operations": counters,
                "duration_seconds": round(time.monotonic() - started_at, 3)}
-    events.insert(0, build_dep_virtual_server_synced_event(dep_virtual_server, payload, event_uuid, 0))
+    events.insert(0, build_dep_virtual_server_synced_event(
+        dep_virtual_server, payload, event_uuid, 0, event_request))
 
     def post_events():
         for event in events:

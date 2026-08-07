@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from urllib.parse import urlencode
 
@@ -90,6 +91,21 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
         result = response.json()
         self.assertEqual(result['task_result_url'], reverse("base_api:task_result", args=(result['task_id'],)))
+
+    @patch("zentral.contrib.mdm.api_views.dep.sync_dep_virtual_server_devices_task.apply_async")
+    def test_user_dep_virtual_server_sync_devices_task_kwargs(self, apply_async):
+        apply_async.return_value.id = uuid.uuid4()
+        dep_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.post(reverse("mdm_api:dep_virtual_server_sync_devices", args=(dep_server.pk,)),
+                                    query_params={'full_sync': 'True'})
+        self.assertEqual(response.status_code, 201)
+        args, task_kwargs = apply_async.call_args.args
+        self.assertEqual(args, (dep_server.pk,))
+        # the task kwargs, not the apply_async options: force_full_sync has to reach the task
+        self.assertTrue(task_kwargs["force_full_sync"])
+        self.assertEqual(task_kwargs["task_user"], self.user.pk)
+        self.assertEqual(task_kwargs["serialized_event_request"]["user"]["username"], self.user.username)
 
     def test_user_dep_virtual_server_sync_devices_full(self):
         dep_server = force_dep_virtual_server()

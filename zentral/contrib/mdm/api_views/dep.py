@@ -18,6 +18,7 @@ from zentral.contrib.mdm.serializers import (
     DEPVirtualServerBetaTokensSerializer,
 )
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
+from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (
     DefaultDjangoModelPermissions,
     DjangoPermissionRequired,
@@ -39,7 +40,10 @@ class DEPVirtualServerSyncDevicesView(GenericAPIView):
         if isinstance(qp, str):
             full_sync = qp.lower() in ('', 'yes', 'y', 't', 'true')
         task = sync_dep_virtual_server_devices_task.apply_async(
-            (server.pk,), force_full_sync=full_sync
+            (server.pk,),
+            {"force_full_sync": full_sync,
+             "serialized_event_request": EventRequest.build_from_request(request).serialize(),
+             "task_user": request.user.id}
         )
         serializer = self.serializer_class.from_task(task=task)
         return Response(

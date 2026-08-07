@@ -14,7 +14,9 @@ logger = logging.getLogger("zentral.contrib.mdm.tasks")
 
 
 @shared_task
-def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=False):
+def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=False,
+                                         serialized_event_request=None, **kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     server = DEPVirtualServer.objects.get(pk=dep_virtual_server_pk)
     result = {"dep_virtual_server": {"pk": server.pk,
                                      "name": server.name},
@@ -22,7 +24,9 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=
               "effective_sync_type": "full_sync" if force_full_sync else "delta_sync"}
 
     def run(force_fetch):
-        return SyncCounters(sync_dep_virtual_server_devices(server, force_fetch=force_fetch)).run()
+        return SyncCounters(sync_dep_virtual_server_devices(
+            server, force_fetch=force_fetch, serialized_event_request=serialized_event_request
+        )).run()
 
     try:
         result["operations"] = run(force_full_sync)

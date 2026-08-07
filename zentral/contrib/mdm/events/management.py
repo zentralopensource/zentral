@@ -117,7 +117,8 @@ class DEPVirtualServerSyncedEvent(BaseEvent):
 register_event_type(DEPVirtualServerSyncedEvent)
 
 
-def build_dep_virtual_server_synced_event(dep_virtual_server, payload, event_uuid, event_index):
-    event_metadata = EventMetadata(uuid=event_uuid, index=event_index)
+def build_dep_virtual_server_synced_event(dep_virtual_server, payload, event_uuid, event_index,
+                                          event_request=None):
+    event_metadata = EventMetadata(uuid=event_uuid, index=event_index, request=event_request)
     event_metadata.add_objects({"mdm_dep_virtual_server": ((dep_virtual_server.pk,),)})
     return DEPVirtualServerSyncedEvent(event_metadata, payload)
