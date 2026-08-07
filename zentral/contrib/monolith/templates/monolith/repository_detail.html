@@ -17,7 +17,8 @@
         <h3 class="m-0 fs-5 text-secondary">Repository</h3>
         <div class="ms-auto">
             {% if perms.monolith.sync_repository %}
-            <a id="repository-sync-btn" href="{% url 'monolith_api:sync_repository' object.pk %}" class="btn btn-link task"
+            <a href="{% url 'monolith_api:sync_repository' object.pk %}" class="btn btn-link task"
+                data-task-label="Repository sync"
                 data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Sync Monolith repository">
               <i class="bi bi-arrow-counterclockwise"></i>
             </a>
@@ -184,45 +185,6 @@
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  var WAIT_FOR_TASK_TIMEOUT_ID;
-
-  function waitForTask(url) {
-    $.ajax({
-      dataType: "json",
-      url: url,
-      success: function (data) {
-        if (data.unready) {
-          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 1000, url);
-        } else {
-          $("#repository-sync-btn").prop("disabled", false);
-          if (data.status === "SUCCESS") {
-            window.location.reload();
-          }
-        }
-      }
-    });
-  }
-
-  function launchTask($link) {
-      $link.prop("disabled", true);
-      var url = $link.attr("href");
-      $.ajax({
-        dataType: "json",
-        url: url,
-        method: "post",
-        success: function (data) {
-          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 300, data.task_result_url);
-        }
-      });
-  }
-
-  $(document).ready(function () {
-    $(".task").click(function (event) {
-      event.preventDefault();
-      launchTask($(this));
-    });
-  });
-
   var openEyes = document.querySelectorAll(".bi-eye");
   openEyes.forEach(function(openEye) {
     openEye.addEventListener("click", function(event) {
