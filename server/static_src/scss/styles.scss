@@ -80,6 +80,22 @@ pre, ol, ul, dl {
     margin-bottom: 0px;
 }
 
+// Messages
+// they stick to the top of the scrolled content, because the button launching a task
+// can be far down the page, a DEP virtual server sync for example
+#messages {
+    position: sticky;
+    top: 0;
+    z-index: $zindex-sticky;
+}
+
+// only when there is something to display, an empty container would hide the top of
+// the scrolled content behind its padding
+#messages:has(.alert) {
+    padding-top: map-get($spacers, 3);
+    background-color: var(--bs-body-bg);
+}
+
 // Forms
 .errorlist {
     color: $ztl-red;
