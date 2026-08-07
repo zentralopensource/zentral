@@ -78,6 +78,9 @@ class MDMTasksTestCase(TestCase):
                 "operations": {
                     "created": 1,
                     "updated": 0,
+                    "unchanged": 0,
+                    "marked_deleted": 0,
+                    "profiles_assigned": 0,
                 },
                 "requested_sync_type": "delta_sync",
                 "effective_sync_type": "delta_sync"
@@ -107,7 +110,11 @@ class MDMTasksTestCase(TestCase):
                 },
                 "operations": {
                     "created": 1,
-                    "updated": 1,
+                    # the device from the first sync is returned again unchanged
+                    "updated": 0,
+                    "unchanged": 1,
+                    "marked_deleted": 0,
+                    "profiles_assigned": 0,
                 },
                 "requested_sync_type": "full_sync",
                 "effective_sync_type": "full_sync"
@@ -147,6 +154,9 @@ class MDMTasksTestCase(TestCase):
                 "operations": {
                     "created": 1,
                     "updated": 0,
+                    "unchanged": 0,
+                    "marked_deleted": 0,
+                    "profiles_assigned": 0,
                 },
                 "requested_sync_type": "delta_sync",
                 "effective_sync_type": "full_sync"

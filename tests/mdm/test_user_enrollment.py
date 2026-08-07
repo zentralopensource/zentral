@@ -38,7 +38,9 @@ class TestUserEnrollment(TestCase):
         self.assertEqual(session.status, "ACCOUNT_DRIVEN_START")
         self.assertEqual(
             session.serialize_for_event(),
-            {"enrollment_session": {"pk": session.pk, "type": "user", "status": "ACCOUNT_DRIVEN_START"}}
+            {"enrollment_session": {"pk": session.pk, "type": "user", "status": "ACCOUNT_DRIVEN_START",
+                                    "user_enrollment": {"pk": enrollment.pk,
+                                                        "name": enrollment.name}}}
         )
 
     def test_user_enrollment_session_scep_payload(self):

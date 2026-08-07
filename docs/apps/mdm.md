@@ -577,9 +577,40 @@ Note that a device can also become unblocked without an operator: a full state p
 
 ### Automated Device Enrollment devices
 
-Assigning an enrollment profile to a device, and refreshing its record from Apple, are recorded with the `updated` action, tagged with the device serial number. The event reports every attribute Apple can change on the record, so a refresh shows what actually moved.
+Assigning an enrollment profile to a device — from the web interface as well as the HTTP API — refreshing its record from Apple, and synchronizing the virtual server with ABM/ASM are recorded with the `created` and `updated` actions, tagged with the device serial number. The event reports every attribute Apple can change on the record, so a refresh shows what actually moved.
 
 A refresh that Apple answers with an unknown serial number still marks the record as deleted, so it is recorded too. A profile assignment Apple refuses changes nothing and records nothing.
+
+A synchronization only records the devices that really changed. Apple returns the whole list, but a device whose attributes all match the stored record is left untouched and produces no event. A device Apple stops returning during a full synchronization is recorded with its `last_op_type` becoming `deleted`, and so is a device that gets the virtual server's default enrollment assigned.
+
+Each synchronization also posts one `dep_virtual_server_synced` event summarizing the run — the synchronization type, how many devices were created, updated, left unchanged, marked deleted and assigned a profile, and how long it took:
+
+```json
+{
+  "dep_virtual_server": {"pk": 1, "uuid": "…", "name": "…"},
+  "sync_type": "full",
+  "operations": {"created": 2, "updated": 5, "unchanged": 1180,
+                 "marked_deleted": 1, "profiles_assigned": 2},
+  "duration_seconds": 12.482
+}
+```
+
+All the events of a single synchronization share the same metadata `id`, with the summary at index 0, so a run can be pulled back together. A synchronization triggered from the web interface or the HTTP API carries the request of the user who triggered it, on the summary as well as on the device events; one Zentral runs on its own carries no request.
+
+A synchronization that fails posts the summary with a `failure` status, the error and, for an error Apple named, its code:
+
+```json
+{
+  "dep_virtual_server": {"pk": 1, "uuid": "…", "name": "…"},
+  "sync_type": "delta",
+  "status": "failure",
+  "error": "DEP cursor expired, error code: EXPIRED_CURSOR",
+  "error_code": "EXPIRED_CURSOR",
+  "duration_seconds": 0.412
+}
+```
+
+It carries no `operations`: a failed synchronization is rolled back, so none of the devices it had already read were written, and no device event is posted for them. Note that an expired cursor is retried as a full synchronization, so a `failure` with the `EXPIRED_CURSOR` code is normally followed by a successful full run.
 
 Disowning a device has its own event, `dep_device_disowned`, rather than an audit event.
 
@@ -830,6 +861,20 @@ Response:
   "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
 }
 ```
+
+Poll `task_result_url` for the outcome. Its `result` reports the synchronization type that was requested and the one that actually ran — an expired cursor turns a delta synchronization into a full one — and how many devices were touched:
+
+```json
+{
+  "dep_virtual_server": {"pk": 1, "name": "…"},
+  "requested_sync_type": "delta_sync",
+  "effective_sync_type": "full_sync",
+  "operations": {"created": 2, "updated": 5, "unchanged": 1180,
+                 "marked_deleted": 1, "profiles_assigned": 2}
+}
+```
+
+Apple returns the whole device list on a full synchronization, so most of the devices it reports are usually `unchanged`: only the ones whose attributes really moved are counted as `updated`, and only those are written and recorded in the event pipeline.
 
 ### `/api/mdm/devices/`
 

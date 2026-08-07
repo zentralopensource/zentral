@@ -5,7 +5,7 @@ from django_filters import rest_framework as filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.filters import OrderingFilter
-from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,10 +18,12 @@ from zentral.contrib.mdm.serializers import (
     DEPVirtualServerBetaTokensSerializer,
 )
 from zentral.contrib.mdm.tasks import sync_dep_virtual_server_devices_task
+from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (
     DefaultDjangoModelPermissions,
     DjangoPermissionRequired,
     MaxLimitOffsetPagination,
+    RetrieveUpdateAPIViewWithAudit,
 )
 
 
@@ -38,7 +40,10 @@ class DEPVirtualServerSyncDevicesView(GenericAPIView):
         if isinstance(qp, str):
             full_sync = qp.lower() in ('', 'yes', 'y', 't', 'true')
         task = sync_dep_virtual_server_devices_task.apply_async(
-            (server.pk,), force_full_sync=full_sync
+            (server.pk,),
+            {"force_full_sync": full_sync,
+             "serialized_event_request": EventRequest.build_from_request(request).serialize(),
+             "task_user": request.user.id}
         )
         serializer = self.serializer_class.from_task(task=task)
         return Response(
@@ -62,10 +67,12 @@ class DEPDeviceList(ListAPIView):
     pagination_class = MaxLimitOffsetPagination
 
 
-class DEPDeviceDetail(RetrieveUpdateAPIView):
+class DEPDeviceDetail(RetrieveUpdateAPIViewWithAudit):
     queryset = DEPDevice.objects.all()
     serializer_class = DEPDeviceSerializer
-    permission_classes = [DefaultDjangoModelPermissions]
+
+    def get_audit_machine_serial_number(self):
+        return self.get_object().serial_number
 
 
 class DEPVirtualServerBetaTokensView(RetrieveAPIView):

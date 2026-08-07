@@ -91,7 +91,7 @@ def post_device_lock_pin_viewed_event(request, enrolled_device):
 
 class DEPDeviceDisownedEvent(BaseEvent):
     event_type = "dep_device_disowned"
-    tags = ["mdm"]
+    tags = ["mdm", "dep"]
 
 
 register_event_type(DEPDeviceDisownedEvent)
@@ -104,3 +104,21 @@ def post_dep_device_disowned_event(request, dep_device, payload):
     )
     event = DEPDeviceDisownedEvent(event_metadata, payload)
     event.post()
+
+
+# DEP virtual server
+
+
+class DEPVirtualServerSyncedEvent(BaseEvent):
+    event_type = "dep_virtual_server_synced"
+    tags = ["mdm", "dep"]
+
+
+register_event_type(DEPVirtualServerSyncedEvent)
+
+
+def build_dep_virtual_server_synced_event(dep_virtual_server, payload, event_uuid, event_index,
+                                          event_request=None):
+    event_metadata = EventMetadata(uuid=event_uuid, index=event_index, request=event_request)
+    event_metadata.add_objects({"mdm_dep_virtual_server": ((dep_virtual_server.pk,),)})
+    return DEPVirtualServerSyncedEvent(event_metadata, payload)

@@ -61,7 +61,10 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(session.status, "STARTED")
         self.assertEqual(
             session.serialize_for_event(),
-            {"enrollment_session": {"pk": session.pk, "type": "dep", "status": "STARTED"}}
+            {"enrollment_session": {"pk": session.pk, "type": "dep", "status": "STARTED",
+                                    "dep_enrollment": {"pk": enrollment.pk,
+                                                       "name": enrollment.name,
+                                                       "uuid": str(enrollment.uuid)}}}
         )
 
     def test_dep_enrollment_session_no_acme_payload(self):

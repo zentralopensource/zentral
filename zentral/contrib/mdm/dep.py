@@ -2,23 +2,25 @@ import base64
 import datetime
 import json
 import logging
+import time
 import uuid
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
-from dateutil import parser
 from django.db import connection, transaction
 from django.urls import reverse
 from django.utils import timezone
 
 from zentral.conf import settings
+from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.utils.certificates import split_certificate_chain
-from zentral.utils.time import naive_utcnow
+from zentral.utils.time import naive_utcnow, parse_naive_datetime
 
 from .crypto import decrypt_cms_payload_with_pem_privkey
 from .dep_client import DEPClient, DEPClientError
+from .events import build_dep_virtual_server_synced_event
 from .models import DEPDevice, DEPEnrollment
 
 logger = logging.getLogger("zentral.contrib.mdm.dep")
@@ -186,13 +188,15 @@ def dep_device_update_dict(device, known_enrollments=None):
         except KeyError:
             pass
         else:
-            val = parser.parse(val)
-            update_d[attr] = val
+            # naive, like every datetime read back from the database, so that the values can be
+            # compared with the stored ones without having to normalize either side
+            update_d[attr] = parse_naive_datetime(val)
 
     return update_d
 
 
-def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_timeout=600):
+def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_timeout=600,
+                                    serialized_event_request=None):
     PG_ADVISORY_LOCK_ID = 12345678
     with transaction.atomic():
         with connection.cursor() as cursor:
@@ -203,23 +207,93 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_
                            [PG_ADVISORY_LOCK_ID, dep_virtual_server.pk])
             logger.info("Advisory lock %s for DEP virtual server %s acquired",
                         PG_ADVISORY_LOCK_ID, dep_virtual_server.pk)
-        yield from _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch)
+        return (yield from _sync_dep_virtual_server_devices(
+            dep_virtual_server, force_fetch, serialized_event_request))
 
 
-def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
+class SyncCounters(object):
+    """Mirrors CursorIterator: drive a sync and keep what the generator returned.
+
+    The counters are only complete once the sync is over, and a caller that just wants the
+    totals should not have to tell an unchanged device from an updated one itself.
+    """
+    def __init__(self, object_iter):
+        self.object_iter = object_iter
+        self.counters = None
+
+    def __iter__(self):
+        self.counters = yield from self.object_iter
+
+    def run(self):
+        for _ in self:
+            pass
+        return self.counters
+
+
+def _dep_device_changed(dep_device, defaults):
+    """Would applying defaults move anything?
+
+    A sync re-reads every device Apple returns, but only a few of them have really changed.
+    Skipping the untouched ones keeps the sync from writing the whole table and, more importantly,
+    from emitting an audit event per device on every full fetch.
+    """
+    for attr, new_value in defaults.items():
+        if attr == "enrollment":
+            # compare the ids, reading the relation would query once per device
+            old_value = dep_device.enrollment_id
+            new_value = new_value.pk if new_value else None
+        else:
+            old_value = getattr(dep_device, attr)
+        if old_value != new_value:
+            return True
+    return False
+
+
+def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, serialized_event_request=None):
+    started_at = time.monotonic()
+    event_request = EventRequest.deserialize(serialized_event_request) if serialized_event_request else None
+    # read inside the advisory lock: a sync that just finished may have moved the cursor
     dep_token = dep_virtual_server.token
+    fetch = force_fetch or not dep_token.sync_cursor
+    try:
+        return (yield from _iter_dep_virtual_server_sync(
+            dep_virtual_server, dep_token, fetch, started_at, event_request))
+    except Exception as e:
+        # the surrounding transaction is rolling back, so nothing was written and the device
+        # events never happened: report the failure alone, and not through transaction.on_commit
+        payload = {"dep_virtual_server": dep_virtual_server.serialize_for_event(keys_only=True),
+                   "sync_type": "full" if fetch else "delta",
+                   "status": "failure",
+                   "error": str(e),
+                   "duration_seconds": round(time.monotonic() - started_at, 3)}
+        error_code = getattr(e, "error_code", None)
+        if error_code:
+            payload["error_code"] = error_code
+        build_dep_virtual_server_synced_event(
+            dep_virtual_server, payload, uuid.uuid4(), 0, event_request
+        ).post()
+        raise
+
+
+def _iter_dep_virtual_server_sync(dep_virtual_server, dep_token, fetch, started_at, event_request):
     client = DEPClient.from_dep_token(dep_token)
-    if force_fetch or not dep_token.sync_cursor:
-        fetch = True
-        devices = client.fetch_devices()
-    else:
-        fetch = False
-        devices = client.sync_devices(dep_token.sync_cursor)
+    devices = client.fetch_devices() if fetch else client.sync_devices(dep_token.sync_cursor)
 
     known_enrollments = {e.uuid: e for e in dep_virtual_server.depenrollment_set.all()}
 
     found_serial_numbers = []
     unassigned_serial_numbers = []
+
+    events = []
+    event_uuid = uuid.uuid4()
+    counters = {"created": 0, "updated": 0, "unchanged": 0, "marked_deleted": 0, "profiles_assigned": 0}
+
+    def add_event(dep_device, action, prev_value=None):
+        # index 0 is kept for the summary event, which is only complete once the sync is over
+        events.append(AuditEvent.build(dep_device, action, prev_value=prev_value,
+                                       event_uuid=event_uuid, event_index=len(events) + 1,
+                                       event_request=event_request,
+                                       machine_serial_number=dep_device.serial_number))
 
     for device in devices:
         serial_number = device["serial_number"]
@@ -234,18 +308,17 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         ):
             unassigned_serial_numbers.append(serial_number)
 
+        try:
+            dep_device = DEPDevice.objects.get(virtual_server=dep_virtual_server, serial_number=serial_number)
+        except DEPDevice.DoesNotExist:
+            dep_device = None
+
         # sync
         if not fetch:
             op_type = device["op_type"]
             if op_type != "deleted":
                 defaults["disowned_at"] = None
-            op_date = parser.parse(device["op_date"])
-            if timezone.is_aware(op_date):
-                op_date = timezone.make_naive(op_date)
-            try:
-                dep_device = DEPDevice.objects.get(virtual_server=dep_virtual_server, serial_number=serial_number)
-            except DEPDevice.DoesNotExist:
-                dep_device = None
+            op_date = parse_naive_datetime(device["op_date"])
             if dep_device and dep_device.last_op_date and dep_device.last_op_date > op_date:
                 # already applied a newer operation. skip stalled one.
                 continue
@@ -257,19 +330,38 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
 
         defaults.update(dep_device_update_dict(device, known_enrollments))
 
-        yield DEPDevice.objects.update_or_create(
-            virtual_server=dep_virtual_server,
-            serial_number=serial_number,
-            defaults=defaults
-        )
+        if dep_device is None:
+            dep_device = DEPDevice.objects.create(virtual_server=dep_virtual_server,
+                                                  serial_number=serial_number,
+                                                  **defaults)
+            add_event(dep_device, AuditEvent.Action.CREATED)
+            action = "created"
+        elif _dep_device_changed(dep_device, defaults):
+            prev_value = dep_device.serialize_for_event()
+            for attr, value in defaults.items():
+                setattr(dep_device, attr, value)
+            dep_device.save()
+            add_event(dep_device, AuditEvent.Action.UPDATED, prev_value=prev_value)
+            action = "updated"
+        else:
+            action = "unchanged"
+        counters[action] += 1
+
+        yield dep_device, action
     dep_token.sync_cursor = devices.cursor
     dep_token.last_synced_at = timezone.now()
     dep_token.save()
     if fetch:
         # mark all other existing token devices as deleted
-        (DEPDevice.objects.filter(virtual_server=dep_virtual_server)
-                          .exclude(serial_number__in=found_serial_numbers)
-                          .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
+        deleted_qs = (DEPDevice.objects.filter(virtual_server=dep_virtual_server)
+                                       .exclude(serial_number__in=found_serial_numbers)
+                                       .exclude(last_op_type=DEPDevice.OP_TYPE_DELETED))
+        for dep_device in deleted_qs:
+            prev_value = dep_device.serialize_for_event()
+            dep_device.last_op_type = DEPDevice.OP_TYPE_DELETED
+            add_event(dep_device, AuditEvent.Action.UPDATED, prev_value=prev_value)
+            counters["marked_deleted"] += 1
+        deleted_qs.update(last_op_type=DEPDevice.OP_TYPE_DELETED)
     if unassigned_serial_numbers:
         default_enrollment = dep_virtual_server.default_enrollment
         # assign the default profile
@@ -284,12 +376,36 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         if success_devices:
             # To avoid some performance issues, only update the devices in the database.
             # The next sync will fix the differences.
-            (DEPDevice.objects.filter(virtual_server=dep_virtual_server,
-                                      serial_number__in=success_devices)
-                              .update(profile_uuid=default_enrollment.uuid,
-                                      profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
-                                      profile_assign_time=naive_utcnow(),
-                                      enrollment=default_enrollment))
+            profile_assign_time = naive_utcnow()
+            assigned_qs = DEPDevice.objects.filter(virtual_server=dep_virtual_server,
+                                                   serial_number__in=success_devices)
+            for dep_device in assigned_qs:
+                prev_value = dep_device.serialize_for_event()
+                dep_device.profile_uuid = default_enrollment.uuid
+                dep_device.profile_status = DEPDevice.PROFILE_STATUS_ASSIGNED
+                dep_device.profile_assign_time = profile_assign_time
+                dep_device.enrollment = default_enrollment
+                add_event(dep_device, AuditEvent.Action.UPDATED, prev_value=prev_value)
+                counters["profiles_assigned"] += 1
+            assigned_qs.update(profile_uuid=default_enrollment.uuid,
+                               profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+                               profile_assign_time=profile_assign_time,
+                               enrollment=default_enrollment)
+
+    payload = {"dep_virtual_server": dep_virtual_server.serialize_for_event(keys_only=True),
+               "sync_type": "full" if fetch else "delta",
+               "status": "success",
+               "operations": counters,
+               "duration_seconds": round(time.monotonic() - started_at, 3)}
+    events.insert(0, build_dep_virtual_server_synced_event(
+        dep_virtual_server, payload, event_uuid, 0, event_request))
+
+    def post_events():
+        for event in events:
+            event.post()
+
+    transaction.on_commit(post_events)
+    return counters
 
 
 def assign_dep_device_profile(dep_device, dep_profile):

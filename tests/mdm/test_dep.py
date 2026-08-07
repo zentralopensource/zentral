@@ -2,14 +2,16 @@ import uuid
 from datetime import datetime
 from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.utils.crypto import get_random_string
 
+from accounts.models import User
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep import define_dep_profile, sync_dep_virtual_server_devices
-from zentral.contrib.mdm.dep_client import CursorIterator
+from zentral.contrib.mdm.dep_client import CursorIterator, DEPClientError
 from zentral.contrib.mdm.models import DEPDevice
 from zentral.contrib.mdm.tasks import define_dep_profile_task
+from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.utils.time import naive_utcnow
 
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
@@ -44,9 +46,9 @@ class TestDEPEnrollment(TestCase):
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.fetch_devices.assert_called_once_with()
         self.assertEqual(len(dep_devices), 1)
-        d, d_created = dep_devices[0]
+        d, d_action = dep_devices[0]
         d.refresh_from_db()  # for the datetimes, to get the stored ones, not the parsed ones
-        self.assertTrue(d_created)
+        self.assertEqual(d_action, "created")
         self.assertEqual(d.asset_tag, "")
         self.assertEqual(d.color, "SPACE GRAY")
         self.assertEqual(d.description, "IPHONE X SPACE GRAY 64GB-ZDD")
@@ -100,9 +102,9 @@ class TestDEPEnrollment(TestCase):
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.sync_devices.assert_called_once_with(sync_cursor)
         self.assertEqual(len(dep_devices), 1)
-        d, d_created = dep_devices[0]
+        d, d_action = dep_devices[0]
         d.refresh_from_db()  # for the datetimes, to get the stored ones, not the parsed ones
-        self.assertTrue(d_created)
+        self.assertEqual(d_action, "created")
         self.assertEqual(d.asset_tag, "")
         self.assertEqual(d.color, "SPACE GRAY")
         self.assertEqual(d.description, "IPHONE X SPACE GRAY 64GB-ZDD")
@@ -154,7 +156,7 @@ class TestDEPEnrollment(TestCase):
         client.fetch_devices.assert_called_once_with()
         client.assign_profile.assert_called_once_with(server.default_enrollment.uuid, [serial_number])
         self.assertEqual(len(dep_devices), 1)
-        device, created = dep_devices[0]
+        device, _ = dep_devices[0]
         self.assertIsNone(device.profile_uuid)
         self.assertIsNone(device.enrollment)
         device.refresh_from_db()
@@ -193,13 +195,182 @@ class TestDEPEnrollment(TestCase):
         client.fetch_devices.assert_called_once_with()
         client.assign_profile.assert_not_called()
         self.assertEqual(len(dep_devices), 1)
-        device, created = dep_devices[0]
+        device, _ = dep_devices[0]
         self.assertIsNone(device.profile_uuid)
         self.assertIsNone(device.enrollment)
         device.refresh_from_db()
         self.assertIsNone(device.profile_uuid)
         self.assertIsNone(device.enrollment)
         self.assertEqual(device.profile_status, "empty")
+
+    def _fetch_one_device(self, server, serial_number, from_dep_token, **extra):
+        device = {'color': 'SPACE GRAY',
+                  'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                  'device_assigned_by': 'support@zentral.com',
+                  'device_assigned_date': '2023-01-10T19:09:22Z',
+                  'device_family': 'iPhone',
+                  'model': 'iPhone X',
+                  'op_date': '2023-06-17T15:41:06Z',
+                  'op_type': 'modified',
+                  'os': 'iOS',
+                  'serial_number': serial_number}
+        device.update(extra)
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([device])
+        from_dep_token.return_value = client
+        with self.captureOnCommitCallbacks(execute=True):
+            list(sync_dep_virtual_server_devices(server, force_fetch=True))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_posts_events(self, from_dep_token, post_event):
+        server = force_dep_virtual_server()
+        serial_number = get_random_string(10).upper()
+        self._fetch_one_device(server, serial_number, from_dep_token)
+        self.assertEqual(len(post_event.call_args_list), 2)
+
+        summary = post_event.call_args_list[0].args[0]
+        self.assertEqual(summary.event_type, "dep_virtual_server_synced")
+        self.assertEqual(summary.payload["sync_type"], "full")
+        self.assertEqual(summary.payload["dep_virtual_server"]["pk"], server.pk)
+        self.assertEqual(summary.payload["operations"]["created"], 1)
+        self.assertEqual(summary.payload["operations"]["updated"], 0)
+        self.assertEqual(summary.payload["operations"]["unchanged"], 0)
+        summary_metadata = summary.metadata.serialize()
+        self.assertEqual(summary_metadata["index"], 0)
+        self.assertEqual(summary_metadata["objects"]["mdm_dep_virtual_server"], [str(server.pk)])
+
+        audit = post_event.call_args_list[1].args[0]
+        self.assertIsInstance(audit, AuditEvent)
+        self.assertEqual(audit.payload["action"], "created")
+        self.assertEqual(audit.payload["object"]["model"], "mdm.depdevice")
+        self.assertEqual(audit.payload["object"]["new_value"]["serial_number"], serial_number)
+        audit_metadata = audit.metadata.serialize()
+        self.assertEqual(audit_metadata["machine_serial_number"], serial_number)
+        # one batch: same uuid as the summary, index right after it
+        self.assertEqual(audit_metadata["id"], summary_metadata["id"])
+        self.assertEqual(audit_metadata["index"], 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_unchanged_posts_no_audit_event(self, from_dep_token, post_event):
+        server = force_dep_virtual_server()
+        serial_number = get_random_string(10).upper()
+        self._fetch_one_device(server, serial_number, from_dep_token)
+        post_event.reset_mock()
+        # same payload again, nothing moved
+        self._fetch_one_device(server, serial_number, from_dep_token)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        summary = post_event.call_args_list[0].args[0]
+        self.assertEqual(summary.event_type, "dep_virtual_server_synced")
+        self.assertEqual(summary.payload["operations"]["created"], 0)
+        self.assertEqual(summary.payload["operations"]["updated"], 0)
+        self.assertEqual(summary.payload["operations"]["unchanged"], 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_change_posts_audit_event(self, from_dep_token, post_event):
+        server = force_dep_virtual_server()
+        serial_number = get_random_string(10).upper()
+        self._fetch_one_device(server, serial_number, from_dep_token)
+        post_event.reset_mock()
+        self._fetch_one_device(server, serial_number, from_dep_token, asset_tag="A42")
+        self.assertEqual(len(post_event.call_args_list), 2)
+        summary = post_event.call_args_list[0].args[0]
+        self.assertEqual(summary.payload["operations"]["updated"], 1)
+        self.assertEqual(summary.payload["operations"]["unchanged"], 0)
+        audit = post_event.call_args_list[1].args[0]
+        self.assertEqual(audit.payload["action"], "updated")
+        self.assertEqual(audit.payload["object"]["prev_value"]["asset_tag"], "")
+        self.assertEqual(audit.payload["object"]["new_value"]["asset_tag"], "A42")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_missing_device_marked_deleted(self, from_dep_token, post_event):
+        server = force_dep_virtual_server()
+        serial_number = get_random_string(10).upper()
+        self._fetch_one_device(server, serial_number, from_dep_token)
+        post_event.reset_mock()
+        # a full fetch that does not return the device anymore
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([])
+        from_dep_token.return_value = client
+        with self.captureOnCommitCallbacks(execute=True):
+            list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        self.assertEqual(len(post_event.call_args_list), 2)
+        summary = post_event.call_args_list[0].args[0]
+        self.assertEqual(summary.payload["operations"]["marked_deleted"], 1)
+        audit = post_event.call_args_list[1].args[0]
+        self.assertEqual(audit.payload["action"], "updated")
+        self.assertIsNone(audit.payload["object"]["prev_value"]["last_op_type"])
+        self.assertEqual(audit.payload["object"]["new_value"]["last_op_type"], "deleted")
+        self.assertEqual(
+            DEPDevice.objects.get(virtual_server=server, serial_number=serial_number).last_op_type,
+            "deleted",
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_failure_posts_event(self, from_dep_token, post_event):
+        server = force_dep_virtual_server()
+        client = Mock()
+        client.fetch_devices.side_effect = DEPClientError("YOLO", error_code="EXPIRED_CURSOR")
+        from_dep_token.return_value = client
+        with self.assertRaises(DEPClientError):
+            with self.captureOnCommitCallbacks(execute=True):
+                list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        # the failure is not posted on commit: the transaction rolled back
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertEqual(event.event_type, "dep_virtual_server_synced")
+        self.assertEqual(event.payload["status"], "failure")
+        self.assertEqual(event.payload["sync_type"], "full")
+        self.assertEqual(event.payload["error_code"], "EXPIRED_CURSOR")
+        self.assertNotIn("operations", event.payload)
+        self.assertEqual(event.payload["dep_virtual_server"]["pk"], server.pk)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_failure_rolls_back(self, from_dep_token, post_event):
+        server = force_dep_virtual_server()
+        serial_number = get_random_string(10).upper()
+
+        def device_iterator():
+            yield {'device_assigned_date': '2023-01-10T19:09:22Z', 'serial_number': serial_number}
+            raise DEPClientError("YOLO")
+
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator(device_iterator())
+        from_dep_token.return_value = client
+        with self.assertRaises(DEPClientError):
+            with self.captureOnCommitCallbacks(execute=True):
+                list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        self.assertEqual(len(post_event.call_args_list), 1)
+        self.assertEqual(post_event.call_args_list[0].args[0].payload["status"], "failure")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_event_request(self, from_dep_token, post_event):
+        server = force_dep_virtual_server()
+        serial_number = get_random_string(10).upper()
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator(
+            [{'device_assigned_date': '2023-01-10T19:09:22Z', 'serial_number': serial_number}]
+        )
+        from_dep_token.return_value = client
+        user = User.objects.create_user(get_random_string(12), "godzilla@zentral.io", get_random_string(12))
+        request = RequestFactory().post("/")
+        request.user = user
+        request.session = Mock()
+        request.session.get_expire_at_browser_close.return_value = True
+        serialized_event_request = EventRequest.build_from_request(request).serialize()
+        with self.captureOnCommitCallbacks(execute=True):
+            list(sync_dep_virtual_server_devices(server, force_fetch=True,
+                                                 serialized_event_request=serialized_event_request))
+        self.assertEqual(len(post_event.call_args_list), 2)
+        for call in post_event.call_args_list:
+            metadata = call.args[0].metadata.serialize()
+            self.assertEqual(metadata["request"]["user"]["username"], user.username)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_define_dep_profile(self, from_dep_token):
