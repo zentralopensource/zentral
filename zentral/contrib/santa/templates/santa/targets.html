@@ -33,7 +33,8 @@
             </button>
             <ul class="dropdown-menu" aria-labelledby="downloadTargets">
                 {% for format, link in export_links %}
-                    <li><a class="dropdown-item task" href="{{ link }}">{{ format|upper }}</a></li>
+                    <li><a class="dropdown-item task" href="{{ link }}"
+                           data-task-label="Targets export ({{ format|upper }})">{{ format|upper }}</a></li>
                 {% endfor %}
             </ul>
         </div>
@@ -129,46 +130,5 @@
       <h5>Use the filters to run a target search</h5>
     </div>
 {% endif %}
-
-{% endblock %}
-
-{% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
-var WAIT_FOR_TASK_TIMEOUT_ID;
-
-function waitForTask(url) {
-    $.ajax({
-    dataType: "json",
-    url: url,
-    success: function (data) {
-        console.log(data);
-        if (data.unready) {
-        WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 1000, url);
-        } else if (data.status === "SUCCESS") {
-        window.location = data.download_url;
-        }
-    }
-    });
-}
-
-function launchTask($link) {
-    var url = $link.attr("href");
-    $.ajax({
-        dataType: "json",
-        url: url,
-        method: "post",
-        success: function (data) {
-        WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 300, data.task_result_url);
-        }
-    });
-}
-
-$(document).ready(function () {
-    $(".task").click(function (event) {
-    event.preventDefault();
-    launchTask($(this));
-    });
-});
-</script>
 
 {% endblock %}
