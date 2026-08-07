@@ -48,7 +48,9 @@ class TestOTAEnrollment(TestCase):
         self.assertEqual(session.status, "PHASE_2")
         self.assertEqual(
             session.serialize_for_event(),
-            {"enrollment_session": {"pk": session.pk, "type": "ota", "status": "PHASE_2"}}
+            {"enrollment_session": {"pk": session.pk, "type": "ota", "status": "PHASE_2",
+                                    "ota_enrollment": {"pk": enrollment.pk,
+                                                       "name": enrollment.name}}}
         )
 
     def test_ota_enrollment_session_scep_payload(self):

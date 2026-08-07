@@ -91,7 +91,7 @@ def post_device_lock_pin_viewed_event(request, enrolled_device):
 
 class DEPDeviceDisownedEvent(BaseEvent):
     event_type = "dep_device_disowned"
-    tags = ["mdm"]
+    tags = ["mdm", "dep"]
 
 
 register_event_type(DEPDeviceDisownedEvent)

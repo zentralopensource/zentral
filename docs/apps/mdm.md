@@ -577,7 +577,7 @@ Note that a device can also become unblocked without an operator: a full state p
 
 ### Automated Device Enrollment devices
 
-Assigning an enrollment profile to a device, refreshing its record from Apple, and synchronizing the virtual server with ABM/ASM are recorded with the `created` and `updated` actions, tagged with the device serial number. The event reports every attribute Apple can change on the record, so a refresh shows what actually moved.
+Assigning an enrollment profile to a device — from the web interface as well as the HTTP API — refreshing its record from Apple, and synchronizing the virtual server with ABM/ASM are recorded with the `created` and `updated` actions, tagged with the device serial number. The event reports every attribute Apple can change on the record, so a refresh shows what actually moved.
 
 A refresh that Apple answers with an unknown serial number still marks the record as deleted, so it is recorded too. A profile assignment Apple refuses changes nothing and records nothing.
 

@@ -1524,6 +1524,9 @@ class EnrollmentSession(models.Model):
         d = {"pk": self.pk,
              "type": enrollment_session_type,
              "status": self.status}
+        # the enrollments are referenced by their keys only: these events are posted on every
+        # enrollment attempt, and the full serialization carries the enrollment secret metadata
+        d.update(extra_dict)
         return {"enrollment_session": d}
 
     # status update methods
@@ -1770,7 +1773,8 @@ class OTAEnrollmentSession(EnrollmentSession):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        return super().serialize_for_event("ota", {"ota_enrollment": self.ota_enrollment.serialize_for_event()})
+        return super().serialize_for_event("ota", {"ota_enrollment": self.ota_enrollment.serialize_for_event(
+            keys_only=True)})
 
     def get_blueprint(self):
         return self.ota_enrollment.blueprint
@@ -2288,7 +2292,8 @@ class DEPEnrollmentSession(EnrollmentSession):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        return super().serialize_for_event("dep", {"dep_enrollment": self.dep_enrollment.serialize_for_event()})
+        return super().serialize_for_event("dep", {"dep_enrollment": self.dep_enrollment.serialize_for_event(
+            keys_only=True)})
 
     def get_blueprint(self):
         return self.dep_enrollment.blueprint
@@ -2430,7 +2435,8 @@ class UserEnrollmentSession(EnrollmentSession):
             raise ValueError("Wrong enrollment sessions status")
 
     def serialize_for_event(self):
-        return super().serialize_for_event("user", {"user_enrollment": self.user_enrollment.serialize_for_event()})
+        return super().serialize_for_event("user", {"user_enrollment": self.user_enrollment.serialize_for_event(
+            keys_only=True)})
 
     def get_blueprint(self):
         return self.user_enrollment.blueprint
@@ -2553,7 +2559,8 @@ class ReEnrollmentSession(EnrollmentSession):
         return self.first_enrolled_at
 
     def serialize_for_event(self):
-        return super().serialize_for_event("re", self.get_enrollment().serialize_for_event())
+        return super().serialize_for_event("re", {"enrollment": self.get_enrollment().serialize_for_event(
+            keys_only=True)})
 
     def get_blueprint(self):
         return self.get_enrollment().blueprint

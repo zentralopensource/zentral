@@ -12,6 +12,7 @@ from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.events import DEPDeviceDisownedEvent
+from zentral.core.events.base import AuditEvent
 
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
@@ -420,6 +421,39 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'virtual_server': dep_device.virtual_server.pk}
         )
         assign_dep_device_profile.assert_called_once_with(dep_device, enrollment)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.serializers.assign_dep_device_profile")
+    def test_update_dep_device_posts_audit_event(self, assign_dep_device_profile, post_event):
+        dep_device = force_dep_device()
+        enrollment = force_dep_enrollment(self.mbu)
+        self.set_permissions("mdm.change_depdevice")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)),
+                                data={"enrollment": enrollment.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "mdm.depdevice")
+        self.assertIsNone(event.payload["object"]["prev_value"]["enrollment"])
+        self.assertEqual(event.payload["object"]["new_value"]["enrollment"]["pk"], enrollment.pk)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], dep_device.serial_number)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.serializers.assign_dep_device_profile")
+    def test_update_dep_device_error_posts_no_event(self, assign_dep_device_profile, post_event):
+        assign_dep_device_profile.side_effect = DEPClientError("YOLO")
+        dep_device = force_dep_device()
+        enrollment = force_dep_enrollment(self.mbu)
+        self.set_permissions("mdm.change_depdevice")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)),
+                                data={"enrollment": enrollment.pk})
+        self.assertEqual(response.status_code, 400)
+        post_event.assert_not_called()
 
     @patch("zentral.contrib.mdm.serializers.assign_dep_device_profile")
     def test_update_dep_device_error(self, assign_dep_device_profile):
