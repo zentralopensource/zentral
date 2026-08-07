@@ -1,6 +1,7 @@
 import base64
 import json
 import re
+import time
 from unittest.mock import patch
 
 import pyotp
@@ -18,6 +19,15 @@ from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.conf import ConfigDict, settings
 from zentral.core.events.base import AuditEvent
+
+
+def verification_code(secret):
+    totp = pyotp.totp.TOTP(secret)
+    # the views verify without a valid window, so a code generated at the end of its
+    # time step is refused if the step rolls over before the response is rendered
+    if totp.interval - time.time() % totp.interval < 2:
+        time.sleep(2)
+    return totp.now()
 
 
 class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
@@ -184,7 +194,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertTemplateUsed(response, "accounts/verify_totp.html")
         self.assertFalse(response.context["request"].user.is_authenticated)
         response = self.client.post(reverse("accounts:verify_totp"),
-                                    {"verification_code": pyotp.totp.TOTP(user_totp.secret).now()},
+                                    {"verification_code": verification_code(user_totp.secret)},
                                     follow=True)
         self.assertTemplateUsed(response, "base/index.html")
         self.assertTrue(response.context["request"].user.is_authenticated)
@@ -1125,7 +1135,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         response = self.client.post(reverse("accounts:add_totp"),
                                     {"name": name,
                                      "secret": form.initial_secret,
-                                     "verification_code": pyotp.totp.TOTP(form.initial_secret).now()},
+                                     "verification_code": verification_code(form.initial_secret)},
                                     follow=True)
         self.assertTemplateUsed(response, "accounts/user_verification_devices.html")
         self.assertContains(response, name)
