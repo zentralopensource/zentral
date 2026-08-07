@@ -3,7 +3,7 @@ import logging
 from celery import shared_task
 
 from .apps_books import bulk_assign_location_asset
-from .dep import DEPClientError, define_dep_profile, sync_dep_virtual_server_devices
+from .dep import DEPClientError, SyncCounters, define_dep_profile, sync_dep_virtual_server_devices
 from .models import DEPEnrollment, DEPVirtualServer, LocationAsset
 from .software_updates import sync_software_updates
 
@@ -18,26 +18,19 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=
     server = DEPVirtualServer.objects.get(pk=dep_virtual_server_pk)
     result = {"dep_virtual_server": {"pk": server.pk,
                                      "name": server.name},
-              "operations": {"created": 0,
-                             "updated": 0},
               "requested_sync_type": "full_sync" if force_full_sync else "delta_sync",
               "effective_sync_type": "full_sync" if force_full_sync else "delta_sync"}
 
-    def update_counters(created):
-        if created:
-            result["operations"]["created"] += 1
-        else:
-            result["operations"]["updated"] += 1
+    def run(force_fetch):
+        return SyncCounters(sync_dep_virtual_server_devices(server, force_fetch=force_fetch)).run()
 
     try:
-        for _, created in sync_dep_virtual_server_devices(server, force_fetch=force_full_sync):
-            update_counters(created)
+        result["operations"] = run(force_full_sync)
     except DEPClientError as e:
         if e.error_code == "EXPIRED_CURSOR":
-            # full sync
+            # full sync, from scratch: whatever the delta sync had counted is not part of it
             result["effective_sync_type"] = "full_sync"
-            for _, created in sync_dep_virtual_server_devices(server, force_fetch=True):
-                update_counters(created)
+            result["operations"] = run(True)
         else:
             raise
 

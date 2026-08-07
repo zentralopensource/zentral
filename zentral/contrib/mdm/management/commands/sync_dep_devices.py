@@ -33,15 +33,13 @@ class Command(BaseCommand):
         for server in depvs_qs:
             self.write(f"Sync server {server.pk} {server}")
             try:
-                for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
-                    operation = "Created" if created else "Updated"
-                    self.write(f"{operation} {dep_device}")
+                for dep_device, action in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
+                    self.write(f"{action.title()} {dep_device}")
             except DEPClientError as e:
                 if e.error_code == "EXPIRED_CURSOR":
                     self.write("Expired cursor → full sync")
-                    for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=True):
-                        operation = "Created" if created else "Updated"
-                        self.write(f"{operation} {dep_device}")
+                    for dep_device, action in sync_dep_virtual_server_devices(server, force_fetch=True):
+                        self.write(f"{action.title()} {dep_device}")
                 else:
                     self.stderr.write(f"DEP client error: {e}")
             except Exception as e:

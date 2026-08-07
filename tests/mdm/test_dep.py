@@ -45,9 +45,9 @@ class TestDEPEnrollment(TestCase):
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.fetch_devices.assert_called_once_with()
         self.assertEqual(len(dep_devices), 1)
-        d, d_created = dep_devices[0]
+        d, d_action = dep_devices[0]
         d.refresh_from_db()  # for the datetimes, to get the stored ones, not the parsed ones
-        self.assertTrue(d_created)
+        self.assertEqual(d_action, "created")
         self.assertEqual(d.asset_tag, "")
         self.assertEqual(d.color, "SPACE GRAY")
         self.assertEqual(d.description, "IPHONE X SPACE GRAY 64GB-ZDD")
@@ -101,9 +101,9 @@ class TestDEPEnrollment(TestCase):
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.sync_devices.assert_called_once_with(sync_cursor)
         self.assertEqual(len(dep_devices), 1)
-        d, d_created = dep_devices[0]
+        d, d_action = dep_devices[0]
         d.refresh_from_db()  # for the datetimes, to get the stored ones, not the parsed ones
-        self.assertTrue(d_created)
+        self.assertEqual(d_action, "created")
         self.assertEqual(d.asset_tag, "")
         self.assertEqual(d.color, "SPACE GRAY")
         self.assertEqual(d.description, "IPHONE X SPACE GRAY 64GB-ZDD")
@@ -155,7 +155,7 @@ class TestDEPEnrollment(TestCase):
         client.fetch_devices.assert_called_once_with()
         client.assign_profile.assert_called_once_with(server.default_enrollment.uuid, [serial_number])
         self.assertEqual(len(dep_devices), 1)
-        device, created = dep_devices[0]
+        device, _ = dep_devices[0]
         self.assertIsNone(device.profile_uuid)
         self.assertIsNone(device.enrollment)
         device.refresh_from_db()
@@ -194,7 +194,7 @@ class TestDEPEnrollment(TestCase):
         client.fetch_devices.assert_called_once_with()
         client.assign_profile.assert_not_called()
         self.assertEqual(len(dep_devices), 1)
-        device, created = dep_devices[0]
+        device, _ = dep_devices[0]
         self.assertIsNone(device.profile_uuid)
         self.assertIsNone(device.enrollment)
         device.refresh_from_db()

@@ -847,6 +847,20 @@ Response:
 }
 ```
 
+Poll `task_result_url` for the outcome. Its `result` reports the synchronization type that was requested and the one that actually ran — an expired cursor turns a delta synchronization into a full one — and how many devices were touched:
+
+```json
+{
+  "dep_virtual_server": {"pk": 1, "name": "…"},
+  "requested_sync_type": "delta_sync",
+  "effective_sync_type": "full_sync",
+  "operations": {"created": 2, "updated": 5, "unchanged": 1180,
+                 "marked_deleted": 1, "profiles_assigned": 2}
+}
+```
+
+Apple returns the whole device list on a full synchronization, so most of the devices it reports are usually `unchanged`: only the ones whose attributes really moved are counted as `updated`, and only those are written and recorded in the event pipeline.
+
 ### `/api/mdm/devices/`
 
  * method: `GET`

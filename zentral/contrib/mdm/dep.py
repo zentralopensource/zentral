@@ -206,7 +206,26 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_
                            [PG_ADVISORY_LOCK_ID, dep_virtual_server.pk])
             logger.info("Advisory lock %s for DEP virtual server %s acquired",
                         PG_ADVISORY_LOCK_ID, dep_virtual_server.pk)
-        yield from _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch)
+        return (yield from _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch))
+
+
+class SyncCounters(object):
+    """Mirrors CursorIterator: drive a sync and keep what the generator returned.
+
+    The counters are only complete once the sync is over, and a caller that just wants the
+    totals should not have to tell an unchanged device from an updated one itself.
+    """
+    def __init__(self, object_iter):
+        self.object_iter = object_iter
+        self.counters = None
+
+    def __iter__(self):
+        self.counters = yield from self.object_iter
+
+    def run(self):
+        for _ in self:
+            pass
+        return self.counters
 
 
 def _dep_device_changed(dep_device, defaults):
@@ -294,21 +313,19 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                                                   serial_number=serial_number,
                                                   **defaults)
             add_event(dep_device, AuditEvent.Action.CREATED)
-            counters["created"] += 1
-            created = True
+            action = "created"
+        elif _dep_device_changed(dep_device, defaults):
+            prev_value = dep_device.serialize_for_event()
+            for attr, value in defaults.items():
+                setattr(dep_device, attr, value)
+            dep_device.save()
+            add_event(dep_device, AuditEvent.Action.UPDATED, prev_value=prev_value)
+            action = "updated"
         else:
-            created = False
-            if _dep_device_changed(dep_device, defaults):
-                prev_value = dep_device.serialize_for_event()
-                for attr, value in defaults.items():
-                    setattr(dep_device, attr, value)
-                dep_device.save()
-                add_event(dep_device, AuditEvent.Action.UPDATED, prev_value=prev_value)
-                counters["updated"] += 1
-            else:
-                counters["unchanged"] += 1
+            action = "unchanged"
+        counters[action] += 1
 
-        yield dep_device, created
+        yield dep_device, action
     dep_token.sync_cursor = devices.cursor
     dep_token.last_synced_at = timezone.now()
     dep_token.save()
@@ -364,6 +381,7 @@ def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
             event.post()
 
     transaction.on_commit(post_events)
+    return counters
 
 
 def assign_dep_device_profile(dep_device, dep_profile):
