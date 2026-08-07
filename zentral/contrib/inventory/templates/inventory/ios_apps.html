@@ -30,8 +30,10 @@
             <i class="bi bi-download"></i>
         </button>
         <ul class="dropdown-menu" aria-labelledby="downloadTargets">
-            <li><a class="dropdown-item task" href="{% url 'inventory_api:ios_apps_export' %}" data-format="csv">CSV</a></li>
-            <li><a class="dropdown-item task" href="{% url 'inventory_api:ios_apps_export' %}" data-format="xlsx">XLSX</a></li>
+            <li><a class="dropdown-item task" href="{% url 'inventory_api:ios_apps_export' %}"
+                   data-format="csv" data-task-label="iOS apps export (CSV)">CSV</a></li>
+            <li><a class="dropdown-item task" href="{% url 'inventory_api:ios_apps_export' %}"
+                   data-format="xlsx" data-task-label="iOS apps export (XLSX)">XLSX</a></li>
         </ul>
     </form>
 </div>
@@ -81,53 +83,4 @@
         {% empty_results empty_results_url %}
     {% endif %}
 
-{% endblock %}
-
-{% block extrajs %}
-<script nonce="{{ request.csp_nonce }}">
-  var WAIT_FOR_TASK_TIMEOUT_ID;
-
-  function waitForTask(url) {
-    $.ajax({
-      dataType: "json",
-      url: url,
-      success: function (data) {
-        console.log(data);
-        if (data.unready) {
-          WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 1000, url);
-        } else if (data.status === "SUCCESS") {
-          window.location = data.download_url;
-        }
-      }
-    });
-  }
-
-  function launchTask($link) {
-    var url = $link.attr("href");
-    var postData = {"export_format": $link.data("format")};
-    var formData = $link.parents("form").serializeArray();
-    $.map(formData, function(n, i) {
-      if (n['value']) {
-        postData[n['name']] = n['value'];
-      }
-    });
-    $.ajax({
-      dataType: "json",
-      contentType: "application/json",
-      url: url,
-      data: JSON.stringify(postData),
-      method: "post",
-      success: function (data) {
-        WAIT_FOR_TASK_TIMEOUT_ID = window.setTimeout(waitForTask, 300, data.task_result_url);
-      }
-    });
-  }
-
-  $(document).ready(function () {
-    $(".task").click(function (event) {
-      event.preventDefault();
-      launchTask($(this));
-    });
-  });
-</script>
 {% endblock %}
