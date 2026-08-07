@@ -229,6 +229,38 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         self.assertEqual(len(audit_events), 1)
         self.assertEqual(audit_events[0].payload["action"], "updated")
 
+    def test_update_one_time_job_job_immutable(self):
+        one_time_job = force_one_time_job()
+        configuration, job = one_time_job.configuration, one_time_job.job
+        other_script = force_script()
+        self.login("turbo.change_onetimejob", "turbo.view_configuration")
+        response = self.client.post(
+            reverse("turbo:update_one_time_job", args=(configuration.pk, one_time_job.pk)),
+            {"job": str(other_script.job.pk), "not_before": "2026-08-01 09:00:00",
+             "serial_numbers": "", "excluded_serial_numbers": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context["form"], "job", "This field cannot be changed")
+        one_time_job.refresh_from_db()
+        self.assertEqual(one_time_job.job, job)
+        self.assertIsNone(one_time_job.not_before)
+
+    def test_update_one_time_job_without_the_disabled_job(self):
+        # the browser drops the disabled field, so an update posted from the form has no job at all
+        one_time_job = force_one_time_job()
+        configuration, job = one_time_job.configuration, one_time_job.job
+        self.login("turbo.change_onetimejob", "turbo.view_configuration")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("turbo:update_one_time_job", args=(configuration.pk, one_time_job.pk)),
+                {"not_before": "2026-08-01 09:00:00",
+                 "serial_numbers": "", "excluded_serial_numbers": ""},
+                follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "turbo/configuration_detail.html")
+        one_time_job.refresh_from_db()
+        self.assertEqual(one_time_job.job, job)
+        self.assertIsNotNone(one_time_job.not_before)
+
     # delete
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

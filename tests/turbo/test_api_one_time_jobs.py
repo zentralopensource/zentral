@@ -127,6 +127,16 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"configuration": ["This field cannot be changed"]})
 
+    def test_update_one_time_job_job_immutable(self):
+        one_time_job = force_one_time_job()
+        other_script = force_script()
+        self.set_permissions("turbo.change_onetimejob")
+        response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
+                            {"configuration": str(one_time_job.configuration.pk),
+                             "job": str(other_script.job.pk)})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"job": ["This field cannot be changed"]})
+
     def test_delete_one_time_job(self):
         one_time_job = force_one_time_job()
         pk = one_time_job.pk

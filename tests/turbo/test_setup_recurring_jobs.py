@@ -224,21 +224,36 @@ class TurboSetupRecurringJobsTestCase(TurboSetupTestCase):
         self.assertEqual(len(audit_events), 1)
         self.assertEqual(audit_events[0].payload["action"], "updated")
 
-    def test_update_recurring_job_duplicate_job_error(self):
-        # the (configuration, job) unique constraint must surface as a form error on update, not as
-        # an IntegrityError — the create form excludes scheduled jobs, but the update form does not
-        recurring_job = force_recurring_job()
-        configuration = recurring_job.configuration
+    def test_update_recurring_job_job_immutable(self):
+        recurring_job = force_recurring_job(interval=3600)
+        configuration, job = recurring_job.configuration, recurring_job.job
         other = force_recurring_job(configuration=configuration)
         self.login("turbo.change_recurringjob")
         response = self.client.post(
             reverse("turbo:update_recurring_job", args=(configuration.pk, recurring_job.pk)),
-            {"job": str(other.job.pk), "serial_numbers": "", "excluded_serial_numbers": ""},
-            follow=True)
+            {"job": str(other.job.pk), "interval": 7200,
+             "serial_numbers": "", "excluded_serial_numbers": ""})
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "turbo/recurringjob_form.html")
-        self.assertFormError(response.context["form"], "job",
-                             "This job is already scheduled in this configuration")
+        self.assertFormError(response.context["form"], "job", "This field cannot be changed")
+        recurring_job.refresh_from_db()
+        self.assertEqual(recurring_job.job, job)
+        self.assertEqual(recurring_job.interval, 3600)
+
+    def test_update_recurring_job_without_the_disabled_job(self):
+        # the browser drops the disabled field, so an update posted from the form has no job at all
+        recurring_job = force_recurring_job(interval=3600)
+        configuration, job = recurring_job.configuration, recurring_job.job
+        self.login("turbo.change_recurringjob", "turbo.view_configuration")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("turbo:update_recurring_job", args=(configuration.pk, recurring_job.pk)),
+                {"interval": 7200, "serial_numbers": "", "excluded_serial_numbers": ""},
+                follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "turbo/configuration_detail.html")
+        recurring_job.refresh_from_db()
+        self.assertEqual(recurring_job.job, job)
+        self.assertEqual(recurring_job.interval, 7200)
 
     # delete
 

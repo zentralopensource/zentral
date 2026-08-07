@@ -145,6 +145,19 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         recurring_job.refresh_from_db()
         self.assertEqual(recurring_job.interval, 3600)
 
+    def test_update_recurring_job_job_immutable(self):
+        # re-pointing a schedule to another job would strand its per-machine ledger rows
+        recurring_job = force_recurring_job(interval=3600)
+        other_script = force_script()
+        self.set_permissions("turbo.change_recurringjob")
+        response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
+                            {"configuration": str(recurring_job.configuration.pk),
+                             "job": str(other_script.job.pk), "interval": 7200})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"job": ["This field cannot be changed"]})
+        recurring_job.refresh_from_db()
+        self.assertEqual(recurring_job.interval, 3600)
+
     def test_delete_recurring_job(self):
         recurring_job = force_recurring_job()
         pk = recurring_job.pk

@@ -169,6 +169,17 @@ class BaseJobScopeForm(forms.ModelForm):
         # NB: the UUID PK default fills pk at construction, so use _state.adding (not pk) for create-vs-update
         self.configuration = configuration or (None if self.instance._state.adding else self.instance.configuration)
         self.fields["job"].queryset = Job.objects.select_related("script", "mscp_check").all()
+        if not self.instance._state.adding:
+            # disabled keeps the initial value, whatever is posted
+            self.fields["job"].disabled = True
+
+    def clean_job(self):
+        # the browser drops a disabled field, so a posted job means a client trying to change it
+        job = self.cleaned_data["job"]
+        posted = self.data.get(self.add_prefix("job"))
+        if posted and posted != str(job.pk):
+            raise forms.ValidationError("This field cannot be changed")
+        return job
 
     def clean(self):
         cleaned_data = super().clean()
@@ -196,23 +207,10 @@ class RecurringJobForm(BaseJobScopeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.configuration is not None and self.instance._state.adding:
-            # a job can be scheduled at most once per configuration (unique constraint)
+            # a job can be scheduled at most once per configuration (unique constraint). Excluding the
+            # scheduled jobs from the choices is enough now that an existing schedule keeps its job
             scheduled = RecurringJob.objects.filter(configuration=self.configuration).values_list("job_id", flat=True)
             self.fields["job"].queryset = self.fields["job"].queryset.exclude(pk__in=scheduled)
-
-    def clean(self):
-        # the (configuration, job) unique constraint is not model-validated by the form (configuration
-        # is not a form field, so Django excludes it), and an update colliding with another schedule
-        # would 500 with an IntegrityError instead of a form error
-        cleaned_data = super().clean()
-        job = cleaned_data.get("job")
-        if job and self.configuration is not None:
-            existing = RecurringJob.objects.filter(configuration=self.configuration, job=job)
-            if not self.instance._state.adding:
-                existing = existing.exclude(pk=self.instance.pk)
-            if existing.exists():
-                self.add_error("job", "This job is already scheduled in this configuration")
-        return cleaned_data
 
 
 class RecurringJobSearchForm(forms.Form):

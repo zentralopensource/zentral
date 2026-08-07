@@ -171,11 +171,11 @@ class JobScopeSerializerMixin:
 
     def validate(self, data):
         data = super().validate(data)
-        # a job's configuration is fixed at creation (the UI pins it): re-pointing an existing schedule
-        # would silently retarget another configuration's whole fleet and strand its ledger rows
-        if self.instance is not None and "configuration" in data \
-           and data["configuration"] != self.instance.configuration:
-            raise serializers.ValidationError({"configuration": "This field cannot be changed"})
+        # what a schedule delivers, and where, is fixed at creation (the UI pins both): re-pointing it
+        # would retarget another configuration's whole fleet, or strand its per-machine ledger rows
+        for field in ("configuration", "job"):
+            if self.instance is not None and field in data and data[field] != getattr(self.instance, field):
+                raise serializers.ValidationError({field: "This field cannot be changed"})
         errors = self._scope_conflicts(data)
         if errors:
             raise serializers.ValidationError(errors)
