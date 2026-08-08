@@ -1,5 +1,7 @@
 from rest_framework.exceptions import ValidationError
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.mdm.models import SoftwareUpdateEnforcement
 from zentral.contrib.mdm.serializers import SoftwareUpdateEnforcementSerializer
 
@@ -9,9 +11,10 @@ class SoftwareUpdateEnforcementList(ListCreateAPIViewWithAudit):
     List all SoftwareUpdateEnforcement, search SoftwareUpdateEnforcement by name,
     or create a new SoftwareUpdateEnforcement.
     """
-    queryset = SoftwareUpdateEnforcement.objects.all()
+    queryset = SoftwareUpdateEnforcement.objects.order_by("name")
     serializer_class = SoftwareUpdateEnforcementSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class SoftwareUpdateEnforcementDetail(RetrieveUpdateDestroyAPIViewWithAudit):

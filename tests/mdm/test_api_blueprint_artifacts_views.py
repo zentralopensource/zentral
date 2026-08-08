@@ -62,27 +62,32 @@ class MDMBlueprintArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': blueprint_artifact.pk,
-              'blueprint': blueprint_artifact.blueprint.pk,
-              'artifact': str(artifact.pk),
-              'default_shard': 100,
-              'excluded_tags': [],
-              'ios': False,
-              'ios_max_version': '',
-              'ios_min_version': '',
-              'ipados': False,
-              'ipados_max_version': '',
-              'ipados_min_version': '',
-              'macos': True,
-              'macos_max_version': '',
-              'macos_min_version': '',
-              'shard_modulo': 100,
-              'tag_shards': [],
-              'tvos': False,
-              'tvos_max_version': '',
-              'tvos_min_version': '',
-              'created_at': blueprint_artifact.created_at.isoformat(),
-              'updated_at': blueprint_artifact.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': blueprint_artifact.pk,
+                  'blueprint': blueprint_artifact.blueprint.pk,
+                  'artifact': str(artifact.pk),
+                  'default_shard': 100,
+                  'excluded_tags': [],
+                  'ios': False,
+                  'ios_max_version': '',
+                  'ios_min_version': '',
+                  'ipados': False,
+                  'ipados_max_version': '',
+                  'ipados_min_version': '',
+                  'macos': True,
+                  'macos_max_version': '',
+                  'macos_min_version': '',
+                  'shard_modulo': 100,
+                  'tag_shards': [],
+                  'tvos': False,
+                  'tvos_max_version': '',
+                  'tvos_min_version': '',
+                  'created_at': blueprint_artifact.created_at.isoformat(),
+                  'updated_at': blueprint_artifact.updated_at.isoformat()}
+             ]}
         )
 
     # get blueprint artifact

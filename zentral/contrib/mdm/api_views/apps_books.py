@@ -2,7 +2,7 @@ from django_filters import rest_framework as filters
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from zentral.contrib.mdm.models import Location, LocationAsset
 from zentral.contrib.mdm.serializers import LocationAssetSerializer, LocationSerializer
-from zentral.utils.drf import DefaultDjangoModelPermissions
+from zentral.utils.drf import DefaultDjangoModelPermissions, MaxLimitOffsetPagination
 
 
 class LocationList(ListAPIView):
@@ -11,6 +11,7 @@ class LocationList(ListAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name', 'organization_name', 'mdm_info_id')
+    pagination_class = MaxLimitOffsetPagination
 
 
 class LocationDetail(RetrieveAPIView):
@@ -26,8 +27,9 @@ class LocationAssetFilter(filters.FilterSet):
 
 
 class LocationAssetList(ListAPIView):
-    queryset = LocationAsset.objects.select_related("asset", "location").all()
+    queryset = LocationAsset.objects.select_related("asset", "location").order_by("pk")
     serializer_class = LocationAssetSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = LocationAssetFilter
+    pagination_class = MaxLimitOffsetPagination

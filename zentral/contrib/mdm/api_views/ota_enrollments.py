@@ -1,5 +1,7 @@
 from rest_framework.exceptions import ValidationError
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.mdm.models import OTAEnrollment
 from zentral.contrib.mdm.serializers import OTAEnrollmentSerializer
 
@@ -12,6 +14,7 @@ class OTAEnrollmentList(ListCreateAPIViewWithAudit):
     queryset = OTAEnrollment.objects.all()
     serializer_class = OTAEnrollmentSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class OTAEnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):

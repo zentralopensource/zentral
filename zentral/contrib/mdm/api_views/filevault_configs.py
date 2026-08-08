@@ -1,5 +1,7 @@
 from rest_framework.exceptions import ValidationError
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.mdm.models import FileVaultConfig
 from zentral.contrib.mdm.serializers import FileVaultConfigSerializer
 
@@ -11,6 +13,7 @@ class FileVaultConfigList(ListCreateAPIViewWithAudit):
     queryset = FileVaultConfig.objects.all()
     serializer_class = FileVaultConfigSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class FileVaultConfigDetail(RetrieveUpdateDestroyAPIViewWithAudit):

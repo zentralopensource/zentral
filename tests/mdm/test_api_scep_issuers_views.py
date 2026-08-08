@@ -65,18 +65,23 @@ class MDMSCEPIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'backend': 'STATIC_CHALLENGE',
-              'created_at': scep_issuer.created_at.isoformat(),
-              'id': str(scep_issuer.pk),
-              'key_usage': 0,
-              'key_size': 2048,
-              'name': scep_issuer.name,
-              'description': '',
-              'provisioning_uid': None,
-              'static_challenge_kwargs': {'challenge': scep_issuer.get_static_challenge_kwargs()['challenge']},
-              'updated_at': scep_issuer.updated_at.isoformat(),
-              'url': scep_issuer.url,
-              'version': 1}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'backend': 'STATIC_CHALLENGE',
+                  'created_at': scep_issuer.created_at.isoformat(),
+                  'id': str(scep_issuer.pk),
+                  'key_usage': 0,
+                  'key_size': 2048,
+                  'name': scep_issuer.name,
+                  'description': '',
+                  'provisioning_uid': None,
+                  'static_challenge_kwargs': {'challenge': scep_issuer.get_static_challenge_kwargs()['challenge']},
+                  'updated_at': scep_issuer.updated_at.isoformat(),
+                  'url': scep_issuer.url,
+                  'version': 1}
+             ]}
         )
 
     def test_list_scep_issuers_name_filter(self):
@@ -88,23 +93,28 @@ class MDMSCEPIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         backend_kwargs = scep_issuer.get_ident_kwargs()
         self.assertEqual(
             response.json(),
-            [{'backend': 'IDENT',
-              'created_at': scep_issuer.created_at.isoformat(),
-              'id': str(scep_issuer.pk),
-              'key_usage': 0,
-              'key_size': 2048,
-              'name': scep_issuer.name,
-              'description': '',
-              'provisioning_uid': None,
-              'ident_kwargs': {
-                  'url': backend_kwargs['url'],
-                  'bearer_token': backend_kwargs['bearer_token'],
-                  'request_timeout': backend_kwargs['request_timeout'],
-                  'max_retries': backend_kwargs['max_retries'],
-              },
-              'updated_at': scep_issuer.updated_at.isoformat(),
-              'url': scep_issuer.url,
-              'version': 1}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'backend': 'IDENT',
+                  'created_at': scep_issuer.created_at.isoformat(),
+                  'id': str(scep_issuer.pk),
+                  'key_usage': 0,
+                  'key_size': 2048,
+                  'name': scep_issuer.name,
+                  'description': '',
+                  'provisioning_uid': None,
+                  'ident_kwargs': {
+                      'url': backend_kwargs['url'],
+                      'bearer_token': backend_kwargs['bearer_token'],
+                      'request_timeout': backend_kwargs['request_timeout'],
+                      'max_retries': backend_kwargs['max_retries'],
+                  },
+                  'updated_at': scep_issuer.updated_at.isoformat(),
+                  'url': scep_issuer.url,
+                  'version': 1}
+             ]}
         )
 
     # get SCEP issuer

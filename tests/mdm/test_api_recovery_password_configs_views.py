@@ -61,15 +61,20 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': rp_config.pk,
-              'name': rp_config.name,
-              'dynamic_password': rp_config.dynamic_password,
-              'static_password': rp_config.static_password,
-              'rotation_interval_days': 0,
-              'reveal_rotation_delay': 0,
-              'rotate_firmware_password': False,
-              'created_at': rp_config.created_at.isoformat(),
-              'updated_at': rp_config.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': rp_config.pk,
+                  'name': rp_config.name,
+                  'dynamic_password': rp_config.dynamic_password,
+                  'static_password': rp_config.static_password,
+                  'rotation_interval_days': 0,
+                  'reveal_rotation_delay': 0,
+                  'rotate_firmware_password': False,
+                  'created_at': rp_config.created_at.isoformat(),
+                  'updated_at': rp_config.updated_at.isoformat()}
+             ]}
         )
 
     def test_list_recovery_password_configs_name_filter(self):
@@ -81,15 +86,20 @@ class MDMRecoveryPasswordConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCas
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': rp_config.pk,
-              'name': rp_config.name,
-              'dynamic_password': rp_config.dynamic_password,
-              'static_password': static_password,
-              'rotation_interval_days': 0,
-              'reveal_rotation_delay': 0,
-              'rotate_firmware_password': False,
-              'created_at': rp_config.created_at.isoformat(),
-              'updated_at': rp_config.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': rp_config.pk,
+                  'name': rp_config.name,
+                  'dynamic_password': rp_config.dynamic_password,
+                  'static_password': static_password,
+                  'rotation_interval_days': 0,
+                  'reveal_rotation_delay': 0,
+                  'rotate_firmware_password': False,
+                  'created_at': rp_config.created_at.isoformat(),
+                  'updated_at': rp_config.updated_at.isoformat()}
+             ]}
         )
 
     # get recovery password config

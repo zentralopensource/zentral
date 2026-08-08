@@ -64,19 +64,24 @@ class MDMBlueprintsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': blueprint.pk,
-              'name': blueprint.name,
-              'inventory_interval': 86400,
-              'collect_apps': 0,
-              'collect_certificates': 0,
-              'collect_profiles': 0,
-              'default_location': None,
-              'filevault_config': None,
-              'legacy_profiles_via_ddm': True,
-              'recovery_password_config': None,
-              'software_update_enforcements': [],
-              'created_at': blueprint.created_at.isoformat(),
-              'updated_at': blueprint.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': blueprint.pk,
+                  'name': blueprint.name,
+                  'inventory_interval': 86400,
+                  'collect_apps': 0,
+                  'collect_certificates': 0,
+                  'collect_profiles': 0,
+                  'default_location': None,
+                  'filevault_config': None,
+                  'legacy_profiles_via_ddm': True,
+                  'recovery_password_config': None,
+                  'software_update_enforcements': [],
+                  'created_at': blueprint.created_at.isoformat(),
+                  'updated_at': blueprint.updated_at.isoformat()}
+             ]}
         )
 
     def test_list_blueprints_name_filter(self):
@@ -92,19 +97,24 @@ class MDMBlueprintsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': blueprint.pk,
-              'name': blueprint.name,
-              'inventory_interval': 86400,
-              'collect_apps': 0,
-              'collect_certificates': 0,
-              'collect_profiles': 0,
-              'default_location': None,
-              'filevault_config': filevault_config.pk,
-              'legacy_profiles_via_ddm': True,
-              'recovery_password_config': recovery_password_config.pk,
-              'software_update_enforcements': [sue.pk],
-              'created_at': blueprint.created_at.isoformat(),
-              'updated_at': blueprint.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': blueprint.pk,
+                  'name': blueprint.name,
+                  'inventory_interval': 86400,
+                  'collect_apps': 0,
+                  'collect_certificates': 0,
+                  'collect_profiles': 0,
+                  'default_location': None,
+                  'filevault_config': filevault_config.pk,
+                  'legacy_profiles_via_ddm': True,
+                  'recovery_password_config': recovery_password_config.pk,
+                  'software_update_enforcements': [sue.pk],
+                  'created_at': blueprint.created_at.isoformat(),
+                  'updated_at': blueprint.updated_at.isoformat()}
+             ]}
         )
 
     # get blueprint

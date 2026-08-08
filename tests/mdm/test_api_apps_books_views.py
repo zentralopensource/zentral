@@ -69,17 +69,22 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'country_code': 'DE',
-              'created_at': location.created_at.isoformat(),
-              'id': location.pk,
-              'library_uid': str(location.library_uid),
-              'mdm_info_id': str(location.mdm_info_id),
-              'name': location.name,
-              'organization_name': location.organization_name,
-              'platform': 'enterprisestore',
-              'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
-              'updated_at': location.updated_at.isoformat(),
-              'website_url': 'https://business.apple.com'}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'country_code': 'DE',
+                  'created_at': location.created_at.isoformat(),
+                  'id': location.pk,
+                  'library_uid': str(location.library_uid),
+                  'mdm_info_id': str(location.mdm_info_id),
+                  'name': location.name,
+                  'organization_name': location.organization_name,
+                  'platform': 'enterprisestore',
+                  'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
+                  'updated_at': location.updated_at.isoformat(),
+                  'website_url': 'https://business.apple.com'}
+             ]}
         )
 
     def test_location_by_mdm_info_id(self):
@@ -90,24 +95,29 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'country_code': 'DE',
-              'created_at': location.created_at.isoformat(),
-              'id': location.pk,
-              'library_uid': str(location.library_uid),
-              'mdm_info_id': str(location.mdm_info_id),
-              'name': location.name,
-              'organization_name': location.organization_name,
-              'platform': 'enterprisestore',
-              'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
-              'updated_at': location.updated_at.isoformat(),
-              'website_url': 'https://business.apple.com'}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'country_code': 'DE',
+                  'created_at': location.created_at.isoformat(),
+                  'id': location.pk,
+                  'library_uid': str(location.library_uid),
+                  'mdm_info_id': str(location.mdm_info_id),
+                  'name': location.name,
+                  'organization_name': location.organization_name,
+                  'platform': 'enterprisestore',
+                  'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
+                  'updated_at': location.updated_at.isoformat(),
+                  'website_url': 'https://business.apple.com'}
+             ]}
         )
 
     def test_location_by_mdm_info_id_no_results(self):
         self.set_permissions("mdm.view_location")
         response = self.get(reverse("mdm_api:locations") + "?mdm_info_id=734898e6-dbcf-4bba-ab60-5ede4633a033")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_location_by_name(self):
         self.set_permissions("mdm.view_location")
@@ -117,24 +127,29 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'country_code': 'DE',
-              'created_at': location.created_at.isoformat(),
-              'id': location.pk,
-              'library_uid': str(location.library_uid),
-              'mdm_info_id': str(location.mdm_info_id),
-              'name': location.name,
-              'organization_name': location.organization_name,
-              'platform': 'enterprisestore',
-              'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
-              'updated_at': location.updated_at.isoformat(),
-              'website_url': 'https://business.apple.com'}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'country_code': 'DE',
+                  'created_at': location.created_at.isoformat(),
+                  'id': location.pk,
+                  'library_uid': str(location.library_uid),
+                  'mdm_info_id': str(location.mdm_info_id),
+                  'name': location.name,
+                  'organization_name': location.organization_name,
+                  'platform': 'enterprisestore',
+                  'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
+                  'updated_at': location.updated_at.isoformat(),
+                  'website_url': 'https://business.apple.com'}
+             ]}
         )
 
     def test_location_by_name_no_results(self):
         self.set_permissions("mdm.view_location")
         response = self.get(reverse("mdm_api:locations") + "?name=yolo")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_location_by_organization_name(self):
         self.set_permissions("mdm.view_location")
@@ -144,24 +159,29 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'country_code': 'DE',
-              'created_at': location.created_at.isoformat(),
-              'id': location.pk,
-              'library_uid': str(location.library_uid),
-              'mdm_info_id': str(location.mdm_info_id),
-              'name': location.name,
-              'organization_name': location.organization_name,
-              'platform': 'enterprisestore',
-              'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
-              'updated_at': location.updated_at.isoformat(),
-              'website_url': 'https://business.apple.com'}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'country_code': 'DE',
+                  'created_at': location.created_at.isoformat(),
+                  'id': location.pk,
+                  'library_uid': str(location.library_uid),
+                  'mdm_info_id': str(location.mdm_info_id),
+                  'name': location.name,
+                  'organization_name': location.organization_name,
+                  'platform': 'enterprisestore',
+                  'server_token_expiration_date': location.server_token_expiration_date.isoformat(),
+                  'updated_at': location.updated_at.isoformat(),
+                  'website_url': 'https://business.apple.com'}
+             ]}
         )
 
     def test_location_by_organization_name_no_results(self):
         self.set_permissions("mdm.view_location")
         response = self.get(reverse("mdm_api:locations") + "?organization_name=yolo")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     # location
 
@@ -227,17 +247,22 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'adam_id': la.asset.adam_id,
-              'asset': la.asset.pk,
-              'assigned_count': 0,
-              'available_count': 0,
-              'created_at': la.created_at.isoformat(),
-              'id': la.pk,
-              'location': la.location.pk,
-              'pricing_param': la.asset.pricing_param,
-              'retired_count': 0,
-              'total_count': 0,
-              'updated_at': la.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'adam_id': la.asset.adam_id,
+                  'asset': la.asset.pk,
+                  'assigned_count': 0,
+                  'available_count': 0,
+                  'created_at': la.created_at.isoformat(),
+                  'id': la.pk,
+                  'location': la.location.pk,
+                  'pricing_param': la.asset.pricing_param,
+                  'retired_count': 0,
+                  'total_count': 0,
+                  'updated_at': la.updated_at.isoformat()}
+             ]}
         )
 
     def test_location_assets_by_adam_id(self):
@@ -247,17 +272,22 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'adam_id': la.asset.adam_id,
-              'asset': la.asset.pk,
-              'assigned_count': 0,
-              'available_count': 0,
-              'created_at': la.created_at.isoformat(),
-              'id': la.pk,
-              'location': la.location.pk,
-              'pricing_param': la.asset.pricing_param,
-              'retired_count': 0,
-              'total_count': 0,
-              'updated_at': la.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'adam_id': la.asset.adam_id,
+                  'asset': la.asset.pk,
+                  'assigned_count': 0,
+                  'available_count': 0,
+                  'created_at': la.created_at.isoformat(),
+                  'id': la.pk,
+                  'location': la.location.pk,
+                  'pricing_param': la.asset.pricing_param,
+                  'retired_count': 0,
+                  'total_count': 0,
+                  'updated_at': la.updated_at.isoformat()}
+             ]}
         )
 
     def test_location_assets_by_adam_id_no_results(self):
@@ -265,7 +295,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         force_location_asset()
         response = self.get(reverse("mdm_api:location_assets") + "?adam_id=yolo")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_location_assets_by_pricing_param(self):
         self.set_permissions("mdm.view_locationasset")
@@ -274,17 +304,22 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'adam_id': la.asset.adam_id,
-              'asset': la.asset.pk,
-              'assigned_count': 0,
-              'available_count': 0,
-              'created_at': la.created_at.isoformat(),
-              'id': la.pk,
-              'location': la.location.pk,
-              'pricing_param': la.asset.pricing_param,
-              'retired_count': 0,
-              'total_count': 0,
-              'updated_at': la.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'adam_id': la.asset.adam_id,
+                  'asset': la.asset.pk,
+                  'assigned_count': 0,
+                  'available_count': 0,
+                  'created_at': la.created_at.isoformat(),
+                  'id': la.pk,
+                  'location': la.location.pk,
+                  'pricing_param': la.asset.pricing_param,
+                  'retired_count': 0,
+                  'total_count': 0,
+                  'updated_at': la.updated_at.isoformat()}
+             ]}
         )
 
     def test_location_assets_by_pricing_param_no_results(self):
@@ -292,7 +327,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         force_location_asset()
         response = self.get(reverse("mdm_api:location_assets") + "?pricing_param=yolo")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_location_assets_by_location_id(self):
         self.set_permissions("mdm.view_locationasset")
@@ -302,17 +337,22 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'adam_id': la.asset.adam_id,
-              'asset': la.asset.pk,
-              'assigned_count': 0,
-              'available_count': 0,
-              'created_at': la.created_at.isoformat(),
-              'id': la.pk,
-              'location': la.location.pk,
-              'pricing_param': la.asset.pricing_param,
-              'retired_count': 0,
-              'total_count': 0,
-              'updated_at': la.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'adam_id': la.asset.adam_id,
+                  'asset': la.asset.pk,
+                  'assigned_count': 0,
+                  'available_count': 0,
+                  'created_at': la.created_at.isoformat(),
+                  'id': la.pk,
+                  'location': la.location.pk,
+                  'pricing_param': la.asset.pricing_param,
+                  'retired_count': 0,
+                  'total_count': 0,
+                  'updated_at': la.updated_at.isoformat()}
+             ]}
         )
 
     def test_location_assets_by_location_id_no_results(self):
@@ -321,7 +361,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         location = force_location()
         response = self.get(reverse("mdm_api:location_assets") + f"?location_id={location.pk}")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_location_assets_all_filters(self):
         self.set_permissions("mdm.view_locationasset")
@@ -335,15 +375,20 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'adam_id': la.asset.adam_id,
-              'asset': la.asset.pk,
-              'assigned_count': 0,
-              'available_count': 0,
-              'created_at': la.created_at.isoformat(),
-              'id': la.pk,
-              'location': la.location.pk,
-              'pricing_param': la.asset.pricing_param,
-              'retired_count': 0,
-              'total_count': 0,
-              'updated_at': la.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'adam_id': la.asset.adam_id,
+                  'asset': la.asset.pk,
+                  'assigned_count': 0,
+                  'available_count': 0,
+                  'created_at': la.created_at.isoformat(),
+                  'id': la.pk,
+                  'location': la.location.pk,
+                  'pricing_param': la.asset.pricing_param,
+                  'retired_count': 0,
+                  'total_count': 0,
+                  'updated_at': la.updated_at.isoformat()}
+             ]}
         )

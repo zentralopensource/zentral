@@ -1,6 +1,8 @@
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.mdm.artifacts import update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.models import Blueprint, BlueprintArtifact
 from zentral.contrib.mdm.serializers import BlueprintSerializer, BlueprintArtifactSerializer
@@ -15,6 +17,7 @@ class BlueprintList(ListCreateAPIViewWithAudit):
     ).all()
     serializer_class = BlueprintSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class BlueprintDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -42,8 +45,9 @@ class BlueprintArtifactList(ListCreateAPIViewWithAudit):
                                  .prefetch_related("excluded_tags",
                                                    "item_tags__tag__meta_business_unit",
                                                    "item_tags__tag__taxonomy")
-                                 .all())
+                                 .order_by("pk"))
     serializer_class = BlueprintArtifactSerializer
+    pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
     def dispatch(self, request, *args, **kwargs):

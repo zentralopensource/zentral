@@ -58,15 +58,20 @@ class MDMPushCertificateAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': push_certificate.pk,
-              'provisioning_uid': "YoLoFoMo",
-              'name': push_certificate.name,
-              'topic': push_certificate.topic,
-              'not_before': push_certificate.not_before.isoformat().split("+")[0],
-              'not_after': push_certificate.not_after.isoformat().split("+")[0],
-              'certificate': push_certificate.certificate.decode("ascii"),
-              'created_at': push_certificate.created_at.isoformat(),
-              'updated_at': push_certificate.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': push_certificate.pk,
+                  'provisioning_uid': "YoLoFoMo",
+                  'name': push_certificate.name,
+                  'topic': push_certificate.topic,
+                  'not_before': push_certificate.not_before.isoformat().split("+")[0],
+                  'not_after': push_certificate.not_after.isoformat().split("+")[0],
+                  'certificate': push_certificate.certificate.decode("ascii"),
+                  'created_at': push_certificate.created_at.isoformat(),
+                  'updated_at': push_certificate.updated_at.isoformat()}
+             ]}
         )
 
     def test_list_push_certificates_name_filter(self):
@@ -77,15 +82,20 @@ class MDMPushCertificateAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': push_certificate.pk,
-              'provisioning_uid': None,
-              'name': push_certificate.name,
-              'topic': push_certificate.topic,
-              'not_before': push_certificate.not_before.isoformat().split("+")[0],
-              'not_after': push_certificate.not_after.isoformat().split("+")[0],
-              'certificate': '1',
-              'created_at': push_certificate.created_at.isoformat(),
-              'updated_at': push_certificate.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': push_certificate.pk,
+                  'provisioning_uid': None,
+                  'name': push_certificate.name,
+                  'topic': push_certificate.topic,
+                  'not_before': push_certificate.not_before.isoformat().split("+")[0],
+                  'not_after': push_certificate.not_after.isoformat().split("+")[0],
+                  'certificate': '1',
+                  'created_at': push_certificate.created_at.isoformat(),
+                  'updated_at': push_certificate.updated_at.isoformat()}
+             ]}
         )
 
     # get push_certificate

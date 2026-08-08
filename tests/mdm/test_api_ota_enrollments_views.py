@@ -66,26 +66,31 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'blueprint': None,
-              'created_at': oe.created_at.isoformat(),
-              'display_name': oe.display_name,
-              'enrollment_secret': {
-                  'id': oe.enrollment_secret.pk,
-                  'meta_business_unit': oe.enrollment_secret.meta_business_unit.pk,
-                  'quota': None,
-                  'request_count': 0,
-                  'secret': oe.enrollment_secret.secret,
-                  'serial_numbers': None,
-                  'tags': [],
-                  'udids': None
-              },
-              'id': oe.pk,
-              'name': oe.name,
-              'push_certificate': oe.push_certificate.pk,
-              'realm': str(realm.pk),
-              'acme_issuer': str(oe.acme_issuer.pk),
-              'scep_issuer': str(oe.scep_issuer.pk),
-              'updated_at': oe.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'blueprint': None,
+                  'created_at': oe.created_at.isoformat(),
+                  'display_name': oe.display_name,
+                  'enrollment_secret': {
+                      'id': oe.enrollment_secret.pk,
+                      'meta_business_unit': oe.enrollment_secret.meta_business_unit.pk,
+                      'quota': None,
+                      'request_count': 0,
+                      'secret': oe.enrollment_secret.secret,
+                      'serial_numbers': None,
+                      'tags': [],
+                      'udids': None
+                  },
+                  'id': oe.pk,
+                  'name': oe.name,
+                  'push_certificate': oe.push_certificate.pk,
+                  'realm': str(realm.pk),
+                  'acme_issuer': str(oe.acme_issuer.pk),
+                  'scep_issuer': str(oe.scep_issuer.pk),
+                  'updated_at': oe.updated_at.isoformat()}
+             ]}
         )
 
     def test_list_ota_enrollments_name_filter(self):
@@ -96,26 +101,31 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'blueprint': None,
-              'created_at': oe.created_at.isoformat(),
-              'display_name': oe.display_name,
-              'enrollment_secret': {
-                  'id': oe.enrollment_secret.pk,
-                  'meta_business_unit': oe.enrollment_secret.meta_business_unit.pk,
-                  'quota': None,
-                  'request_count': 0,
-                  'secret': oe.enrollment_secret.secret,
-                  'serial_numbers': None,
-                  'tags': [],
-                  'udids': None
-              },
-              'id': oe.pk,
-              'name': oe.name,
-              'push_certificate': oe.push_certificate.pk,
-              'realm': None,
-              'acme_issuer': str(oe.acme_issuer.pk),
-              'scep_issuer': str(oe.scep_issuer.pk),
-              'updated_at': oe.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'blueprint': None,
+                  'created_at': oe.created_at.isoformat(),
+                  'display_name': oe.display_name,
+                  'enrollment_secret': {
+                      'id': oe.enrollment_secret.pk,
+                      'meta_business_unit': oe.enrollment_secret.meta_business_unit.pk,
+                      'quota': None,
+                      'request_count': 0,
+                      'secret': oe.enrollment_secret.secret,
+                      'serial_numbers': None,
+                      'tags': [],
+                      'udids': None
+                  },
+                  'id': oe.pk,
+                  'name': oe.name,
+                  'push_certificate': oe.push_certificate.pk,
+                  'realm': None,
+                  'acme_issuer': str(oe.acme_issuer.pk),
+                  'scep_issuer': str(oe.scep_issuer.pk),
+                  'updated_at': oe.updated_at.isoformat()}
+             ]}
         )
 
     # get OTA enrollment

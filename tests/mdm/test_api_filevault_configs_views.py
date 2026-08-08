@@ -61,17 +61,22 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': fv_config.pk,
-              'name': fv_config.name,
-              'escrow_location_display_name': fv_config.escrow_location_display_name,
-              'at_login_only': False,
-              'bypass_attempts': -1,
-              'show_recovery_key': False,
-              'destroy_key_on_standby': False,
-              'prk_rotation_interval_days': 0,
-              'prk_reveal_rotation_delay': 0,
-              'created_at': fv_config.created_at.isoformat(),
-              'updated_at': fv_config.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': fv_config.pk,
+                  'name': fv_config.name,
+                  'escrow_location_display_name': fv_config.escrow_location_display_name,
+                  'at_login_only': False,
+                  'bypass_attempts': -1,
+                  'show_recovery_key': False,
+                  'destroy_key_on_standby': False,
+                  'prk_rotation_interval_days': 0,
+                  'prk_reveal_rotation_delay': 0,
+                  'created_at': fv_config.created_at.isoformat(),
+                  'updated_at': fv_config.updated_at.isoformat()}
+             ]}
         )
 
     def test_list_filevault_configs_name_filter(self):
@@ -82,17 +87,22 @@ class MDMFileVaultConfigsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': fv_config.pk,
-              'name': fv_config.name,
-              'escrow_location_display_name': fv_config.escrow_location_display_name,
-              'at_login_only': False,
-              'bypass_attempts': -1,
-              'show_recovery_key': False,
-              'destroy_key_on_standby': False,
-              'prk_rotation_interval_days': 0,
-              'prk_reveal_rotation_delay': 0,
-              'created_at': fv_config.created_at.isoformat(),
-              'updated_at': fv_config.updated_at.isoformat()}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': fv_config.pk,
+                  'name': fv_config.name,
+                  'escrow_location_display_name': fv_config.escrow_location_display_name,
+                  'at_login_only': False,
+                  'bypass_attempts': -1,
+                  'show_recovery_key': False,
+                  'destroy_key_on_standby': False,
+                  'prk_rotation_interval_days': 0,
+                  'prk_reveal_rotation_delay': 0,
+                  'created_at': fv_config.created_at.isoformat(),
+                  'updated_at': fv_config.updated_at.isoformat()}
+             ]}
         )
 
     # get FileVault config

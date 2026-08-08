@@ -66,26 +66,31 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         backend_kwargs = acme_issuer.get_microsoft_ca_kwargs()
         self.assertEqual(
             response.json(),
-            [{'attest': True,
-              'backend': 'MICROSOFT_CA',
-              'created_at': acme_issuer.created_at.isoformat(),
-              'description': '',
-              'directory_url': acme_issuer.directory_url,
-              'extended_key_usage': [],
-              'hardware_bound': True,
-              'id': str(acme_issuer.pk),
-              'key_size': 384,
-              'key_type': 'ECSECPrimeRandom',
-              'name': acme_issuer.name,
-              'microsoft_ca_kwargs': {
-                  'url': backend_kwargs['url'],
-                  'username': backend_kwargs['username'],
-                  'password': backend_kwargs['password'],
-              },
-              'provisioning_uid': None,
-              'updated_at': acme_issuer.updated_at.isoformat(),
-              'usage_flags': 1,
-              'version': 1}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'attest': True,
+                  'backend': 'MICROSOFT_CA',
+                  'created_at': acme_issuer.created_at.isoformat(),
+                  'description': '',
+                  'directory_url': acme_issuer.directory_url,
+                  'extended_key_usage': [],
+                  'hardware_bound': True,
+                  'id': str(acme_issuer.pk),
+                  'key_size': 384,
+                  'key_type': 'ECSECPrimeRandom',
+                  'name': acme_issuer.name,
+                  'microsoft_ca_kwargs': {
+                      'url': backend_kwargs['url'],
+                      'username': backend_kwargs['username'],
+                      'password': backend_kwargs['password'],
+                  },
+                  'provisioning_uid': None,
+                  'updated_at': acme_issuer.updated_at.isoformat(),
+                  'usage_flags': 1,
+                  'version': 1}
+             ]}
         )
 
     def test_list_acme_issuers_name_filter(self):
@@ -97,27 +102,32 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         backend_kwargs = acme_issuer.get_ident_kwargs()
         self.assertEqual(
             response.json(),
-            [{'attest': True,
-              'backend': 'IDENT',
-              'created_at': acme_issuer.created_at.isoformat(),
-              'description': '',
-              'directory_url': acme_issuer.directory_url,
-              'extended_key_usage': [],
-              'hardware_bound': True,
-              'id': str(acme_issuer.pk),
-              'key_size': 384,
-              'key_type': 'ECSECPrimeRandom',
-              'ident_kwargs': {
-                  'url': backend_kwargs['url'],
-                  'bearer_token': backend_kwargs['bearer_token'],
-                  'request_timeout': backend_kwargs['request_timeout'],
-                  'max_retries': backend_kwargs['max_retries'],
-              },
-              'name': acme_issuer.name,
-              'provisioning_uid': None,
-              'updated_at': acme_issuer.updated_at.isoformat(),
-              'usage_flags': 1,
-              'version': 1}]
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'attest': True,
+                  'backend': 'IDENT',
+                  'created_at': acme_issuer.created_at.isoformat(),
+                  'description': '',
+                  'directory_url': acme_issuer.directory_url,
+                  'extended_key_usage': [],
+                  'hardware_bound': True,
+                  'id': str(acme_issuer.pk),
+                  'key_size': 384,
+                  'key_type': 'ECSECPrimeRandom',
+                  'ident_kwargs': {
+                      'url': backend_kwargs['url'],
+                      'bearer_token': backend_kwargs['bearer_token'],
+                      'request_timeout': backend_kwargs['request_timeout'],
+                      'max_retries': backend_kwargs['max_retries'],
+                  },
+                  'name': acme_issuer.name,
+                  'provisioning_uid': None,
+                  'updated_at': acme_issuer.updated_at.isoformat(),
+                  'usage_flags': 1,
+                  'version': 1}
+             ]}
         )
 
     # get ACME issuer

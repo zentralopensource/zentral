@@ -17,6 +17,11 @@ Repository syncs now run in the background. Repositories that need more than the
 
 ### Backward incompatibilities
 
+#### 🧨 MDM API endpoint pagination
+
+The API endpoints for the ACME issuer, SCEP issuer, FileVault configuration, recovery password configuration, software update enforcement, OTA enrollment, blueprint, blueprint artifact, location, location asset and push certificate lists are paginated now. Remember to upgrade the Terraform Provider.
+
+
 #### 🧨 Monolith repository sync API endpoint
 
 `/api/monolith/repositories/<int:pk>/sync/` launches a background task instead of syncing the repository during the request. It responds with `201` and a `task_id`/`task_result_url` pair, in place of the `200 {"status": 0}` and `500 {"status": 1, "error": "…"}` responses it used to return. Poll `task_result_url` to know the outcome of the sync.

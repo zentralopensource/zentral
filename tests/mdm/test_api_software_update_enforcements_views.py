@@ -63,19 +63,24 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': sue.pk,
-              'name': sue.name,
-              'details_url': '',
-              'platforms': ['macOS'],
-              'tags': [],
-              'max_os_version': '17.1.2',
-              'delay_days': 14,
-              'local_time': '09:30:00',
-              'os_version': '',
-              'build_version': '',
-              'local_datetime': None,
-              'created_at': sue.created_at.isoformat(),
-              'updated_at': sue.updated_at.isoformat()}],
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': sue.pk,
+                  'name': sue.name,
+                  'details_url': '',
+                  'platforms': ['macOS'],
+                  'tags': [],
+                  'max_os_version': '17.1.2',
+                  'delay_days': 14,
+                  'local_time': '09:30:00',
+                  'os_version': '',
+                  'build_version': '',
+                  'local_datetime': None,
+                  'created_at': sue.created_at.isoformat(),
+                  'updated_at': sue.updated_at.isoformat()}
+             ]},
         )
 
     def test_list_software_update_enforcements_name_filter(self):
@@ -86,19 +91,24 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            [{'id': sue.pk,
-              'name': sue.name,
-              'details_url': '',
-              'platforms': ['macOS'],
-              'tags': [],
-              'max_os_version': '17.1.2',
-              'delay_days': 14,
-              'local_time': '09:30:00',
-              'os_version': '',
-              'build_version': '',
-              'local_datetime': None,
-              'created_at': sue.created_at.isoformat(),
-              'updated_at': sue.updated_at.isoformat()}],
+            {'count': 1,
+             'next': None,
+             'previous': None,
+             'results': [
+                 {'id': sue.pk,
+                  'name': sue.name,
+                  'details_url': '',
+                  'platforms': ['macOS'],
+                  'tags': [],
+                  'max_os_version': '17.1.2',
+                  'delay_days': 14,
+                  'local_time': '09:30:00',
+                  'os_version': '',
+                  'build_version': '',
+                  'local_datetime': None,
+                  'created_at': sue.created_at.isoformat(),
+                  'updated_at': sue.updated_at.isoformat()}
+             ]},
         )
 
     # get software update enforcement

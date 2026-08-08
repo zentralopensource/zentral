@@ -1,13 +1,16 @@
 from rest_framework.exceptions import ValidationError
 from zentral.contrib.mdm.models import ACMEIssuer, SCEPIssuer
 from zentral.contrib.mdm.serializers import ACMEIssuerSerializer, SCEPIssuerSerializer
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 
 
 class ACMEIssuerList(ListCreateAPIViewWithAudit):
-    queryset = ACMEIssuer.objects.all()
+    queryset = ACMEIssuer.objects.order_by("name")
     serializer_class = ACMEIssuerSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ACMEIssuerDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -26,9 +29,10 @@ class ACMEIssuerDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class SCEPIssuerList(ListCreateAPIViewWithAudit):
-    queryset = SCEPIssuer.objects.all()
+    queryset = SCEPIssuer.objects.order_by("name")
     serializer_class = SCEPIssuerSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class SCEPIssuerDetail(RetrieveUpdateDestroyAPIViewWithAudit):

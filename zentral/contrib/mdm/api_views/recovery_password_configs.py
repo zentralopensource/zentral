@@ -1,5 +1,7 @@
 from rest_framework.exceptions import ValidationError
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit,
+                               MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.mdm.models import RecoveryPasswordConfig
 from zentral.contrib.mdm.serializers import RecoveryPasswordConfigSerializer
 
@@ -11,6 +13,7 @@ class RecoveryPasswordConfigList(ListCreateAPIViewWithAudit):
     queryset = RecoveryPasswordConfig.objects.all()
     serializer_class = RecoveryPasswordConfigSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class RecoveryPasswordConfigDetail(RetrieveUpdateDestroyAPIViewWithAudit):

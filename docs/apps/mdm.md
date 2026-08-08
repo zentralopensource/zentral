@@ -1414,6 +1414,9 @@ Response: HTTP 204 No Content
  * available filters:
      * `name`
      * `organization_name`
+ * pagination:
+    * `limit` (max `500`, `50` by default)
+    * `offset`
 
 Fetches the list of Apps / Books locations.
 
@@ -1428,21 +1431,26 @@ curl -XPOST \
 Result:
 
 ```json
-[
-  {
-    "id": 388,
-    "server_token_expiration_date": "2050-01-01T00:00:00",
-    "organization_name": "Organization name",
-    "name": "Location name",
-    "country_code": "DE",
-    "library_uid": "1dc05825-af1d-422a-9b26-72a2f8c2aae5",
-    "platform": "enterprisestore",
-    "website_url": "https://business.apple.com",
-    "mdm_info_id": "f42d9d70-d304-4ac1-83db-b045fa4bc623",
-    "created_at": "2024-03-28T17:58:15.948083",
-    "updated_at": "2024-03-28T17:58:15.948088"
-  }
-]
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 388,
+            "server_token_expiration_date": "2050-01-01T00:00:00",
+            "organization_name": "Organization name",
+            "name": "Location name",
+            "country_code": "DE",
+            "library_uid": "1dc05825-af1d-422a-9b26-72a2f8c2aae5",
+            "platform": "enterprisestore",
+            "website_url": "https://business.apple.com",
+            "mdm_info_id": "f42d9d70-d304-4ac1-83db-b045fa4bc623",
+            "created_at": "2024-03-28T17:58:15.948083",
+            "updated_at": "2024-03-28T17:58:15.948088"
+        }
+    ]
+}
 ```
 
 ### `/api/mdm/location_assets/`
@@ -1453,6 +1461,9 @@ Result:
      * `adam_id`
      * `pricing_param`
      * `location_id`
+ * pagination:
+    * `limit` (max `500`, `50` by default)
+    * `offset`
 
 Fetches the list of Apps / Books location assets.
 
@@ -1467,19 +1478,24 @@ curl -XPOST \
 Result:
 
 ```json
-[
-  {
-    "id": 414,
-    "assigned_count": 0,
-    "available_count": 0,
-    "retired_count": 0,
-    "total_count": 0,
-    "created_at": "2024-03-28T19:15:58.212233",
-    "updated_at": "2024-03-28T19:15:58.212237",
-    "location": 749,
-    "asset": 489
-  }
-]
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 414,
+            "assigned_count": 0,
+            "available_count": 0,
+            "retired_count": 0,
+            "total_count": 0,
+            "created_at": "2024-03-28T19:15:58.212233",
+            "updated_at": "2024-03-28T19:15:58.212237",
+            "location": 749,
+            "asset": 489
+        }
+    ]
+}
 ```
 
 ### `/api/mdm/software_updates/sync/`
