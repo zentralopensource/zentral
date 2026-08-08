@@ -70,10 +70,11 @@ class ScriptCheckSerializer(serializers.ModelSerializer):
         allow_blank=True, required=False, default=""
     )
     version = serializers.IntegerField(source="compliance_check.version", read_only=True)
+    compliance_check_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = ScriptCheck
-        fields = ("name", "description", "version",
+        fields = ("name", "description", "version", "compliance_check_id",
                   "id", "tags", "excluded_tags",
                   "arch_amd64", "arch_arm64",
                   "min_os_version", "max_os_version",

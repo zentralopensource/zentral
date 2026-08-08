@@ -117,6 +117,7 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
             response = self.post(reverse('inventory_api:jmespath_checks'), data)
         self.assertEqual(response.status_code, 201)
         jpcc = JMESPathCheck.objects.get(compliance_check__name=name)
+        self.assertEqual(response.json()["compliance_check_id"], jpcc.compliance_check.pk)
         self.assertEqual(jpcc.compliance_check.description, description)
         self.assertEqual(jpcc.compliance_check.version, 1)
         self.assertEqual(jpcc.source_name, source_name)
@@ -213,6 +214,7 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
              "name": jpcc.compliance_check.name,
              "description": jpcc.compliance_check.description,
              "version": jpcc.compliance_check.version,
+             "compliance_check_id": jpcc.compliance_check.pk,
              "source_name": jpcc.source_name,
              "platforms": jpcc.platforms,
              "jmespath_expression": jpcc.jmespath_expression,
@@ -345,6 +347,7 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
               "name": jpcc.compliance_check.name,
               "description": jpcc.compliance_check.description,
               "version": jpcc.compliance_check.version,
+              "compliance_check_id": jpcc.compliance_check.pk,
               "source_name": jpcc.source_name,
               "platforms": jpcc.platforms,
               "jmespath_expression": jpcc.jmespath_expression,
@@ -366,6 +369,7 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
               "name": jpcc.compliance_check.name,
               "description": jpcc.compliance_check.description,
               "version": jpcc.compliance_check.version,
+              "compliance_check_id": jpcc.compliance_check.pk,
               "source_name": jpcc.source_name,
               "platforms": jpcc.platforms,
               "jmespath_expression": jpcc.jmespath_expression,

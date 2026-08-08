@@ -1339,6 +1339,7 @@ Response:
     {
         "id": 1,
         "compliance_check_enabled": false,
+        "compliance_check_id": null,
         "name": "GetApps",
         "sql": "SELECT * FROM apps;",
         "platforms": [],
@@ -1392,6 +1393,7 @@ Response:
 {
 	"id": 1,
 	"compliance_check_enabled": false,
+	"compliance_check_id": null,
 	"name": "GetApps",
 	"sql": "SELECT * FROM apps;",
 	"platforms": [],
@@ -1435,6 +1437,7 @@ Response:
 {
 	"id": 1,
 	"compliance_check_enabled": false,
+	"compliance_check_id": null,
 	"name": "GetApps",
 	"sql": "SELECT * FROM apps;",
 	"platforms": [],
@@ -1481,6 +1484,7 @@ Response:
 {
 	"id": 1,
 	"compliance_check_enabled": false,
+	"compliance_check_id": null,
 	"name": "GetUsers",
 	"sql": "SELECT * FROM users;",
 	"platforms": [],
