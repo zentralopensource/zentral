@@ -676,6 +676,67 @@ class MunkiAPIViewsTestCase(TestCase):
                                       HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
         self.assertTrue(response.json()["managed_installs"])
 
+    # job details munki state
+
+    def test_job_details_first_time_creates_munki_state(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        self.assertFalse(
+            MunkiState.objects.filter(machine_serial_number=enrolled_machine.serial_number).exists())
+        start = naive_utcnow()
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token),
+                                      HTTP_USER_AGENT="Zentral/munkipreflight 0.14")
+        self.assertEqual(response.status_code, 200)
+        munki_state = MunkiState.objects.get(machine_serial_number=enrolled_machine.serial_number)
+        self.assertTrue(start <= munki_state.last_preflight_at <= naive_utcnow())
+        self.assertIsNone(munki_state.last_postflight_at)
+        self.assertEqual(munki_state.user_agent, "Zentral/munkipreflight 0.14")
+        self.assertEqual(munki_state.ip, "127.0.0.1")
+        self.assertIsNotNone(munki_state.created_at)
+        self.assertIsNotNone(munki_state.updated_at)
+
+    def test_job_details_first_time_response_computed_before_the_write(self):
+        # the row this preflight creates must not feed the response: a first-contact machine still gets
+        # no managed_installs / last_seen_sha1sum keys, exactly as before the row was created here
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("managed_installs", response.json())
+        self.assertNotIn("last_seen_sha1sum", response.json())
+        self.assertTrue(
+            MunkiState.objects.filter(machine_serial_number=enrolled_machine.serial_number).exists())
+
+    def test_job_details_updates_last_preflight_at_without_touching_postflight_fields(self):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        postflight_at = naive_utcnow() - timedelta(days=3)
+        MunkiState.objects.create(machine_serial_number=enrolled_machine.serial_number,
+                                  last_preflight_at=postflight_at,
+                                  last_postflight_at=postflight_at,
+                                  last_managed_installs_sync=postflight_at,
+                                  sha1sum=40 * "a")
+        start = naive_utcnow()
+        response = self._post_as_json(reverse("munki_public:job_details"),
+                                      {"machine_serial_number": enrolled_machine.serial_number,
+                                       "os_version": "14.1",
+                                       "arch": "arm64"},
+                                      HTTP_AUTHORIZATION="MunkiEnrolledMachine {}".format(enrolled_machine.token))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["last_seen_sha1sum"], 40 * "a")
+        munki_state = MunkiState.objects.get(machine_serial_number=enrolled_machine.serial_number)
+        self.assertTrue(start <= munki_state.last_preflight_at <= naive_utcnow())
+        self.assertEqual(munki_state.last_postflight_at, postflight_at)
+        self.assertEqual(munki_state.last_managed_installs_sync, postflight_at)
+        self.assertEqual(munki_state.sha1sum, 40 * "a")
+        self.assertEqual(MunkiState.objects.filter(
+            machine_serial_number=enrolled_machine.serial_number).count(), 1)
+
     # post job
 
     @patch("zentral.contrib.munki.public_views.post_machine_snapshot_raw_event")
@@ -1076,3 +1137,7 @@ class MunkiAPIViewsTestCase(TestCase):
         munki_state = MunkiState.objects.get(machine_serial_number=enrolled_machine.serial_number)
         self.assertEqual(munki_state.start_time, datetime(2026, 1, 2, 0, 0, 0))
         self.assertEqual(munki_state.end_time, datetime(2026, 1, 2, 0, 1, 0))
+        # the postflight is the only writer of last_postflight_at; start/end_time come from the report,
+        # this one is the server's own receipt time
+        self.assertIsNotNone(munki_state.last_postflight_at)
+        self.assertIsNone(munki_state.last_preflight_at)

@@ -155,12 +155,10 @@ class JobDetailsView(BaseView):
         response_d["incidents"] = [mi.incident.name for mi in m.open_incidents()]
         response_d["tags"] = [t[1] for t in m.tag_pks_and_names]
 
-        munki_state = None
+        # the response is computed from the state as it was BEFORE this preflight, so that recording the
+        # preflight below cannot change what the agent is asked to send
         now = naive_utcnow()
-        try:
-            munki_state = MunkiState.objects.get(machine_serial_number=self.machine_serial_number)
-        except MunkiState.DoesNotExist:
-            pass
+        munki_state = MunkiState.objects.filter(machine_serial_number=self.machine_serial_number).first()
 
         # last seen sha1sum
         # last managed installs sync
@@ -219,6 +217,16 @@ class JobDetailsView(BaseView):
 
                 # delete machine status for compliance checks not in scope
                 prune_out_of_scope_machine_statuses(self.machine_serial_number, in_scope_cc_ids)
+
+        # record the preflight. This is the only writer of last_preflight_at, and the only place a
+        # MunkiState row is created before a machine has ever posted a postflight — without it, a machine
+        # that polls job_details forever without completing a run leaves no trace at all.
+        MunkiState.objects.update_or_create(
+            machine_serial_number=self.machine_serial_number,
+            defaults={"user_agent": self.user_agent,
+                      "ip": self.ip,
+                      "last_preflight_at": now}
+        )
 
         return response_d
 
@@ -329,7 +337,8 @@ class PostJobView(BaseView):
 
         # update machine munki state
         update_dict = {'user_agent': self.user_agent,
-                       'ip': self.ip}
+                       'ip': self.ip,
+                       'last_postflight_at': request_time}
         if managed_installs is not None:
             update_dict["last_managed_installs_sync"] = request_time
         if script_check_results is not None:

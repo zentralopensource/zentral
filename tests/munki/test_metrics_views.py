@@ -23,9 +23,11 @@ class MunkiMetricsViewsTestCase(TestCase):
             failed_at=datetime.now() if failed else None,
             reinstall=reinstall,
         )
-        last_seen = naive_utcnow() - timedelta(days=age_days)
-        ms = MunkiState.objects.create(machine_serial_number=mi.machine_serial_number)
-        MunkiState.objects.filter(pk=ms.pk).update(last_seen=last_seen)
+        # age_days None ⇒ the machine has never posted a postflight
+        MunkiState.objects.create(
+            machine_serial_number=mi.machine_serial_number,
+            last_postflight_at=None if age_days is None else naive_utcnow() - timedelta(days=age_days),
+        )
         return mi
 
     def _make_authenticated_request(self):
@@ -44,8 +46,8 @@ class MunkiMetricsViewsTestCase(TestCase):
 
     def test_active_machines(self):
         for age in (2, 22, 31):
-            ms = MunkiState.objects.create(machine_serial_number=get_random_string(12))
-            MunkiState.objects.filter(pk=ms.pk).update(last_seen=naive_utcnow() - timedelta(days=age))
+            MunkiState.objects.create(machine_serial_number=get_random_string(12),
+                                      last_postflight_at=naive_utcnow() - timedelta(days=age))
         response = self._make_authenticated_request()
         self.assertEqual(response.status_code, 200)
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
@@ -63,6 +65,72 @@ class MunkiMetricsViewsTestCase(TestCase):
                         self.assertEqual(sample.value, 2)
                     else:
                         self.assertEqual(sample.value, 3)
+                break
+        else:
+            raise AssertionError("could not find expected metric family")
+
+    def test_active_machines_never_postflighted_only_in_inf(self):
+        # a machine that only ever preflighted has a null age: it is counted in the +Inf total but in no
+        # bucket, because it has never been active
+        MunkiState.objects.create(machine_serial_number=get_random_string(12),
+                                  last_postflight_at=naive_utcnow() - timedelta(days=2))
+        MunkiState.objects.create(machine_serial_number=get_random_string(12),
+                                  last_preflight_at=naive_utcnow(), last_postflight_at=None)
+        response = self._make_authenticated_request()
+        self.assertEqual(response.status_code, 200)
+        for family in text_string_to_metric_families(response.content.decode("utf-8")):
+            if family.name != "zentral_munki_active_machines_bucket":
+                continue
+            else:
+                self.assertEqual(len(family.samples), 7)
+                for sample in family.samples:
+                    le = sample.labels["le"]
+                    if le == "1":
+                        self.assertEqual(sample.value, 0)
+                    elif le == "+Inf":
+                        self.assertEqual(sample.value, 2)
+                    else:
+                        self.assertEqual(sample.value, 1)
+                break
+        else:
+            raise AssertionError("could not find expected metric family")
+
+    def test_active_machines_force_full_sync_does_not_rejuvenate(self):
+        # regression: updated_at is auto_now, so force_full_sync() moves it. The metric must follow
+        # last_postflight_at, or a forced sync would drop a long-dead machine into the youngest bucket.
+        ms = MunkiState.objects.create(machine_serial_number=get_random_string(12),
+                                       last_postflight_at=naive_utcnow() - timedelta(days=31))
+        ms.force_full_sync()
+        response = self._make_authenticated_request()
+        self.assertEqual(response.status_code, 200)
+        for family in text_string_to_metric_families(response.content.decode("utf-8")):
+            if family.name != "zentral_munki_active_machines_bucket":
+                continue
+            else:
+                for sample in family.samples:
+                    if sample.labels["le"] in ("1", "7", "14", "30"):
+                        self.assertEqual(sample.value, 0)
+                    else:
+                        self.assertEqual(sample.value, 1)
+                break
+        else:
+            raise AssertionError("could not find expected metric family")
+
+    def test_installed_pkginfos_never_postflighted_only_in_inf(self):
+        mi = self._force_managed_install(age_days=None)
+        response = self._make_authenticated_request()
+        self.assertEqual(response.status_code, 200)
+        for family in text_string_to_metric_families(response.content.decode("utf-8")):
+            if family.name != "zentral_munki_installed_pkginfos_bucket":
+                continue
+            else:
+                self.assertEqual(len(family.samples), 7)
+                for sample in family.samples:
+                    self.assertEqual(sample.labels["name"], mi.name)
+                    if sample.labels["le"] == "+Inf":
+                        self.assertEqual(sample.value, 1)
+                    else:
+                        self.assertEqual(sample.value, 0)
                 break
         else:
             raise AssertionError("could not find expected metric family")

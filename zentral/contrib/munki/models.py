@@ -152,8 +152,13 @@ class MunkiState(models.Model):
     run_type = models.CharField(max_length=64, blank=True, null=True)
     start_time = models.DateTimeField(blank=True, null=True)
     end_time = models.DateTimeField(blank=True, null=True)
-    last_seen = models.DateTimeField(auto_now=True)
+    # contact timestamps, one per agent phase. NOT updated_at: that one is auto_now, so any save moves it
+    # — force_full_sync() included — which is why it cannot be used to tell how recently a machine reported.
+    last_preflight_at = models.DateTimeField(null=True)
+    last_postflight_at = models.DateTimeField(null=True)
     force_full_sync_at = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def force_full_sync(self):
         self.force_full_sync_at = naive_utcnow()

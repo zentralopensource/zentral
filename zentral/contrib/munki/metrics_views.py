@@ -8,8 +8,11 @@ from .models import ManagedInstall
 class MetricsView(BasePrometheusMetricsView):
     def add_active_machines(self):
         query = (
+            # last_postflight_at, not updated_at: the latter is auto_now, so a force full sync would move a
+            # long-dead machine into the youngest bucket. A machine that only ever preflighted has a null
+            # age and lands in +Inf alone, which is correct — it has never been active.
             "with active_machines as ("
-            "  select date_part('days', now() - last_seen) as age"
+            "  select date_part('days', now() - last_postflight_at) as age"
             "  from munki_munkistate"
             ") select "
             'count(*) filter (where age < 1) as "1",'
@@ -40,7 +43,7 @@ class MetricsView(BasePrometheusMetricsView):
     def add_installed_pkginfos_buckets(self):
         query = (
             "with active_machines as ("
-            "  select machine_serial_number, date_part('days', now() - last_seen) as age"
+            "  select machine_serial_number, date_part('days', now() - last_postflight_at) as age"
             "  from munki_munkistate"
             ") select "
             "mi.name, mi.installed_version as version,"
