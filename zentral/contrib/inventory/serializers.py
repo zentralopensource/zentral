@@ -107,10 +107,11 @@ class JMESPathCheckSerializer(serializers.ModelSerializer):
         allow_blank=True, required=False, default=""
     )
     version = serializers.IntegerField(source="compliance_check.version", read_only=True)
+    compliance_check_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = JMESPathCheck
-        fields = ("name", "description", "version",
+        fields = ("name", "description", "version", "compliance_check_id",
                   "id", "source_name", "platforms", "tags",
                   "jmespath_expression", "created_at", "updated_at")
 

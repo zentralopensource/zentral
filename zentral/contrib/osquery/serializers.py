@@ -199,6 +199,7 @@ class QuerySchedulingSerializer(serializers.ModelSerializer):
 
 class QuerySerializer(serializers.ModelSerializer):
     compliance_check_enabled = serializers.BooleanField(default=False)
+    compliance_check_id = serializers.IntegerField(read_only=True, allow_null=True)
     scheduling = QuerySchedulingSerializer(source="packquery", required=False, allow_null=True)
 
     class Meta:

@@ -62,6 +62,9 @@ def sync_query_compliance_check(query, on):
                 query.compliance_check.save()
     elif query.compliance_check:
         query.compliance_check.delete()
+        # delete() only NULLs the FK column (SET_NULL); refresh the in-memory instance so the caller's
+        # serialization doesn't report the deleted check as still set
+        query.compliance_check = None
         deleted = True
     return created, updated, deleted
 

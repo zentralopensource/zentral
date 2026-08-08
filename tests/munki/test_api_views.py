@@ -818,6 +818,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             [{'id': sc.pk,
+              'compliance_check_id': sc.compliance_check.pk,
               'description': sc.compliance_check.description,
               'expected_result': sc.expected_result,
               'arch_amd64': True,
@@ -845,6 +846,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             sorted(response.json(), key=lambda d: d["id"]),
             [{'id': sc.pk,
+              'compliance_check_id': sc.compliance_check.pk,
               'description': sc.compliance_check.description,
               'expected_result': sc.expected_result,
               'arch_amd64': True,
@@ -860,6 +862,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
               'updated_at': sc.updated_at.isoformat(),
               'version': 1},
              {'id': sc2.pk,
+              'compliance_check_id': sc2.compliance_check.pk,
               'description': sc2.compliance_check.description,
               'expected_result': sc2.expected_result,
               'arch_amd64': True,
@@ -1012,6 +1015,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'id': script_check.pk,
+             'compliance_check_id': script_check.compliance_check.pk,
              'description': "",
              'expected_result': "yolo",
              'arch_amd64': True,
@@ -1081,6 +1085,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'id': sc.pk,
+             'compliance_check_id': sc.compliance_check.pk,
              'description': sc.compliance_check.description,
              'expected_result': sc.expected_result,
              'arch_amd64': True,
@@ -1165,6 +1170,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'id': script_check.pk,
+             'compliance_check_id': script_check.compliance_check.pk,
              'description': "yolo",
              'expected_result': "true",
              'arch_amd64': False,

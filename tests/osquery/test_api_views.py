@@ -2472,6 +2472,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                            "name": query.name,
                            "version": 1,
                            "compliance_check_enabled": False,
+                           "compliance_check_id": None,
                            "sql": query.sql,
                            "tag": None,
                            "minimum_osquery_version": None,
@@ -2503,6 +2504,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                            "name": query.name,
                            "version": 1,
                            "compliance_check_enabled": False,
+                           "compliance_check_id": None,
                            "sql": query.sql,
                            "tag": None,
                            "minimum_osquery_version": None,
@@ -2527,6 +2529,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                            "name": query.name,
                            "version": 1,
                            "compliance_check_enabled": False,
+                           "compliance_check_id": None,
                            "sql": query.sql,
                            "tag": None,
                            "minimum_osquery_version": None,
@@ -2574,6 +2577,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "name": query.name,
                           "version": 1,
                           "compliance_check_enabled": False,
+                          "compliance_check_id": None,
                           "sql": "select * from osquery_info;",
                           "tag": None,
                           "minimum_osquery_version": None,
@@ -2606,6 +2610,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "name": query.name,
                           "version": 1,
                           "compliance_check_enabled": False,
+                          "compliance_check_id": None,
                           "sql": "select * from osquery_info;",
                           "tag": None,
                           "minimum_osquery_version": None,
@@ -2640,6 +2645,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "name": query.name,
                           "version": 1,
                           "compliance_check_enabled": True,
+                          "compliance_check_id": query.compliance_check.pk,
                           "sql": "select 'OK' ztl_status;",
                           "tag": None,
                           "minimum_osquery_version": None,
@@ -2668,6 +2674,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "name": query.name,
                           "version": 1,
                           "compliance_check_enabled": False,
+                          "compliance_check_id": None,
                           "sql": "select 'OK' ztl_status;",
                           "tag": tag.pk,
                           "minimum_osquery_version": None,
@@ -2866,6 +2873,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "name": query.name,
                           "version": 1,
                           "compliance_check_enabled": False,
+                          "compliance_check_id": None,
                           "sql": query.sql,
                           "tag": None,
                           "minimum_osquery_version": None,
@@ -2890,6 +2898,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertEqual(response.json()["compliance_check_id"], query.compliance_check.pk)
         self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
 
     def test_get_query_unauthorized(self):
@@ -2946,6 +2955,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'compliance_check_enabled': False,
+             'compliance_check_id': None,
              'created_at': query.created_at.isoformat(),
              'description': '',
              'id': query.pk,
@@ -3002,6 +3012,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'compliance_check_enabled': False,
+             'compliance_check_id': None,
              'created_at': query.created_at.isoformat(),
              'description': '',
              'id': query.pk,
@@ -3052,6 +3063,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'compliance_check_enabled': False,
+             'compliance_check_id': None,
              'created_at': query.created_at.isoformat(),
              'description': '',
              'id': query.pk,
@@ -3119,8 +3131,22 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         query.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
+        self.assertEqual(response.json()["compliance_check_id"], query.compliance_check.pk)
         self.assertIs(isinstance(query.compliance_check, ComplianceCheck), True)
         self.assertEqual(query.sql, "ztl_status;")
+
+    def test_update_query_disable_compliance_check(self):
+        query = self.force_query(compliance_check=True)
+        compliance_check_pk = query.compliance_check.pk
+        data = {"name": query.name, "sql": query.sql, "compliance_check_enabled": False}
+        self.set_permissions("osquery.change_query")
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["compliance_check_enabled"], False)
+        self.assertIsNone(response.json()["compliance_check_id"])
+        query.refresh_from_db()
+        self.assertIsNone(query.compliance_check)
+        self.assertEqual(ComplianceCheck.objects.filter(pk=compliance_check_pk).count(), 0)
 
     def test_update_query_increment_version(self):
         query = self.force_query()
