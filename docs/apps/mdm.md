@@ -1423,9 +1423,9 @@ Fetches the list of Apps / Books locations.
 Example:
 
 ```bash
-curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_FQDN/api/mdm/locations/
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/locations/ \
+  | python3 -m json.tool
 ```
 
 Result:
@@ -1470,9 +1470,9 @@ Fetches the list of Apps / Books location assets.
 Example:
 
 ```bash
-curl -XPOST \
-  -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_FQDN/api/mdm/location_assets/?location_id=749
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/location_assets/?location_id=749" \
+  | python3 -m json.tool
 ```
 
 Result:
