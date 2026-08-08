@@ -1,11 +1,13 @@
 import hashlib
 import json
+from datetime import timedelta
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from tests.mdm.utils import force_dep_virtual_server, force_push_certificate
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from zentral.contrib.mdm.crypto import certificate_sha256_fingerprint
 from zentral.contrib.mdm.models import PushCertificate
+from zentral.utils.time import naive_utcnow
 
 
 class TestMDMCredentialModelSerialization(TestCase, SerializeForEventAssertions):
@@ -83,12 +85,21 @@ class TestMDMCredentialModelSerialization(TestCase, SerializeForEventAssertions)
         d = dep_token.serialize_for_event()
         self.assertEqual(
             set(d),
-            {"pk", "certificate_sha256", "access_token_expiry", "has_expired", "expires_soon",
-             "last_synced_at", "created_at", "updated_at"},
+            {"pk", "certificate_sha256", "access_token_expiry", "last_synced_at", "created_at", "updated_at"},
         )
-        self.assertIsInstance(d["has_expired"], bool)
-        self.assertIsInstance(d["expires_soon"], bool)
         self.assert_serialize_for_event_is_json_native(dep_token)
+
+    def test_dep_token_serialize_for_event_has_no_point_in_time_expiry_flags(self):
+        # a stored event must not carry a value that was only true when it was serialized
+        dep_token = force_dep_virtual_server().token
+        dep_token.access_token_expiry = naive_utcnow() - timedelta(days=1)
+        dep_token.save()
+        self.assertTrue(dep_token.has_expired())
+        self.assertTrue(dep_token.expires_soon())
+        d = dep_token.serialize_for_event()
+        self.assertNotIn("has_expired", d)
+        self.assertNotIn("expires_soon", d)
+        self.assertEqual(d["access_token_expiry"], dep_token.access_token_expiry.isoformat())
 
     def test_dep_token_serialize_for_event_keys_only(self):
         dep_token = force_dep_virtual_server().token

@@ -1961,12 +1961,12 @@ class DEPToken(models.Model):
         # Only the metadata an auditor can act on. The three secrets are left out, and so are
         # consumer_key and access_token: they are the public halves of the OAuth credential,
         # but there is one token per virtual server, so naming them tells an auditor nothing.
-        # sync_cursor is operational state.
+        # sync_cursor is operational state. The expiry is reported as a timestamp and not as
+        # has_expired/expires_soon booleans: those are only true at serialization time, and a
+        # stored event would keep asserting them long after they stopped being accurate.
         d.update({
             "certificate_sha256": certificate_sha256_fingerprint(self.certificate),
             "access_token_expiry": self.access_token_expiry.isoformat() if self.access_token_expiry else None,
-            "has_expired": bool(self.has_expired()),
-            "expires_soon": bool(self.expires_soon()),
             "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
