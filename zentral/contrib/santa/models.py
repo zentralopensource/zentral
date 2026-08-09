@@ -855,6 +855,11 @@ class EnrolledMachine(models.Model):
     teamid_rule_count = models.IntegerField(null=True)
     last_sync_ok = models.BooleanField(null=True)
 
+    # the machine rules of the current sync session are only committed once the postflight
+    # confirms that the client wrote them to its own rule database
+    sync_session = models.CharField(max_length=8, null=True)
+    sync_session_clean = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1211,7 +1216,14 @@ class MachineRule(models.Model):
     target = models.ForeignKey(Target, on_delete=models.PROTECT)
     policy = models.PositiveSmallIntegerField(choices=Rule.Policy.choices)
     version = models.PositiveIntegerField()
+    # batch being downloaded by the client
     cursor = models.CharField(max_length=8, null=True)
+    # sync session during which the rule was sent. Null means that the client has confirmed
+    # that the rule is in its own rule database.
+    sync_session = models.CharField(max_length=8, null=True)
+    # a removal was sent to the client during the current sync session. The policy and the
+    # version are left untouched, so that the ledger can be restored if the session is lost.
+    staged_removal = models.BooleanField(default=False)
 
     objects = MachineRuleManager()
 
