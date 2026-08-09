@@ -332,26 +332,29 @@ class PreflightView(BaseSyncView):
             comparable_santa_version,
         )
 
-        # compare the reported rules with the synced ones before the machine rules are updated.
-        # only necessary for the incidents, and a machine that just enrolled has no synced rule
-        # to be compared with.
-        sync_incident_severity = configuration.get_sync_incident_severity()
+        # reconcile the sync session the client never confirmed with a postflight, and
+        # compare the reported rules with the ledger. A machine that just enrolled has no
+        # synced rule to be compared with.
         sync_ok = None
-        if sync_incident_severity != Severity.NONE and self.enrollment_action is None:
-            sync_ok = self.enrolled_machine.sync_ok()
+        lost_clean_session = False
+        if self.enrollment_action is None:
+            sync_ok, lost_clean_session = self.enrolled_machine.reconcile_sync_session()
 
         # clean sync?
         clean_sync = (
             self.request_data.get("request_clean_sync")
             # enrollment
             or self.enrollment_action is not None
+            # the ledger of a lost clean session cannot be restored, the client rule database
+            # has to be rebuilt from scratch again
+            or lost_clean_session
             # the client reports no rule at all, but some rules were synced with it. It has
             # probably lost its rule database, and the machine rules have to be rebuilt.
             or (not any(getattr(self.enrolled_machine, k) for k in self._iter_rule_count_keys())
                 and self.enrolled_machine.machinerule_set.exists())
         )
+        self.enrolled_machine.start_sync_session(bool(clean_sync))
         if clean_sync:
-            MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).delete()
             if comparable_santa_version < (2024, 1):
                 response_dict["clean_sync"] = True
             else:
@@ -364,7 +367,8 @@ class PreflightView(BaseSyncView):
 
         # sync incident update?
         incident_update = None
-        if sync_ok is not None:
+        sync_incident_severity = configuration.get_sync_incident_severity()
+        if sync_ok is not None and sync_incident_severity != Severity.NONE:
             last_sync_ok = self.enrolled_machine.last_sync_ok
             if sync_ok != last_sync_ok:
                 # an update is sent even the first time. The machine could have been re-enrolled
@@ -418,4 +422,10 @@ class EventUploadView(BaseSyncView):
 
 class PostflightView(BaseSyncView):
     def do_post(self):
+        if self.enrolled_machine.sync_session:
+            # the client only sends a postflight once it has written the rules of the whole
+            # session to its own rule database
+            clean = self.request_data.get("syncType") in ("CLEAN", "CLEAN_ALL")
+            MachineRule.objects.commit_session(self.enrolled_machine, clean)
+            self.enrolled_machine.end_sync_session()
         return {}

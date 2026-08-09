@@ -449,7 +449,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response["sync_type"], "clean")
-        self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 0)
+        # the machine rules are only rebuilt once the client confirms the clean sync
+        self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 1)
 
     def _add_synced_rule(self, enrolled_machine=None, target_type=Target.Type.BINARY, configuration=None):
         identifier = new_team_id() if target_type == Target.Type.TEAM_ID else new_sha256()
@@ -519,7 +520,8 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["sync_type"], "clean")
-        self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 0)
+        # the machine rules are only rebuilt once the client confirms the clean sync
+        self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 1)
         self.enrolled_machine.refresh_from_db()
         self.assertTrue(self.enrolled_machine.last_sync_ok)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)

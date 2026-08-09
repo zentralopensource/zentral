@@ -874,33 +874,90 @@ class EnrolledMachine(models.Model):
         except ValueError:
             return ()
 
+    def _synced_rule_counts(self, qs):
+        return {
+            r["target__type"]: r["count"]
+            for r in qs.values("target__type").annotate(count=Count("id"))
+        }
+
+    def _reported_rule_counts(self):
+        counts = {}
+        for target_type in Target.Type:
+            if not target_type.is_native:
+                continue
+            count = getattr(self, f"{target_type.value.lower()}_rule_count") or 0
+            if target_type == Target.Type.BINARY:
+                # the client adds the transitive rules to its own database as binary rules,
+                # they are reported in the binary rule count, but they are never synced
+                count -= self.transitive_rule_count or 0
+            counts[target_type.value] = count
+        return counts
+
+    def _match_reported_rules(self, qs):
+        reported_counts = self._reported_rule_counts()
+        synced_counts = self._synced_rule_counts(qs)
+        for target_type, reported_count in reported_counts.items():
+            if synced_counts.get(target_type, 0) != reported_count:
+                return False
+        return True
+
+    def committed_rules(self):
+        """The rules the client is expected to have, ignoring the rules staged by a current session, if any.
+
+        A staged removal was committed before the session, so the client still has it. A staged
+        rule that replaced a committed one cannot be told apart from a new one, and is left out.
+        """
+        return (self.machinerule_set.filter(cursor__isnull=True)
+                                    .filter(Q(sync_session__isnull=True) | Q(staged_removal=True)))
+
     def sync_ok(self):
         """
         Compare the synced and reported rules
         """
-        synced_rules = {
-            r["target__type"]: r["count"]
-            for r in self.machinerule_set.filter(cursor__isnull=True)
-                                         .values("target__type")
-                                         .annotate(count=Count("id"))
-        }
-        ok = True
-        for target_type in Target.Type:
-            if not target_type.is_native:
-                continue
-            synced_count = synced_rules.get(target_type.value, 0)
-            reported_count = getattr(self, f"{target_type.value.lower()}_rule_count") or 0
-            if target_type == Target.Type.BINARY:
-                # the client adds the transitive rules to its own database as binary rules,
-                # they are reported in the binary rule count, but they are never synced
-                reported_count -= self.transitive_rule_count or 0
-            if synced_count != reported_count:
-                logger.error(
-                    "Enrolled machine %s: %s rules synced %s, reported %s",
-                    self.pk, target_type, synced_count, reported_count  # lgtm[py/clear-text-logging-sensitive-data]
-                )
-                ok = False
+        ok = self._match_reported_rules(self.committed_rules())
+        if not ok:
+            logger.error(
+                "Enrolled machine %s: synced %s, reported %s",
+                self.pk,  # lgtm[py/clear-text-logging-sensitive-data]
+                self._synced_rule_counts(self.committed_rules()), self._reported_rule_counts()
+            )
         return ok
+
+    def start_sync_session(self, clean):
+        self.sync_session = get_random_string(8)
+        self.sync_session_clean = clean
+        EnrolledMachine.objects.filter(pk=self.pk).update(sync_session=self.sync_session,
+                                                          sync_session_clean=clean)
+
+    def end_sync_session(self):
+        self.sync_session = None
+        self.sync_session_clean = False
+        EnrolledMachine.objects.filter(pk=self.pk).update(sync_session=None, sync_session_clean=False)
+
+    def reconcile_sync_session(self):
+        """Settle the sync session the client never confirmed with a postflight.
+
+        Returns whether the client rule database and the ledger agree, and whether a clean
+        session was lost.
+        """
+        if self.sync_session is None:
+            return self.sync_ok(), False
+        if self.sync_session_clean:
+            # the rules committed before the session were replaced in place, the state of the
+            # client cannot be worked out anymore. Rebuild it with another clean sync.
+            MachineRule.objects.discard_session(self)
+            return None, True
+        if self._match_reported_rules(self.committed_rules()):
+            # the session never reached the client rule database
+            MachineRule.objects.discard_session(self)
+            return True, False
+        if self._match_reported_rules(self.machinerule_set.filter(staged_removal=False)):
+            # the session reached the client rule database, only the postflight was lost. The
+            # client then has everything but the removals it applied.
+            MachineRule.objects.commit_session(self, False)
+            return True, False
+        MachineRule.objects.discard_session(self)
+        return self.sync_ok(), False
 
 
 # Voting
@@ -1085,16 +1142,16 @@ class MachineRuleManager(models.Manager):
             "    {wheres}"
             "  )"
             "), machine_rules as ("  # current enrolled machine machine rules
-            "   select target_id, policy, version"
+            "   select target_id, policy, version, staged_removal"
             "   from santa_machinerule"
-            "   where enrolled_machine_id = %(enrolled_machine_pk)s"
+            "   where enrolled_machine_id = %(enrolled_machine_pk)s and ({machine_rule_wheres})"
             "), rule_product as ("  # full product of the configured rules and the machine rules
             "  select fr.target_id as rule_target_id, fr.policy as rule_policy, fr.cel_expr as rule_cel_expr,"
             "  fr.custom_msg as rule_custom_msg,"
             "  fr.custom_url as rule_custom_url,"
             "  fr.version as rule_version,"
             "  mr.target_id as machine_rule_target_id, mr.policy as machine_rule_policy,"
-            "  mr.version as machine_rule_version"
+            "  mr.version as machine_rule_version, mr.staged_removal as machine_rule_staged_removal"
             "  from filtered_rules as fr"
             "  full outer join machine_rules as mr on (mr.target_id = fr.target_id)"
             "), changed_rules as ("  # filter the product to get the changes
@@ -1104,12 +1161,16 @@ class MachineRuleManager(models.Manager):
             "  rule_version as version"
             "  from rule_product where ("
             "    (machine_rule_target_id is null)"
+            # a rule back in scope after its removal was sent has to be sent again
             "    or (rule_target_id is not null"
-            "        and (rule_policy <> machine_rule_policy or rule_version <> machine_rule_version)))"
+            "        and (machine_rule_staged_removal"
+            "             or rule_policy <> machine_rule_policy"
+            "             or rule_version <> machine_rule_version)))"
             "  union"
+            # the removals already sent during the current session are not sent again
             "  select machine_rule_target_id as target_id, 4 as policy, null as cel_expr,"
             "  null as custom_msg, null as custom_url, 1 as version"
-            "  from rule_product where rule_target_id is null"
+            "  from rule_product where rule_target_id is null and not machine_rule_staged_removal"
             ") "  # limit, order and join with target to get all the necessary info
             "select t.id as target_id, t.type as rule_type, t.identifier, cr.policy, cr.cel_expr,"
             "cr.custom_msg, cr.custom_url, cr.version "
@@ -1143,7 +1204,14 @@ class MachineRuleManager(models.Manager):
             kwargs["tags"] = tags
         else:
             wheres.append("cardinality(pr.tag_ids) = 0")
-        query = query.format(wheres=" and ".join(wheres))
+        # during a clean sync, the client rebuilds its rule database from the rules of the
+        # current session only, so the committed machine rules are ignored
+        if enrolled_machine.sync_session_clean:
+            machine_rule_wheres = "sync_session = %(sync_session)s"
+        else:
+            machine_rule_wheres = "sync_session is null or sync_session = %(sync_session)s"
+        kwargs["sync_session"] = enrolled_machine.sync_session
+        query = query.format(wheres=" and ".join(wheres), machine_rule_wheres=machine_rule_wheres)
         cursor = connection.cursor()
         cursor.execute(query, kwargs)
         columns = [col[0] for col in cursor.description]
@@ -1154,25 +1222,44 @@ class MachineRuleManager(models.Manager):
                     rule_info_d[key] = val
             yield rule_info_d
 
+    def _discard(self, qs):
+        """Restore the ledger rows of a lost sync session"""
+        qs.filter(staged_removal=True).update(cursor=None, sync_session=None, staged_removal=False)
+        qs.filter(staged_removal=False).delete()
+
+    def discard_session(self, enrolled_machine):
+        """Forget the rules sent during the sync sessions the client never confirmed"""
+        self._discard(self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False))
+
+    def commit_session(self, enrolled_machine, clean):
+        """Record the rules of the sync session the client just confirmed"""
+        qs = self.filter(enrolled_machine=enrolled_machine)
+        session_qs = qs.filter(sync_session=enrolled_machine.sync_session)
+        if clean and session_qs.exists():
+            # the client rebuilt its rule database from the rules of this session. Santa skips
+            # the cleanup altogether when it does not receive any rule, hence the exists().
+            qs.filter(sync_session__isnull=True).delete()
+        session_qs.filter(staged_removal=True).delete()
+        session_qs.update(cursor=None, sync_session=None)
+
     def get_next_rule_batch(self, enrolled_machine, tags, cursor=None):
+        if enrolled_machine.sync_session is None:
+            # a rule download without a preflight, the rules still have to be staged
+            enrolled_machine.start_sync_session(False)
         qs = self.filter(enrolled_machine=enrolled_machine).select_for_update()
 
-        # fresh start from last known OK state
-        # remove all unacknowlegded machine rules, except the REMOVE ones
-        # this will ultimately refresh all the rules that haven't been acknowleged
-        qs_cleanup = qs.exclude(policy=Rule.Policy.REMOVE).filter(cursor__isnull=False)
+        # fresh start from the last known OK state
+        # discard the batches that have not been acknowledged, they will be sent again
+        qs_cleanup = qs.filter(cursor__isnull=False)
         if cursor:
-            # do not delete request cursor rules. We will acknowlege them
+            # do not discard the request cursor batch, we are about to acknowledge it
             qs_cleanup = qs_cleanup.exclude(cursor=cursor)
-        qs_cleanup.delete()
+        self._discard(qs_cleanup)
 
-        # acknowlege the cursor rules
+        # acknowledge the request cursor batch. The rules stay staged until the postflight,
+        # the client only writes them to its own database once the whole download is over.
         if cursor:
-            qs = qs.filter(cursor=cursor)
-            # remove the REMOVE machine rules from the last batch
-            qs.filter(policy=Rule.Policy.REMOVE).delete()
-            # acknowlege the other machine rules from the last batch
-            qs.update(cursor=None)
+            qs.filter(cursor=cursor).update(cursor=None)
 
         # translate attributes for older santa agents
         # TODO remove eventually
@@ -1197,13 +1284,17 @@ class MachineRuleManager(models.Manager):
                 rule.pop("custom_url", None)
             if use_sha256_attr and Target.Type(rule["rule_type"]).has_sha256_identifier:
                 rule["sha256"] = rule.pop("identifier")
-            self.update_or_create(enrolled_machine=enrolled_machine,
-                                  target=Target(pk=target_id),
-                                  defaults={
-                                      "policy": policy,
-                                      "version": version,
-                                      "cursor": new_cursor,
-                                  })
+            defaults = {"cursor": new_cursor, "sync_session": enrolled_machine.sync_session}
+            if policy == Rule.Policy.REMOVE:
+                # keep the committed policy and version, the ledger is the only place where
+                # the rule still exists
+                defaults["staged_removal"] = True
+                self.filter(enrolled_machine=enrolled_machine, target=target_id).update(**defaults)
+            else:
+                defaults.update({"policy": policy, "version": version, "staged_removal": False})
+                self.update_or_create(enrolled_machine=enrolled_machine,
+                                      target=Target(pk=target_id),
+                                      defaults=defaults)
             rules.append(rule)
         response_cursor = None
         if len(rules):

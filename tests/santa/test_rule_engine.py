@@ -218,7 +218,8 @@ class SantaRuleEngineTestCase(TestCase):
                     target=target,
                     policy=rule.policy,
                     version=rule.version,
-                    cursor=get_random_string(8) if target_type == Target.Type.BINARY else None
+                    cursor=get_random_string(8) if target_type == Target.Type.BINARY else None,
+                    sync_session=get_random_string(8) if target_type == Target.Type.BINARY else None
                 )
         self.enrolled_machine.binary_rule_count = 4
         self.enrolled_machine.cdhash_rule_count = 3
@@ -597,6 +598,7 @@ class SantaRuleEngineTestCase(TestCase):
 
     def test_deleted_rule(self):
         target, rule, serialized_rule = self.create_and_serialize_rule()
+        rule_policy = rule.policy
         _, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
         MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
         rule.delete()
@@ -612,9 +614,15 @@ class SantaRuleEngineTestCase(TestCase):
             self.assertEqual(machine_rule_qs.count(), 1)
             machine_rule = machine_rule_qs.first()
             self.assertEqual(machine_rule.target, target)
-            self.assertEqual(machine_rule.policy, Rule.Policy.REMOVE)
+            # the removal is staged, the ledger keeps the policy of the rule the client has
+            self.assertTrue(machine_rule.staged_removal)
+            self.assertEqual(machine_rule.policy, rule_policy)
             self.assertEqual(machine_rule.cursor, response_cursor)
         MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
+        # the machine rule is only removed from the ledger once the client confirms the session
+        self.assertEqual(machine_rule_qs.count(), 1)
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
         self.assertEqual(machine_rule_qs.count(), 0)
 
     def test_scoped_rule(self):
