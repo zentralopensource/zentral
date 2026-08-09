@@ -437,6 +437,78 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response["sync_type"], "clean")
 
+    def _add_synced_rule(self, enrolled_machine=None):
+        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+        MachineRule.objects.create(
+            enrolled_machine=enrolled_machine or self.enrolled_machine,
+            target=target,
+            policy=rule.policy,
+            version=rule.version,
+            cursor=None
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_enrollment_conf_with_severity_no_incident_update(self, post_event):
+        # a machine that just enrolled has no synced rule to be compared with
+        self.configuration.sync_incident_severity = Severity.MAJOR.value
+        self.configuration.save()
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        # the client still reports the rules of a previous enrollment
+        data["binary_rule_count"] = 5
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
+        self.assertIsNone(enrolled_machine.last_sync_ok)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_re_enrollment_conf_with_severity_no_incident_update(self, post_event):
+        self.configuration.sync_incident_severity = Severity.MAJOR.value
+        self.configuration.save()
+        self.configuration2.sync_incident_severity = Severity.MAJOR.value
+        self.configuration2.save()
+        self._add_synced_rule()
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["binary_rule_count"] = 1
+        # same machine, other enrollment → the enrolled machine is replaced
+        response = self.post_as_json("preflight", hardware_uuid, data,
+                                     enrollment_secret=self.enrollment_secret2.secret)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(EnrolledMachine.objects.filter(pk=self.enrolled_machine.pk).count(), 0)
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment2, hardware_uuid=hardware_uuid)
+        self.assertIsNone(enrolled_machine.last_sync_ok)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        enrollment_event = events[1]
+        self.assertIsInstance(enrollment_event, SantaEnrollmentEvent)
+        self.assertEqual(enrollment_event.payload["action"], "re-enrollment")
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_clean_sync_requested_in_sync_no_incident_update(self, post_event):
+        # the machine rules are deleted, but the client still has its rules during the preflight
+        self.configuration.sync_incident_severity = Severity.MAJOR.value
+        self.configuration.save()
+        self._add_synced_rule()
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["binary_rule_count"] = 1
+        data["request_clean_sync"] = True
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["sync_type"], "clean")
+        self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 0)
+        self.enrolled_machine.refresh_from_db()
+        self.assertTrue(self.enrolled_machine.last_sync_ok)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_not_ok_conf_without_severity_no_incident_update(self, post_event):
         # add one synced rule

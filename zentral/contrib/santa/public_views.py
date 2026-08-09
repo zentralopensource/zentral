@@ -327,12 +327,21 @@ class PreflightView(BaseSyncView):
 
     def do_post(self):
         self._commit_machine_snapshot()
+        configuration = self.enrolled_machine.enrollment.configuration
         comparable_santa_version = self.enrolled_machine.get_comparable_santa_version()
 
-        response_dict = self.enrolled_machine.enrollment.configuration.get_sync_server_config(
+        response_dict = configuration.get_sync_server_config(
             self.enrolled_machine.serial_number,
             comparable_santa_version,
         )
+
+        # compare the reported rules with the synced ones before the machine rules are updated.
+        # only necessary for the incidents, and a machine that just enrolled has no synced rule
+        # to be compared with.
+        sync_incident_severity = configuration.get_sync_incident_severity()
+        sync_ok = None
+        if sync_incident_severity != Severity.NONE and self.enrollment_action is None:
+            sync_ok = self.enrolled_machine.sync_ok()
 
         # clean sync?
         clean_sync = (
@@ -356,10 +365,7 @@ class PreflightView(BaseSyncView):
 
         # sync incident update?
         incident_update = None
-        configuration = self.enrolled_machine.enrollment.configuration
-        sync_incident_severity = configuration.get_sync_incident_severity()
-        if sync_incident_severity != Severity.NONE:
-            sync_ok = self.enrolled_machine.sync_ok()
+        if sync_ok is not None:
             last_sync_ok = self.enrolled_machine.last_sync_ok
             if sync_ok != last_sync_ok:
                 if last_sync_ok is not None or not sync_ok:  # no incident update if first time and OK
