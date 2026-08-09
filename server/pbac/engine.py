@@ -244,7 +244,7 @@ class Engine:
             )
 
     def register_app_legacy_perms(self, app_config: AppConfig) -> None:
-        permission_models = getattr(app_config, "permission_models", [])
+        permission_models = getattr(app_config, "permission_models", None) or []
         perm_registered = False
         for model in app_config.get_models():
             model_name = model._meta.model_name
