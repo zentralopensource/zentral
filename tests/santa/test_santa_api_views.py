@@ -510,6 +510,8 @@ class SantaAPIViewsTestCase(TestCase):
         # the machine rules are deleted, but the client still has its rules during the preflight
         self.configuration.sync_incident_severity = Severity.MAJOR.value
         self.configuration.save()
+        self.enrolled_machine.last_sync_ok = True
+        self.enrolled_machine.save()
         self._add_synced_rule()
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["binary_rule_count"] = 1
@@ -546,20 +548,12 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_preflight_sync_ok_conf_with_severity_first_time_no_incident_update(self, post_event):
+    def test_preflight_sync_ok_conf_with_severity_first_time_incident_update_none(self, post_event):
         # setup the sync incidents
         self.configuration.sync_incident_severity = Severity.CRITICAL.value
         self.configuration.save()
         # add one synced rule
-        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
-        MachineRule.objects.create(
-            enrolled_machine=self.enrolled_machine,
-            target=target,
-            policy=rule.policy,
-            version=rule.version,
-            cursor=None
-        )
+        self._add_synced_rule()
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["binary_rule_count"] = 1
         response = self.post_as_json("preflight", hardware_uuid, data)
@@ -572,7 +566,11 @@ class SantaAPIViewsTestCase(TestCase):
         preflight_event = events[-1]
         self.assertIsInstance(preflight_event, SantaPreflightEvent)
         self.assertEqual(preflight_event.metadata.machine_serial_number, self.enrolled_machine.serial_number)
-        self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 1)
+        incident_update = preflight_event.metadata.incident_updates[0]
+        self.assertEqual(incident_update.incident_type, "santa_sync")
+        self.assertEqual(incident_update.key, {"santa_cfg_pk": self.configuration.pk})
+        self.assertEqual(incident_update.severity, Severity.NONE)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_ok_conf_with_severity_resolution_incident_update_none(self, post_event):

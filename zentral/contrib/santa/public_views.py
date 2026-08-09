@@ -370,12 +370,13 @@ class PreflightView(BaseSyncView):
         if sync_ok is not None:
             last_sync_ok = self.enrolled_machine.last_sync_ok
             if sync_ok != last_sync_ok:
-                if last_sync_ok is not None or not sync_ok:  # no incident update if first time and OK
-                    if sync_ok:
-                        severity = Severity.NONE
-                    else:
-                        severity = sync_incident_severity
-                    incident_update = SyncIncident.build_incident_update(configuration, severity)
+                # an update is sent even the first time. The machine could have been re-enrolled
+                # while an incident was open, and nothing else would ever close it.
+                if sync_ok:
+                    severity = Severity.NONE
+                else:
+                    severity = sync_incident_severity
+                incident_update = SyncIncident.build_incident_update(configuration, severity)
                 self.enrolled_machine.last_sync_ok = sync_ok
                 self.enrolled_machine.save()
 
