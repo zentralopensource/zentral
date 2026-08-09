@@ -348,8 +348,10 @@ class PreflightView(BaseSyncView):
             self.request_data.get("request_clean_sync")
             # enrollment
             or self.enrollment_action is not None
-            # all rule count keys are missing
-            or all(k not in self.request_data for k in self._iter_rule_count_keys())
+            # the client reports no rule at all, but some rules were synced with it. It has
+            # probably lost its rule database, and the machine rules have to be rebuilt.
+            or (not any(getattr(self.enrolled_machine, k) for k in self._iter_rule_count_keys())
+                and self.enrolled_machine.machinerule_set.exists())
         )
         if clean_sync:
             MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).delete()

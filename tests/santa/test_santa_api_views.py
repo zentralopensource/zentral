@@ -425,8 +425,21 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response["sync_type"], "clean")
 
-    def test_preflight_no_enrollment_no_rule_counts(self):
-        # no enrollment, no rule counts, no clean sync requested → sync type clean
+    def test_preflight_no_enrollment_no_rule_count_no_machine_rule_sync_type_normal(self):
+        # no enrollment, no reported rule, no synced rule, no clean sync requested → sync type normal
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        for k in list(data.keys()):
+            if k.endswith("_rule_count"):
+                del data[k]
+        data["request_clean_sync"] = False
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["sync_type"], "normal")
+
+    def test_preflight_no_enrollment_no_rule_count_machine_rules_sync_type_clean(self):
+        # the client reports no rule, but some rules were synced with it → sync type clean
+        self._add_synced_rule()
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         for k in list(data.keys()):
             if k.endswith("_rule_count"):
@@ -436,10 +449,13 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response["sync_type"], "clean")
+        self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 0)
 
-    def _add_synced_rule(self, enrolled_machine=None):
-        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+    def _add_synced_rule(self, enrolled_machine=None, target_type=Target.Type.BINARY, configuration=None):
+        identifier = new_team_id() if target_type == Target.Type.TEAM_ID else new_sha256()
+        target = Target.objects.create(type=target_type, identifier=identifier)
+        rule = Rule.objects.create(configuration=configuration or self.configuration,
+                                   target=target, policy=Rule.Policy.BLOCKLIST)
         MachineRule.objects.create(
             enrolled_machine=enrolled_machine or self.enrolled_machine,
             target=target,
@@ -511,18 +527,12 @@ class SantaAPIViewsTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_not_ok_conf_without_severity_no_incident_update(self, post_event):
-        # add one synced rule
-        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
-        MachineRule.objects.create(
-            enrolled_machine=self.enrolled_machine,
-            target=target,
-            policy=rule.policy,
-            version=rule.version,
-            cursor=None
-        )
+        # add two synced rules
+        self._add_synced_rule()
+        self._add_synced_rule(target_type=Target.Type.TEAM_ID)
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         data["binary_rule_count"] = 0  # sync not OK
+        data["teamid_rule_count"] = 1  # the client still reports a rule, no clean sync
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
@@ -604,17 +614,11 @@ class SantaAPIViewsTestCase(TestCase):
         # setup the sync incidents
         self.configuration.sync_incident_severity = Severity.MAJOR.value
         self.configuration.save()
-        # add one synced rule
-        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
-        MachineRule.objects.create(
-            enrolled_machine=self.enrolled_machine,
-            target=target,
-            policy=rule.policy,
-            version=rule.version,
-            cursor=None
-        )
+        # add two synced rules
+        self._add_synced_rule()
+        self._add_synced_rule(target_type=Target.Type.TEAM_ID)
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["teamid_rule_count"] = 1  # the client still reports a rule, no clean sync
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
@@ -637,17 +641,11 @@ class SantaAPIViewsTestCase(TestCase):
         # simulate sync not ok status
         self.enrolled_machine.last_sync_ok = False
         self.enrolled_machine.save()
-        # add one synced rule
-        target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
-        rule = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.BLOCKLIST)
-        MachineRule.objects.create(
-            enrolled_machine=self.enrolled_machine,
-            target=target,
-            policy=rule.policy,
-            version=rule.version,
-            cursor=None
-        )
+        # add two synced rules
+        self._add_synced_rule()
+        self._add_synced_rule(target_type=Target.Type.TEAM_ID)
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["teamid_rule_count"] = 1  # the client still reports a rule, no clean sync
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
