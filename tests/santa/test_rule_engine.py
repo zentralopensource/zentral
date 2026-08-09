@@ -110,6 +110,37 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertTrue(self.enrolled_machine.sync_ok())
         self.assertTrue(self.enrolled_machine2.sync_ok())
 
+    def test_transitive_rules_sync_ok(self):
+        # the transitive rules are created by the client and reported as binary rules
+        for i in range(3):
+            target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=Target.Type.BINARY)
+            MachineRule.objects.create(
+                enrolled_machine=self.enrolled_machine,
+                target=target,
+                policy=rule.policy,
+                version=rule.version,
+                cursor=None
+            )
+        self.enrolled_machine.binary_rule_count = 3 + 17
+        self.enrolled_machine.transitive_rule_count = 17
+        self.assertTrue(self.enrolled_machine.sync_ok())
+
+    def test_transitive_rules_missing_synced_binary_sync_not_ok(self):
+        for i in range(3):
+            target, rule, _ = self.create_and_serialize_for_iter_rule(target_type=Target.Type.BINARY)
+            if i == 0:
+                continue
+            MachineRule.objects.create(
+                enrolled_machine=self.enrolled_machine,
+                target=target,
+                policy=rule.policy,
+                version=rule.version,
+                cursor=None
+            )
+        self.enrolled_machine.binary_rule_count = 3 + 17
+        self.enrolled_machine.transitive_rule_count = 17
+        self.assertFalse(self.enrolled_machine.sync_ok())
+
     def test_multiple_rules_missing_reported_teamid_sync_not_ok(self):
         for target_type, count in ((Target.Type.BINARY, 3), (Target.Type.CERTIFICATE, 2), (Target.Type.TEAM_ID, 1)):
             for i in range(count):

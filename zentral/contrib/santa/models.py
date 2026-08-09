@@ -885,6 +885,10 @@ class EnrolledMachine(models.Model):
                 continue
             synced_count = synced_rules.get(target_type.value, 0)
             reported_count = getattr(self, f"{target_type.value.lower()}_rule_count") or 0
+            if target_type == Target.Type.BINARY:
+                # the client adds the transitive rules to its own database as binary rules,
+                # they are reported in the binary rule count, but they are never synced
+                reported_count -= self.transitive_rule_count or 0
             if synced_count != reported_count:
                 logger.error(
                     "Enrolled machine %s: %s rules synced %s, reported %s",
