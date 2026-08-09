@@ -6,6 +6,7 @@ from django.contrib.postgres.expressions import ArraySubquery
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.db.models import OuterRef
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.generic import View
 from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
@@ -353,7 +354,7 @@ class PreflightView(BaseSyncView):
             or (not any(getattr(self.enrolled_machine, k) for k in self._iter_rule_count_keys())
                 and self.enrolled_machine.machinerule_set.exists())
         )
-        self.enrolled_machine.start_sync_session(bool(clean_sync))
+        self.enrolled_machine.start_sync_session(bool(clean_sync), preflight_at=timezone.now())
         if clean_sync:
             if comparable_santa_version < (2024, 1):
                 response_dict["clean_sync"] = True
@@ -423,5 +424,5 @@ class PostflightView(BaseSyncView):
             # session to its own rule database
             clean = self.request_data.get("syncType") in ("CLEAN", "CLEAN_ALL")
             MachineRule.objects.commit_session(self.enrolled_machine, clean)
-            self.enrolled_machine.end_sync_session()
+        self.enrolled_machine.end_sync_session(postflight_at=timezone.now())
         return {}

@@ -114,6 +114,46 @@ class SantaSyncSessionTestCase(TestCase):
         client.enrolled_machine.refresh_from_db()
         self.assertTrue(client.enrolled_machine.sync_ok())
 
+    # the sync stage timestamps
+
+    def test_sync_records_the_stage_timestamps(self):
+        client, _, targets = self.force_client(rule_count=1)
+        self.assertIsNone(client.enrolled_machine.last_preflight_at)
+        self.assertIsNone(client.enrolled_machine.last_postflight_at)
+        client.sync()
+        client.enrolled_machine.refresh_from_db()
+        self.assertIsNotNone(client.enrolled_machine.last_preflight_at)
+        self.assertIsNotNone(client.enrolled_machine.last_postflight_at)
+        self.assertLessEqual(client.enrolled_machine.last_preflight_at,
+                             client.enrolled_machine.last_postflight_at)
+
+    def test_interrupted_sync_only_records_the_preflight(self):
+        client, _, targets = self.force_client(batch_size=1, rule_count=3)
+        client.preflight()
+        client.rule_download(max_batches=1)
+        client.enrolled_machine.refresh_from_db()
+        self.assertIsNotNone(client.enrolled_machine.last_preflight_at)
+        # the client never confirmed the run
+        self.assertIsNone(client.enrolled_machine.last_postflight_at)
+
+    def test_second_preflight_moves_the_preflight_timestamp_only(self):
+        client, _, targets = self.force_client(rule_count=1)
+        client.sync()
+        client.enrolled_machine.refresh_from_db()
+        first_preflight_at = client.enrolled_machine.last_preflight_at
+        first_postflight_at = client.enrolled_machine.last_postflight_at
+        client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertGreater(client.enrolled_machine.last_preflight_at, first_preflight_at)
+        self.assertEqual(client.enrolled_machine.last_postflight_at, first_postflight_at)
+
+    def test_rule_download_without_preflight_does_not_move_the_timestamps(self):
+        client, _, targets = self.force_client(rule_count=1)
+        client.rule_download()
+        client.enrolled_machine.refresh_from_db()
+        self.assertIsNone(client.enrolled_machine.last_preflight_at)
+        self.assertIsNone(client.enrolled_machine.last_postflight_at)
+
     # an interrupted rule download must not be recorded as synced
 
     def test_interrupted_rule_download_is_not_committed(self):

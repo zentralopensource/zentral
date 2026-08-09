@@ -860,6 +860,13 @@ class EnrolledMachine(models.Model):
     sync_session = models.CharField(max_length=8, null=True)
     sync_session_clean = models.BooleanField(default=False)
 
+    # one timestamp per sync stage. updated_at is auto_now, it moves on any save and cannot say
+    # how recently a machine reported. A machine that preflights forever without ever sending a
+    # postflight is not visible at the inventory source grain either: the preflight is what commits
+    # the machine snapshot.
+    last_preflight_at = models.DateTimeField(null=True)
+    last_postflight_at = models.DateTimeField(null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -867,6 +874,10 @@ class EnrolledMachine(models.Model):
 
     class Meta:
         unique_together = ("enrollment", "hardware_uuid")
+        indexes = [
+            models.Index(fields=["last_preflight_at"]),
+            models.Index(fields=["last_postflight_at"]),
+        ]
 
     def get_comparable_santa_version(self):
         try:
@@ -923,16 +934,24 @@ class EnrolledMachine(models.Model):
             )
         return ok
 
-    def start_sync_session(self, clean):
+    def start_sync_session(self, clean, preflight_at=None):
         self.sync_session = get_random_string(8)
         self.sync_session_clean = clean
-        EnrolledMachine.objects.filter(pk=self.pk).update(sync_session=self.sync_session,
-                                                          sync_session_clean=clean)
+        updates = {"sync_session": self.sync_session, "sync_session_clean": clean}
+        if preflight_at is not None:
+            # a rule download can start a session without a preflight, only the preflight stamps
+            self.last_preflight_at = preflight_at
+            updates["last_preflight_at"] = preflight_at
+        EnrolledMachine.objects.filter(pk=self.pk).update(**updates)
 
-    def end_sync_session(self):
+    def end_sync_session(self, postflight_at=None):
         self.sync_session = None
         self.sync_session_clean = False
-        EnrolledMachine.objects.filter(pk=self.pk).update(sync_session=None, sync_session_clean=False)
+        updates = {"sync_session": None, "sync_session_clean": False}
+        if postflight_at is not None:
+            self.last_postflight_at = postflight_at
+            updates["last_postflight_at"] = postflight_at
+        EnrolledMachine.objects.filter(pk=self.pk).update(**updates)
 
     def reconcile_sync_session(self):
         """Settle the sync session the client never confirmed with a postflight.
