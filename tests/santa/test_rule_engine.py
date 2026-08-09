@@ -68,6 +68,11 @@ class SantaRuleEngineTestCase(TestCase):
         }
         return target, rule, result
 
+    def commit_session(self):
+        """The client confirmed the rules of the session with a postflight"""
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
+
     def create_and_serialize_rule(
         self,
         target_type=Target.Type.BINARY,
@@ -422,7 +427,8 @@ class SantaRuleEngineTestCase(TestCase):
         target, rule, serialized_rule = self.create_and_serialize_rule()
         for _ in range(2):
             rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-            self.assertIsNotNone(response_cursor)
+            # the last batch has no cursor, the client stops and sends the postflight
+            self.assertIsNone(response_cursor)
             self.assertEqual(rule_batch, [serialized_rule])
             machine_rule_qs = self.enrolled_machine.machinerule_set.all()
             self.assertEqual(machine_rule_qs.count(), 1)
@@ -430,7 +436,7 @@ class SantaRuleEngineTestCase(TestCase):
             self.assertEqual(machine_rule.target, target)
             self.assertEqual(machine_rule.policy, rule.policy)
             self.assertEqual(machine_rule.version, rule.version)
-            self.assertEqual(machine_rule.cursor, response_cursor)
+            self.assertIsNotNone(machine_rule.cursor)
 
     def test_next_rule_batch_pagination(self):
         serialized_rules = []
@@ -440,26 +446,27 @@ class SantaRuleEngineTestCase(TestCase):
         serialized_rules.sort(key=lambda r: r["identifier"])
         i = 0
         response_cursor = None
-        for batch_len in (5, 1):
+        for batch_len, last in ((5, False), (1, True)):
             rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(
                 self.enrolled_machine, [],
                 response_cursor
             )
-            self.assertIsNotNone(response_cursor)
-            self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine,
-                                                        cursor=response_cursor).count(),
-                             batch_len)
             self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
             i += batch_len
+            if last:
+                # no extra round trip to acknowledge the last batch
+                self.assertIsNone(response_cursor)
+            else:
+                self.assertIsNotNone(response_cursor)
+                self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine,
+                                                            cursor=response_cursor).count(),
+                                 batch_len)
         machine_rule_qs = self.enrolled_machine.machinerule_set.all()
         self.assertEqual(machine_rule_qs.count(), 6)
+        # the last batch is only acknowledged by the postflight
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 5)
-        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(
-            self.enrolled_machine, [],
-            response_cursor
-        )
-        self.assertEqual(len(rule_batch), 0)
-        self.assertIsNone(response_cursor)
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 6)
 
     def test_lost_response_batch_pagination(self):
@@ -507,27 +514,21 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).exclude(cursor=response_cursor3).count(), 0)
         self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
         i += batch_len
-        # the client received the last batch and makes another request
+        # the client received the last batch, it is not sent a cursor and stops there
         batch_len = 1
         rule_batch, response_cursor4 = MachineRule.objects.get_next_rule_batch(
             self.enrolled_machine, [],
             response_cursor3
         )
-        self.assertIsNotNone(response_cursor4)
+        self.assertIsNone(response_cursor4)
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 10)
-        self.assertEqual(machine_rule_qs.filter(cursor=response_cursor4).count(), batch_len)
-        self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).exclude(cursor=response_cursor4).count(), 0)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).count(), batch_len)
         self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
-        i += batch_len
-        # last batch
-        rule_batch, response_cursor5 = MachineRule.objects.get_next_rule_batch(
-            self.enrolled_machine, [],
-            response_cursor4
-        )
-        self.assertIsNone(response_cursor5)
+        # the postflight acknowledges the last batch
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 11)
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).count(), 0)
-        self.assertEqual(rule_batch, [])
 
     def test_reset_batch_pagination(self):
         serialized_rules = []
@@ -539,47 +540,48 @@ class SantaRuleEngineTestCase(TestCase):
         # first 2 requests OK
         i = 0
         response_cursor = None
-        for batch_len in (5, 1):
+        for batch_len, last in ((5, False), (1, True)):
             rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(
                 self.enrolled_machine, [],
                 response_cursor
             )
-            self.assertIsNotNone(response_cursor)
-            self.assertEqual(machine_rule_qs.filter(cursor=response_cursor).count(), batch_len)
             self.assertEqual(rule_batch, serialized_rules[i: i + batch_len])
             i += batch_len
+            if last:
+                self.assertIsNone(response_cursor)
+            else:
+                self.assertIsNotNone(response_cursor)
+                self.assertEqual(machine_rule_qs.filter(cursor=response_cursor).count(), batch_len)
         self.assertEqual(machine_rule_qs.count(), 6)
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 5)
-        # last batch, never acknowleged, the client keeps making new requests without cursor
-        # and getting the last unacknowlegded rule
-        for i in range(2):
+        # the session is lost before the postflight, the client keeps making new requests
+        # without cursor and getting the last unacknowlegded rule
+        for _ in range(2):
             rule_batch, response_cursor_post_reset = MachineRule.objects.get_next_rule_batch(
                 self.enrolled_machine, []
             )
-            self.assertIsNotNone(response_cursor_post_reset)
+            self.assertIsNone(response_cursor_post_reset)
             self.assertEqual(rule_batch, [serialized_rules[-1]])
             self.assertEqual(machine_rule_qs.count(), 6)
             self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 5)
-            self.assertEqual(machine_rule_qs.filter(cursor=response_cursor_post_reset).count(), 1)
-        # the client acknowleges the last rule
-        rule_batch, final_response_cursor = MachineRule.objects.get_next_rule_batch(
-            self.enrolled_machine, [],
-            response_cursor_post_reset
-        )
+            self.assertEqual(machine_rule_qs.filter(cursor__isnull=False).count(), 1)
+        # the client confirms the session
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
         self.assertEqual(machine_rule_qs.count(), 6)
         self.assertEqual(machine_rule_qs.filter(cursor__isnull=True).count(), 6)
-        self.assertEqual(rule_batch, [])
 
     def test_updated_rule(self):
         target, rule, serialized_rule = self.create_and_serialize_rule()
-        _, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
+        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
+        self.commit_session()
         rule.custom_msg = "YOLO"
         rule.version = F("version") + 1
         rule.save()
         serialized_rule["custom_msg"] = rule.custom_msg
         rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        self.assertIsNotNone(response_cursor)
+        # the update is the last batch, the client stops there
+        self.assertIsNone(response_cursor)
         self.assertEqual(rule_batch, [serialized_rule])
         machine_rule_qs = self.enrolled_machine.machinerule_set.all()
         self.assertEqual(machine_rule_qs.count(), 1)
@@ -587,7 +589,7 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertEqual(machine_rule.target, target)
         self.assertEqual(machine_rule.policy, rule.policy)
         self.assertEqual(machine_rule.version, 2)
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
+        self.commit_session()
         self.assertEqual(machine_rule_qs.count(), 1)
         self.assertEqual(machine_rule.pk, machine_rule_qs.first().pk)
         machine_rule.refresh_from_db()
@@ -599,16 +601,16 @@ class SantaRuleEngineTestCase(TestCase):
     def test_deleted_rule(self):
         target, rule, serialized_rule = self.create_and_serialize_rule()
         rule_policy = rule.policy
-        _, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
+        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
+        self.commit_session()
         rule.delete()
         serialized_rule.pop("custom_msg", None)
         serialized_rule["policy"] = "REMOVE"
-        response_cursor = None
-        for i in range(2):
+        for _ in range(2):
             rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
             self.enrolled_machine.refresh_from_db()
-            self.assertIsNotNone(response_cursor)
+            # the removal is the last batch, the client stops there
+            self.assertIsNone(response_cursor)
             self.assertEqual(rule_batch, [serialized_rule])
             machine_rule_qs = self.enrolled_machine.machinerule_set.all()
             self.assertEqual(machine_rule_qs.count(), 1)
@@ -617,19 +619,17 @@ class SantaRuleEngineTestCase(TestCase):
             # the removal is staged, the ledger keeps the policy of the rule the client has
             self.assertTrue(machine_rule.staged_removal)
             self.assertEqual(machine_rule.policy, rule_policy)
-            self.assertEqual(machine_rule.cursor, response_cursor)
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
+            self.assertIsNotNone(machine_rule.cursor)
         # the machine rule is only removed from the ledger once the client confirms the session
         self.assertEqual(machine_rule_qs.count(), 1)
-        self.enrolled_machine.refresh_from_db()
-        MachineRule.objects.commit_session(self.enrolled_machine, False)
+        self.commit_session()
         self.assertEqual(machine_rule_qs.count(), 0)
 
     def test_scoped_rule(self):
         # rule without restrictions
         target, rule, serialized_rule = self.create_and_serialize_rule()
-        _, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
+        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
+        self.commit_session()
         # scope rule with some tags
         tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(4)]
         rule.tags.set(tags[:-1])
@@ -640,14 +640,14 @@ class SantaRuleEngineTestCase(TestCase):
         serialized_remove_rule.pop("custom_msg", None)
         serialized_remove_rule["policy"] = "REMOVE"
         self.assertEqual(rule_batch, [serialized_remove_rule])
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], response_cursor)
+        self.commit_session()
         # rule removed, noop
         rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
         self.assertEqual(rule_batch, [])
         # machine tagged, rule needs to be added
         rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk])
         self.assertEqual(rule_batch, [serialized_rule])
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk], response_cursor)
+        self.commit_session()
         # rule added, noop
         rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk])
         self.assertEqual(rule_batch, [])
@@ -658,7 +658,7 @@ class SantaRuleEngineTestCase(TestCase):
         serialized_remove_rule.pop("custom_msg", None)
         serialized_remove_rule["policy"] = "REMOVE"
         self.assertEqual(rule_batch, [serialized_remove_rule])
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk], response_cursor)
+        self.commit_session()
         # rule removed, noop
         rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk])
         self.assertEqual(rule_batch, [])
@@ -668,7 +668,7 @@ class SantaRuleEngineTestCase(TestCase):
         rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine,
                                                                               [tags[0].pk, tags[-2].pk])
         self.assertEqual(rule_batch, [serialized_rule])
-        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk], response_cursor)
+        self.commit_session()
         # rule added noop
         rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk])
         self.assertEqual(rule_batch, [])

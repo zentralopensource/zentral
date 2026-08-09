@@ -1176,7 +1176,8 @@ class MachineRuleManager(models.Manager):
             "cr.custom_msg, cr.custom_url, cr.version "
             "from changed_rules as cr "
             "join santa_target as t on (t.id = cr.target_id) "
-            "order by t.identifier limit %(batch_size)s"
+            # one extra rule, to know if another batch is necessary without a second query
+            "order by t.identifier limit %(batch_size)s + 1"
         )
         configuration = enrolled_machine.enrollment.configuration
         # machine specific rules
@@ -1261,15 +1262,20 @@ class MachineRuleManager(models.Manager):
         if cursor:
             qs.filter(cursor=cursor).update(cursor=None)
 
-        # translate attributes for older santa agents
-        # TODO remove eventually
-
         # return next batch
         rules = []
         new_cursor = None
+        more_rules = False
+        batch_size = enrolled_machine.enrollment.configuration.batch_size
         cmp_santa_version = enrolled_machine.get_comparable_santa_version()
+        # santa < 2022.1 expects the rule identifier in a sha256 attribute
+        # TODO remove eventually
         use_sha256_attr = cmp_santa_version < (2022, 1)
         for rule in self._iter_new_rules(enrolled_machine, tags):
+            if len(rules) == batch_size:
+                # the extra rule of the query, it belongs to the next batch
+                more_rules = True
+                break
             if new_cursor is None:
                 new_cursor = get_random_string(8)
             target_id = rule.pop("target_id")
@@ -1296,9 +1302,9 @@ class MachineRuleManager(models.Manager):
                                       target=Target(pk=target_id),
                                       defaults=defaults)
             rules.append(rule)
-        response_cursor = None
-        if len(rules):
-            response_cursor = new_cursor
+        # the cursor is only necessary to get the next batch. The client stops as soon as a
+        # response has no cursor, and the postflight commits the whole session.
+        response_cursor = new_cursor if more_rules else None
         return rules, response_cursor
 
 

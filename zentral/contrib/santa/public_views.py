@@ -398,10 +398,6 @@ class RuleDownloadView(BaseSyncView):
         )
         response_dict = {"rules": rules}
         if response_cursor:
-            # If a cursor is present in response, santa will make an extra request.
-            # This is used to acknowlege the rules. There will be always one extra query to validate the last batch.
-            # This is more robust than keeping the cursor on the enrolled machine and updating the cache to pass it
-            # to the Postflight view to validate the last batch.
             response_dict["cursor"] = response_cursor
         return response_dict
 

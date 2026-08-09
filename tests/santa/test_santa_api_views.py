@@ -747,12 +747,15 @@ class SantaAPIViewsTestCase(TestCase):
               "identifier": target.identifier,
               "policy": "BLOCKLIST"}]
         )
-        # rule acknowleged, no rules
-        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid,
-                                     {"cursor": json_response["cursor"]})
+        # the last batch has no cursor, the client stops there and sends a postflight
+        self.assertNotIn("cursor", json_response)
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
+        # rule confirmed, no rules
+        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
         self.assertEqual(response.status_code, 200)
-        json_response = response.json()
-        self.assertEqual(json_response, {"rules": []})
+        self.enrolled_machine.refresh_from_db()
+        self.assertEqual(response.json(), {"rules": []})
         # updated rule, rule
         rule.custom_msg = "BAD LUCK"
         rule.version = F("version") + 1
@@ -804,12 +807,13 @@ class SantaAPIViewsTestCase(TestCase):
               "custom_msg": rule.custom_msg,
               "custom_url": rule.custom_url}]
         )
-        # updated rule acknowleged, no rules
-        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid,
-                                     {"cursor": json_response["cursor"]})
+        # updated rule confirmed, no rules
+        self.assertNotIn("cursor", json_response)
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
+        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
         self.assertEqual(response.status_code, 200)
-        json_response = response.json()
-        self.assertEqual(json_response, {"rules": []})
+        self.assertEqual(response.json(), {"rules": []})
         # rule out of scope, remove rule
         rule.serial_numbers = [get_random_string(12)]
         rule.save()
@@ -845,12 +849,13 @@ class SantaAPIViewsTestCase(TestCase):
               "identifier": target.identifier,
               "policy": "REMOVE"}]
         )
-        # remove rule acknowleged, no rules
-        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid,
-                                     {"cursor": json_response["cursor"]})
+        # remove rule confirmed, no rules
+        self.assertNotIn("cursor", json_response)
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
+        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
         self.assertEqual(response.status_code, 200)
-        json_response = response.json()
-        self.assertEqual(json_response, {"rules": []})
+        self.assertEqual(response.json(), {"rules": []})
         # rule again in scope by removing excluded serial number, we get the rule
         rule.excluded_serial_numbers = [get_random_string(15)]
         rule.save()
@@ -865,12 +870,13 @@ class SantaAPIViewsTestCase(TestCase):
               "custom_msg": rule.custom_msg,
               "custom_url": rule.custom_url}]
         )
-        # rule again in scope acknowleged, no rules
-        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid,
-                                     {"cursor": json_response["cursor"]})
+        # rule again in scope confirmed, no rules
+        self.assertNotIn("cursor", json_response)
+        self.enrolled_machine.refresh_from_db()
+        MachineRule.objects.commit_session(self.enrolled_machine, False)
+        response = self.post_as_json("ruledownload", self.enrolled_machine.hardware_uuid, {})
         self.assertEqual(response.status_code, 200)
-        json_response = response.json()
-        self.assertEqual(json_response, {"rules": []})
+        self.assertEqual(response.json(), {"rules": []})
 
     def test_cel_rule_download(self):
         # add a CEL rule
