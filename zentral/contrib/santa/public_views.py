@@ -175,16 +175,20 @@ class PreflightView(BaseSyncView):
             'santa_version': self.request_data['santa_version'],
         }
         # cleanup rule counts
+        # santa serializes the preflight request with the protobuf JSON mapping, which drops the
+        # fields set to their default value. A missing key means a null count, not an unknown one.
         for key in self._iter_rule_count_keys():
-            val = self.request_data.get(key)
-            if isinstance(val, int):
-                if val > 2147483648:
-                    logger.error("Machine %s: reported %s %s overflow", serial_number, key, val)
-                    val = 2147483647  # max IntegerField value
-                elif val < 0:
-                    logger.error("Machine %s: reported %s %s negative", serial_number, key, val)
-                    val = 0
-                defaults[key] = val
+            val = self.request_data.get(key, 0)
+            if not isinstance(val, int):
+                logger.error("Machine %s: reported %s %s not an integer", serial_number, key, val)
+                val = 0
+            elif val > 2147483647:
+                logger.error("Machine %s: reported %s %s overflow", serial_number, key, val)
+                val = 2147483647  # max IntegerField value
+            elif val < 0:
+                logger.error("Machine %s: reported %s %s negative", serial_number, key, val)
+                val = 0
+            defaults[key] = val
 
         # client mode
         req_client_mode = self.request_data.get('client_mode')

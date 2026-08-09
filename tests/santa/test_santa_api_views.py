@@ -318,6 +318,53 @@ class SantaAPIViewsTestCase(TestCase):
         enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
         self.assertEqual(enrolled_machine.compiler_rule_count, 2147483647)
 
+    def test_preflight_compiler_rule_count_max_int_field_value_overflow(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        data["compiler_rule_count"] = 2147483648
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+
+        # Enrolled machine
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
+        self.assertEqual(enrolled_machine.compiler_rule_count, 2147483647)
+
+    def test_preflight_binary_rule_count_not_an_integer(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        data["binary_rule_count"] = "yolo"
+        with self.assertLogs("zentral.contrib.santa.views.api", level="ERROR") as cm:
+            response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            f"ERROR:zentral.contrib.santa.views.api:Machine {serial_number}: "
+            "reported binary_rule_count yolo not an integer",
+            cm.output
+        )
+
+        # Enrolled machine
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
+        self.assertEqual(enrolled_machine.binary_rule_count, 0)
+
+    def test_preflight_missing_rule_counts_reset(self):
+        # santa omits the rule counts set to 0, they must not keep their previous value
+        EnrolledMachine.objects.filter(pk=self.enrolled_machine.pk).update(
+            binary_rule_count=17, cdhash_rule_count=17, certificate_rule_count=17, compiler_rule_count=17,
+            signingid_rule_count=17, teamid_rule_count=17, transitive_rule_count=17,
+        )
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        for key in list(data.keys()):
+            if key.endswith("_rule_count"):
+                del data[key]
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_machine.refresh_from_db()
+        self.assertEqual(self.enrolled_machine.binary_rule_count, 0)
+        self.assertEqual(self.enrolled_machine.cdhash_rule_count, 0)
+        self.assertEqual(self.enrolled_machine.certificate_rule_count, 0)
+        self.assertEqual(self.enrolled_machine.compiler_rule_count, 0)
+        self.assertEqual(self.enrolled_machine.signingid_rule_count, 0)
+        self.assertEqual(self.enrolled_machine.teamid_rule_count, 0)
+        self.assertEqual(self.enrolled_machine.transitive_rule_count, 0)
+
     def test_preflight_binary_rule_count_negative(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
         data["binary_rule_count"] = -27551562368811008
