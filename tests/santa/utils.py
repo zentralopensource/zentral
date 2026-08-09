@@ -1,5 +1,8 @@
+import json
 import uuid
 
+from django.test import Client
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmGroup, RealmUser
 
@@ -371,3 +374,160 @@ def force_ballot(
             weight=weight
         )
     return ballot
+
+
+# sync client
+
+
+class SantaSyncClient:
+    """Simulate the santa sync client rule database and sync stages.
+
+    The rule database is only updated once the whole rule download is over, like
+    the client does, so an interrupted sync leaves it untouched.
+    """
+
+    RULE_COUNT_TYPES = (
+        (Target.Type.BINARY, "binary"),
+        (Target.Type.CDHASH, "cdhash"),
+        (Target.Type.CERTIFICATE, "certificate"),
+        (Target.Type.SIGNING_ID, "signingid"),
+        (Target.Type.TEAM_ID, "teamid"),
+    )
+
+    def __init__(self, enrolled_machine, santa_version="2024.5"):
+        self.enrolled_machine = enrolled_machine
+        self.secret = enrolled_machine.enrollment.secret.secret
+        self.machine_id = str(enrolled_machine.hardware_uuid)
+        self.serial_number = enrolled_machine.serial_number
+        self.primary_user = enrolled_machine.primary_user
+        self.santa_version = santa_version
+        self.client = Client()
+        # rule database: (rule_type, identifier) -> policy
+        self.rules = {}
+        # rules created by the client itself, stored as binary rules
+        self.transitive_rules = set()
+        self.sync_type = None
+        self.last_response = None
+
+    # rule database
+
+    def add_transitive_rule(self, identifier=None):
+        identifier = identifier or new_sha256()
+        self.transitive_rules.add(identifier)
+        return identifier
+
+    def rule_counts(self):
+        counts = {f"{name}_rule_count": 0 for _, name in self.RULE_COUNT_TYPES}
+        counts["compiler_rule_count"] = 0
+        for (rule_type, _), policy in self.rules.items():
+            for target_type, name in self.RULE_COUNT_TYPES:
+                if rule_type == target_type:
+                    counts[f"{name}_rule_count"] += 1
+            if policy == "ALLOWLIST_COMPILER":
+                counts["compiler_rule_count"] += 1
+        # the client stores the transitive rules as binary rules
+        counts["binary_rule_count"] += len(self.transitive_rules)
+        counts["transitive_rule_count"] = len(self.transitive_rules)
+        return counts
+
+    def _apply_rules(self, rules):
+        # santa returns before the cleanup when it did not receive any rule
+        if not rules:
+            return
+        if self.sync_type == "clean":
+            self.rules = {}
+        elif self.sync_type == "clean_all":
+            self.rules = {}
+            self.transitive_rules = set()
+        for rule in rules:
+            key = (rule["rule_type"], rule["identifier"])
+            if rule["policy"] == "REMOVE":
+                self.rules.pop(key, None)
+                self.transitive_rules.discard(rule["identifier"])
+            else:
+                self.rules[key] = rule["policy"]
+
+    # sync stages
+
+    def _post(self, url_name, data):
+        url = reverse(f"santa_public:{url_name}", args=(self.machine_id,))
+        response = self.client.post(
+            url, json.dumps(data), content_type="application/json",
+            headers={"Zentral-Authorization": f"Bearer {self.secret}"},
+        )
+        self.last_response = response
+        return response
+
+    def preflight(self, request_clean_sync=False, **extra):
+        data = {
+            "serial_number": self.serial_number,
+            "machine_id": self.machine_id,
+            "santa_version": self.santa_version,
+            "hostname": "hostname",
+            "os_build": "20C69",
+            "os_version": "11.1",
+            "client_mode": "MONITOR",
+        }
+        if self.primary_user:
+            data["primary_user"] = self.primary_user
+        if request_clean_sync:
+            data["request_clean_sync"] = True
+        # santa omits the rule counts set to 0
+        data.update({k: v for k, v in self.rule_counts().items() if v})
+        data.update(extra)
+        response = self._post("preflight", data)
+        if response.status_code == 200:
+            json_response = response.json()
+            self.sync_type = json_response.get("sync_type")
+            if self.sync_type is None and json_response.get("clean_sync"):
+                self.sync_type = "clean"
+        return response
+
+    def rule_download(self, max_batches=None):
+        """Download the rules, and apply them unless the download was interrupted."""
+        rules = []
+        cursor = None
+        batches = 0
+        while True:
+            data = {}
+            if cursor:
+                data["cursor"] = cursor
+            response = self._post("ruledownload", data)
+            if response.status_code != 200:
+                return None
+            json_response = response.json()
+            rules.extend(json_response["rules"])
+            cursor = json_response.get("cursor")
+            batches += 1
+            if max_batches is not None and batches >= max_batches:
+                # interrupted download, nothing is written to the rule database
+                return None
+            if not cursor:
+                break
+        self._apply_rules(rules)
+        return rules
+
+    def postflight(self, rules):
+        data = {
+            "machine_id": self.machine_id,
+            "rules_received": len(rules),
+            "rules_processed": len(rules),
+        }
+        if self.sync_type == "clean":
+            data["syncType"] = "CLEAN"
+        elif self.sync_type == "clean_all":
+            data["syncType"] = "CLEAN_ALL"
+        else:
+            data["syncType"] = "NORMAL"
+        return self._post("postflight", data)
+
+    def sync(self, request_clean_sync=False, max_batches=None, postflight=True, **extra):
+        response = self.preflight(request_clean_sync=request_clean_sync, **extra)
+        if response.status_code != 200:
+            return response
+        rules = self.rule_download(max_batches=max_batches)
+        if rules is None:
+            return self.last_response
+        if postflight:
+            return self.postflight(rules)
+        return self.last_response
