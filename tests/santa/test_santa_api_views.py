@@ -682,6 +682,30 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertIsInstance(preflight_event, SantaPreflightEvent)
         self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_reenrollment_other_serial_number_no_incident_update(self, post_event):
+        # santa can be configured to report a machine ID that is not the hardware UUID
+        self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.save()
+        data, _, hardware_uuid = self._get_preflight_data(enrolled=True)
+        serial_number = get_random_string(12)
+        data["serial_number"] = serial_number
+        with self.assertLogs("zentral.contrib.santa.views.api", level="ERROR") as cm:
+            response = self.post_as_json("preflight", hardware_uuid, data,
+                                         enrollment_secret=self.enrollment_secret2.secret)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            f"ERROR:zentral.contrib.santa.views.api:Machine {serial_number}: "
+            f"machine ID {hardware_uuid} already used by machine {self.machine_serial_number}",
+            cm.output
+        )
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        enrollment_event = events[1]
+        self.assertIsInstance(enrollment_event, SantaEnrollmentEvent)
+        self.assertEqual(enrollment_event.payload["action"], "re-enrollment")
+        self.assertEqual(enrollment_event.metadata.machine_serial_number, serial_number)
+        self.assertEqual(len(enrollment_event.metadata.incident_updates), 0)
+
     # rule download
 
     def test_rule_download_not_enrolled(self):

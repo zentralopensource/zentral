@@ -241,13 +241,20 @@ class PreflightView(BaseSyncView):
         for other_enrolled_machine in other_enrolled_machines:
             self.enrollment_action = 're-enrollment'
             if other_enrolled_machine.last_sync_ok is False:
-                # close machine incident
-                incident_updates.append(
-                    SyncIncident.build_incident_update(
-                        other_enrolled_machine.enrollment.configuration,
-                        Severity.NONE
+                if other_enrolled_machine.serial_number == enrolled_machine.serial_number:
+                    # close machine incident
+                    incident_updates.append(
+                        SyncIncident.build_incident_update(
+                            other_enrolled_machine.enrollment.configuration,
+                            Severity.NONE
+                        )
                     )
-                )
+                else:
+                    # the incident updates are applied with the serial number of the enrollment
+                    # event, they would close the incident of a machine that is still out of sync
+                    logger.error("Machine %s: machine ID %s already used by machine %s",
+                                 enrolled_machine.serial_number, self.hardware_uuid,
+                                 other_enrolled_machine.serial_number)
             other_enrolled_machine.delete()
 
         # post event
