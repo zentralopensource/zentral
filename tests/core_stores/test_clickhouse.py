@@ -7,8 +7,9 @@ from zentral.core.probes.models import ProbeSource
 from zentral.core.probes.probe import Probe
 from zentral.core.stores.backends.all import StoreBackend
 from zentral.core.stores.backends.clickhouse import ClickHouseStore, ClickHouseStoreSerializer
+from zentral.utils.time import naive_utc_fromisoformat
 from .utils import build_login_event, force_store
-from . import BaseTestStore
+from . import BaseTestStore, get_from_dt, make_event
 
 
 class TestClickHouseStoreStorage(TestCase, BaseTestStore):
@@ -37,6 +38,26 @@ class TestClickHouseStoreStorage(TestCase, BaseTestStore):
     def tearDownClass(cls):
         super().tearDownClass()
         cls.store.client.command(f"TRUNCATE DATABASE `{cls.database}`;")
+
+    def test_fetch_machine_events_json_shared_data(self):
+        # a JSON column only keeps max_dynamic_paths paths (1024 by default) as sub columns.
+        # The extra ones are stored in the shared data structure, where the values keep their
+        # binary type encoding.
+        msn = get_random_string(12)
+        event = make_event(msn=msn)
+        for i in range(1100):
+            event.payload[f"path_{i:04d}"] = [f"val_{i}"]
+        status_time = datetime(2026, 7, 31, 14, 24, 25, 877383)
+        event.payload["status_time"] = status_time.isoformat()
+        self.store.store(event)
+        events, _ = self.store.fetch_machine_events(msn, from_dt=get_from_dt())
+        self.assertEqual(len(events), 1)
+        payload = events[0].payload
+        # ClickHouse infers the datetimes, and formats them back when it serializes the column
+        self.assertEqual(naive_utc_fromisoformat(payload.pop("status_time")), status_time)
+        expected_payload = event.payload.copy()
+        expected_payload.pop("status_time")
+        self.assertEqual(payload, expected_payload)
 
     def test_aggregation_not_implemented(self):
         with self.assertRaises(NotImplementedError) as cm:
