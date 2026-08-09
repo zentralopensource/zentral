@@ -126,8 +126,8 @@ class ClickHouseStore(BaseStore):
         )
 
     def _deserialize_event(self, result):
-        event_d = result["payload"]
-        event_d["_zentral"] = result["metadata"]
+        event_d = json.loads(result["payload"])
+        event_d["_zentral"] = json.loads(result["metadata"])
         event_d["_zentral"]["tags"] = result["tags"]
         event_d["_zentral"]["type"] = result["type"]
         event_d["_zentral"]["created_at"] = self._datetime_to_zentral(result["created_at"])
@@ -217,15 +217,26 @@ class ClickHouseStore(BaseStore):
             params["event_type"] = event_type
         wheres = " AND ".join(wheres)
         query_ctx = self.client.create_query_context(
+            # the JSON paths that do not fit in the column max_dynamic_paths budget are stored in the
+            # shared data structure, where the values keep their binary type encoding. clickhouse-connect
+            # reads them as opaque strings instead of decoding them, and returns raw bytes for the types
+            # it does not reconstruct (Date, DateTime64, Array). Serializing the columns server side
+            # sidesteps this.
             query=(
-                f"SELECT metadata, type, tags, created_at, payload FROM `{self.table_name}` WHERE {wheres} "
+                "SELECT toJSONString(metadata) AS metadata, type, tags, created_at, "
+                f"toJSONString(payload) AS payload FROM `{self.table_name}` WHERE {wheres} "
                 "ORDER BY created_at DESC, metadata.id.:String ASC, metadata.index.:Int64 ASC LIMIT {limit:UInt32}"
             ),
             parameters=params,
-            # the top-K dynamic filter mixes up the `type` primary key column with `created_at`
-            # when `type` is pinned by an equality predicate and the rows are read in order,
-            # and fails with CANNOT_PARSE_DATETIME (seen on 26.5.1.882, TODO: link upstream issue)
-            settings={"use_top_k_dynamic_filtering": 0},
+            settings={
+                # the top-K dynamic filter mixes up the `type` primary key column with `created_at`
+                # when `type` is pinned by an equality predicate and the rows are read in order,
+                # and fails with CANNOT_PARSE_DATETIME (seen on 26.5.1.882, TODO: link upstream issue)
+                "use_top_k_dynamic_filtering": 0,
+                # the JSON columns are serialized by ClickHouse, so the datetimes they contain
+                # are formatted by the server. `iso` is the closest to what we store.
+                "date_time_output_format": "iso",
+            },
         )
         events = []
         cursor = None
