@@ -658,7 +658,9 @@ class Configuration(models.Model):
         try:
             return Severity(self.sync_incident_severity)
         except ValueError:
-            return
+            logger.error("Configuration %s: unknown sync incident severity %s",
+                         self.pk, self.sync_incident_severity)
+            return Severity.NONE
 
     def get_preflight_client_mode(self):
         if self.client_mode == self.MONITOR_MODE:

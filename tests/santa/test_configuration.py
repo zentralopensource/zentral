@@ -1,9 +1,28 @@
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.santa.models import Configuration
+from zentral.core.incidents.models import Severity
 
 
 class SantaConfigurationTestCase(TestCase):
+    # get_sync_incident_severity
+
+    def test_get_sync_incident_severity(self):
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              sync_incident_severity=Severity.MAJOR.value)
+        self.assertEqual(config.get_sync_incident_severity(), Severity.MAJOR)
+
+    def test_get_unknown_sync_incident_severity_none(self):
+        config = Configuration.objects.create(name=get_random_string(256))
+        Configuration.objects.filter(pk=config.pk).update(sync_incident_severity=42)
+        config.refresh_from_db()
+        with self.assertLogs("zentral.contrib.santa.models", level="ERROR") as cm:
+            self.assertEqual(config.get_sync_incident_severity(), Severity.NONE)
+        self.assertEqual(
+            cm.output,
+            [f"ERROR:zentral.contrib.santa.models:Configuration {config.pk}: unknown sync incident severity 42"]
+        )
+
     def test_local_configuration_url_keys(self):
         config = Configuration.objects.create(name=get_random_string(256))
         local_config = config.get_local_config()
