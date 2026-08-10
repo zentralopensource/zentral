@@ -403,7 +403,10 @@ class TargetsExport(APIView):
         if export_format not in ("xlsx", "zip"):
             raise ValidationError("Unknown export format")
         filename = f"santa_targets_export_{timezone.now():%Y-%m-%d_%H-%M-%S}.{export_format}"
-        result = export_targets.apply_async((search_kwargs, export_format, filename))
+        result = export_targets.apply_async(
+            (search_kwargs, export_format, filename),
+            {"task_user": request.user.id}
+        )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

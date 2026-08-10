@@ -13,8 +13,10 @@ logger = logging.getLogger('zentral.contrib.google_workspace.tasks')
 @shared_task
 def sync_group_tag_mappings_task(
         connection_pk: uuid,
-        serialized_event_request: str = None
+        serialized_event_request: str = None,
+        **kwargs
         ) -> dict[str, dict[str, str]]:
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     try:
         connection = Connection.objects.get(pk=connection_pk)
     except Connection.DoesNotExist:

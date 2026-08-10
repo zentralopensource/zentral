@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, User, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -156,3 +156,12 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("wsone.view_instance", "inventory.change_machinesnapshot")
         response = self.post(reverse("wsone_api:start_instance_sync", args=(instance.pk,)))
         self.assertEqual(response.status_code, 201)
+
+    def test_start_sync_creates_user_task(self):
+        instance = self.force_instance()
+        self.set_permissions("wsone.view_instance", "inventory.change_machinesnapshot")
+        response = self.post(reverse("wsone_api:start_instance_sync", args=(instance.pk,)))
+        self.assertEqual(response.status_code, 201)
+        # the endpoint is token only, so the task belongs to the service account
+        user_task = UserTask.objects.get(task_result__task_id=response.json()["task_id"])
+        self.assertEqual(user_task.user, self.service_account)

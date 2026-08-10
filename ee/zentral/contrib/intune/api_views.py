@@ -38,7 +38,9 @@ class StartTenantSync(APIView):
 
     def post(self, request, *args, **kwargs):
         tenant = get_object_or_404(Tenant, tenant_id=self.kwargs["tenant_id"])
-        result = sync_inventory.apply_async(kwargs={'tenant_id': tenant.tenant_id})
+        result = sync_inventory.apply_async(
+            kwargs={'tenant_id': tenant.tenant_id, 'task_user': request.user.id}
+        )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

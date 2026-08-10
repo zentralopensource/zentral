@@ -1050,7 +1050,8 @@ class AssociateLocationAssetView(PermissionRequiredMixin, FormView):
 
     def form_valid(self, form):
         bulk_assign_location_asset_task.apply_async(
-            (self.location_asset.pk, [vs.pk for vs in form.cleaned_data["dep_virtual_servers"]])
+            (self.location_asset.pk, [vs.pk for vs in form.cleaned_data["dep_virtual_servers"]]),
+            {"task_user": self.request.user.id}
         )
         messages.info(self.request, "Location asset license association task launched.")
         return redirect(self.location_asset)

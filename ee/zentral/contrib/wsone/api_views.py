@@ -38,7 +38,10 @@ class StartInstanceSync(APIView):
     def post(self, request, *args, **kwargs):
         instance = get_object_or_404(Instance, pk=self.kwargs["pk"])
         event_request = EventRequest.build_from_request(request)
-        result = sync_inventory.apply_async((instance.pk, event_request.serialize()))
+        result = sync_inventory.apply_async(
+            (instance.pk, event_request.serialize()),
+            {"task_user": request.user.id}
+        )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

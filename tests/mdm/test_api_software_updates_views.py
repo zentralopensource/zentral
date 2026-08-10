@@ -3,7 +3,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, User, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 
@@ -58,6 +58,18 @@ class SoftwareUpdatesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.post(reverse("mdm_api:sync_software_updates"))
         self.assertEqual(response.status_code, 201)
         self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
+
+    def test_sa_sync_software_updates_creates_user_task(self):
+        self.set_permissions(
+            "mdm.add_softwareupdate",
+            "mdm.change_softwareupdate",
+            "mdm.delete_softwareupdate",
+        )
+        response = self.post(reverse("mdm_api:sync_software_updates"))
+        self.assertEqual(response.status_code, 201)
+        # the endpoint is token only, so the task belongs to the service account
+        user_task = UserTask.objects.get(task_result__task_id=response.json()["task_id"])
+        self.assertEqual(user_task.user, self.service_account)
 
     def test_user_sync_software_updates_unauthorized(self):
         response = self.client.post(reverse("mdm_api:sync_software_updates"))

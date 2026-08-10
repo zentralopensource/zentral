@@ -133,5 +133,6 @@ def _export_targets(search_kwargs, export_format, filename):
 
 
 @shared_task
-def export_targets(search_kwargs, export_format, filename):
+def export_targets(search_kwargs, export_format, filename, **kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     return _export_targets(search_kwargs, export_format, filename)

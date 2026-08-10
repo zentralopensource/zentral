@@ -55,7 +55,8 @@ def define_dep_profile_task(dep_enrollment_pk):
 
 
 @shared_task
-def sync_software_updates_task():
+def sync_software_updates_task(**kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     return sync_software_updates()
 
 
@@ -63,7 +64,8 @@ def sync_software_updates_task():
 
 
 @shared_task
-def bulk_assign_location_asset_task(location_asset_pk, dep_virtual_server_pks):
+def bulk_assign_location_asset_task(location_asset_pk, dep_virtual_server_pks, **kwargs):
+    # kwargs absorbs task_user, added by the view for the UserTask created in the celery signal
     location_asset = LocationAsset.objects.select_related("location", "asset").get(pk=location_asset_pk)
     dep_virtual_servers = DEPVirtualServer.objects.filter(pk__in=dep_virtual_server_pks)
     return {

@@ -52,7 +52,8 @@ def do_sync_inventory(instance, client, serialized_event_request=None):
 
 
 @shared_task
-def sync_inventory(instance_pk, serialized_event_request):
+def sync_inventory(instance_pk, serialized_event_request, **kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     instance = Instance.objects.get(pk=instance_pk)
     client = Client.from_instance(instance)
     return do_sync_inventory(instance, client, serialized_event_request)

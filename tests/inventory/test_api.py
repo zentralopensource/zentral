@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework import status
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, User, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshot,
@@ -385,6 +385,13 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
 
+    def test_cleanup_creates_user_task(self):
+        self.set_permissions("inventory.delete_machinesnapshot")
+        response = self.post(reverse('inventory_api:cleanup'), {"days": 70})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        user_task = UserTask.objects.get(task_result__task_id=response.data["task_id"])
+        self.assertEqual(user_task.user, self.user)
+
     # full export
 
     def test_full_export_unauthorized(self):
@@ -397,6 +404,14 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+
+    def test_full_export_creates_user_task(self):
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # the export produces a file, and its download button lives on the task page
+        user_task = UserTask.objects.get(task_result__task_id=response.data["task_id"])
+        self.assertEqual(user_task.user, self.user)
 
     # create meta business unit
 
