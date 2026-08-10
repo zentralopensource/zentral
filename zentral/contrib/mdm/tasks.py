@@ -1,11 +1,13 @@
 import logging
 
 from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError
 from django.db import transaction
 
 from .apps_books import bulk_assign_location_asset
 from .dep import (
     DEPClientError,
+    assign_dep_virtual_server_default_enrollment,
     define_dep_profile,
     sync_dep_virtual_server_devices,
     try_lock_dep_virtual_server_sync,
@@ -52,7 +54,53 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=
                     update_counters(created)
             else:
                 raise
+        if server.default_enrollment_id:
+            # the assignment is attributed to whoever asked for the synchronization that scheduled
+            # it, so that it shows up in their task list too
+            assignment_kwargs = {}
+            task_user = kwargs.get("task_user")
+            if task_user:
+                assignment_kwargs["task_user"] = task_user
+            # the devices have to be committed before the assignment task reads them back
+            transaction.on_commit(
+                lambda: assign_dep_virtual_server_default_enrollment_task.apply_async(
+                    (server.pk,), assignment_kwargs
+                )
+            )
 
+    result["status"] = "SUCCESS"
+    return result
+
+
+# retrying a request Apple throttled or failed to serve is worth it. Anything else - a rejected
+# payload, an expired token - would fail again the same way.
+DEP_RETRY_STATUS_CODES = frozenset([429, 500, 502, 503, 504])
+
+
+@shared_task(bind=True, max_retries=5)
+def assign_dep_virtual_server_default_enrollment_task(self, dep_virtual_server_pk, **kwargs):
+    server = DEPVirtualServer.objects.select_related("default_enrollment").get(pk=dep_virtual_server_pk)
+    result = {"dep_virtual_server": {"pk": server.pk,
+                                     "name": server.name},
+              "operations": {"assigned": 0,
+                             "failed": 0}}
+    with transaction.atomic():
+        if not try_lock_dep_virtual_server_sync(server.pk):
+            # a synchronization is holding the lock. Retry rather than wait for the next one to
+            # schedule this again, which would delay the assignment by a whole interval. The work
+            # list is derived from the database, so a retry finds the same devices.
+            logger.warning("DEP virtual server %s is already being synced", server.pk)
+            try:
+                raise self.retry(countdown=60 * 2 ** self.request.retries)
+            except MaxRetriesExceededError:
+                result["status"] = "SKIPPED"
+                return result
+        try:
+            result["operations"] = assign_dep_virtual_server_default_enrollment(server)
+        except DEPClientError as e:
+            if e.status_code in DEP_RETRY_STATUS_CODES:
+                raise self.retry(exc=e, countdown=60 * 2 ** self.request.retries)
+            raise
     result["status"] = "SUCCESS"
     return result
 

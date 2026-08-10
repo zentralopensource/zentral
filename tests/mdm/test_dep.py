@@ -6,7 +6,12 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.dep import define_dep_profile, sync_dep_virtual_server_devices
+from zentral.contrib.mdm.dep import (
+    assign_dep_virtual_server_default_enrollment,
+    define_dep_profile,
+    iter_unassigned_dep_device_serial_numbers,
+    sync_dep_virtual_server_devices,
+)
 from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE, CursorIterator
 from zentral.contrib.mdm.models import DEPDevice
 from zentral.contrib.mdm.tasks import define_dep_profile_task
@@ -122,55 +127,13 @@ class TestDEPEnrollment(TestCase):
         self.assertTrue(server.token.last_synced_at > start)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
-    def test_sync_dep_virtual_server_devices_assign_default_profile(self, from_dep_token):
+    def test_sync_dep_virtual_server_devices_does_not_assign_the_default_profile(self, from_dep_token):
         serial_number = get_random_string(10).upper()
 
         enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
         server = enrollment.virtual_server
         server.default_enrollment = enrollment
         server.save()
-
-        def device_iterator():
-            yield from [
-                {'color': 'SPACE GRAY',
-                 'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
-                 'device_assigned_by': 'support@zentral.com',
-                 'device_assigned_date': '2023-01-10T19:09:22Z',
-                 'device_family': 'iPhone',
-                 'model': 'iPhone X',
-                 'op_date': '2023-01-10T19:07:41Z',
-                 'op_type': 'modified',
-                 'os': 'iOS',
-                 'profile_status': 'empty',
-                 'serial_number': serial_number}
-            ]
-            return get_random_string(12)
-
-        client = Mock()
-        client.fetch_devices.return_value = CursorIterator(device_iterator())
-        client.assign_profile.return_value = {"devices": {serial_number: "SUCCESS"}}
-        from_dep_token.return_value = client
-        dep_devices = list(sync_dep_virtual_server_devices(server))
-        client.fetch_devices.assert_called_once_with()
-        client.assign_profile.assert_called_once_with(server.default_enrollment.uuid, [serial_number])
-        self.assertEqual(len(dep_devices), 1)
-        device, created = dep_devices[0]
-        self.assertIsNone(device.profile_uuid)
-        self.assertIsNone(device.enrollment)
-        device.refresh_from_db()
-        self.assertEqual(device.profile_uuid, server.default_enrollment.uuid)
-        self.assertEqual(device.enrollment, server.default_enrollment)
-        self.assertEqual(device.profile_status, "assigned")
-
-    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
-    def test_sync_dep_virtual_server_devices_assign_default_profile_bumps_updated_at(self, from_dep_token):
-        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
-        server = enrollment.virtual_server
-        server.default_enrollment = enrollment
-        server.save()
-        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
-        prev_updated_at = dep_device.updated_at
-        serial_number = dep_device.serial_number
 
         def device_iterator():
             yield from [
@@ -185,16 +148,16 @@ class TestDEPEnrollment(TestCase):
 
         client = Mock()
         client.fetch_devices.return_value = CursorIterator(device_iterator())
-        client.assign_profile.return_value = {"devices": {serial_number: "SUCCESS"}}
         from_dep_token.return_value = client
-        list(sync_dep_virtual_server_devices(server))
-        dep_device.refresh_from_db()
-        self.assertEqual(dep_device.enrollment, enrollment)
-        self.assertEqual(dep_device.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
-        # the bulk update bypasses save(), so auto_now would not have fired
-        self.assertTrue(dep_device.updated_at > prev_updated_at)
-        # Apple has not reported an assignment time yet, and Zentral does not invent one
-        self.assertIsNone(dep_device.profile_assign_time)
+        dep_devices = list(sync_dep_virtual_server_devices(server))
+        client.fetch_devices.assert_called_once_with()
+        # the assignment is a separate task now, the synchronization does not talk to Apple about it
+        client.assign_profile.assert_not_called()
+        self.assertEqual(len(dep_devices), 1)
+        device, _ = dep_devices[0]
+        device.refresh_from_db()
+        self.assertIsNone(device.profile_uuid)
+        self.assertIsNone(device.enrollment)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_sync_dep_virtual_server_devices_fetch_marks_missing_deleted(self, from_dep_token):
@@ -242,15 +205,124 @@ class TestDEPEnrollment(TestCase):
         from_dep_token.return_value = client
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.fetch_devices.assert_called_once_with()
-        client.assign_profile.assert_not_called()
         self.assertEqual(len(dep_devices), 1)
         device, created = dep_devices[0]
-        self.assertIsNone(device.profile_uuid)
-        self.assertIsNone(device.enrollment)
         device.refresh_from_db()
-        self.assertIsNone(device.profile_uuid)
+        self.assertEqual(device.last_op_type, DEPDevice.OP_TYPE_DELETED)
+        # a deleted device is not a candidate for the default enrollment
+        self.assertNotIn(device.serial_number, list(iter_unassigned_dep_device_serial_numbers(server)))
+
+    # default enrollment assignment
+
+    def force_server_with_default_enrollment(self):
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        server = enrollment.virtual_server
+        server.default_enrollment = enrollment
+        server.save()
+        return server, enrollment
+
+    def test_iter_unassigned_dep_device_serial_numbers(self):
+        server, enrollment = self.force_server_with_default_enrollment()
+        unassigned = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        # a full fetch leaves last_op_type null, and those devices must be candidates too:
+        # excluding the deleted ones must not exclude the ones with no operation at all
+        DEPDevice.objects.filter(pk=unassigned.pk).update(last_op_type=None)
+        removed = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+                                   enrollment=enrollment)
+        DEPDevice.objects.filter(pk=removed.pk).update(profile_status=DEPDevice.PROFILE_STATUS_REMOVED)
+        assigned = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+                                    enrollment=enrollment)
+        deleted = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY,
+                                   op_type=DEPDevice.OP_TYPE_DELETED)
+        disowned = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        DEPDevice.objects.filter(pk=disowned.pk).update(disowned_at=naive_utcnow())
+        other_server_device = force_dep_device(profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+
+        serial_numbers = sorted(iter_unassigned_dep_device_serial_numbers(server))
+        self.assertEqual(serial_numbers, sorted([unassigned.serial_number, removed.serial_number]))
+        for device in (assigned, deleted, disowned, other_server_device):
+            self.assertNotIn(device.serial_number, serial_numbers)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        prev_updated_at = device.updated_at
+        client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
+        client.assign_profile.return_value = {"devices": {device.serial_number: "SUCCESS"}}
+        from_dep_virtual_server.return_value = client
+
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 1, "failed": 0})
+        client.assign_profile.assert_called_once_with(enrollment.uuid, [device.serial_number])
+        device.refresh_from_db()
+        self.assertEqual(device.enrollment, enrollment)
+        self.assertEqual(device.profile_uuid, enrollment.uuid)
+        self.assertEqual(device.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
+        # the bulk update bypasses save(), so auto_now would not have fired
+        self.assertTrue(device.updated_at > prev_updated_at)
+        # Apple has not reported an assignment time yet, and Zentral does not invent one
+        self.assertIsNone(device.profile_assign_time)
+        # the device is not a candidate anymore
+        self.assertEqual(list(iter_unassigned_dep_device_serial_numbers(server)), [])
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_failure(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
+        client.assign_profile.return_value = {"devices": {device.serial_number: "FAILED"}}
+        from_dep_virtual_server.return_value = client
+
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 0, "failed": 1})
+        device.refresh_from_db()
         self.assertIsNone(device.enrollment)
-        self.assertEqual(device.profile_status, "empty")
+        # it stays a candidate, the next synchronization enqueues the task again
+        self.assertEqual(list(iter_unassigned_dep_device_serial_numbers(server)), [device.serial_number])
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_chunks(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        devices = [force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+                   for _ in range(3)]
+        serial_numbers = sorted(d.serial_number for d in devices)
+        client = Mock()
+        client.get_device_batch_size.return_value = 2
+        client.assign_profile.side_effect = [
+            {"devices": {sn: "SUCCESS" for sn in serial_numbers[:2]}},
+            {"devices": {serial_numbers[2]: "SUCCESS"}},
+        ]
+        from_dep_virtual_server.return_value = client
+
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 3, "failed": 0})
+        self.assertEqual(
+            [c.args[1] for c in client.assign_profile.call_args_list],
+            [serial_numbers[:2], serial_numbers[2:]]
+        )
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_no_default(self, from_dep_virtual_server):
+        server = force_dep_virtual_server()
+        force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 0, "failed": 0})
+        from_dep_virtual_server.assert_not_called()
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_nothing_to_do(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+                         enrollment=enrollment)
+        client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
+        from_dep_virtual_server.return_value = client
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 0, "failed": 0})
+        client.assign_profile.assert_not_called()
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_define_dep_profile(self, from_dep_token):

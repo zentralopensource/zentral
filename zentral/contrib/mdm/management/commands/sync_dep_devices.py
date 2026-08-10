@@ -3,6 +3,7 @@ from django.db import transaction
 from zentral.contrib.mdm.models import DEPVirtualServer
 from zentral.contrib.mdm.dep import (
     DEPClientError,
+    assign_dep_virtual_server_default_enrollment,
     sync_dep_virtual_server_devices,
     try_lock_dep_virtual_server_sync,
 )
@@ -55,3 +56,14 @@ class Command(BaseCommand):
                         self.stderr.write(f"DEP client error: {e}")
                 except Exception as e:
                     self.stderr.write(f"Unknown error: {e}")
+            if not server.default_enrollment_id:
+                continue
+            # the task the API view schedules is run inline: this command is the cron entry point,
+            # and it must not depend on a worker being up to assign the default enrollment
+            try:
+                operations = assign_dep_virtual_server_default_enrollment(server)
+            except Exception as e:
+                self.stderr.write(f"Could not assign the default enrollment: {e}")
+            else:
+                self.write("Assigned the default enrollment to {assigned} device(s),"
+                           " {failed} failure(s)".format(**operations))

@@ -2,18 +2,22 @@ import json
 import os.path
 from unittest.mock import Mock, patch
 
+from celery.exceptions import MaxRetriesExceededError, Retry
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
+from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep import DEPClientError
 from zentral.contrib.mdm.dep_client import CursorIterator
 from zentral.contrib.mdm.tasks import (
+    assign_dep_virtual_server_default_enrollment_task,
     bulk_assign_location_asset_task,
     sync_dep_virtual_server_devices_task,
     sync_software_updates_task,
 )
 
 from .utils import (
+    force_dep_enrollment,
     force_dep_virtual_server,
     force_location_asset,
 )
@@ -196,6 +200,120 @@ class MDMTasksTestCase(TestCase):
         )
         # Apple is never contacted
         from_dep_token.assert_not_called()
+
+    # default enrollment assignment
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.apply_async")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_task_schedules_the_assignment(self, from_dep_token, apply_async):
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([])
+        from_dep_token.return_value = client
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        dep_virtual_server = enrollment.virtual_server
+        dep_virtual_server.default_enrollment = enrollment
+        dep_virtual_server.save()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            result = sync_dep_virtual_server_devices_task(dep_virtual_server.pk)
+        self.assertEqual(result["status"], "SUCCESS")
+        apply_async.assert_called_once_with((dep_virtual_server.pk,), {})
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.apply_async")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_task_passes_the_task_user_on(self, from_dep_token, apply_async):
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([])
+        from_dep_token.return_value = client
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        dep_virtual_server = enrollment.virtual_server
+        dep_virtual_server.default_enrollment = enrollment
+        dep_virtual_server.save()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            sync_dep_virtual_server_devices_task(dep_virtual_server.pk, task_user=42)
+        # the assignment shows up in the task list of whoever asked for the synchronization
+        apply_async.assert_called_once_with((dep_virtual_server.pk,), {"task_user": 42})
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.apply_async")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_task_no_default_enrollment_no_assignment(
+        self, from_dep_token, apply_async
+    ):
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([])
+        from_dep_token.return_value = client
+        dep_virtual_server = force_dep_virtual_server()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            sync_dep_virtual_server_devices_task(dep_virtual_server.pk)
+        apply_async.assert_not_called()
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
+    def test_assign_dep_virtual_server_default_enrollment_task(self, assign):
+        dep_virtual_server = force_dep_virtual_server()
+        assign.return_value = {"assigned": 3, "failed": 1}
+        self.assertEqual(
+            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk),
+            {
+                "dep_virtual_server": {
+                    "name": dep_virtual_server.name,
+                    "pk": dep_virtual_server.pk,
+                },
+                "operations": {"assigned": 3, "failed": 1},
+                "status": "SUCCESS",
+            },
+        )
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
+    @patch("zentral.contrib.mdm.tasks.try_lock_dep_virtual_server_sync")
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
+    def test_assign_dep_virtual_server_default_enrollment_task_already_running_retries(
+        self, assign, try_lock, retry
+    ):
+        try_lock.return_value = False
+        retry.side_effect = Retry()
+        dep_virtual_server = force_dep_virtual_server()
+        # waiting for the next synchronization to schedule this again would delay the assignment
+        # by a whole interval, and the work list is derived from the database
+        with self.assertRaises(Retry):
+            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
+        assign.assert_not_called()
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
+    @patch("zentral.contrib.mdm.tasks.try_lock_dep_virtual_server_sync")
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
+    def test_assign_dep_virtual_server_default_enrollment_task_skipped_after_the_last_retry(
+        self, assign, try_lock, retry
+    ):
+        try_lock.return_value = False
+        retry.side_effect = MaxRetriesExceededError()
+        dep_virtual_server = force_dep_virtual_server()
+        # the next synchronization schedules it again, so giving up is not losing the work
+        result = assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
+        self.assertEqual(result["status"], "SKIPPED")
+        self.assertEqual(result["operations"], {"assigned": 0, "failed": 0})
+        assign.assert_not_called()
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
+    def test_assign_dep_virtual_server_default_enrollment_task_retries_throttled(self, assign, retry):
+        dep_virtual_server = force_dep_virtual_server()
+        error = DEPClientError("Too many requests", status_code=429)
+        assign.side_effect = error
+        retry.side_effect = Retry()
+        with self.assertRaises(Retry):
+            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
+        self.assertEqual(retry.call_args.kwargs["exc"], error)
+
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
+    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
+    def test_assign_dep_virtual_server_default_enrollment_task_does_not_retry_rejected(self, assign, retry):
+        dep_virtual_server = force_dep_virtual_server()
+        assign.side_effect = DEPClientError("Nope", status_code=400)
+        with self.assertRaises(DEPClientError):
+            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
+        retry.assert_not_called()
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.software_updates.requests.get")

@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from dateutil import parser
 from django.db import connection
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -18,7 +19,7 @@ from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.time import naive_utcnow
 
 from .crypto import decrypt_cms_payload_with_pem_privkey
-from .dep_client import DEPClient, DEPClientError
+from .dep_client import DEVICE_BATCH_SIZE, DEPClient, DEPClientError, iter_device_chunks
 from .models import DEPDevice, DEPEnrollment
 
 logger = logging.getLogger("zentral.contrib.mdm.dep")
@@ -217,20 +218,11 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
     known_enrollments = {e.uuid: e for e in dep_virtual_server.depenrollment_set.all()}
 
     found_serial_numbers = []
-    unassigned_serial_numbers = []
 
     for device in devices:
         serial_number = device["serial_number"]
         found_serial_numbers.append(serial_number)
         defaults = {}
-
-        # default assignment
-        if (
-            device.get("op_type") != "deleted"
-            and (not device.get("profile_uuid") or device.get("profile_status") == "removed")
-            and dep_virtual_server.default_enrollment
-        ):
-            unassigned_serial_numbers.append(serial_number)
 
         # sync
         if not fetch:
@@ -252,6 +244,13 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                 defaults["last_op_date"] = op_date
         else:
             defaults["disowned_at"] = None
+            # a fetch reports the fleet and does not record operations, the deleted devices are
+            # the ones it leaves out. A device it reports as deleted anyway is marked like them:
+            # the default enrollment candidates are derived from the stored record, so a deletion
+            # Apple reported has to be in it. The op_date stays out, both to keep a fetch free of
+            # operation dates and so that it cannot make a later real operation look stale.
+            if device.get("op_type") == DEPDevice.OP_TYPE_DELETED:
+                defaults["last_op_type"] = DEPDevice.OP_TYPE_DELETED
 
         defaults.update(dep_device_update_dict(device, known_enrollments))
 
@@ -271,26 +270,48 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                           .exclude(serial_number__in=found_serial_numbers)
                           .update(last_op_type=DEPDevice.OP_TYPE_DELETED,
                                   updated_at=naive_utcnow()))
-    if unassigned_serial_numbers:
-        default_enrollment = dep_virtual_server.default_enrollment
-        # assign the default profile
-        response = client.assign_profile(default_enrollment.uuid, unassigned_serial_numbers)
+
+
+def iter_unassigned_dep_device_serial_numbers(dep_virtual_server, chunk_size=DEVICE_BATCH_SIZE):
+    # the database cursor is read one Apple request worth of rows at a time
+    return (DEPDevice.objects.filter(virtual_server=dep_virtual_server, disowned_at__isnull=True)
+                             .exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
+                             .filter(Q(profile_uuid__isnull=True)
+                                     | Q(profile_status=DEPDevice.PROFILE_STATUS_REMOVED))
+                             .values_list("serial_number", flat=True)
+                             .iterator(chunk_size=chunk_size))
+
+
+def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
+    result = {"assigned": 0, "failed": 0}
+    default_enrollment = dep_virtual_server.default_enrollment
+    if default_enrollment is None:
+        return result
+    client = DEPClient.from_dep_virtual_server(dep_virtual_server)
+    # one Apple request per chunk, each applied before the next one is sent, so a chunk that fails
+    # does not discard the work of the chunks before it
+    batch_size = client.get_device_batch_size("/profile/devices")
+    for serial_numbers in iter_device_chunks(
+        iter_unassigned_dep_device_serial_numbers(dep_virtual_server, batch_size), batch_size
+    ):
+        response = client.assign_profile(default_enrollment.uuid, serial_numbers)
         success_devices = []
-        for serial_number, result in response.get("devices").items():
-            if result == "SUCCESS":
+        for serial_number, status in response["devices"].items():
+            if status == "SUCCESS":
                 success_devices.append(serial_number)
             else:
+                result["failed"] += 1
                 logger.error("Could not assign profile %s to device %s: %s",
-                             default_enrollment.uuid, serial_number, result)
+                             default_enrollment.uuid, serial_number, status)
         if success_devices:
-            # To avoid some performance issues, only update the devices in the database.
-            # The next sync will fix the differences.
             (DEPDevice.objects.filter(virtual_server=dep_virtual_server,
                                       serial_number__in=success_devices)
                               .update(profile_uuid=default_enrollment.uuid,
                                       profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
                                       enrollment=default_enrollment,
                                       updated_at=naive_utcnow()))
+            result["assigned"] += len(success_devices)
+    return result
 
 
 def assign_dep_device_profile(dep_device, dep_profile):

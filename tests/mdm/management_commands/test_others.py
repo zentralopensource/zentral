@@ -8,9 +8,10 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.mdm.dep_client import DEPClientError
+from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import ACMEIssuer, Location, LocationAsset, SCEPIssuer
 
-from ..utils import force_asset, force_dep_virtual_server
+from ..utils import force_asset, force_dep_enrollment, force_dep_virtual_server
 
 
 class MDMManagementCommandsTest(TestCase):
@@ -328,6 +329,59 @@ class MDMManagementCommandsTest(TestCase):
         sync_dep_virtual_server_devices.assert_has_calls([
             call(dvs1, force_fetch=True), call(dvs2, force_fetch=True)
         ])
+
+    def _force_server_with_default_enrollment(self):
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        server = enrollment.virtual_server
+        server.default_enrollment = enrollment
+        server.save()
+        return server
+
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.assign_dep_virtual_server_default_enrollment")
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
+    def test_sync_dep_devices_assigns_the_default_enrollment(self, sync, assign):
+        server = self._force_server_with_default_enrollment()
+        sync.side_effect = [(("YOLO", True),)]
+        assign.return_value = {"assigned": 2, "failed": 1}
+        out = StringIO()
+        call_command('sync_dep_devices', '--server', str(server.pk), stdout=out)
+        # the command is the cron entry point, it assigns inline instead of scheduling a task
+        assign.assert_called_once_with(server)
+        self.assertEqual(
+            out.getvalue(),
+            f"Sync server {server.pk} {server}\n"
+            "Created YOLO\n"
+            "Assigned the default enrollment to 2 device(s), 1 failure(s)\n"
+        )
+
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.assign_dep_virtual_server_default_enrollment")
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
+    def test_sync_dep_devices_default_enrollment_assignment_error(self, sync, assign):
+        server = self._force_server_with_default_enrollment()
+        sync.side_effect = [(("YOLO", True),)]
+        assign.side_effect = DEPClientError("yolo", status_code=429)
+        out = StringIO()
+        err = StringIO()
+        call_command('sync_dep_devices', '--server', str(server.pk), stdout=out, stderr=err)
+        # a failed assignment does not take the synchronization down with it
+        self.assertEqual(
+            out.getvalue(),
+            f"Sync server {server.pk} {server}\n"
+            "Created YOLO\n"
+        )
+        self.assertEqual(
+            err.getvalue(),
+            "Could not assign the default enrollment: yolo, status code: 429\n"
+        )
+
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.assign_dep_virtual_server_default_enrollment")
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
+    def test_sync_dep_devices_no_default_enrollment_no_assignment(self, sync, assign):
+        server = force_dep_virtual_server()
+        sync.side_effect = [(("YOLO", True),)]
+        out = StringIO()
+        call_command('sync_dep_devices', '--server', str(server.pk), stdout=out)
+        assign.assert_not_called()
 
     @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
     def test_sync_dep_devices_list_servers(self, sync_dep_virtual_server_devices):
