@@ -200,8 +200,8 @@ class MDMManagementCommandsTest(TestCase):
         dvs1 = force_dep_virtual_server()
         dvs2 = force_dep_virtual_server()
         sync_dep_virtual_server_devices.side_effect = [
-            (("YOLO", True),),
-            (("FOMO", False),),
+            (("YOLO", "created"),),
+            (("FOMO", "updated"),),
         ]
         out = StringIO()
         call_command('sync_dep_devices', stdout=out)
@@ -223,7 +223,7 @@ class MDMManagementCommandsTest(TestCase):
         dvs2 = force_dep_virtual_server()
         try_lock.side_effect = [False, True]
         sync_dep_virtual_server_devices.side_effect = [
-            (("FOMO", False),),
+            (("FOMO", "updated"),),
         ]
         out = StringIO()
         call_command('sync_dep_devices', stdout=out)
@@ -242,7 +242,7 @@ class MDMManagementCommandsTest(TestCase):
         dvs = force_dep_virtual_server()
         sync_dep_virtual_server_devices.side_effect = [
             DEPClientError("yolo", error_code="EXPIRED_CURSOR"),
-            (("FOMO", False),),
+            (("FOMO", "updated"),),
         ]
         out = StringIO()
         call_command('sync_dep_devices', stdout=out)
@@ -278,7 +278,7 @@ class MDMManagementCommandsTest(TestCase):
         dvs = force_dep_virtual_server()
         sync_dep_virtual_server_devices.side_effect = [
             ValueError("HAAAAAAAAAAA"),
-            (("FOMO", False),),
+            (("FOMO", "updated"),),
         ]
         out = StringIO()
         err = StringIO()
@@ -298,7 +298,7 @@ class MDMManagementCommandsTest(TestCase):
         force_dep_virtual_server()
         dvs = force_dep_virtual_server()
         sync_dep_virtual_server_devices.side_effect = [
-            (("YOLO", True),),
+            (("YOLO", "created"),),
         ]
         out = StringIO()
         call_command('sync_dep_devices', '--server', str(dvs.pk), stdout=out)
@@ -314,8 +314,8 @@ class MDMManagementCommandsTest(TestCase):
         dvs1 = force_dep_virtual_server()
         dvs2 = force_dep_virtual_server()
         sync_dep_virtual_server_devices.side_effect = [
-            (("YOLO", True),),
-            (("FOMO", False),),
+            (("YOLO", "created"),),
+            (("FOMO", "updated"),),
         ]
         out = StringIO()
         call_command('sync_dep_devices', '--full-sync', stdout=out)
@@ -341,7 +341,7 @@ class MDMManagementCommandsTest(TestCase):
     @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
     def test_sync_dep_devices_assigns_the_default_enrollment(self, sync, assign):
         server = self._force_server_with_default_enrollment()
-        sync.side_effect = [(("YOLO", True),)]
+        sync.side_effect = [(("YOLO", "created"),)]
         assign.return_value = {"assigned": 2, "failed": 1}
         out = StringIO()
         call_command('sync_dep_devices', '--server', str(server.pk), stdout=out)
@@ -358,7 +358,7 @@ class MDMManagementCommandsTest(TestCase):
     @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
     def test_sync_dep_devices_default_enrollment_assignment_error(self, sync, assign):
         server = self._force_server_with_default_enrollment()
-        sync.side_effect = [(("YOLO", True),)]
+        sync.side_effect = [(("YOLO", "created"),)]
         assign.side_effect = DEPClientError("yolo", status_code=429)
         out = StringIO()
         err = StringIO()
@@ -378,7 +378,7 @@ class MDMManagementCommandsTest(TestCase):
     @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
     def test_sync_dep_devices_no_default_enrollment_no_assignment(self, sync, assign):
         server = force_dep_virtual_server()
-        sync.side_effect = [(("YOLO", True),)]
+        sync.side_effect = [(("YOLO", "created"),)]
         out = StringIO()
         call_command('sync_dep_devices', '--server', str(server.pk), stdout=out)
         assign.assert_not_called()

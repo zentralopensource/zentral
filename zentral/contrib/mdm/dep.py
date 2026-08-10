@@ -205,7 +205,15 @@ def try_lock_dep_virtual_server_sync(dep_virtual_server_pk):
         return cursor.fetchone()[0]
 
 
+DEP_DEVICE_CREATED = "created"
+DEP_DEVICE_UPDATED = "updated"
+DEP_DEVICE_UNCHANGED = "unchanged"
+DEP_DEVICE_MARKED_DELETED = "marked_deleted"
+
+
 def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
+    """Yield a (DEP device, action) pair for every device Apple reported, plus the ones it stopped
+    reporting on a full fetch."""
     dep_token = dep_virtual_server.token
     client = DEPClient.from_dep_token(dep_token)
     if force_fetch or not dep_token.sync_cursor:
@@ -224,6 +232,15 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         found_serial_numbers.append(serial_number)
         defaults = {}
 
+        # the stored record, needed to tell a real change from a device Apple reported again
+        # unchanged. Both foreign keys are dereferenced by serialize_for_event().
+        try:
+            dep_device = (DEPDevice.objects.select_related("virtual_server", "enrollment")
+                                           .get(virtual_server=dep_virtual_server,
+                                                serial_number=serial_number))
+        except DEPDevice.DoesNotExist:
+            dep_device = None
+
         # sync
         if not fetch:
             op_type = device["op_type"]
@@ -232,10 +249,6 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
             op_date = parser.parse(device["op_date"])
             if timezone.is_aware(op_date):
                 op_date = timezone.make_naive(op_date)
-            try:
-                dep_device = DEPDevice.objects.get(virtual_server=dep_virtual_server, serial_number=serial_number)
-            except DEPDevice.DoesNotExist:
-                dep_device = None
             if dep_device and dep_device.last_op_date and dep_device.last_op_date > op_date:
                 # already applied a newer operation. skip stalled one.
                 continue
@@ -254,22 +267,45 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
 
         defaults.update(dep_device_update_dict(device, known_enrollments))
 
-        yield DEPDevice.objects.update_or_create(
-            virtual_server=dep_virtual_server,
-            serial_number=serial_number,
-            defaults=defaults
-        )
+        if dep_device is None:
+            dep_device = DEPDevice.objects.create(virtual_server=dep_virtual_server,
+                                                  serial_number=serial_number,
+                                                  **defaults)
+            yield dep_device, DEP_DEVICE_CREATED
+            continue
+
+        # compare the serializations, not the attributes: the values parsed from the DEP API are
+        # aware datetimes and the stored ones are naive, and serialize_for_event() makes both naive
+        prev_value = dep_device.serialize_for_event()
+        for attr, val in defaults.items():
+            setattr(dep_device, attr, val)
+        if dep_device.serialize_for_event() == prev_value:
+            yield dep_device, DEP_DEVICE_UNCHANGED
+            continue
+        dep_device.save()
+        yield dep_device, DEP_DEVICE_UPDATED
+
     dep_token.sync_cursor = devices.cursor
     dep_token.last_synced_at = timezone.now()
     dep_token.save()
     if fetch:
-        # mark all other existing token devices as deleted.
-        # a queryset update bypasses save(), so auto_now does not fire and updated_at has to be
-        # written by hand, here and in the other bulk updates of the DEP devices
-        (DEPDevice.objects.filter(virtual_server=dep_virtual_server)
-                          .exclude(serial_number__in=found_serial_numbers)
-                          .update(last_op_type=DEPDevice.OP_TYPE_DELETED,
-                                  updated_at=naive_utcnow()))
+        # a device the fetch did not report is deleted. The ones already marked as such are left
+        # alone, so that a full fetch does not rewrite them on every run.
+        now = naive_utcnow()
+        deleted_devices = list(
+            DEPDevice.objects.select_related("virtual_server", "enrollment")
+                             .filter(virtual_server=dep_virtual_server)
+                             .exclude(serial_number__in=found_serial_numbers)
+                             .exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
+        )
+        for dep_device in deleted_devices:
+            dep_device.last_op_type = DEPDevice.OP_TYPE_DELETED
+            dep_device.updated_at = now
+        if deleted_devices:
+            # bulk_update bypasses save(), hence the updated_at above
+            DEPDevice.objects.bulk_update(deleted_devices, ["last_op_type", "updated_at"])
+        for dep_device in deleted_devices:
+            yield dep_device, DEP_DEVICE_MARKED_DELETED
 
 
 def iter_unassigned_dep_device_serial_numbers(dep_virtual_server, chunk_size=DEVICE_BATCH_SIZE):

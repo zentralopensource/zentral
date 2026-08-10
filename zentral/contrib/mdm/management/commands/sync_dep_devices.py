@@ -24,6 +24,9 @@ class Command(BaseCommand):
         if self.verbosity:
             self.stdout.write(msg)
 
+    def action_display(self, action):
+        return action.replace("_", " ").capitalize()
+
     def handle(self, *args, **kwargs):
         self.verbosity = kwargs.get("verbosity", 1)
         depvs_qs = DEPVirtualServer.objects.all().order_by("pk")
@@ -43,15 +46,13 @@ class Command(BaseCommand):
                     self.write("Already being synced → skipped")
                     continue
                 try:
-                    for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
-                        operation = "Created" if created else "Updated"
-                        self.write(f"{operation} {dep_device}")
+                    for dep_device, action in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
+                        self.write(f"{self.action_display(action)} {dep_device}")
                 except DEPClientError as e:
                     if e.error_code == "EXPIRED_CURSOR":
                         self.write("Expired cursor → full sync")
-                        for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=True):
-                            operation = "Created" if created else "Updated"
-                            self.write(f"{operation} {dep_device}")
+                        for dep_device, action in sync_dep_virtual_server_devices(server, force_fetch=True):
+                            self.write(f"{self.action_display(action)} {dep_device}")
                     else:
                         self.stderr.write(f"DEP client error: {e}")
                 except Exception as e:

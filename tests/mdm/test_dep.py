@@ -49,9 +49,9 @@ class TestDEPEnrollment(TestCase):
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.fetch_devices.assert_called_once_with()
         self.assertEqual(len(dep_devices), 1)
-        d, d_created = dep_devices[0]
+        d, d_action = dep_devices[0]
         d.refresh_from_db()  # for the datetimes, to get the stored ones, not the parsed ones
-        self.assertTrue(d_created)
+        self.assertEqual(d_action, "created")
         self.assertEqual(d.asset_tag, "")
         self.assertEqual(d.color, "SPACE GRAY")
         self.assertEqual(d.description, "IPHONE X SPACE GRAY 64GB-ZDD")
@@ -105,9 +105,9 @@ class TestDEPEnrollment(TestCase):
         dep_devices = list(sync_dep_virtual_server_devices(server))
         client.sync_devices.assert_called_once_with(sync_cursor)
         self.assertEqual(len(dep_devices), 1)
-        d, d_created = dep_devices[0]
+        d, d_action = dep_devices[0]
         d.refresh_from_db()  # for the datetimes, to get the stored ones, not the parsed ones
-        self.assertTrue(d_created)
+        self.assertEqual(d_action, "created")
         self.assertEqual(d.asset_tag, "")
         self.assertEqual(d.color, "SPACE GRAY")
         self.assertEqual(d.description, "IPHONE X SPACE GRAY 64GB-ZDD")
@@ -171,9 +171,59 @@ class TestDEPEnrollment(TestCase):
              'serial_number': get_random_string(10).upper()}
         ])
         from_dep_token.return_value = client
-        list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        results = list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        self.assertEqual([action for _, action in results], ["created", "marked_deleted"])
         dep_device.refresh_from_db()
         self.assertEqual(dep_device.last_op_type, DEPDevice.OP_TYPE_DELETED)
+        self.assertTrue(dep_device.updated_at > prev_updated_at)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_fetch_leaves_the_deleted_ones_alone(self, from_dep_token):
+        server = force_dep_virtual_server()
+        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY,
+                                      op_type=DEPDevice.OP_TYPE_DELETED)
+        prev_updated_at = dep_device.updated_at
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([])
+        from_dep_token.return_value = client
+        self.assertEqual(list(sync_dep_virtual_server_devices(server, force_fetch=True)), [])
+        dep_device.refresh_from_db()
+        # a device already marked as deleted is not rewritten on every full fetch
+        self.assertEqual(dep_device.updated_at, prev_updated_at)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_unchanged_device_is_not_written(self, from_dep_token):
+        server = force_dep_virtual_server()
+        device_d = {'color': 'SPACE GRAY',
+                    'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
+                    'device_assigned_by': 'support@zentral.com',
+                    'device_assigned_date': '2023-01-10T19:09:22Z',
+                    'device_family': 'iPhone',
+                    'model': 'iPhone X',
+                    'os': 'iOS',
+                    'profile_status': 'empty',
+                    'serial_number': get_random_string(10).upper()}
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([device_d])
+        from_dep_token.return_value = client
+        results = list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        self.assertEqual([action for _, action in results], ["created"])
+        dep_device = results[0][0]
+        prev_updated_at = dep_device.updated_at
+
+        # the very same device, reported again
+        client.fetch_devices.return_value = CursorIterator([device_d])
+        results = list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        self.assertEqual([action for _, action in results], ["unchanged"])
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.updated_at, prev_updated_at)
+
+        # one attribute moves
+        client.fetch_devices.return_value = CursorIterator([dict(device_d, color="MIDNIGHT")])
+        results = list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        self.assertEqual([action for _, action in results], ["updated"])
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.color, "MIDNIGHT")
         self.assertTrue(dep_device.updated_at > prev_updated_at)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
