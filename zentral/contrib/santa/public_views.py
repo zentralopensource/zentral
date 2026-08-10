@@ -2,13 +2,14 @@ import json
 import logging
 from uuid import UUID
 import zlib
-from django.core.cache import cache
+from django.contrib.postgres.expressions import ArraySubquery
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.db.models import OuterRef
 from django.http import JsonResponse
 from django.views.generic import View
 from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MetaMachine, PrincipalUserSource
+from zentral.contrib.inventory.models import MachineTag, PrincipalUserSource
 from zentral.contrib.inventory.utils import (add_machine_tags,
                                              commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
@@ -24,7 +25,6 @@ logger = logging.getLogger('zentral.contrib.santa.views.api')
 
 
 class BaseSyncView(View):
-    use_enrolled_machine_cache = True
     allow_doctor_test = False
     doctor_test_machine_id = "santactl-doctor-test"
 
@@ -70,6 +70,12 @@ class BaseSyncView(View):
             enrolled_machine = EnrolledMachine.objects.select_related(
                 "enrollment__secret",
                 "enrollment__configuration"
+            ).annotate(
+                # only the rule download scopes on the tags, but they are one index scan in the
+                # round trip that reads the machine anyway
+                tag_ids=ArraySubquery(
+                    MachineTag.objects.filter(serial_number=OuterRef("serial_number")).values("tag_id")
+                )
             ).get(
                 enrollment__secret__secret=self.enrollment_secret_secret,
                 hardware_uuid=self.hardware_uuid
@@ -105,30 +111,14 @@ class BaseSyncView(View):
 
         self.request_data = self._get_json_data(request)
 
-        self.cache_key = f"tests/santa/fixtures/{self.enrollment_secret_secret}{self.hardware_uuid}"
-        self.enrolled_machine = None
-        self.tag_ids = []
-        if self.use_enrolled_machine_cache:
-            try:
-                self.enrolled_machine, self.tag_ids = cache.get(self.cache_key)
-            except TypeError:
-                pass
-            else:
-                if self.enrolled_machine.enrollment.configuration.client_certificate_auth and not self.client_cert_dn:
-                    raise PermissionDenied("Missing client certificate")
+        self.enrolled_machine = self.get_enrolled_machine()
         if not self.enrolled_machine:
-            self.enrolled_machine = self.get_enrolled_machine()
-            if not self.enrolled_machine:
-                raise PermissionDenied("Machine not enrolled")
-            meta_machine = MetaMachine(self.enrolled_machine.serial_number)
-            self.tag_ids = [t.id for t in meta_machine.tags]
-            cache.set(self.cache_key, (self.enrolled_machine, self.tag_ids), 600)  # TODO cache timeout hardcoded
+            raise PermissionDenied("Machine not enrolled")
 
         return JsonResponse(self.do_post())
 
 
 class PreflightView(BaseSyncView):
-    use_enrolled_machine_cache = False
     allow_doctor_test = True
 
     def doctor_test_response(self):
@@ -400,7 +390,7 @@ class RuleDownloadView(BaseSyncView):
     def do_post(self):
         request_cursor = self.request_data.get("cursor")
         rules, response_cursor = MachineRule.objects.get_next_rule_batch(
-            self.enrolled_machine, self.tag_ids, request_cursor
+            self.enrolled_machine, self.enrolled_machine.tag_ids, request_cursor
         )
         response_dict = {"rules": rules}
         if response_cursor:
@@ -428,5 +418,4 @@ class EventUploadView(BaseSyncView):
 
 class PostflightView(BaseSyncView):
     def do_post(self):
-        cache.delete(self.cache_key)
         return {}
