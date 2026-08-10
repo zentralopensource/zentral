@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from accounts.models import User
+from accounts.models import User, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.models import (Artifact, ArtifactVersion, Asset,
                                         Channel, Location, LocationAsset, Platform, StoreApp)
@@ -251,6 +251,8 @@ class AssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(task_qs.count(), 1)
         tr = task_qs.first()
         self.assertEqual(tr.task_args, f'"({location_asset.pk}, [{dep_virtual_server.pk}])"')
+        # without it the task is invisible to a user who is not a superuser
+        self.assertEqual(UserTask.objects.get(task_result=tr).user, self.user)
 
     # create_asset_artifact
 
