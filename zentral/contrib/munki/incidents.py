@@ -2,6 +2,7 @@ import logging
 from zentral.core.incidents import register_incident_class
 from zentral.core.incidents.models import IncidentUpdate, Severity
 from zentral.core.incidents.incidents import BaseIncident
+from .models import MunkiState
 
 
 logger = logging.getLogger("zentral.contrib.munki.incidents")
@@ -66,3 +67,40 @@ class MunkiReinstallIncident(BaseMunkiIncident):
 
 
 register_incident_class(MunkiReinstallIncident)
+
+
+class MunkiAgentUnhealthyIncident(BaseIncident):
+    """The munki agent on a machine is not completing runs.
+
+    Machine-scoped: the events carry a serial, so this opens a MachineIncident. One incident per machine,
+    escalating in place as the diagnosis changes — the reason travels in the event payload, never in the
+    key, or every change of diagnosis would open a second incident and leave the first one open.
+    """
+    incident_type = "munki_agent_unhealthy"
+
+    @classmethod
+    def get_incident_key(cls, serial_number):
+        return {"munki_msn": serial_number}
+
+    def get_objects(self):
+        try:
+            serial_number = self.key["munki_msn"]
+        except KeyError:
+            logger.error("Wrong munki agent unhealthy incident key %s", self.key)
+            return []
+        return list(MunkiState.objects.filter(machine_serial_number=serial_number))
+
+    def get_objects_for_display(self):
+        munki_states = self.get_objects()
+        if munki_states:
+            yield ("Munki state", ("munki.view_munkistate",), munki_states)
+
+    def get_name(self):
+        try:
+            serial_number = self.key["munki_msn"]
+        except KeyError:
+            return "Unknown machine munki agent is unhealthy"
+        return f"Munki agent on {serial_number} is not completing runs"
+
+
+register_incident_class(MunkiAgentUnhealthyIncident)
