@@ -2589,7 +2589,9 @@ class ReEnrollmentSession(EnrollmentSession):
         return self.first_enrolled_at
 
     def serialize_for_event(self):
-        return super().serialize_for_event("re", self.get_enrollment().serialize_for_event())
+        # nested under a key: merged into the session dict, the enrollment's own pk would
+        # overwrite the session's
+        return super().serialize_for_event("re", {"enrollment": self.get_enrollment().serialize_for_event()})
 
     def get_blueprint(self):
         return self.get_enrollment().blueprint
