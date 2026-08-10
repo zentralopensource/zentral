@@ -6,7 +6,7 @@ from django.utils.crypto import get_random_string
 from rest_framework import status
 import yaml
 
-from accounts.models import User, APIToken
+from accounts.models import User, APIToken, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
@@ -730,6 +730,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
+
+    def test_targets_export_creates_user_task(self):
+        self.login("santa.view_target")
+        response = self.client.post(reverse("santa_api:targets_export") + "?export_format=xlsx")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # without it the export is invisible to a user who is not a superuser, download included
+        user_task = UserTask.objects.get(task_result__task_id=response.data["task_id"])
+        self.assertEqual(user_task.user, self.user)
 
     def test_team_id_targets_export(self):
         self.set_permissions("santa.view_target")
