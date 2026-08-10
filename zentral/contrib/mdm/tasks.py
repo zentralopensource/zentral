@@ -14,7 +14,8 @@ logger = logging.getLogger("zentral.contrib.mdm.tasks")
 
 
 @shared_task
-def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=False):
+def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=False, **kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     server = DEPVirtualServer.objects.get(pk=dep_virtual_server_pk)
     result = {"dep_virtual_server": {"pk": server.pk,
                                      "name": server.name},

@@ -38,7 +38,9 @@ class DEPVirtualServerSyncDevicesView(GenericAPIView):
         if isinstance(qp, str):
             full_sync = qp.lower() in ('', 'yes', 'y', 't', 'true')
         task = sync_dep_virtual_server_devices_task.apply_async(
-            (server.pk,), force_full_sync=full_sync
+            (server.pk,),
+            {"force_full_sync": full_sync,
+             "task_user": request.user.id}
         )
         serializer = self.serializer_class.from_task(task=task)
         return Response(
