@@ -264,10 +264,13 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
     dep_token.last_synced_at = timezone.now()
     dep_token.save()
     if fetch:
-        # mark all other existing token devices as deleted
+        # mark all other existing token devices as deleted.
+        # a queryset update bypasses save(), so auto_now does not fire and updated_at has to be
+        # written by hand, here and in the other bulk updates of the DEP devices
         (DEPDevice.objects.filter(virtual_server=dep_virtual_server)
                           .exclude(serial_number__in=found_serial_numbers)
-                          .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
+                          .update(last_op_type=DEPDevice.OP_TYPE_DELETED,
+                                  updated_at=naive_utcnow()))
     if unassigned_serial_numbers:
         default_enrollment = dep_virtual_server.default_enrollment
         # assign the default profile
@@ -286,8 +289,8 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                                       serial_number__in=success_devices)
                               .update(profile_uuid=default_enrollment.uuid,
                                       profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
-                                      profile_assign_time=naive_utcnow(),
-                                      enrollment=default_enrollment))
+                                      enrollment=default_enrollment,
+                                      updated_at=naive_utcnow()))
 
 
 def assign_dep_device_profile(dep_device, dep_profile):
@@ -347,14 +350,15 @@ def define_dep_profile(dep_enrollment: DEPEnrollment):
                                   serial_number__in=result["devices"]["success"])
                           .update(profile_uuid=dep_enrollment.uuid,
                                   profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
-                                  profile_assign_time=naive_utcnow(),
-                                  enrollment=dep_enrollment))
+                                  enrollment=dep_enrollment,
+                                  updated_at=naive_utcnow()))
 
     # mark unaccessible devices as deleted
     if result["devices"]["not_accessible"]:
         (DEPDevice.objects.filter(virtual_server=dep_virtual_server,
                                   serial_number__in=result["devices"]["not_accessible"])
-                          .update(last_op_type=DEPDevice.OP_TYPE_DELETED))
+                          .update(last_op_type=DEPDevice.OP_TYPE_DELETED,
+                                  updated_at=naive_utcnow()))
 
     if result["devices"]["failed"]:
         logger.error("Define DEP profile %s response has failed devices", dep_enrollment.pk)
@@ -396,5 +400,6 @@ def disown_dep_device(dep_device):
     except AssertionError:
         raise DEPClientError("Unknown result")
     if result == "SUCCESS":
-        DEPDevice.objects.filter(pk=dep_device.pk).update(disowned_at=naive_utcnow())
+        now = naive_utcnow()
+        DEPDevice.objects.filter(pk=dep_device.pk).update(disowned_at=now, updated_at=now)
     return result

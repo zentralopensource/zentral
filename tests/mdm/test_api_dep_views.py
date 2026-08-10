@@ -544,7 +544,10 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertIsInstance(event, DEPDeviceDisownedEvent)
         self.assertEqual(event.metadata.machine_serial_number, dep_device.serial_number)
         self.assertEqual(event.payload, {"result": "SUCCESS"})
+        prev_updated_at = dep_device.updated_at
         dep_device.refresh_from_db()
         self.assertIsNotNone(dep_device.disowned_at)
+        # the bulk update bypasses save(), so auto_now would not have fired
+        self.assertTrue(dep_device.updated_at > prev_updated_at)
         self.assertEqual(send_request.call_args_list[0].args, ("devices/disown", "POST"))
         self.assertEqual(send_request.call_args_list[0].kwargs, {'json': {'devices': [dep_device.serial_number]}})

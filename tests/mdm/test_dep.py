@@ -163,6 +163,57 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(device.profile_status, "assigned")
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_assign_default_profile_bumps_updated_at(self, from_dep_token):
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        server = enrollment.virtual_server
+        server.default_enrollment = enrollment
+        server.save()
+        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        prev_updated_at = dep_device.updated_at
+        serial_number = dep_device.serial_number
+
+        def device_iterator():
+            yield from [
+                {'device_assigned_by': 'support@zentral.com',
+                 'device_assigned_date': '2023-01-10T19:09:22Z',
+                 'op_date': '2023-01-10T19:07:41Z',
+                 'op_type': 'modified',
+                 'profile_status': 'empty',
+                 'serial_number': serial_number}
+            ]
+            return get_random_string(12)
+
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator(device_iterator())
+        client.assign_profile.return_value = {"devices": {serial_number: "SUCCESS"}}
+        from_dep_token.return_value = client
+        list(sync_dep_virtual_server_devices(server))
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.enrollment, enrollment)
+        self.assertEqual(dep_device.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
+        # the bulk update bypasses save(), so auto_now would not have fired
+        self.assertTrue(dep_device.updated_at > prev_updated_at)
+        # Apple has not reported an assignment time yet, and Zentral does not invent one
+        self.assertIsNone(dep_device.profile_assign_time)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_fetch_marks_missing_deleted(self, from_dep_token):
+        server = force_dep_virtual_server()
+        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        prev_updated_at = dep_device.updated_at
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([
+            {'device_assigned_by': 'support@zentral.com',
+             'device_assigned_date': '2023-01-10T19:09:22Z',
+             'serial_number': get_random_string(10).upper()}
+        ])
+        from_dep_token.return_value = client
+        list(sync_dep_virtual_server_devices(server, force_fetch=True))
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.last_op_type, DEPDevice.OP_TYPE_DELETED)
+        self.assertTrue(dep_device.updated_at > prev_updated_at)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_sync_dep_virtual_server_deleted_device_no_assign_default_profile(self, from_dep_token):
         serial_number = get_random_string(10).upper()
 
