@@ -239,7 +239,10 @@ class ExportDistributedQueryResults(APIView):
         export_format = request.GET.get("export_format", "csv")
         if export_format not in ("csv", "ndjson", "xlsx"):
             raise ValidationError({"export_format": "Must be csv, ndjson or xlsx"})
-        result = export_distributed_query_results.apply_async((int(kwargs["pk"]), f".{export_format}"))
+        result = export_distributed_query_results.apply_async(
+            (int(kwargs["pk"]), f".{export_format}"),
+            {"task_user": request.user.id}
+        )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

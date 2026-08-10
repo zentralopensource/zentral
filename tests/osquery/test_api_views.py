@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest.mock import patch
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, User, UserTask
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
@@ -2450,6 +2450,15 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.login("osquery.view_distributedqueryresult")
         response = self.client.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)))
         self.assertEqual(response.status_code, 201)
+
+    def test_export_distributed_query_results_creates_user_task(self):
+        dq = self._force_distributed_query()
+        self.login("osquery.view_distributedqueryresult")
+        response = self.client.post(reverse("osquery_api:export_distributed_query_results", args=(dq.pk,)))
+        self.assertEqual(response.status_code, 201)
+        # without it the export is invisible to a user who is not a superuser, download included
+        user_task = UserTask.objects.get(task_result__task_id=response.json()["task_id"])
+        self.assertEqual(user_task.user, self.user)
 
     def test_export_distributed_query_results_unknown_format(self):
         dq = self._force_distributed_query()

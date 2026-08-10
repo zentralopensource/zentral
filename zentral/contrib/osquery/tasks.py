@@ -155,6 +155,7 @@ def _export_distributed_query_results(distributed_query, extension):
 
 
 @shared_task
-def export_distributed_query_results(distributed_query_pk, extension):
+def export_distributed_query_results(distributed_query_pk, extension, **kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     distributed_query = DistributedQuery.objects.get(pk=distributed_query_pk)
     return _export_distributed_query_results(distributed_query, extension)
