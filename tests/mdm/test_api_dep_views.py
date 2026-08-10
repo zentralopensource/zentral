@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from urllib.parse import urlencode
 
@@ -6,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, User, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -89,6 +90,37 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
         result = response.json()
         self.assertEqual(result['task_result_url'], reverse("base_api:task_result", args=(result['task_id'],)))
+
+    @patch("zentral.contrib.mdm.api_views.dep.sync_dep_virtual_server_devices_task.apply_async")
+    def test_user_dep_virtual_server_sync_devices_task_kwargs(self, apply_async):
+        apply_async.return_value.id = uuid.uuid4()
+        dep_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.post(reverse("mdm_api:dep_virtual_server_sync_devices", args=(dep_server.pk,)),
+                                    query_params={'full_sync': 'True'})
+        self.assertEqual(response.status_code, 201)
+        args, task_kwargs = apply_async.call_args.args
+        self.assertEqual(args, (dep_server.pk,))
+        # the task kwargs, not the apply_async options: force_full_sync has to reach the task
+        self.assertEqual(task_kwargs, {"force_full_sync": True, "task_user": self.user.pk})
+
+    @patch("zentral.contrib.mdm.api_views.dep.sync_dep_virtual_server_devices_task.apply_async")
+    def test_sa_dep_virtual_server_sync_devices_delta_task_kwargs(self, apply_async):
+        apply_async.return_value.id = uuid.uuid4()
+        dep_server = force_dep_virtual_server()
+        self.set_permissions("mdm.view_depvirtualserver")
+        response = self.post(reverse("mdm_api:dep_virtual_server_sync_devices", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 201)
+        _, task_kwargs = apply_async.call_args.args
+        self.assertEqual(task_kwargs, {"force_full_sync": False, "task_user": self.service_account.pk})
+
+    def test_user_dep_virtual_server_sync_devices_creates_user_task(self):
+        dep_server = force_dep_virtual_server()
+        self.login("mdm.view_depvirtualserver")
+        response = self.client.post(reverse("mdm_api:dep_virtual_server_sync_devices", args=(dep_server.pk,)))
+        self.assertEqual(response.status_code, 201)
+        user_task = UserTask.objects.get(task_result__task_id=response.json()["task_id"])
+        self.assertEqual(user_task.user, self.user)
 
     def test_user_dep_virtual_server_sync_devices_full(self):
         dep_server = force_dep_virtual_server()
