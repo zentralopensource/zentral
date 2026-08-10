@@ -17,5 +17,6 @@ class QueuesWorkersTestCase(TestCase):
             worker_names,
             {"preprocess worker", "enrich worker", "process worker",
              "store worker Elasticsearch",
-             "APNS worker devices", "APNS worker users"}
+             "APNS worker devices", "APNS worker users",
+             "Watch worker"}
         )
