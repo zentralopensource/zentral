@@ -6,6 +6,7 @@ from .downloads import *  # NOQA
 from .filevault import *  # NOQA
 from .management import *  # NOQA
 from .mdm import *  # NOQA
+from .push_certificates import *  # NOQA
 from .recovery_password import *  # NOQA
 from .device_lock_pin import *  # NOQA
 

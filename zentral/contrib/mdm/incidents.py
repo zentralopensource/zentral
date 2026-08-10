@@ -2,7 +2,7 @@ import logging
 from zentral.core.incidents import register_incident_class
 from zentral.core.incidents.models import IncidentUpdate
 from zentral.core.incidents.incidents import BaseIncident
-from .models import LocationAsset
+from .models import LocationAsset, PushCertificate
 
 
 logger = logging.getLogger("zentral.contrib.mdm.incidents")
@@ -119,3 +119,39 @@ class MDMAssetRevocationIncident(BaseMDMAssetAssociationIncident):
 
 
 register_incident_class(MDMAssetRevocationIncident)
+
+
+class PushCertificateExpiryIncident(BaseIncident):
+    """The APNs push certificate is running out.
+
+    Not machine-scoped: one certificate serves the whole fleet, and its expiry makes every device
+    unmanageable at once. The events carry no machine serial, so this stays a plain Incident.
+    """
+    incident_type = "mdm_push_certificate_expiry"
+
+    @classmethod
+    def get_incident_key(cls, push_certificate_pk):
+        return {"mdm_pc_pk": push_certificate_pk}
+
+    def get_objects(self):
+        try:
+            pk = int(self.key["mdm_pc_pk"])
+        except (KeyError, ValueError, TypeError):
+            logger.error("Wrong MDM push certificate expiry incident key %s", self.key)
+            return []
+        return list(PushCertificate.objects.filter(pk=pk))
+
+    def get_objects_for_display(self):
+        push_certificates = self.get_objects()
+        if push_certificates:
+            yield ("MDM push certificate", ("mdm.view_pushcertificate",), push_certificates)
+
+    def get_name(self):
+        try:
+            push_certificate = self.get_objects()[0]
+        except IndexError:
+            return "Unknown MDM push certificate is expiring"
+        return f"MDM push certificate {push_certificate.name} is expiring"
+
+
+register_incident_class(PushCertificateExpiryIncident)
