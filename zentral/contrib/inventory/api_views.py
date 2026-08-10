@@ -400,7 +400,9 @@ class FullExport(APIView):
     permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        result = export_full_inventory.apply_async()
+        result = export_full_inventory.apply_async(
+            kwargs={"task_user": request.user.id}
+        )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)

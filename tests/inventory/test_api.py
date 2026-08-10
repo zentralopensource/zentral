@@ -405,6 +405,14 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.assertIn("task_id", response.data)
         self.assertIn("task_result_url", response.data)
 
+    def test_full_export_creates_user_task(self):
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # the export produces a file, and its download button lives on the task page
+        user_task = UserTask.objects.get(task_result__task_id=response.data["task_id"])
+        self.assertEqual(user_task.user, self.user)
+
     # create meta business unit
 
     def test_create_meta_business_unit_unauthorized(self):
