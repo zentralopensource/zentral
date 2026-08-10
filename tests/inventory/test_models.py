@@ -11,6 +11,7 @@ from zentral.contrib.inventory.models import (
     EnrollmentSecret,
     MachineTag,
     MetaBusinessUnit,
+    Source,
     Tag,
     Taxonomy,
 )
@@ -138,6 +139,23 @@ class InventoryModelsTestCase(TestCase):
              "api_enrollment_enabled": True,
              "created_at": mbu.created_at,
              "updated_at": mbu.updated_at}
+        )
+
+    # Source
+
+    def test_source_serialize_for_event_keys_only(self):
+        source = Source.objects.create(module="tests.inventory", name=get_random_string(12))
+        self.assertEqual(
+            source.serialize_for_event(keys_only=True),
+            {"pk": source.pk, "name": source.name}
+        )
+
+    def test_source_serialize_for_event(self):
+        # the module comes with the name: a source is identified by the pair, not by name alone
+        source = Source.objects.create(module="tests.inventory", name=get_random_string(12))
+        self.assertEqual(
+            source.serialize_for_event(),
+            {"pk": source.pk, "name": source.name, "module": source.module}
         )
 
     def test_taxonomy_serialize_for_event_keys_only(self):
