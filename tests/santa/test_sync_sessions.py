@@ -63,7 +63,7 @@ class SantaSyncSessionTestCase(TestCase):
         client.sync()
         response = client.preflight()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["sync_type"], "normal")
+        self.assertEqual(response.json()["sync_type"], "NORMAL")
         client.enrolled_machine.refresh_from_db()
         self.assertEqual(client.enrolled_machine.binary_rule_count, 2)
         self.assertTrue(client.enrolled_machine.sync_ok())
@@ -97,7 +97,7 @@ class SantaSyncSessionTestCase(TestCase):
         client, _, targets = self.force_client(rule_count=2)
         client.sync()
         response = client.preflight(request_clean_sync=True)
-        self.assertEqual(response.json()["sync_type"], "clean")
+        self.assertEqual(response.json()["sync_type"], "CLEAN")
         rules = client.rule_download()
         self.assertEqual(len(rules), 2)
         client.postflight(rules)
@@ -200,7 +200,7 @@ class SantaSyncSessionTestCase(TestCase):
         # the ledger of the lost session cannot be restored, so a clean sync is done again.
         # The state of the machine is unknown until it is over, it must not be marked out of sync.
         response = client.preflight()
-        self.assertEqual(response.json()["sync_type"], "clean")
+        self.assertEqual(response.json()["sync_type"], "CLEAN")
         client.enrolled_machine.refresh_from_db()
         self.assertTrue(client.enrolled_machine.last_sync_ok)
         rules = client.rule_download()
@@ -260,7 +260,7 @@ class SantaSyncSessionTestCase(TestCase):
         # the postflight never reaches the server
         response = client.preflight()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["sync_type"], "normal")
+        self.assertEqual(response.json()["sync_type"], "NORMAL")
         client.enrolled_machine.refresh_from_db()
         self.assertTrue(client.enrolled_machine.sync_ok())
         # nothing has to be sent again

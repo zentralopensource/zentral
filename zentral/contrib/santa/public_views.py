@@ -359,12 +359,12 @@ class PreflightView(BaseSyncView):
             if comparable_santa_version < (2024, 1):
                 response_dict["clean_sync"] = True
             else:
-                response_dict["sync_type"] = "clean"
+                response_dict["sync_type"] = "CLEAN"
         else:
             if comparable_santa_version < (2024, 1):
                 response_dict["clean_sync"] = False
             else:
-                response_dict["sync_type"] = "normal"
+                response_dict["sync_type"] = "NORMAL"
 
         # sync incident update?
         incident_update = None

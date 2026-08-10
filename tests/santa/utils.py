@@ -434,9 +434,9 @@ class SantaSyncClient:
         # santa returns before the cleanup when it did not receive any rule
         if not rules:
             return
-        if self.sync_type == "clean":
+        if self.sync_type == "CLEAN":
             self.rules = {}
-        elif self.sync_type == "clean_all":
+        elif self.sync_type == "CLEAN_ALL":
             self.rules = {}
             self.transitive_rules = set()
         for rule in rules:
@@ -480,7 +480,7 @@ class SantaSyncClient:
             json_response = response.json()
             self.sync_type = json_response.get("sync_type")
             if self.sync_type is None and json_response.get("clean_sync"):
-                self.sync_type = "clean"
+                self.sync_type = "CLEAN"
         return response
 
     def rule_download(self, max_batches=None):
@@ -513,12 +513,7 @@ class SantaSyncClient:
             "rules_received": len(rules),
             "rules_processed": len(rules),
         }
-        if self.sync_type == "clean":
-            data["syncType"] = "CLEAN"
-        elif self.sync_type == "clean_all":
-            data["syncType"] = "CLEAN_ALL"
-        else:
-            data["syncType"] = "NORMAL"
+        data["syncType"] = self.sync_type or "NORMAL"
         return self._post("postflight", data)
 
     def sync(self, request_clean_sync=False, max_batches=None, postflight=True, **extra):

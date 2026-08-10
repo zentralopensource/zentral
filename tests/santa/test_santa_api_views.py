@@ -171,7 +171,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
         self.assertEqual(json_response["full_sync_interval"], Configuration.DEFAULT_FULL_SYNC_INTERVAL)
-        self.assertEqual(json_response["sync_type"], "clean")
+        self.assertEqual(json_response["sync_type"], "CLEAN")
         self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
         self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
 
@@ -217,7 +217,7 @@ class SantaAPIViewsTestCase(TestCase):
         json_response = response.json()
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
         self.assertEqual(json_response["full_sync_interval"], Configuration.DEFAULT_FULL_SYNC_INTERVAL)
-        self.assertEqual(json_response["sync_type"], "clean")
+        self.assertEqual(json_response["sync_type"], "CLEAN")
         self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
         self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
 
@@ -389,7 +389,7 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
-        self.assertEqual(json_response["sync_type"], "clean")
+        self.assertEqual(json_response["sync_type"], "CLEAN")
 
     def test_preflight_no_enrollment_clean_sync_false(self):
         # no enrollment, clean sync not requested, legacy Santa version → clean sync False
@@ -405,7 +405,7 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
-        self.assertEqual(json_response["sync_type"], "normal")
+        self.assertEqual(json_response["sync_type"], "NORMAL")
 
     def test_preflight_no_enrollment_legacy_clean_sync_requested(self):
         # no enrollment, clean sync requested, legacy Santa version → clean sync True
@@ -423,7 +423,7 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
-        self.assertEqual(json_response["sync_type"], "clean")
+        self.assertEqual(json_response["sync_type"], "CLEAN")
 
     def test_preflight_no_enrollment_no_rule_count_no_machine_rule_sync_type_normal(self):
         # no enrollment, no reported rule, no synced rule, no clean sync requested → sync type normal
@@ -435,7 +435,7 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
-        self.assertEqual(json_response["sync_type"], "normal")
+        self.assertEqual(json_response["sync_type"], "NORMAL")
 
     def test_preflight_no_enrollment_no_rule_count_machine_rules_sync_type_clean(self):
         # the client reports no rule, but some rules were synced with it → sync type clean
@@ -448,7 +448,7 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
-        self.assertEqual(json_response["sync_type"], "clean")
+        self.assertEqual(json_response["sync_type"], "CLEAN")
         # the machine rules are only rebuilt once the client confirms the clean sync
         self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 1)
 
@@ -519,7 +519,7 @@ class SantaAPIViewsTestCase(TestCase):
         data["request_clean_sync"] = True
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["sync_type"], "clean")
+        self.assertEqual(response.json()["sync_type"], "CLEAN")
         # the machine rules are only rebuilt once the client confirms the clean sync
         self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 1)
         self.enrolled_machine.refresh_from_db()
