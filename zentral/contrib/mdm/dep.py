@@ -282,12 +282,32 @@ def iter_unassigned_dep_device_serial_numbers(dep_virtual_server, chunk_size=DEV
                              .iterator(chunk_size=chunk_size))
 
 
+def apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollments):
+    """Write back what Apple reports for a batch of devices, and return how many were written."""
+    dep_devices = []
+    update_fields = {"updated_at"}
+    now = naive_utcnow()
+    for dep_device in DEPDevice.objects.filter(virtual_server=dep_virtual_server,
+                                               serial_number__in=list(updated_devices)):
+        update_d = dep_device_update_dict(updated_devices[dep_device.serial_number], known_enrollments)
+        update_fields.update(update_d)
+        for attr, val in update_d.items():
+            setattr(dep_device, attr, val)
+        dep_device.updated_at = now
+        dep_devices.append(dep_device)
+    if dep_devices:
+        # bulk_update bypasses save(), hence the updated_at above
+        DEPDevice.objects.bulk_update(dep_devices, sorted(update_fields))
+    return len(dep_devices)
+
+
 def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
     result = {"assigned": 0, "failed": 0}
     default_enrollment = dep_virtual_server.default_enrollment
     if default_enrollment is None:
         return result
     client = DEPClient.from_dep_virtual_server(dep_virtual_server)
+    known_enrollments = {e.uuid: e for e in dep_virtual_server.depenrollment_set.all()}
     # one Apple request per chunk, each applied before the next one is sent, so a chunk that fails
     # does not discard the work of the chunks before it
     batch_size = client.get_device_batch_size("/profile/devices")
@@ -303,14 +323,16 @@ def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
                 result["failed"] += 1
                 logger.error("Could not assign profile %s to device %s: %s",
                              default_enrollment.uuid, serial_number, status)
-        if success_devices:
-            (DEPDevice.objects.filter(virtual_server=dep_virtual_server,
-                                      serial_number__in=success_devices)
-                              .update(profile_uuid=default_enrollment.uuid,
-                                      profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
-                                      enrollment=default_enrollment,
-                                      updated_at=naive_utcnow()))
-            result["assigned"] += len(success_devices)
+        if not success_devices:
+            continue
+        # read the records back rather than assume what the assignment made of them: the profile
+        # status is Apple's to decide, and the assignment time is Apple's to stamp
+        updated_devices = client.get_devices(success_devices)
+        for serial_number in success_devices:
+            if serial_number not in updated_devices:
+                logger.error("Device %s assigned to profile %s but not reported by Apple",
+                             serial_number, default_enrollment.uuid)
+        result["assigned"] += apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollments)
     return result
 
 

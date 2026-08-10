@@ -251,21 +251,50 @@ class TestDEPEnrollment(TestCase):
         client = Mock()
         client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
         client.assign_profile.return_value = {"devices": {device.serial_number: "SUCCESS"}}
+        client.get_devices.return_value = {
+            device.serial_number: {
+                "profile_uuid": str(enrollment.uuid).upper().replace("-", ""),
+                # Apple has already pushed it, which the assignment could not have guessed
+                "profile_status": "pushed",
+                "profile_assign_time": "2026-08-10T09:15:22Z",
+                "profile_push_time": "2026-08-10T09:16:01Z",
+            }
+        }
         from_dep_virtual_server.return_value = client
 
         self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
                          {"assigned": 1, "failed": 0})
         client.assign_profile.assert_called_once_with(enrollment.uuid, [device.serial_number])
+        client.get_devices.assert_called_once_with([device.serial_number])
         device.refresh_from_db()
         self.assertEqual(device.enrollment, enrollment)
         self.assertEqual(device.profile_uuid, enrollment.uuid)
-        self.assertEqual(device.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
-        # the bulk update bypasses save(), so auto_now would not have fired
+        # what Apple reports, not what the assignment assumed
+        self.assertEqual(device.profile_status, DEPDevice.PROFILE_STATUS_PUSHED)
+        self.assertEqual(device.profile_assign_time, datetime(2026, 8, 10, 9, 15, 22))
+        self.assertEqual(device.profile_push_time, datetime(2026, 8, 10, 9, 16, 1))
+        # bulk_update bypasses save(), so auto_now would not have fired
         self.assertTrue(device.updated_at > prev_updated_at)
-        # Apple has not reported an assignment time yet, and Zentral does not invent one
-        self.assertIsNone(device.profile_assign_time)
         # the device is not a candidate anymore
         self.assertEqual(list(iter_unassigned_dep_device_serial_numbers(server)), [])
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_not_reported_back(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
+        client.assign_profile.return_value = {"devices": {device.serial_number: "SUCCESS"}}
+        # Apple accepted the assignment but does not report the device back
+        client.get_devices.return_value = {}
+        from_dep_virtual_server.return_value = client
+
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 0, "failed": 0})
+        device.refresh_from_db()
+        self.assertIsNone(device.enrollment)
+        # nothing was written, so it stays a candidate for the next run
+        self.assertEqual(list(iter_unassigned_dep_device_serial_numbers(server)), [device.serial_number])
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_assign_dep_virtual_server_default_enrollment_failure(self, from_dep_virtual_server):
@@ -294,6 +323,11 @@ class TestDEPEnrollment(TestCase):
         client.assign_profile.side_effect = [
             {"devices": {sn: "SUCCESS" for sn in serial_numbers[:2]}},
             {"devices": {serial_numbers[2]: "SUCCESS"}},
+        ]
+        profile_uuid = str(enrollment.uuid).upper().replace("-", "")
+        client.get_devices.side_effect = [
+            {sn: {"profile_uuid": profile_uuid, "profile_status": "assigned"} for sn in serial_numbers[:2]},
+            {serial_numbers[2]: {"profile_uuid": profile_uuid, "profile_status": "assigned"}},
         ]
         from_dep_virtual_server.return_value = client
 
