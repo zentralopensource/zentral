@@ -5,7 +5,7 @@ from django_filters import rest_framework as filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.filters import OrderingFilter
-from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import GenericAPIView, ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -23,6 +23,7 @@ from zentral.utils.drf import (
     DefaultDjangoModelPermissions,
     DjangoPermissionRequired,
     MaxLimitOffsetPagination,
+    RetrieveUpdateAPIViewWithAudit,
 )
 
 
@@ -66,10 +67,12 @@ class DEPDeviceList(ListAPIView):
     pagination_class = MaxLimitOffsetPagination
 
 
-class DEPDeviceDetail(RetrieveUpdateAPIView):
+class DEPDeviceDetail(RetrieveUpdateAPIViewWithAudit):
     queryset = DEPDevice.objects.all()
     serializer_class = DEPDeviceSerializer
-    permission_classes = [DefaultDjangoModelPermissions]
+
+    def get_audit_machine_serial_number(self):
+        return self.get_object().serial_number
 
 
 class DEPVirtualServerBetaTokensView(RetrieveAPIView):

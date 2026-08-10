@@ -13,6 +13,7 @@ from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.events import DEPDeviceDisownedEvent
+from zentral.core.events.base import AuditEvent
 
 from .utils import force_dep_device, force_dep_enrollment, force_dep_virtual_server
 
@@ -431,6 +432,35 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         dep_device = force_dep_device()
         response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.serializers.assign_dep_device_profile")
+    def test_update_dep_device_posts_audit_event(self, assign_dep_device_profile, post_event):
+        dep_device = force_dep_device()
+        enrollment = force_dep_enrollment(self.mbu)
+        self.set_permissions("mdm.change_depdevice")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse("mdm_api:dep_device", args=(dep_device.pk,)),
+                                data={"enrollment": enrollment.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.metadata.machine_serial_number, dep_device.serial_number)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "mdm.depdevice")
+        self.assertIsNone(event.payload["object"]["prev_value"]["enrollment"])
+        self.assertEqual(event.payload["object"]["new_value"]["enrollment"]["pk"], enrollment.pk)
+
+    def test_patch_dep_device_not_allowed(self):
+        dep_device = force_dep_device()
+        enrollment = force_dep_enrollment(self.mbu)
+        self.set_permissions("mdm.change_depdevice")
+        response = self.client.patch(reverse("mdm_api:dep_device", args=(dep_device.pk,)),
+                                     data={"enrollment": enrollment.pk},
+                                     content_type="application/json",
+                                     HTTP_AUTHORIZATION=f"Token {self._get_api_key()}")
+        self.assertEqual(response.status_code, 405)
 
     @patch("zentral.contrib.mdm.serializers.assign_dep_device_profile")
     def test_update_dep_device(self, assign_dep_device_profile):
