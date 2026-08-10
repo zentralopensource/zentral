@@ -10,6 +10,7 @@ from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE
 from zentral.contrib.mdm.models import DEPDevice, DEPEnrollment
 from zentral.utils.time import naive_utcnow
 
@@ -275,6 +276,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
     def test_create_dep_enrollment_post(self, from_dep_virtual_server):
         profile_uuid = uuid.uuid4()
         client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
         client.add_profile.return_value = {
             "profile_uuid": str(profile_uuid).upper().replace("-", ""),
             "devices": {}

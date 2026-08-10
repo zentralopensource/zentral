@@ -10,7 +10,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
-from zentral.contrib.mdm.dep_client import DEPClientError
+from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE, DEPClientError
 from zentral.core.events.base import AuditEvent
 
 from .utils import (force_acme_issuer, force_ota_enrollment, force_push_certificate,
@@ -203,6 +203,7 @@ class EnrollmentAuditEventTestCase(TestCase, LoginCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_dep_enrollment_audit_event(self, post_event, from_dep_virtual_server):
         client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
         client.add_profile.return_value = {
             "profile_uuid": str(uuid.uuid4()).upper().replace("-", ""),
             "devices": {},

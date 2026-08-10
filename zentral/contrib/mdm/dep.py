@@ -318,11 +318,22 @@ def define_dep_profile(dep_enrollment: DEPEnrollment):
     dep_virtual_server = dep_enrollment.virtual_server
     dep_client = DEPClient.from_dep_virtual_server(dep_virtual_server)
     profile_payload = serialize_dep_profile(dep_enrollment)
+    # the profile carries its devices, but Apple caps how many a request can hold. The profile is
+    # created with the first batch, the rest is assigned to it once it has a UUID.
+    batch_size = dep_client.get_device_batch_size("/profile")
+    extra_serial_numbers = profile_payload["devices"][batch_size:]
+    profile_payload["devices"] = profile_payload["devices"][:batch_size]
 
     profile_response = dep_client.add_profile(profile_payload)
 
     dep_enrollment.uuid = profile_response["profile_uuid"]
     dep_enrollment.save()
+
+    device_statuses = dict(profile_response["devices"])
+    if extra_serial_numbers:
+        device_statuses.update(
+            dep_client.assign_profile(dep_enrollment.uuid, extra_serial_numbers)["devices"]
+        )
 
     result = {
         "pk": dep_enrollment.pk,
@@ -336,7 +347,7 @@ def define_dep_profile(dep_enrollment: DEPEnrollment):
         }
     }
 
-    for serial_number, status in profile_response["devices"].items():
+    for serial_number, status in device_statuses.items():
         try:
             result["devices"][status.lower()].append(serial_number)
         except KeyError:

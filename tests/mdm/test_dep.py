@@ -7,7 +7,7 @@ from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep import define_dep_profile, sync_dep_virtual_server_devices
-from zentral.contrib.mdm.dep_client import CursorIterator
+from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE, CursorIterator
 from zentral.contrib.mdm.models import DEPDevice
 from zentral.contrib.mdm.tasks import define_dep_profile_task
 from zentral.utils.time import naive_utcnow
@@ -277,6 +277,7 @@ class TestDEPEnrollment(TestCase):
             enrollment=enrollment2
         )
         client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
         profile_uuid = uuid.uuid4()
         self.assertNotEqual(enrollment.uuid, profile_uuid)
         self.assertNotEqual(device1.profile_uuid, profile_uuid)
@@ -324,9 +325,46 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(device4.profile_uuid, enrollment2.uuid)
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_define_dep_profile_over_the_limit_assigns_the_rest(self, from_dep_token):
+        enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        devices = [
+            force_dep_device(server=enrollment.virtual_server,
+                             profile_status=DEPDevice.PROFILE_STATUS_ASSIGNED,
+                             enrollment=enrollment)
+            for _ in range(3)
+        ]
+        # serialize_dep_profile() lists them in the DEPDevice ordering, by serial number
+        serial_numbers = sorted(d.serial_number for d in devices)
+        client = Mock()
+        # the profile payload is split at the size the client resolves for /profile
+        client.get_device_batch_size.return_value = 2
+        profile_uuid = uuid.uuid4()
+        client.add_profile.return_value = {
+            "profile_uuid": str(profile_uuid).upper().replace("-", ""),
+            "devices": {sn: "SUCCESS" for sn in serial_numbers[:2]},
+        }
+        client.assign_profile.return_value = {"devices": {serial_numbers[2]: "SUCCESS"}}
+        from_dep_token.return_value = client
+        result = define_dep_profile(enrollment)
+        # only the first batch rides in the profile payload
+        profile_payload = client.add_profile.call_args.args[0]
+        self.assertEqual(sorted(profile_payload["devices"]), serial_numbers[:2])
+        # the rest is assigned once the profile has a UUID, as Apple returned it
+        client.assign_profile.assert_called_once_with(
+            str(profile_uuid).upper().replace("-", ""), [serial_numbers[2]]
+        )
+        # the statuses of both calls end up in the same result
+        self.assertEqual(sorted(result["devices"]["success"]), serial_numbers)
+        for device in devices:
+            device.refresh_from_db()
+            self.assertEqual(device.profile_uuid, profile_uuid)
+            self.assertEqual(device.profile_status, DEPDevice.PROFILE_STATUS_ASSIGNED)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
     def test_define_dep_profile_task(self, from_dep_token):
         enrollment = force_dep_enrollment(MetaBusinessUnit.objects.create(name=get_random_string(12)))
         client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
         profile_uuid = uuid.uuid4()
         self.assertNotEqual(enrollment.uuid, profile_uuid)
         client.add_profile.return_value = {
