@@ -22,6 +22,7 @@ class ZentralAppConfig(AppConfig):
         self.incidents_module = None
         self.provisioning_module = None
         self.pbac_module = None
+        self.watches_module = None
 
     def ready(self):
         """
@@ -31,6 +32,7 @@ class ZentralAppConfig(AppConfig):
         self.import_events()
         self.import_incidents()
         self.import_provisioning()
+        self.import_watches()
         self.import_pbac_module()
         self.register_legacy_perms()
 
@@ -58,6 +60,9 @@ class ZentralAppConfig(AppConfig):
 
     def import_provisioning(self):
         self._import_submodule("provisioning")
+
+    def import_watches(self):
+        self._import_submodule("watches")
 
     # PBAC
 

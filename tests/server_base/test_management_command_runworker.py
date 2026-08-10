@@ -30,6 +30,7 @@ class RunWorkerBaseManagementCommandsTest(TestCase):
                 'preprocess worker',
                 'enrich worker',
                 'process worker',
+                'Watch worker',
                 'APNS worker devices',
                 'APNS worker users',
                 'store worker Elasticsearch',
@@ -46,6 +47,7 @@ class RunWorkerBaseManagementCommandsTest(TestCase):
             "Worker 'preprocess worker'\n"
             "Worker 'enrich worker'\n"
             "Worker 'process worker'\n"
+            "Worker 'Watch worker'\n"
             "Worker 'APNS worker devices'\n"
             "Worker 'APNS worker users'\n"
             "Worker 'store worker Elasticsearch'\n"
