@@ -61,7 +61,10 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(session.status, "STARTED")
         self.assertEqual(
             session.serialize_for_event(),
-            {"enrollment_session": {"pk": session.pk, "type": "dep", "status": "STARTED"}}
+            {"enrollment_session": {"pk": session.pk, "type": "dep", "status": "STARTED"},
+             "dep_enrollment": {"pk": enrollment.pk,
+                                "name": enrollment.name,
+                                "uuid": str(enrollment.uuid)}}
         )
 
     def test_dep_enrollment_session_no_acme_payload(self):
@@ -127,6 +130,14 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(reenrollment_session.realm_user, realm_user)
         self.assertEqual(reenrollment_session.first_enrolled_at, session.created_at)
         self.assertEqual(reenrollment_session.device_enrolled_at, session.device_enrolled_at)
+        # same key as the first session, even though the session type is different
+        self.assertEqual(
+            reenrollment_session.serialize_for_event(),
+            {"enrollment_session": {"pk": reenrollment_session.pk, "type": "re", "status": "STARTED"},
+             "dep_enrollment": {"pk": enrollment.pk,
+                                "name": enrollment.name,
+                                "uuid": str(enrollment.uuid)}}
+        )
         re_s, dep_s = list(session.enrolled_device.iter_enrollment_session_info())
         self.assertEqual(re_s["session_type"], "RE")
         self.assertEqual(re_s["id"], reenrollment_session.pk)

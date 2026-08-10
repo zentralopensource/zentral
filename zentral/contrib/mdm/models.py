@@ -1527,6 +1527,9 @@ class EnrolledUser(models.Model):
 
 
 class EnrollmentSession(models.Model):
+    # value of the enrollment_session.type event payload attribute, set by the subclasses
+    session_type = None
+
     realm_user = models.ForeignKey(RealmUser, on_delete=models.PROTECT, blank=True, null=True)
     enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1556,11 +1559,17 @@ class EnrollmentSession(models.Model):
     def is_completed(self):
         return self.status == self.COMPLETED
 
-    def serialize_for_event(self, enrollment_session_type, extra_dict):
-        d = {"pk": self.pk,
-             "type": enrollment_session_type,
-             "status": self.status}
-        return {"enrollment_session": d}
+    def serialize_for_event(self):
+        enrollment = self.get_enrollment()
+        # dep_enrollment, ota_enrollment or user_enrollment, whatever the session type: a
+        # re-enrollment session reports its enrollment under the same key as a first enrollment
+        enrollment_key = enrollment._meta.verbose_name.replace(" ", "_")
+        return {"enrollment_session": {"pk": self.pk,
+                                       "type": self.session_type,
+                                       "status": self.status},
+                # keys only: these events are posted on every enrollment attempt, and the full
+                # serialization carries the realm and the enrollment secret's metadata
+                enrollment_key: enrollment.serialize_for_event(keys_only=True)}
 
     # status update methods
 
@@ -1769,6 +1778,8 @@ class OTAEnrollmentSessionManager(models.Manager):
 
 
 class OTAEnrollmentSession(EnrollmentSession):
+    session_type = "ota"
+
     PHASE_1 = "PHASE_1"
     PHASE_2 = "PHASE_2"
     PHASE_3 = "PHASE_3"
@@ -1804,9 +1815,6 @@ class OTAEnrollmentSession(EnrollmentSession):
             return "MDM$OTA"
         else:
             raise ValueError("Wrong enrollment sessions status")
-
-    def serialize_for_event(self):
-        return super().serialize_for_event("ota", {"ota_enrollment": self.ota_enrollment.serialize_for_event()})
 
     def get_blueprint(self):
         return self.ota_enrollment.blueprint
@@ -2305,6 +2313,8 @@ class DEPEnrollmentSessionManager(models.Manager):
 
 
 class DEPEnrollmentSession(EnrollmentSession):
+    session_type = "dep"
+
     STARTED = "STARTED"
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
@@ -2329,9 +2339,6 @@ class DEPEnrollmentSession(EnrollmentSession):
             return "MDM$DEP"
         else:
             raise ValueError("Wrong enrollment sessions status")
-
-    def serialize_for_event(self):
-        return super().serialize_for_event("dep", {"dep_enrollment": self.dep_enrollment.serialize_for_event()})
 
     def get_blueprint(self):
         return self.dep_enrollment.blueprint
@@ -2440,6 +2447,8 @@ class UserEnrollmentSessionManager(models.Manager):
 
 
 class UserEnrollmentSession(EnrollmentSession):
+    session_type = "user"
+
     ACCOUNT_DRIVEN_START = "ACCOUNT_DRIVEN_START"
     ACCOUNT_DRIVEN_AUTHENTICATED = "ACCOUNT_DRIVEN_AUTHENTICATED"
     STARTED = "STARTED"
@@ -2471,9 +2480,6 @@ class UserEnrollmentSession(EnrollmentSession):
             return "MDM$USER"
         else:
             raise ValueError("Wrong enrollment sessions status")
-
-    def serialize_for_event(self):
-        return super().serialize_for_event("user", {"user_enrollment": self.user_enrollment.serialize_for_event()})
 
     def get_blueprint(self):
         return self.user_enrollment.blueprint
@@ -2558,6 +2564,8 @@ class ReEnrollmentSessionManager(models.Manager):
 
 
 class ReEnrollmentSession(EnrollmentSession):
+    session_type = "re"
+
     STARTED = "STARTED"
     AUTHENTICATED = "AUTHENTICATED"
     COMPLETED = "COMPLETED"
@@ -2594,9 +2602,6 @@ class ReEnrollmentSession(EnrollmentSession):
     @property
     def device_enrolled_at(self):
         return self.first_enrolled_at
-
-    def serialize_for_event(self):
-        return super().serialize_for_event("re", self.get_enrollment().serialize_for_event())
 
     def get_blueprint(self):
         return self.get_enrollment().blueprint

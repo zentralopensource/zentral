@@ -190,6 +190,6 @@ class OTAEnrollView(PostEventMixin, View):
             )
             configuration_profile_filename = "zentral_mdm"
 
-        self.post_event("success", phase=phase)
+        self.post_event("success", phase=phase, **ota_enrollment_session.serialize_for_event())
 
         return build_configuration_profile_response(configuration_profile, configuration_profile_filename)

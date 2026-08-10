@@ -161,6 +161,7 @@ class MDMView(PostEventMixin, View):
             try:
                 self.enrollment_session = (
                     ReEnrollmentSession.objects
+                    .select_related("dep_enrollment", "ota_enrollment", "user_enrollment")
                     .get(enrollment_secret__secret=enrollment_secret_secret)
                 )
             except ReEnrollmentSession.DoesNotExist:

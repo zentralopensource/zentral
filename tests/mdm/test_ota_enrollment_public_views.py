@@ -8,6 +8,7 @@ from realms.models import RealmAuthenticationSession
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
+from zentral.contrib.mdm.models import OTAEnrollmentSession
 from zentral.contrib.mdm.public_views.ota import ota_enroll_callback
 from .utils import force_ota_enrollment, force_ota_enrollment_session, force_realm, force_realm_user
 
@@ -110,4 +111,9 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(data["PayloadIdentifier"], "zentral.scep")
         self.assertEqual(len(data["PayloadContent"]), 1)
         self.assertEqual(data["PayloadContent"][0]["PayloadType"], "com.apple.security.scep")
-        self.assertSuccess(post_event, phase=2)
+        session = OTAEnrollmentSession.objects.get(ota_enrollment=enrollment)
+        self.assertSuccess(
+            post_event, phase=2,
+            enrollment_session={"pk": session.pk, "type": "ota", "status": "PHASE_2"},
+            ota_enrollment={"pk": enrollment.pk, "name": enrollment.name},
+        )

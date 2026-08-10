@@ -11,6 +11,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import DEPEnrollmentRequestEvent
+from zentral.contrib.mdm.models import DEPEnrollmentSession
 from zentral.contrib.mdm.public_views.dep import DEP_ENROLLMENT_SESSION_KEY, dep_web_enroll_callback
 
 from .utils import (
@@ -248,7 +249,12 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
                                                          "UDID": str(uuid.uuid4()).upper()}),
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 200)
-        self.assertSuccess(post_event)
+        session = DEPEnrollmentSession.objects.get(dep_enrollment=enrollment)
+        self.assertSuccess(
+            post_event,
+            enrollment_session={"pk": session.pk, "type": "dep", "status": "STARTED"},
+            dep_enrollment={"pk": enrollment.pk, "name": enrollment.name, "uuid": str(enrollment.uuid)},
+        )
         _, data = verify_signed_payload(response.content)
         payload = plistlib.loads(data)
         self.assertEqual(payload["PayloadIdentifier"], "zentral.mdm")

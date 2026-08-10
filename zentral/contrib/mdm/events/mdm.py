@@ -6,24 +6,39 @@ from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 logger = logging.getLogger('zentral.contrib.mdm.events.mdm')
 
 
-class DEPEnrollmentRequestEvent(BaseEvent):
+class EnrollmentRequestEvent(BaseEvent):
+    enrollment_payload_key = None
+
+    def get_linked_objects_keys(self):
+        enrollment = self.payload.get(self.enrollment_payload_key)
+        if not enrollment:
+            # the aborted requests do not always have an enrollment session
+            return {}
+        # same object key as the audit events of the enrollment
+        return {f"mdm_{self.enrollment_payload_key}": [(enrollment["pk"],)]}
+
+
+class DEPEnrollmentRequestEvent(EnrollmentRequestEvent):
     event_type = "dep_enrollment_request"
+    enrollment_payload_key = "dep_enrollment"
     tags = ["mdm", "dep", "heartbeat"]
 
 
 register_event_type(DEPEnrollmentRequestEvent)
 
 
-class OTAEnrollmentRequestEvent(BaseEvent):
+class OTAEnrollmentRequestEvent(EnrollmentRequestEvent):
     event_type = "ota_enrollment_request"
+    enrollment_payload_key = "ota_enrollment"
     tags = ["mdm", "ota", "heartbeat"]
 
 
 register_event_type(OTAEnrollmentRequestEvent)
 
 
-class UserEnrollmentRequestEvent(BaseEvent):
+class UserEnrollmentRequestEvent(EnrollmentRequestEvent):
     event_type = "user_enrollment_request"
+    enrollment_payload_key = "user_enrollment"
     tags = ["mdm"]
 
 
