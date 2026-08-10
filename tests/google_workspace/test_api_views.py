@@ -7,7 +7,7 @@ from django.contrib.auth.models import Group
 from django.utils.crypto import get_random_string
 from googleapiclient.errors import HttpError
 
-from accounts.models import User, APIToken
+from accounts.models import User, APIToken, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
@@ -164,6 +164,15 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.client.post(reverse("google_workspace_api:sync_tags", args=(connection.pk,)))
         self.assertEqual(response.status_code, 201)
         self.assertEqual(sorted(response.json().keys()), ['task_id', 'task_result_url'])
+
+    def test_user_group_tag_mappings_task_creates_user_task(self):
+        connection = self._given_connection()
+        self.login("google_workspace.view_connection")
+        response = self.client.post(reverse("google_workspace_api:sync_tags", args=(connection.pk,)))
+        self.assertEqual(response.status_code, 201)
+        # without it the sync is invisible to a user who is not a superuser
+        user_task = UserTask.objects.get(task_result__task_id=response.json()["task_id"])
+        self.assertEqual(user_task.user, self.user)
 
     # ConnectionList
 
