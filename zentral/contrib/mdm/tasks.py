@@ -55,7 +55,8 @@ def define_dep_profile_task(dep_enrollment_pk):
 
 
 @shared_task
-def sync_software_updates_task():
+def sync_software_updates_task(**kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     return sync_software_updates()
 
 

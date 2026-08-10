@@ -15,7 +15,9 @@ class SyncSoftwareUpdatesView(APIView):
     permission_classes = [DjangoPermissionRequired]
 
     def post(self, request, *args, **kwargs):
-        result = sync_software_updates_task.apply_async()
+        result = sync_software_updates_task.apply_async(
+            kwargs={"task_user": request.user.id}
+        )
         return Response({"task_id": result.id,
                          "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                         status=status.HTTP_201_CREATED)
