@@ -22,7 +22,8 @@ from .utils import (MSQuery,
 
 
 @shared_task
-def cleanup_inventory(days, serialized_event_request):
+def cleanup_inventory(days, serialized_event_request, **kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     max_date = get_cleanup_max_date(days)
     payload = {"days": days, "max_date": max_date}
     post_cleanup_started_event(payload.copy(), serialized_event_request)

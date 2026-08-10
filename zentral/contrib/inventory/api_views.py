@@ -381,7 +381,10 @@ class CleanupInventory(APIView):
         serializer = CleanupInventorySerializer(data=request.data)
         if serializer.is_valid():
             event_request = EventRequest.build_from_request(request)
-            result = cleanup_inventory.apply_async((serializer.data["days"], event_request.serialize(),))
+            result = cleanup_inventory.apply_async(
+                (serializer.data["days"], event_request.serialize(),),
+                {"task_user": request.user.id}
+            )
             return Response({"task_id": result.id,
                              "task_result_url": reverse("base_api:task_result", args=(result.id,))},
                             status=status.HTTP_201_CREATED)
