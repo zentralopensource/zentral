@@ -49,7 +49,8 @@ def do_sync_inventory(client):
 
 
 @shared_task
-def sync_inventory(tenant_id):
+def sync_inventory(tenant_id, **kwargs):
+    # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
     tenant = Tenant.objects.get(tenant_id=tenant_id)
     client = Client.from_instance(tenant)
     return do_sync_inventory(client)

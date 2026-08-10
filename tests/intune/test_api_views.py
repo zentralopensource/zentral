@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, User, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -150,6 +150,15 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("intune.view_tenant", "inventory.change_machinesnapshot")
         response = self.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
         self.assertEqual(response.status_code, 201)
+
+    def test_start_sync_creates_user_task(self):
+        tenant = force_tenant(self.bu)
+        self.set_permissions("intune.view_tenant", "inventory.change_machinesnapshot")
+        response = self.post(reverse("intune_api:start_tenant_sync", args=(tenant.tenant_id,)))
+        self.assertEqual(response.status_code, 201)
+        # the endpoint is token only, so the task belongs to the service account
+        user_task = UserTask.objects.get(task_result__task_id=response.json()["task_id"])
+        self.assertEqual(user_task.user, self.service_account)
 
     # create tenant
 
