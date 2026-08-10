@@ -102,7 +102,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         args, task_kwargs = apply_async.call_args.args
         self.assertEqual(args, (dep_server.pk,))
         # the task kwargs, not the apply_async options: force_full_sync has to reach the task
-        self.assertEqual(task_kwargs, {"force_full_sync": True, "task_user": self.user.pk})
+        self.assertEqual(sorted(task_kwargs),
+                         ["force_full_sync", "serialized_event_request", "task_user"])
+        self.assertEqual(task_kwargs["force_full_sync"], True)
+        self.assertEqual(task_kwargs["task_user"], self.user.pk)
+        # the request is carried to the worker, so the events of the synchronization somebody asked
+        # for say who asked for it
+        self.assertEqual(task_kwargs["serialized_event_request"]["user"]["id"], self.user.pk)
+        self.assertEqual(task_kwargs["serialized_event_request"]["method"], "POST")
 
     @patch("zentral.contrib.mdm.api_views.dep.sync_dep_virtual_server_devices_task.apply_async")
     def test_sa_dep_virtual_server_sync_devices_delta_task_kwargs(self, apply_async):
@@ -112,7 +119,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.post(reverse("mdm_api:dep_virtual_server_sync_devices", args=(dep_server.pk,)))
         self.assertEqual(response.status_code, 201)
         _, task_kwargs = apply_async.call_args.args
-        self.assertEqual(task_kwargs, {"force_full_sync": False, "task_user": self.service_account.pk})
+        self.assertEqual(sorted(task_kwargs),
+                         ["force_full_sync", "serialized_event_request", "task_user"])
+        self.assertEqual(task_kwargs["force_full_sync"], False)
+        self.assertEqual(task_kwargs["task_user"], self.service_account.pk)
+        self.assertEqual(task_kwargs["serialized_event_request"]["user"]["id"], self.service_account.pk)
+        self.assertTrue(
+            task_kwargs["serialized_event_request"]["user"]["session"]["token_authenticated"]
+        )
 
     def test_user_dep_virtual_server_sync_devices_creates_user_task(self):
         dep_server = force_dep_virtual_server()

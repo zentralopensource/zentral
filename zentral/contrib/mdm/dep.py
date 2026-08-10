@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import uuid
+from itertools import count
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -20,6 +21,11 @@ from zentral.utils.time import naive_utcnow
 
 from .crypto import decrypt_cms_payload_with_pem_privkey
 from .dep_client import DEVICE_BATCH_SIZE, DEPClient, DEPClientError, iter_device_chunks
+from .events.dep import (
+    ORIGIN_DEFAULT_ENROLLMENT_ASSIGNMENT,
+    DEPDeviceChangeEvent,
+    build_dep_device_change_event,
+)
 from .models import DEPDevice, DEPEnrollment
 
 logger = logging.getLogger("zentral.contrib.mdm.dep")
@@ -210,8 +216,21 @@ DEP_DEVICE_UPDATED = "updated"
 DEP_DEVICE_UNCHANGED = "unchanged"
 DEP_DEVICE_MARKED_DELETED = "marked_deleted"
 
+# a delta synchronization reports operations for attributes Zentral does not store. A device whose
+# stored record only moved because of the operation itself has not really changed.
+UNEVENTFUL_ATTRS = frozenset(["last_op_date", "last_op_type"])
 
-def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
+
+def is_eventful_dep_device_change(prev_value, new_value):
+    changed = set(k for k, v in new_value.items() if prev_value.get(k) != v)
+    if changed - UNEVENTFUL_ATTRS:
+        return True
+    # a deletion is worth reporting even when it is all that moved
+    return (new_value.get("last_op_type") == DEPDevice.OP_TYPE_DELETED
+            and prev_value.get("last_op_type") != DEPDevice.OP_TYPE_DELETED)
+
+
+def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, event_request=None):
     """Yield a (DEP device, action) pair for every device Apple reported, plus the ones it stopped
     reporting on a full fetch."""
     dep_token = dep_virtual_server.token
@@ -224,6 +243,17 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         devices = client.sync_devices(dep_token.sync_cursor)
 
     known_enrollments = {e.uuid: e for e in dep_virtual_server.depenrollment_set.all()}
+
+    event_uuid = uuid.uuid4()
+    event_index = 0
+
+    def post_event(dep_device, action, prev_value=None):
+        nonlocal event_index
+        build_dep_device_change_event(
+            dep_device, action, prev_value=prev_value,
+            event_uuid=event_uuid, event_index=event_index, event_request=event_request,
+        ).post()
+        event_index += 1
 
     found_serial_numbers = []
 
@@ -271,6 +301,7 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
             dep_device = DEPDevice.objects.create(virtual_server=dep_virtual_server,
                                                   serial_number=serial_number,
                                                   **defaults)
+            post_event(dep_device, DEPDeviceChangeEvent.Action.CREATED)
             yield dep_device, DEP_DEVICE_CREATED
             continue
 
@@ -279,10 +310,13 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
         prev_value = dep_device.serialize_for_event()
         for attr, val in defaults.items():
             setattr(dep_device, attr, val)
-        if dep_device.serialize_for_event() == prev_value:
+        new_value = dep_device.serialize_for_event()
+        if new_value == prev_value:
             yield dep_device, DEP_DEVICE_UNCHANGED
             continue
         dep_device.save()
+        if is_eventful_dep_device_change(prev_value, new_value):
+            post_event(dep_device, DEPDeviceChangeEvent.Action.UPDATED, prev_value=prev_value)
         yield dep_device, DEP_DEVICE_UPDATED
 
     dep_token.sync_cursor = devices.cursor
@@ -298,13 +332,17 @@ def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
                              .exclude(serial_number__in=found_serial_numbers)
                              .exclude(last_op_type=DEPDevice.OP_TYPE_DELETED)
         )
+        prev_values = {}
         for dep_device in deleted_devices:
+            prev_values[dep_device.pk] = dep_device.serialize_for_event()
             dep_device.last_op_type = DEPDevice.OP_TYPE_DELETED
             dep_device.updated_at = now
         if deleted_devices:
             # bulk_update bypasses save(), hence the updated_at above
             DEPDevice.objects.bulk_update(deleted_devices, ["last_op_type", "updated_at"])
         for dep_device in deleted_devices:
+            # the record stays, with last_op_type moved to deleted, so this is an update
+            post_event(dep_device, DEPDeviceChangeEvent.Action.UPDATED, prev_value=prev_values[dep_device.pk])
             yield dep_device, DEP_DEVICE_MARKED_DELETED
 
 
@@ -319,13 +357,20 @@ def iter_unassigned_dep_device_serial_numbers(dep_virtual_server, chunk_size=DEV
 
 
 def apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollments):
-    """Write back what Apple reports for a batch of devices, and return how many were written."""
+    """Write back what Apple reports for a batch of devices.
+
+    Returns the (DEP device, previous serialization) pairs it really changed, and how many it
+    wrote, which is not the same number: Apple can report a device Zentral already agreed with.
+    """
     dep_devices = []
+    prev_values = {}
     update_fields = {"updated_at"}
     now = naive_utcnow()
-    for dep_device in DEPDevice.objects.filter(virtual_server=dep_virtual_server,
-                                               serial_number__in=list(updated_devices)):
+    for dep_device in (DEPDevice.objects.select_related("virtual_server", "enrollment")
+                                        .filter(virtual_server=dep_virtual_server,
+                                                serial_number__in=list(updated_devices))):
         update_d = dep_device_update_dict(updated_devices[dep_device.serial_number], known_enrollments)
+        prev_values[dep_device.pk] = dep_device.serialize_for_event()
         update_fields.update(update_d)
         for attr, val in update_d.items():
             setattr(dep_device, attr, val)
@@ -334,7 +379,9 @@ def apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollme
     if dep_devices:
         # bulk_update bypasses save(), hence the updated_at above
         DEPDevice.objects.bulk_update(dep_devices, sorted(update_fields))
-    return len(dep_devices)
+    changes = [(dep_device, prev_values[dep_device.pk]) for dep_device in dep_devices
+               if prev_values[dep_device.pk] != dep_device.serialize_for_event()]
+    return changes, len(dep_devices)
 
 
 def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
@@ -344,6 +391,8 @@ def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
         return result
     client = DEPClient.from_dep_virtual_server(dep_virtual_server)
     known_enrollments = {e.uuid: e for e in dep_virtual_server.depenrollment_set.all()}
+    event_uuid = uuid.uuid4()
+    event_indexes = count()
     # one Apple request per chunk, each applied before the next one is sent, so a chunk that fails
     # does not discard the work of the chunks before it
     batch_size = client.get_device_batch_size("/profile/devices")
@@ -368,7 +417,16 @@ def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
             if serial_number not in updated_devices:
                 logger.error("Device %s assigned to profile %s but not reported by Apple",
                              serial_number, default_enrollment.uuid)
-        result["assigned"] += apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollments)
+        changes, written = apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollments)
+        result["assigned"] += written
+        for dep_device, prev_value in changes:
+            build_dep_device_change_event(
+                dep_device, DEPDeviceChangeEvent.Action.UPDATED,
+                prev_value=prev_value,
+                origin=ORIGIN_DEFAULT_ENROLLMENT_ASSIGNMENT,
+                event_uuid=event_uuid,
+                event_index=next(event_indexes),
+            ).post()
     return result
 
 

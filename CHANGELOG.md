@@ -9,6 +9,8 @@ Recovery password configurations can schedule a password rotation after each rev
 
 FileVault configurations can schedule a PRK rotation after each reveal of the PRK.
 
+Synchronizing a DEP virtual server with Apple Business Manager now posts a `dep_device_change` event for every device it changed, with the previous and the new value of the record, like an audit event.
+
 
 #### Monolith
 

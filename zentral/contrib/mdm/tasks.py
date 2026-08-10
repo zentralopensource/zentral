@@ -4,6 +4,8 @@ from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
 from django.db import transaction
 
+from zentral.core.events.base import EventRequest
+
 from .apps_books import bulk_assign_location_asset
 from .dep import (
     DEP_DEVICE_CREATED,
@@ -26,8 +28,12 @@ logger = logging.getLogger("zentral.contrib.mdm.tasks")
 
 
 @shared_task
-def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=False, **kwargs):
+def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=False,
+                                         serialized_event_request=None, **kwargs):
     # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
+    event_request = None
+    if serialized_event_request:
+        event_request = EventRequest.deserialize(serialized_event_request)
     server = DEPVirtualServer.objects.get(pk=dep_virtual_server_pk)
     result = {"dep_virtual_server": {"pk": server.pk,
                                      "name": server.name},
@@ -49,7 +55,8 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=
             result["status"] = "SKIPPED"
             return result
         try:
-            for _, action in sync_dep_virtual_server_devices(server, force_fetch=force_full_sync):
+            for _, action in sync_dep_virtual_server_devices(server, force_fetch=force_full_sync,
+                                                             event_request=event_request):
                 result["operations"][action] += 1
         except DEPClientError as e:
             if e.error_code == "EXPIRED_CURSOR":
@@ -57,7 +64,8 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=
                 # it hit the expired cursor would be counted twice.
                 result["effective_sync_type"] = "full_sync"
                 reset_counters()
-                for _, action in sync_dep_virtual_server_devices(server, force_fetch=True):
+                for _, action in sync_dep_virtual_server_devices(server, force_fetch=True,
+                                                                 event_request=event_request):
                     result["operations"][action] += 1
             else:
                 raise

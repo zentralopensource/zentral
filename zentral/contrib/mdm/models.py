@@ -2238,6 +2238,13 @@ class DEPDevice(models.Model):
     def get_urlsafe_serial_number(self):
         return MetaMachine(self.serial_number).get_urlsafe_serial_number()
 
+    def linked_objects_keys_for_event(self):
+        keys = {"mdm_dep_device": [(self.pk,)],
+                "mdm_dep_virtual_server": [(self.virtual_server.pk,)]}
+        if self.enrollment:
+            keys["mdm_dep_enrollment"] = [(self.enrollment.pk,)]
+        return keys
+
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "serial_number": self.serial_number}
         if keys_only:

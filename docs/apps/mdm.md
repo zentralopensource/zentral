@@ -579,11 +579,37 @@ Note that a device can also become unblocked without an operator: a full state p
 
 ### Automated Device Enrollment devices
 
-Assigning an enrollment profile to a device, and refreshing its record from Apple, are recorded with the `updated` action, tagged with the device serial number. The event reports every attribute Apple can change on the record, so a refresh shows what actually moved.
+Assigning an enrollment profile to a device, and refreshing its record from Apple, are recorded with the `updated` action, tagged with the device serial number. The event reports every attribute Apple can change on the record, so a refresh shows what actually moved. An assignment made over the HTTP API is recorded the same way as one made from the web interface.
 
 A refresh that Apple answers with an unknown serial number still marks the record as deleted, so it is recorded too. A profile assignment Apple refuses changes nothing and records nothing.
 
 Disowning a device has its own event, `dep_device_disowned`, rather than an audit event.
+
+Changes Apple makes are **not** audit events. A synchronization with Apple Business Manager posts a `dep_device_change` event instead, tagged `mdm` and `dep`, and not `zentral`: they are machine generated, one per device the synchronization found a change on, and they would bury the operator actions in the audit trail. The payload is an audit event's, so a DEP device has one history whichever end changed it:
+
+```json
+{
+  "action": "updated",
+  "origin": "sync",
+  "object": {
+    "model": "mdm.depdevice",
+    "pk": "42",
+    "prev_value": {"serial_number": "C02...", "profile_status": "pushed", "enrollment": {"pk": 3}},
+    "new_value": {"serial_number": "C02...", "profile_status": "empty", "enrollment": null}
+  }
+}
+```
+
+The `origin` says which end of Zentral was talking to Apple: `sync` for a synchronization, `default_enrollment_assignment` for the task that assigns a virtual server's default enrollment. All the events of one run share the same metadata `id`.
+
+Two kinds of change post nothing:
+
+- a device Apple reports **unchanged**, which a full fetch does for the whole fleet on every run
+- a device whose stored record only moved because of the **operation itself**, `last_op_type` and `last_op_date`, which a delta synchronization reports for attributes Zentral does not store. A deletion is still reported, even when it is all that moved.
+
+The first synchronization of a virtual server reports every device it finds, like any other. A virtual server usually fills up progressively, so those are real additions rather than an import artefact.
+
+A device Apple stops reporting is recorded with the `updated` action, not `deleted`: the record stays in Zentral, with its `last_op_type` moved to `deleted`.
 
 ### Artifacts and blueprints
 

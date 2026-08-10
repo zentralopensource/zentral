@@ -118,6 +118,26 @@ class ESOSStore(BaseStore):
                     },
                 },
             },
+            # same payload as an audit event, so the same free-form objects to keep out of the
+            # mapping. see zentral.contrib.mdm.events.dep
+            "dep_device_change": {
+                "type": "object",
+                "properties": {
+                    "object": {
+                        "type": "object",
+                        "properties": {
+                            "new_value": {
+                                "type": "object",
+                                "enabled": False,
+                            },
+                            "prev_value": {
+                                "type": "object",
+                                "enabled": False,
+                            },
+                        },
+                    },
+                },
+            },
         }
     }
     INTERVAL_UNIT = {

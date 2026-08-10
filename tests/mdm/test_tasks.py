@@ -210,6 +210,33 @@ class MDMTasksTestCase(TestCase):
         # Apple is never contacted
         from_dep_token.assert_not_called()
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_task_rebuilds_the_event_request(self, from_dep_token, post_event):
+        client = Mock()
+        serial_number = get_random_string(10).upper()
+        client.fetch_devices.return_value = CursorIterator([
+            {"device_assigned_date": "2023-01-10T19:09:22Z", "serial_number": serial_number}
+        ])
+        from_dep_token.return_value = client
+        dep_virtual_server = force_dep_virtual_server()
+
+        sync_dep_virtual_server_devices_task(
+            dep_virtual_server.pk,
+            serialized_event_request={
+                "method": "POST",
+                "path": "/api/mdm/dep/virtual_servers/1/sync_devices/",
+                "ip": "127.0.0.1",
+                "user": {"id": 42, "username": "yolo", "email": "yolo@example.com"},
+            },
+        )
+
+        # the events of a synchronization somebody asked for say who asked for it
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertEqual(event.metadata.request.method, "POST")
+        self.assertEqual(event.metadata.request.user.username, "yolo")
+
     # default enrollment assignment
 
     @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.apply_async")
