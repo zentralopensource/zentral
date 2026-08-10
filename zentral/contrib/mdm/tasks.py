@@ -1,9 +1,15 @@
 import logging
 
 from celery import shared_task
+from django.db import transaction
 
 from .apps_books import bulk_assign_location_asset
-from .dep import DEPClientError, define_dep_profile, sync_dep_virtual_server_devices
+from .dep import (
+    DEPClientError,
+    define_dep_profile,
+    sync_dep_virtual_server_devices,
+    try_lock_dep_virtual_server_sync,
+)
 from .models import DEPEnrollment, DEPVirtualServer, LocationAsset
 from .software_updates import sync_software_updates
 
@@ -30,18 +36,24 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=
         else:
             result["operations"]["updated"] += 1
 
-    try:
-        for _, created in sync_dep_virtual_server_devices(server, force_fetch=force_full_sync):
-            update_counters(created)
-    except DEPClientError as e:
-        if e.error_code == "EXPIRED_CURSOR":
-            # full sync
-            result["effective_sync_type"] = "full_sync"
-            for _, created in sync_dep_virtual_server_devices(server, force_fetch=True):
+    with transaction.atomic():
+        if not try_lock_dep_virtual_server_sync(server.pk):
+            logger.warning("DEP virtual server %s is already being synced", server.pk)
+            result["status"] = "SKIPPED"
+            return result
+        try:
+            for _, created in sync_dep_virtual_server_devices(server, force_fetch=force_full_sync):
                 update_counters(created)
-        else:
-            raise
+        except DEPClientError as e:
+            if e.error_code == "EXPIRED_CURSOR":
+                # full sync
+                result["effective_sync_type"] = "full_sync"
+                for _, created in sync_dep_virtual_server_devices(server, force_fetch=True):
+                    update_counters(created)
+            else:
+                raise
 
+    result["status"] = "SUCCESS"
     return result
 
 

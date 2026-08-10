@@ -215,6 +215,27 @@ class MDMManagementCommandsTest(TestCase):
             call(dvs1, force_fetch=False), call(dvs2, force_fetch=False)
         ])
 
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.try_lock_dep_virtual_server_sync")
+    @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
+    def test_sync_dep_devices_already_running(self, sync_dep_virtual_server_devices, try_lock):
+        dvs1 = force_dep_virtual_server()
+        dvs2 = force_dep_virtual_server()
+        try_lock.side_effect = [False, True]
+        sync_dep_virtual_server_devices.side_effect = [
+            (("FOMO", False),),
+        ]
+        out = StringIO()
+        call_command('sync_dep_devices', stdout=out)
+        self.assertEqual(
+            out.getvalue(),
+            f"Sync server {dvs1.pk} {dvs1}\n"
+            "Already being synced → skipped\n"
+            f"Sync server {dvs2.pk} {dvs2}\n"
+            "Updated FOMO\n"
+        )
+        # the locked server is not synced, the next one still is
+        sync_dep_virtual_server_devices.assert_called_once_with(dvs2, force_fetch=False)
+
     @patch("zentral.contrib.mdm.management.commands.sync_dep_devices.sync_dep_virtual_server_devices")
     def test_sync_dep_devices_cursor_error(self, sync_dep_virtual_server_devices):
         dvs = force_dep_virtual_server()

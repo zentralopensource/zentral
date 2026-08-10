@@ -80,7 +80,8 @@ class MDMTasksTestCase(TestCase):
                     "updated": 0,
                 },
                 "requested_sync_type": "delta_sync",
-                "effective_sync_type": "delta_sync"
+                "effective_sync_type": "delta_sync",
+                "status": "SUCCESS",
             },
         )
         serial_number2 = get_random_string(10).upper()
@@ -110,7 +111,8 @@ class MDMTasksTestCase(TestCase):
                     "updated": 1,
                 },
                 "requested_sync_type": "full_sync",
-                "effective_sync_type": "full_sync"
+                "effective_sync_type": "full_sync",
+                "status": "SUCCESS",
             },
         )
 
@@ -149,9 +151,51 @@ class MDMTasksTestCase(TestCase):
                     "updated": 0,
                 },
                 "requested_sync_type": "delta_sync",
-                "effective_sync_type": "full_sync"
+                "effective_sync_type": "full_sync",
+                "status": "SUCCESS",
             },
         )
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_task_reraises_the_other_dep_errors(self, from_dep_token):
+        client = Mock()
+        client.sync_devices.side_effect = DEPClientError("Could not perform operation", error_code="YOLO")
+        from_dep_token.return_value = client
+        dep_virtual_server = force_dep_virtual_server()
+        token = dep_virtual_server.token
+        token.sync_cursor = "yolo-cursor"
+        token.save()
+
+        # only an expired cursor is handled, anything else has to surface
+        with self.assertRaises(DEPClientError):
+            sync_dep_virtual_server_devices_task(dep_virtual_server.pk)
+        client.fetch_devices.assert_not_called()
+
+    @patch("zentral.contrib.mdm.tasks.try_lock_dep_virtual_server_sync")
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_task_already_running(self, from_dep_token, try_lock):
+        try_lock.return_value = False
+        dep_virtual_server = force_dep_virtual_server()
+
+        result = sync_dep_virtual_server_devices_task(dep_virtual_server.pk)
+        self.assertEqual(
+            result,
+            {
+                "dep_virtual_server": {
+                    "name": dep_virtual_server.name,
+                    "pk": dep_virtual_server.pk,
+                },
+                "operations": {
+                    "created": 0,
+                    "updated": 0,
+                },
+                "requested_sync_type": "delta_sync",
+                "effective_sync_type": "delta_sync",
+                "status": "SKIPPED",
+            },
+        )
+        # Apple is never contacted
+        from_dep_token.assert_not_called()
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.software_updates.requests.get")

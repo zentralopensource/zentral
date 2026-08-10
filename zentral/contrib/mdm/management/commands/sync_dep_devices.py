@@ -1,6 +1,11 @@
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from zentral.contrib.mdm.models import DEPVirtualServer
-from zentral.contrib.mdm.dep import sync_dep_virtual_server_devices, DEPClientError
+from zentral.contrib.mdm.dep import (
+    DEPClientError,
+    sync_dep_virtual_server_devices,
+    try_lock_dep_virtual_server_sync,
+)
 
 
 class Command(BaseCommand):
@@ -32,17 +37,21 @@ class Command(BaseCommand):
         full_sync = kwargs.get("full_sync")
         for server in depvs_qs:
             self.write(f"Sync server {server.pk} {server}")
-            try:
-                for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
-                    operation = "Created" if created else "Updated"
-                    self.write(f"{operation} {dep_device}")
-            except DEPClientError as e:
-                if e.error_code == "EXPIRED_CURSOR":
-                    self.write("Expired cursor → full sync")
-                    for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=True):
+            with transaction.atomic():
+                if not try_lock_dep_virtual_server_sync(server.pk):
+                    self.write("Already being synced → skipped")
+                    continue
+                try:
+                    for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=full_sync):
                         operation = "Created" if created else "Updated"
                         self.write(f"{operation} {dep_device}")
-                else:
-                    self.stderr.write(f"DEP client error: {e}")
-            except Exception as e:
-                self.stderr.write(f"Unknown error: {e}")
+                except DEPClientError as e:
+                    if e.error_code == "EXPIRED_CURSOR":
+                        self.write("Expired cursor → full sync")
+                        for dep_device, created in sync_dep_virtual_server_devices(server, force_fetch=True):
+                            operation = "Created" if created else "Updated"
+                            self.write(f"{operation} {dep_device}")
+                    else:
+                        self.stderr.write(f"DEP client error: {e}")
+                except Exception as e:
+                    self.stderr.write(f"Unknown error: {e}")

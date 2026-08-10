@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from dateutil import parser
-from django.db import connection, transaction
+from django.db import connection
 from django.urls import reverse
 from django.utils import timezone
 
@@ -192,21 +192,19 @@ def dep_device_update_dict(device, known_enrollments=None):
     return update_d
 
 
-def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False, lock_timeout=600):
-    PG_ADVISORY_LOCK_ID = 12345678
-    with transaction.atomic():
-        with connection.cursor() as cursor:
-            cursor.execute("SET LOCAL lock_timeout = %s", [f"{lock_timeout}s"])
-            logger.info("Acquire advisory lock %s for DEP virtual server %s",
-                        PG_ADVISORY_LOCK_ID, dep_virtual_server.pk)
-            cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)",
-                           [PG_ADVISORY_LOCK_ID, dep_virtual_server.pk])
-            logger.info("Advisory lock %s for DEP virtual server %s acquired",
-                        PG_ADVISORY_LOCK_ID, dep_virtual_server.pk)
-        yield from _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch)
+# must not collide with the other advisory lock IDs, see zentral.contrib.monolith.tasks
+SYNC_DEP_VIRTUAL_SERVER_LOCK_ID = 12345678
 
 
-def _sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
+def try_lock_dep_virtual_server_sync(dep_virtual_server_pk):
+    # transaction scoped: released on commit, on rollback, and if the connection dies
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_xact_lock(%s, %s)",
+                       [SYNC_DEP_VIRTUAL_SERVER_LOCK_ID, dep_virtual_server_pk])
+        return cursor.fetchone()[0]
+
+
+def sync_dep_virtual_server_devices(dep_virtual_server, force_fetch=False):
     dep_token = dep_virtual_server.token
     client = DEPClient.from_dep_token(dep_token)
     if force_fetch or not dep_token.sync_cursor:
