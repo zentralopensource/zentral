@@ -108,6 +108,7 @@ def force_realm_group(realm=None, parent=None):
     return RealmGroup.objects.create(
         realm=realm,
         display_name=get_random_string(12),
+        parent=parent,
     )
 
 
