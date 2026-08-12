@@ -219,7 +219,9 @@ class PreflightView(BaseSyncView):
 
         # get or create enrolled machine
         defaults = self._get_enrolled_machine_defaults()
+        # an enrollment has no synced rule to compare, and no incident of its own yet
         defaults["last_sync_ok"] = None
+        defaults["reported_sync_incident_severity"] = None
         enrolled_machine, _ = EnrolledMachine.objects.update_or_create(
             enrollment=enrollment,
             hardware_uuid=self.hardware_uuid,
@@ -237,7 +239,9 @@ class PreflightView(BaseSyncView):
         incident_updates = []
         for other_enrolled_machine in other_enrolled_machines:
             self.enrollment_action = 're-enrollment'
-            if other_enrolled_machine.last_sync_ok is False:
+            # an incident was opened for the machine we are about to delete, and nothing else
+            # would ever close it
+            if other_enrolled_machine.reported_sync_incident_severity not in (None, Severity.NONE.value):
                 if other_enrolled_machine.serial_number == enrolled_machine.serial_number:
                     # close machine incident
                     incident_updates.append(
@@ -364,7 +368,7 @@ class PreflightView(BaseSyncView):
             # probably lost its rule database, and the machine rules have to be rebuilt.
             clean_reason = "no_reported_rule"
         clean_sync = clean_reason is not None
-        self.enrolled_machine.start_sync_session(clean_sync, preflight_at=timezone.now())
+        self.enrolled_machine.start_sync_session(clean_sync, preflight_at=timezone.now(), sync_ok=sync_ok)
         if clean_sync:
             if comparable_santa_version < (2024, 1):
                 response_dict["clean_sync"] = True
@@ -380,17 +384,20 @@ class PreflightView(BaseSyncView):
         incident_update = None
         sync_incident_severity = configuration.get_sync_incident_severity()
         if sync_ok is not None and sync_incident_severity != Severity.NONE:
-            last_sync_ok = self.enrolled_machine.last_sync_ok
-            if sync_ok != last_sync_ok:
+            if sync_ok:
+                severity = Severity.NONE
+            else:
+                severity = sync_incident_severity
+            if severity.value != self.enrolled_machine.reported_sync_incident_severity:
                 # an update is sent even the first time. The machine could have been re-enrolled
-                # while an incident was open, and nothing else would ever close it.
-                if sync_ok:
-                    severity = Severity.NONE
-                else:
-                    severity = sync_incident_severity
+                # while an incident was open, and nothing else would ever close it. The severity
+                # the machine was last reported with is what is compared, not the state of its
+                # rule database: a severity raised on the configuration has to be reported too.
                 incident_update = SyncIncident.build_incident_update(configuration, severity)
-                self.enrolled_machine.last_sync_ok = sync_ok
-                self.enrolled_machine.save()
+                self.enrolled_machine.reported_sync_incident_severity = severity.value
+                EnrolledMachine.objects.filter(pk=self.enrolled_machine.pk).update(
+                    reported_sync_incident_severity=severity.value
+                )
 
         payload = dict(self.request_data)
         payload["sync_session"] = {"id": self.enrolled_machine.sync_session,

@@ -217,7 +217,9 @@ class SantaSyncSessionTestCase(TestCase):
         response = client.preflight()
         self.assertEqual(response.json()["sync_type"], "CLEAN")
         client.enrolled_machine.refresh_from_db()
-        self.assertTrue(client.enrolled_machine.last_sync_ok)
+        self.assertIsNone(client.enrolled_machine.last_sync_ok)
+        # the machine was reported in sync by the first sync, and nothing contradicts it
+        self.assertEqual(client.enrolled_machine.reported_sync_incident_severity, Severity.NONE.value)
         rules = client.rule_download()
         client.postflight(rules)
         self.assertEqual(len(client.rules), 6)

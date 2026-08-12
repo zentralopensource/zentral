@@ -853,7 +853,14 @@ class EnrolledMachine(models.Model):
     signingid_rule_count = models.IntegerField(null=True)
     transitive_rule_count = models.IntegerField(null=True)
     teamid_rule_count = models.IntegerField(null=True)
+
+    # the result of the last rule comparison, written by every preflight. Null means that the
+    # state of the client rule database is unknown, not that it disagrees
     last_sync_ok = models.BooleanField(null=True)
+    # the severity of the last sync incident update posted for the machine. Null means that none
+    # was ever posted. Not last_sync_ok: an incident that was never opened has to be opened when
+    # the configuration starts asking for them, whatever the machine reported until then
+    reported_sync_incident_severity = models.IntegerField(null=True)
 
     # the machine rules of the current sync session are only committed once the postflight
     # confirms that the client wrote them to its own rule database
@@ -934,14 +941,18 @@ class EnrolledMachine(models.Model):
             )
         return ok
 
-    def start_sync_session(self, clean, preflight_at=None):
+    def start_sync_session(self, clean, preflight_at=None, sync_ok=None):
         self.sync_session = get_random_string(8)
         self.sync_session_clean = clean
         updates = {"sync_session": self.sync_session, "sync_session_clean": clean}
         if preflight_at is not None:
-            # a rule download can start a session without a preflight, only the preflight stamps
+            # a rule download can start a session without a preflight. Only the preflight stamps
+            # the timestamp, and only the preflight compares the rules, so sync_ok rides in the
+            # same update instead of costing a second one. A rule download must not clear it
             self.last_preflight_at = preflight_at
+            self.last_sync_ok = sync_ok
             updates["last_preflight_at"] = preflight_at
+            updates["last_sync_ok"] = sync_ok
         EnrolledMachine.objects.filter(pk=self.pk).update(**updates)
 
     def end_sync_session(self, postflight_at=None):

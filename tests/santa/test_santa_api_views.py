@@ -532,6 +532,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.configuration.sync_incident_severity = Severity.MAJOR.value
         self.configuration.save()
         self.enrolled_machine.last_sync_ok = True
+        # the machine was already reported as having no incident
+        self.enrolled_machine.reported_sync_incident_severity = Severity.NONE.value
         self.enrolled_machine.save()
         self._add_synced_rule()
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
@@ -561,13 +563,16 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.enrolled_machine.refresh_from_db()
         self.assertFalse(self.enrolled_machine.sync_ok())
-        self.assertIsNone(self.enrolled_machine.last_sync_ok)  # not updated
+        # the comparison is recorded whatever the configuration does with it
+        self.assertFalse(self.enrolled_machine.last_sync_ok)
+        self.assertIsNone(self.enrolled_machine.reported_sync_incident_severity)
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
         self.assertEqual(len(events), 3)  # add machine, inventory heartbeat, santa preflight
         preflight_event = events[-1]
         self.assertIsInstance(preflight_event, SantaPreflightEvent)
         self.assertEqual(preflight_event.metadata.machine_serial_number, self.enrolled_machine.serial_number)
         self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
+        self.assertFalse(preflight_event.payload["sync_session"]["sync_ok"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_sync_ok_conf_with_severity_first_time_incident_update_none(self, post_event):
@@ -599,8 +604,9 @@ class SantaAPIViewsTestCase(TestCase):
         # setup the sync incidents
         self.configuration.sync_incident_severity = Severity.CRITICAL.value
         self.configuration.save()
-        # simulate sync not ok status
+        # simulate sync not ok status, reported with an incident update
         self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.reported_sync_incident_severity = Severity.CRITICAL.value
         self.enrolled_machine.save()
         # add one synced rule
         target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
@@ -658,8 +664,9 @@ class SantaAPIViewsTestCase(TestCase):
         # setup the sync incidents
         self.configuration.sync_incident_severity = Severity.MAJOR.value
         self.configuration.save()
-        # simulate sync not ok status
+        # simulate sync not ok status, already reported with an incident update
         self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.reported_sync_incident_severity = Severity.MAJOR.value
         self.enrolled_machine.save()
         # add two synced rules
         self._add_synced_rule()
@@ -678,9 +685,34 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(len(preflight_event.metadata.incident_updates), 0)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_preflight_reenrollment_incident_update_none_old_config(self, post_event):
-        # simulate sync not ok status
+    def test_preflight_sync_not_ok_conf_severity_raised_incident_update(self, post_event):
+        # the machine is out of sync and was reported with a minor incident, the configuration
+        # now asks for a major one
+        self.configuration.sync_incident_severity = Severity.MAJOR.value
+        self.configuration.save()
         self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.reported_sync_incident_severity = Severity.MINOR.value
+        self.enrolled_machine.save()
+        self._add_synced_rule()
+        self._add_synced_rule(target_type=Target.Type.TEAM_ID)
+        data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
+        data["teamid_rule_count"] = 1  # the client still reports a rule, no clean sync
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        self.enrolled_machine.refresh_from_db()
+        self.assertFalse(self.enrolled_machine.last_sync_ok)
+        self.assertEqual(self.enrolled_machine.reported_sync_incident_severity, Severity.MAJOR.value)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(len(preflight_event.metadata.incident_updates), 1)
+        self.assertEqual(preflight_event.metadata.incident_updates[0].severity, Severity.MAJOR)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_reenrollment_incident_update_none_old_config(self, post_event):
+        # simulate an open incident on the machine that is about to be replaced
+        self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.reported_sync_incident_severity = Severity.MAJOR.value
         self.enrolled_machine.save()
         data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=True)
         response = self.post_as_json("preflight", hardware_uuid, data,
@@ -708,6 +740,7 @@ class SantaAPIViewsTestCase(TestCase):
     def test_preflight_reenrollment_other_serial_number_no_incident_update(self, post_event):
         # santa can be configured to report a machine ID that is not the hardware UUID
         self.enrolled_machine.last_sync_ok = False
+        self.enrolled_machine.reported_sync_incident_severity = Severity.MAJOR.value
         self.enrolled_machine.save()
         data, _, hardware_uuid = self._get_preflight_data(enrolled=True)
         serial_number = get_random_string(12)
