@@ -509,6 +509,13 @@ class Configuration(models.Model):
     PREFLIGHT_LOCKDOWN_MODE = "LOCKDOWN"
     DEFAULT_BATCH_SIZE = 50
     DEFAULT_FULL_SYNC_INTERVAL = 600
+    # The preflight path regex fields have explicit presence: omitting one leaves the pattern the
+    # client already persisted in place, so an emptied regex has to be overwritten with a pattern
+    # that cannot match. Not an empty string: ICU rejects it, which clears the sync state key and
+    # lets a regex still set in the configuration profile take over again. Not a placeholder path
+    # either, which would be the same known allow rule in every deployment. A failing lookahead
+    # matches nothing, anchored or not, and stays byte for byte the same between preflights.
+    NON_MATCHING_PATH_REGEX = "(?!)"
     SYNC_SERVER_CONFIGURATION_ATTRIBUTES = {
         # 'client_mode', has to be translated to a string value
         # 'clean_sync' managed dynamically
@@ -684,7 +691,7 @@ class Configuration(models.Model):
         for attr in ("allowed_path_regex",
                      "blocked_path_regex"):
             if not config.get(attr):
-                config[attr] = "NON_MATCHING_PLACEHOLDER_{}".format(get_random_string(8))
+                config[attr] = self.NON_MATCHING_PATH_REGEX
 
         # enable_all_event_upload
         config["enable_all_event_upload"] = (

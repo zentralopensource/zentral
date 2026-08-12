@@ -190,6 +190,8 @@ A Santa sync incident is updated when the severity is raised on the configuratio
 
 Santa ballot events link every configuration their votes name, and not only the last one.
 
+The Santa preflight response falls back to a stable non matching path regex when a configuration has none. A fresh random one was sent on every full sync, and the clients flush all their decision caches whenever a path regex changes, twice per sync in this case.
+
 `santactl doctor` does not report a broken sync connection on a healthy server anymore.
 
 

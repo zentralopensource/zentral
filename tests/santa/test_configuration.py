@@ -1,3 +1,4 @@
+import re
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.santa.models import Configuration
@@ -37,7 +38,7 @@ class SantaConfigurationTestCase(TestCase):
         self.assertTrue("AllowedPathRegex" not in local_config)
         sync_server_config = config.get_sync_server_config(get_random_string(12), (1, 14))
         self.assertEqual(sync_server_config["blocked_path_regex"], blocked_path_regex)
-        self.assertTrue(sync_server_config["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        self.assertEqual(sync_server_config["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
     def test_allowed_path_regex_default_blocked_path_regex(self):
         allowed_path_regex = get_random_string(34)
@@ -48,7 +49,24 @@ class SantaConfigurationTestCase(TestCase):
         self.assertTrue("BlockedPathRegex" not in local_config)
         sync_server_config = config.get_sync_server_config(get_random_string(12), (1, 14))
         self.assertEqual(sync_server_config["allowed_path_regex"], allowed_path_regex)
-        self.assertTrue(sync_server_config["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        self.assertEqual(sync_server_config["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+
+    def test_non_matching_path_regex_stable_across_preflights(self):
+        # a value that changed on every preflight made the client flush all its decision
+        # caches twice per full sync
+        config = Configuration.objects.create(name=get_random_string(256))
+        serial_number = get_random_string(12)
+        first = config.get_sync_server_config(serial_number, (1, 14))
+        second = config.get_sync_server_config(serial_number, (1, 14))
+        for attr in ("allowed_path_regex", "blocked_path_regex"):
+            self.assertEqual(first[attr], Configuration.NON_MATCHING_PATH_REGEX)
+            self.assertEqual(first[attr], second[attr])
+
+    def test_non_matching_path_regex_matches_no_path(self):
+        # the client compiles the pattern with ICU, re only guards against the constant being
+        # replaced by something a path could match
+        for path in ("/", "/usr/local/bin/santactl", Configuration.NON_MATCHING_PATH_REGEX, ""):
+            self.assertIsNone(re.search(Configuration.NON_MATCHING_PATH_REGEX, path))
 
     def test_enable_all_event_upload_local_config(self):
         config = Configuration.objects.create(name=get_random_string(256))

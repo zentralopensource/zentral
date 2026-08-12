@@ -172,8 +172,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
         self.assertEqual(json_response["full_sync_interval"], Configuration.DEFAULT_FULL_SYNC_INTERVAL)
         self.assertEqual(json_response["sync_type"], "CLEAN")
-        self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
-        self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        self.assertEqual(json_response["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+        self.assertEqual(json_response["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
         # enrollment event
         events = list(call_args.args[0] for call_args in post_event.call_args_list)
@@ -218,8 +218,8 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
         self.assertEqual(json_response["full_sync_interval"], Configuration.DEFAULT_FULL_SYNC_INTERVAL)
         self.assertEqual(json_response["sync_type"], "CLEAN")
-        self.assertTrue(json_response["blocked_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
-        self.assertTrue(json_response["allowed_path_regex"].startswith("NON_MATCHING_PLACEHOLDER_"))
+        self.assertEqual(json_response["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+        self.assertEqual(json_response["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
     def test_deprecated_preflight(self):
         data, serial_number, hardware_uuid = self._get_preflight_data()
