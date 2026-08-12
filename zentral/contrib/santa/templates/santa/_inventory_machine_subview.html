@@ -19,6 +19,20 @@
   <dd class="col-sm-9">{{ enrolled_machine.get_client_mode_display }}</dd>
   <dt class="col-sm-3 text-md-end">Version</dt>
   <dd class="col-sm-9">{{ enrolled_machine.santa_version }}</dd>
+  <dt class="col-sm-3 text-md-end">Rules in sync</dt>
+  <dd class="col-sm-9">
+    {% if sync_ok == "yes" %}
+    <span class="text-success">Yes</span>
+    {% elif sync_ok == "no" %}
+    <span class="text-danger">No</span>
+    {% else %}
+    <span class="text-secondary">Unknown</span>
+    {% endif %}
+  </dd>
+  <dt class="col-sm-3 text-md-end">Last preflight</dt>
+  <dd class="col-sm-9">{{ enrolled_machine.last_preflight_at|default:"-" }}</dd>
+  <dt class="col-sm-3 text-md-end">Last postflight</dt>
+  <dd class="col-sm-9">{{ enrolled_machine.last_postflight_at|default:"-" }}</dd>
   <dt class="col-sm-3 text-md-end">Binary rule{% if binary_rule_count != "-" %}{{ binary_rule_count|pluralize }}{% else %}s{% endif %}</dt>
   <dd class="col-sm-9">{{ binary_rule_count }}</dd>
   <dt class="col-sm-3 text-md-end">cdhash rule{% if cdhash_rule_count != "-" %}{{ cdhash_rule_count|pluralize }}{% else %}s{% endif %}</dt>

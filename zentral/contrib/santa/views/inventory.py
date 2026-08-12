@@ -28,6 +28,8 @@ class InventoryMachineSubview:
             ctx.update({
                 "enrolled_machine": em,
                 "err_message": self.err_message,
+                # a template cannot tell an unknown state from a mismatch
+                "sync_ok": "-" if em.last_sync_ok is None else "yes" if em.last_sync_ok else "no",
                 "binary_rule_count": "-" if em.binary_rule_count is None else em.binary_rule_count,
                 "cdhash_rule_count": "-" if em.cdhash_rule_count is None else em.cdhash_rule_count,
                 "certificate_rule_count": "-" if em.certificate_rule_count is None else em.certificate_rule_count,
