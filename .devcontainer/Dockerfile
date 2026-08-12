@@ -28,7 +28,7 @@ RUN apt-get update && \
 RUN python -m venv /opt/venv && /opt/venv/bin/pip install -U pip setuptools wheel
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY constraints.txt requirements*.txt ./
+COPY requirements*.txt ./
 RUN pip install -r requirements.txt -r requirements_dev.txt -r requirements_aws.txt -r requirements_gcp.txt
 
 # Build the CSS and JS dist files

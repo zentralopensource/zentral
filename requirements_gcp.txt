@@ -1,4 +1,4 @@
--c constraints.txt
+-c requirements_constraints.txt
 
 # Django file storage
 django-storages[google]

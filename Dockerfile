@@ -72,7 +72,7 @@ RUN set -eux ; \
 RUN python -m venv /opt/venv && /opt/venv/bin/pip install -U pip setuptools wheel
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY constraints.txt requirements.txt ./
+COPY requirements_constraints.txt requirements.txt ./
 RUN pip install -r requirements.txt
 
 # Build the CSS and JS dist files
@@ -88,19 +88,19 @@ RUN npm install && npm run build
 
 # Installing the extra requirements for dev
 FROM base-builder AS dev-builder
-COPY constraints.txt requirements_*.txt ./
+COPY requirements_*.txt ./
 RUN pip install -r requirements_dev.txt -r requirements_aws.txt -r requirements_gcp.txt
 
 
 # Installing the extra requirements for aws
 FROM base-builder AS aws-builder
-COPY constraints.txt requirements_aws.txt ./
+COPY requirements_constraints.txt requirements_aws.txt ./
 RUN pip install -r requirements_aws.txt
 
 
 # Installing the extra requirements for gcp
 FROM base-builder AS gcp-builder
-COPY constraints.txt requirements_gcp.txt ./
+COPY requirements_constraints.txt requirements_gcp.txt ./
 RUN pip install -r requirements_gcp.txt
 
 
