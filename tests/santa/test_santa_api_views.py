@@ -452,6 +452,26 @@ class SantaAPIViewsTestCase(TestCase):
         # the machine rules are only rebuilt once the client confirms the clean sync
         self.assertEqual(MachineRule.objects.filter(enrolled_machine=self.enrolled_machine).count(), 1)
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_enrollment_clean_sync(self, post_event):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        response = self.post_as_json("preflight", hardware_uuid, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["sync_type"], "CLEAN")
+        enrolled_machine = EnrolledMachine.objects.get(enrollment=self.enrollment, hardware_uuid=hardware_uuid)
+        events = list(call_args.args[0] for call_args in post_event.call_args_list)
+        preflight_event = events[-1]
+        self.assertIsInstance(preflight_event, SantaPreflightEvent)
+        self.assertEqual(
+            preflight_event.payload["sync_session"],
+            {"id": enrolled_machine.sync_session,
+             "clean": True,
+             "clean_reason": "enrollment",
+             # a machine that just enrolled has no synced rule to be compared with
+             "sync_ok": None,
+             "previous_session": None}
+        )
+
     def _add_synced_rule(self, enrolled_machine=None, target_type=Target.Type.BINARY, configuration=None):
         identifier = new_team_id() if target_type == Target.Type.TEAM_ID else new_sha256()
         target = Target.objects.create(type=target_type, identifier=identifier)

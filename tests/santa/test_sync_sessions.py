@@ -1,6 +1,6 @@
 from unittest.mock import patch
 from django.test import TestCase
-from zentral.contrib.santa.events import SantaPostflightEvent
+from zentral.contrib.santa.events import SantaPostflightEvent, SantaPreflightEvent
 from zentral.contrib.santa.models import MachineRule, Rule, Target
 from zentral.core.incidents.models import Severity
 from .utils import SantaSyncClient, force_configuration, force_enrolled_machine, force_rule, new_sha256
@@ -39,6 +39,11 @@ class SantaSyncSessionTestCase(TestCase):
     def postflight_events(self, post_event):
         return [call_args.args[0] for call_args in post_event.call_args_list
                 if isinstance(call_args.args[0], SantaPostflightEvent)]
+
+    def last_preflight_sync_session(self, post_event):
+        events = [call_args.args[0] for call_args in post_event.call_args_list
+                  if isinstance(call_args.args[0], SantaPreflightEvent)]
+        return events[-1].payload["sync_session"]
 
     # a full sync converges
 
@@ -428,3 +433,111 @@ class SantaSyncSessionTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = self.postflight_events(post_event)[-1].payload
         self.assertEqual(payload["sync_session"], {"committed": False})
+
+    # the preflight event reports the session it starts, and the one it settled
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_starts_a_session(self, post_event):
+        client, _, _ = self.force_client()
+        client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertEqual(
+            self.last_preflight_sync_session(post_event),
+            {"id": client.enrolled_machine.sync_session,
+             "clean": False,
+             "clean_reason": None,
+             # the client reports no rule, and no rule was ever synced with it
+             "sync_ok": True,
+             "previous_session": None}
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_clean_sync_requested(self, post_event):
+        client, _, _ = self.force_client(rule_count=1)
+        client.sync()
+        client.preflight(request_clean_sync=True)
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertTrue(sync_session["clean"])
+        self.assertEqual(sync_session["clean_reason"], "requested")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_clean_sync_after_a_lost_rule_database(self, post_event):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        # the client loses its rule database
+        client.rules = {}
+        client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertTrue(sync_session["clean"])
+        self.assertEqual(sync_session["clean_reason"], "no_reported_rule")
+        # the machine is out of sync until the clean session is over
+        self.assertFalse(sync_session["sync_ok"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_lost_clean_session_is_discarded(self, post_event):
+        client, _, _ = self.force_client(batch_size=2, rule_count=6)
+        client.sync()
+        client.preflight(request_clean_sync=True)
+        # the download dies after the first batch
+        client.rule_download(max_batches=1)
+        client.enrolled_machine.refresh_from_db()
+        lost_session = client.enrolled_machine.sync_session
+        client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertEqual(sync_session["clean_reason"], "lost_clean_session")
+        # the state of the client cannot be worked out anymore
+        self.assertIsNone(sync_session["sync_ok"])
+        self.assertEqual(sync_session["previous_session"],
+                         {"id": lost_session,
+                          "clean": True,
+                          "outcome": "discarded",
+                          "rules_discarded": 2,
+                          "removals_restored": 0})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_lost_postflight_is_committed(self, post_event):
+        client, _, _ = self.force_client(rule_count=3)
+        client.preflight()
+        client.rule_download()
+        client.enrolled_machine.refresh_from_db()
+        lost_session = client.enrolled_machine.sync_session
+        # the postflight never reaches the server
+        client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertFalse(sync_session["clean"])
+        self.assertTrue(sync_session["sync_ok"])
+        self.assertEqual(sync_session["previous_session"],
+                         {"id": lost_session,
+                          "clean": False,
+                          "outcome": "committed",
+                          "rules_committed": 3,
+                          "removals_confirmed": 0,
+                          "rules_dropped": 0})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_interrupted_download_is_discarded(self, post_event):
+        client, _, _ = self.force_client(batch_size=1, rule_count=3)
+        client.preflight()
+        # the download dies after the first batch, the client writes nothing
+        self.assertIsNone(client.rule_download(max_batches=1))
+        client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertTrue(sync_session["sync_ok"])
+        self.assertEqual(sync_session["previous_session"]["outcome"], "discarded")
+        self.assertEqual(sync_session["previous_session"]["rules_discarded"], 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_restores_an_unconfirmed_removal(self, post_event):
+        client, configuration, targets = self.force_client(rule_count=2)
+        client.sync()
+        Rule.objects.filter(configuration=configuration, target=targets[0]).delete()
+        client.preflight()
+        # the removal is sent, but the client dies before writing it
+        self.assertIsNone(client.rule_download(max_batches=1))
+        client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        # the client still has the rule, and the removal is sent again during the next session
+        self.assertTrue(sync_session["sync_ok"])
+        self.assertEqual(sync_session["previous_session"]["outcome"], "discarded")
+        self.assertEqual(sync_session["previous_session"]["removals_restored"], 1)
+        self.assertEqual(sync_session["previous_session"]["rules_discarded"], 0)

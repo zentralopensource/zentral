@@ -956,27 +956,36 @@ class EnrolledMachine(models.Model):
     def reconcile_sync_session(self):
         """Settle the sync session the client never confirmed with a postflight.
 
-        Returns whether the client rule database and the ledger agree, and whether a clean
-        session was lost.
+        Returns whether the client rule database and the ledger agree, whether a clean session
+        was lost, and what became of the session.
         """
         if self.sync_session is None:
-            return self.sync_ok(), False
+            return {"sync_ok": self.sync_ok(), "lost_clean_session": False, "previous_session": None}
+        previous_session = {"id": self.sync_session, "clean": self.sync_session_clean}
+
+        def discard():
+            previous_session["outcome"] = "discarded"
+            previous_session.update(MachineRule.objects.discard_session(self))
+
         if self.sync_session_clean:
             # the rules committed before the session were replaced in place, the state of the
             # client cannot be worked out anymore. Rebuild it with another clean sync.
-            MachineRule.objects.discard_session(self)
-            return None, True
+            discard()
+            return {"sync_ok": None, "lost_clean_session": True, "previous_session": previous_session}
         if self._match_reported_rules(self.committed_rules()):
             # the session never reached the client rule database
-            MachineRule.objects.discard_session(self)
-            return True, False
+            discard()
+            return {"sync_ok": True, "lost_clean_session": False, "previous_session": previous_session}
         if self._match_reported_rules(self.machinerule_set.filter(staged_removal=False)):
             # the session reached the client rule database, only the postflight was lost. The
             # client then has everything but the removals it applied.
-            MachineRule.objects.commit_session(self, False)
-            return True, False
-        MachineRule.objects.discard_session(self)
-        return self.sync_ok(), False
+            previous_session["outcome"] = "committed"
+            previous_session.update(MachineRule.objects.commit_session(self, False))
+            return {"sync_ok": True, "lost_clean_session": False, "previous_session": previous_session}
+        discard()
+        # the ledger is back to the last state the client confirmed, sync_ok compares it with the
+        # rules the client reports. It is only ever called with no session open
+        return {"sync_ok": self.sync_ok(), "lost_clean_session": False, "previous_session": previous_session}
 
 
 # Voting
@@ -1244,12 +1253,16 @@ class MachineRuleManager(models.Manager):
 
     def _discard(self, qs):
         """Restore the ledger rows of a lost sync session"""
-        qs.filter(staged_removal=True).update(cursor=None, sync_session=None, staged_removal=False)
-        qs.filter(staged_removal=False).delete()
+        # the restored rows drop out of qs - both callers filter on a column the update clears -
+        # so the delete leaves them alone
+        removals_restored = qs.filter(staged_removal=True).update(cursor=None, sync_session=None,
+                                                                 staged_removal=False)
+        rules_discarded, _ = qs.filter(staged_removal=False).delete()
+        return {"rules_discarded": rules_discarded, "removals_restored": removals_restored}
 
     def discard_session(self, enrolled_machine):
         """Forget the rules sent during the sync sessions the client never confirmed"""
-        self._discard(self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False))
+        return self._discard(self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False))
 
     def commit_session(self, enrolled_machine, clean):
         """Record the rules of the sync session the client just confirmed

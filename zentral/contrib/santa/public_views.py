@@ -342,25 +342,29 @@ class PreflightView(BaseSyncView):
         # reconcile the sync session the client never confirmed with a postflight, and
         # compare the reported rules with the ledger. A machine that just enrolled has no
         # synced rule to be compared with.
-        sync_ok = None
-        lost_clean_session = False
+        reconciliation = {"sync_ok": None, "lost_clean_session": False, "previous_session": None}
         if self.enrollment_action is None:
-            sync_ok, lost_clean_session = self.enrolled_machine.reconcile_sync_session()
+            reconciliation = self.enrolled_machine.reconcile_sync_session()
+        sync_ok = reconciliation["sync_ok"]
 
-        # clean sync?
-        clean_sync = (
-            self.request_data.get("request_clean_sync")
-            # enrollment
-            or self.enrollment_action is not None
+        # clean sync? the reason is reported, the arms are tested in order and the last one
+        # costs a query
+        clean_reason = None
+        if self.request_data.get("request_clean_sync"):
+            clean_reason = "requested"
+        elif self.enrollment_action is not None:
+            clean_reason = self.enrollment_action
+        elif reconciliation["lost_clean_session"]:
             # the ledger of a lost clean session cannot be restored, the client rule database
             # has to be rebuilt from scratch again
-            or lost_clean_session
+            clean_reason = "lost_clean_session"
+        elif (not any(getattr(self.enrolled_machine, k) for k in self._iter_rule_count_keys())
+                and self.enrolled_machine.machinerule_set.exists()):
             # the client reports no rule at all, but some rules were synced with it. It has
             # probably lost its rule database, and the machine rules have to be rebuilt.
-            or (not any(getattr(self.enrolled_machine, k) for k in self._iter_rule_count_keys())
-                and self.enrolled_machine.machinerule_set.exists())
-        )
-        self.enrolled_machine.start_sync_session(bool(clean_sync), preflight_at=timezone.now())
+            clean_reason = "no_reported_rule"
+        clean_sync = clean_reason is not None
+        self.enrolled_machine.start_sync_session(clean_sync, preflight_at=timezone.now())
         if clean_sync:
             if comparable_santa_version < (2024, 1):
                 response_dict["clean_sync"] = True
@@ -388,10 +392,17 @@ class PreflightView(BaseSyncView):
                 self.enrolled_machine.last_sync_ok = sync_ok
                 self.enrolled_machine.save()
 
+        payload = dict(self.request_data)
+        payload["sync_session"] = {"id": self.enrolled_machine.sync_session,
+                                   "clean": clean_sync,
+                                   "clean_reason": clean_reason,
+                                   "sync_ok": sync_ok,
+                                   "previous_session": reconciliation["previous_session"]}
+
         post_preflight_event(self.enrolled_machine.serial_number,
                              self.user_agent,
                              self.ip,
-                             self.request_data,
+                             payload,
                              incident_update)
 
         return response_dict
