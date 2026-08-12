@@ -55,6 +55,58 @@ class MetricsView(BasePrometheusMetricsView):
                     continue
                 g.labels(**labels).set(count)
 
+    def add_sync_states_gauge(self):
+        g = Gauge('zentral_santa_enrolled_machines_sync_total', 'Zentral Santa Enrolled Machines Sync States',
+                  ['cfg_pk', 'state'], registry=self.registry)
+        query = (
+            "select e.configuration_id, m.last_sync_ok, count(*) "
+            "from santa_enrolledmachine as m "
+            "join santa_enrollment as e on (m.enrollment_id = e.id) "
+            "group by e.configuration_id, m.last_sync_ok"
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            for cfg_pk, last_sync_ok, count in cursor.fetchall():
+                if last_sync_ok is None:
+                    # no preflight since the machine enrolled, or a clean session was lost
+                    state = "unknown"
+                elif last_sync_ok:
+                    state = "ok"
+                else:
+                    state = "mismatch"
+                g.labels(cfg_pk=cfg_pk, state=state).set(count)
+
+    def add_active_machines_buckets(self):
+        query = (
+            # last_postflight_at, not updated_at: the latter is auto_now, so a machine that
+            # preflights forever without ever confirming a sync would stay in the youngest bucket.
+            # Such a machine has a null age and lands in +Inf alone, which is correct - it has
+            # never completed a sync.
+            "with active_machines as ("
+            "  select e.configuration_id as cfg_pk,"
+            "  date_part('days', now() - m.last_postflight_at) as age"
+            "  from santa_enrolledmachine as m"
+            "  join santa_enrollment as e on (m.enrollment_id = e.id)"
+            ") select cfg_pk,"
+            'count(*) filter (where age < 1) as "1",'
+            'count(*) filter (where age < 7) as "7",'
+            'count(*) filter (where age < 14) as "14",'
+            'count(*) filter (where age < 30) as "30",'
+            'count(*) filter (where age < 45) as "45",'
+            'count(*) filter (where age < 90) as "90",'
+            'count(*) as "+Inf" '
+            "from active_machines group by cfg_pk"
+        )
+        g = Gauge('zentral_santa_active_machines_bucket', 'Zentral Santa Active Machines',
+                  ['cfg_pk', 'le'], registry=self.registry)
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            columns = [c.name for c in cursor.description]
+            for row in cursor.fetchall():
+                row_d = dict(zip(columns, row))
+                for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
+                    g.labels(cfg_pk=row_d["cfg_pk"], le=le).set(row_d[le])
+
     def add_rules_gauge(self):
         g = Gauge('zentral_santa_rules_total', 'Zentral Santa Rules',
                   ['cfg_pk', 'ruleset', 'target_type', 'policy', 'voting',
@@ -152,6 +204,8 @@ class MetricsView(BasePrometheusMetricsView):
     def populate_registry(self):
         self.add_configurations_info()
         self.add_enrolled_machines_gauge()
+        self.add_sync_states_gauge()
+        self.add_active_machines_buckets()
         self.add_rules_gauge()
         self.add_target_states_gauge()
         self.add_votes_gauge()

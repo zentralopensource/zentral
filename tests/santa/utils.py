@@ -151,6 +151,8 @@ def force_enrolled_machine(
     santa_version="2024.5",
     primary_user=None,
     last_seen=None,
+    last_sync_ok=None,
+    last_postflight_at=None,
 ):
     if mbu is None:
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
@@ -167,6 +169,8 @@ def force_enrolled_machine(
         client_mode=Configuration.LOCKDOWN_MODE if lockdown else Configuration.MONITOR_MODE,
         santa_version=santa_version,
         primary_user=primary_user,
+        last_sync_ok=last_sync_ok,
+        last_postflight_at=last_postflight_at,
     )
     if last_seen is not None:
         tree = {

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from unittest.mock import Mock, call, patch
 
 from django.test import TestCase
@@ -6,6 +7,7 @@ from prometheus_client.parser import text_string_to_metric_families
 
 from zentral.conf import settings
 from zentral.contrib.santa.models import Rule, Target, TargetState
+from zentral.utils.time import naive_utcnow
 
 from .utils import (
     force_ballot,
@@ -66,9 +68,11 @@ class SantaMetricsViewsTestCase(TestCase):
         mocked_fetchall.side_effect = [
             [(1, "yolo", 42)],  # 1st call with bad mode
             [],  # 2nd call for the enrolled machines gauge
-            [],  # 3rd call for the rules gauge
-            [],  # 4th call for the target states gauge
-            [],  # 5th call for the votes gauge
+            [],  # 3rd call for the sync states gauge
+            [],  # 4th call for the active machines buckets
+            [],  # 5th call for the rules gauge
+            [],  # 6th call for the target states gauge
+            [],  # 7th call for the votes gauge
         ]
         response = self._make_authenticated_request()
         family_count = 0
@@ -81,7 +85,7 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(family_count, 1)
         self.assertEqual(sample_count, 0)
         warning.assert_called_once_with("Unknown santa configuration mode: %s", 42)
-        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(5)])
+        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(7)])
 
     def test_enrolled_machines(self):
         em_m = force_enrolled_machine(lockdown=False, santa_version="2024.5")
@@ -114,9 +118,11 @@ class SantaMetricsViewsTestCase(TestCase):
         mocked_fetchall.side_effect = [
             [],  # 1st call for the configurations info gauge
             [(1, 42, "2024.5", 1)],  # 2nd call for the enrolled machines gauge
-            [],  # 3rd call for the rules gauge
-            [],  # 4th call for the target states gauge
-            [],  # 5th call for the votes gauge
+            [],  # 3rd call for the sync states gauge
+            [],  # 4th call for the active machines buckets
+            [],  # 5th call for the rules gauge
+            [],  # 6th call for the target states gauge
+            [],  # 7th call for the votes gauge
         ]
         response = self._make_authenticated_request()
         family_count = 0
@@ -129,7 +135,57 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(family_count, 1)
         self.assertEqual(sample_count, 0)
         warning.assert_called_once_with("Unknown santa configuration mode: %s", 42)
-        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(5)])
+        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(7)])
+
+    def test_enrolled_machines_sync_states(self):
+        configuration = force_configuration()
+        for last_sync_ok in (True, False, None):
+            force_enrolled_machine(configuration=configuration, last_sync_ok=last_sync_ok)
+        response = self._make_authenticated_request()
+        for family in text_string_to_metric_families(response.content.decode("utf-8")):
+            if family.name != "zentral_santa_enrolled_machines_sync_total":
+                continue
+            samples = [s for s in family.samples if int(s.labels["cfg_pk"]) == configuration.pk]
+            self.assertEqual(len(samples), 3)
+            self.assertEqual({s.labels["state"] for s in samples}, {"ok", "mismatch", "unknown"})
+            for sample in samples:
+                self.assertEqual(sample.value, 1)
+            break
+        else:
+            raise AssertionError("could not find expected metric family")
+        self.assertEqual(response.status_code, 200)
+
+    def test_active_machines_buckets(self):
+        configuration = force_configuration()
+        for age in (2, 22, 31):
+            force_enrolled_machine(configuration=configuration,
+                                   last_postflight_at=naive_utcnow() - timedelta(days=age))
+        # a machine that preflights without ever confirming a sync has never been active
+        force_enrolled_machine(configuration=configuration, last_postflight_at=None)
+        response = self._make_authenticated_request()
+        for family in text_string_to_metric_families(response.content.decode("utf-8")):
+            if family.name != "zentral_santa_active_machines_bucket":
+                continue
+            samples = [s for s in family.samples if int(s.labels["cfg_pk"]) == configuration.pk]
+            self.assertEqual(len(samples), 7)
+            for sample in samples:
+                le = sample.labels["le"]
+                if le == "1":
+                    self.assertEqual(sample.value, 0)
+                elif le in ("7", "14"):
+                    self.assertEqual(sample.value, 1)
+                elif le == "30":
+                    self.assertEqual(sample.value, 2)
+                elif le in ("45", "90"):
+                    self.assertEqual(sample.value, 3)
+                else:
+                    # the machine that never confirmed a sync is only counted in the total
+                    self.assertEqual(le, "+Inf")
+                    self.assertEqual(sample.value, 4)
+            break
+        else:
+            raise AssertionError("could not find expected metric family")
+        self.assertEqual(response.status_code, 200)
 
     def test_rules(self):
         rules = {}
@@ -187,9 +243,11 @@ class SantaMetricsViewsTestCase(TestCase):
         mocked_cursor.fetchall.side_effect = [
             [],  # 1st call for the configurations info
             [],  # 2nd call for the enrolled machines gauge
-            [(1, None, "BUNDLE", 42, False, True, False, False, False, 1)],  # 3rd call with unknown policy
-            [],  # 4th call for the target states gauge
-            [],  # 5th call for the votes gauge
+            [],  # 3rd call for the sync states gauge
+            [],  # 4th call for the active machines buckets
+            [(1, None, "BUNDLE", 42, False, True, False, False, False, 1)],  # 5th call with unknown policy
+            [],  # 6th call for the target states gauge
+            [],  # 7th call for the votes gauge
         ]
         response = self._make_authenticated_request()
         family_count = 0
@@ -202,7 +260,7 @@ class SantaMetricsViewsTestCase(TestCase):
         self.assertEqual(family_count, 1)
         self.assertEqual(sample_count, 0)
         warning.assert_called_once_with("Unknown rule policy: %s", 42)
-        self.assertEqual(mocked_cursor.fetchall.mock_calls, [call() for _ in range(5)])
+        self.assertEqual(mocked_cursor.fetchall.mock_calls, [call() for _ in range(7)])
 
     def test_target_states(self):
         configuration = force_configuration()
