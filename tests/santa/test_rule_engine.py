@@ -672,3 +672,26 @@ class SantaRuleEngineTestCase(TestCase):
         # rule added noop
         rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk])
         self.assertEqual(rule_batch, [])
+
+    # unstaging a session
+
+    def test_unstage_does_not_delete_the_removal_it_restored(self):
+        # the private method is called directly: it must work on any set of staged rows, whatever
+        # the caller selected them on, and the two callers both filter on a column it clears
+        removal_target, _ = self.create_rule()
+        addition_target, _ = self.create_rule()
+        removal = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=removal_target,
+                                             policy=Rule.Policy.ALLOWLIST, version=1,
+                                             sync_session="session1", staged_removal=True)
+        addition = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=addition_target,
+                                              policy=Rule.Policy.ALLOWLIST, version=1,
+                                              sync_session="session1")
+        counts = MachineRule.objects._unstage(MachineRule.objects.filter(pk__in=[removal.pk, addition.pk]))
+        self.assertEqual(counts, {"rules_discarded": 1, "removals_restored": 1})
+        # the client still holds the rule, the removal is committed again and sent again next session
+        removal.refresh_from_db()
+        self.assertIsNone(removal.sync_session)
+        self.assertIsNone(removal.cursor)
+        self.assertFalse(removal.staged_removal)
+        # the staged rule only existed because of the session
+        self.assertEqual(MachineRule.objects.filter(pk=addition.pk).count(), 0)

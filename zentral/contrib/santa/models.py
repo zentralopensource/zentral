@@ -1251,18 +1251,29 @@ class MachineRuleManager(models.Manager):
                     rule_info_d[key] = val
             yield rule_info_d
 
-    def _discard(self, qs):
-        """Restore the ledger rows of a lost sync session"""
-        # the restored rows drop out of qs - both callers filter on a column the update clears -
-        # so the delete leaves them alone
+    def _unstage(self, qs):
+        """Put the given staged rules back to the state the client last confirmed.
+
+        Called for the rules of a session the client never confirmed, and for the batches of a
+        session it stopped downloading.
+
+        A staged removal was committed before the session staged it, so the client still holds the
+        rule: the row is committed again, and the removal is sent again during the next session.
+        Every other staged row only exists because of the send being unstaged - including one that
+        replaced a committed row, which nothing tells apart from a new one - so it is deleted, and
+        the rule is sent again.
+
+        The delete runs first, so that neither statement depends on the other, nor on the columns
+        the caller filtered on.
+        """
+        rules_discarded, _ = qs.filter(staged_removal=False).delete()
         removals_restored = qs.filter(staged_removal=True).update(cursor=None, sync_session=None,
                                                                  staged_removal=False)
-        rules_discarded, _ = qs.filter(staged_removal=False).delete()
         return {"rules_discarded": rules_discarded, "removals_restored": removals_restored}
 
     def discard_session(self, enrolled_machine):
         """Forget the rules sent during the sync sessions the client never confirmed"""
-        return self._discard(self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False))
+        return self._unstage(self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False))
 
     def commit_session(self, enrolled_machine, clean):
         """Record the rules of the sync session the client just confirmed
@@ -1287,13 +1298,13 @@ class MachineRuleManager(models.Manager):
             enrolled_machine.start_sync_session(False)
         qs = self.filter(enrolled_machine=enrolled_machine).select_for_update()
 
-        # fresh start from the last known OK state
-        # discard the batches that have not been acknowledged, they will be sent again
+        # fresh start from the last known OK state: unstage the batches that have not been
+        # acknowledged, they will be sent again
         qs_cleanup = qs.filter(cursor__isnull=False)
         if cursor:
-            # do not discard the request cursor batch, we are about to acknowledge it
+            # do not unstage the request cursor batch, we are about to acknowledge it
             qs_cleanup = qs_cleanup.exclude(cursor=cursor)
-        self._discard(qs_cleanup)
+        self._unstage(qs_cleanup)
 
         # acknowledge the request cursor batch. The rules stay staged until the postflight,
         # the client only writes them to its own database once the whole download is over.
