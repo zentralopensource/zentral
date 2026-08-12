@@ -398,6 +398,7 @@ class PreflightView(BaseSyncView):
                                    "clean_reason": clean_reason,
                                    "sync_ok": sync_ok,
                                    "previous_session": reconciliation["previous_session"]}
+        payload["configuration"] = configuration.serialize_for_event(keys_only=True)
 
         post_preflight_event(self.enrolled_machine.serial_number,
                              self.user_agent,

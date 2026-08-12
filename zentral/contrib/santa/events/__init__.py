@@ -545,11 +545,15 @@ def _flatten_process_signing_chain(process_d):
 
 
 def _post_santa_events(enrolled_machine, user_agent, ip, events):
+    configuration = enrolled_machine.enrollment.configuration
+
     def get_created_at(payload):
         return naive_utcfromtimestamp(payload['execution_time'])
 
     def prepare_santa_event(payload):
         _flatten_process_signing_chain(payload)
+        # one dict per event: a payload is not read only once it is posted
+        payload["configuration"] = configuration.serialize_for_event(keys_only=True)
         return payload
 
     allow_unknown_shard = enrolled_machine.enrollment.configuration.allow_unknown_shard
@@ -578,12 +582,15 @@ def _post_santa_events(enrolled_machine, user_agent, ip, events):
 
 
 def _post_santa_file_access_events(enrolled_machine, user_agent, ip, events):
+    configuration = enrolled_machine.enrollment.configuration
+
     def get_created_at(payload):
         return naive_utcfromtimestamp(payload["access_time"])
 
     def prepare_santa_file_access_event(payload):
         for process_d in payload.get("process_chain", []):
             _flatten_process_signing_chain(process_d)
+        payload["configuration"] = configuration.serialize_for_event(keys_only=True)
         return payload
 
     event_iterator = (

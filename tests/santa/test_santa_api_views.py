@@ -1066,6 +1066,10 @@ class SantaAPIViewsTestCase(TestCase):
         for i, cert in enumerate(event_d["signing_chain"]):
             self.assertEqual(event.payload[f"signing_cert_{i}"], cert)
         self.assertNotIn("signing_chain", event.payload)
+        self.assertEqual(event.payload["configuration"],
+                         {"pk": self.configuration.pk, "name": self.configuration.name})
+        self.assertEqual(event.get_linked_objects_keys()["santa_configuration"],
+                         [(self.configuration.pk,)])
         self.assertEqual(Target.objects.all().count(), 4)
         for target_type, target_identifier, b_count, c_count, e_count in (
             (Target.Type.BINARY, event_d["file_sha256"], 0, 0, 1),
@@ -1337,6 +1341,7 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(
             events[0].payload,
             {'access_time': 1772523396.823121,
+             'configuration': {'name': self.configuration.name, 'pk': self.configuration.pk},
              'decision': 'FILE_ACCESS_DECISION_AUDIT_ONLY',
              'process_chain': [
                  {'cdhash': '7009fd13a7a15a3395878f19a10d524ee7bb59a2',
@@ -1377,7 +1382,8 @@ class SantaAPIViewsTestCase(TestCase):
         metadata = events[0].metadata.serialize()
         self.assertEqual(
             metadata["objects"],
-            {'apple_team_id': ['3522FA9PXF'],
+            {'santa_configuration': [str(self.configuration.pk)],
+             'apple_team_id': ['3522FA9PXF'],
              'certificate': ['sha256|7c9faa9d607c98bee9de8a9ed8d30f51e4ec32acf8751a9992016eb6a769254d',
                              'sha256|7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f',
                              'sha256|b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024'],

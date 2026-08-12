@@ -36,14 +36,18 @@ class SantaSyncSessionTestCase(TestCase):
         return MachineRule.objects.filter(enrolled_machine=enrolled_machine,
                                           sync_session__isnull=False).count()
 
-    def postflight_events(self, post_event):
+    def _events(self, post_event, event_cls):
         return [call_args.args[0] for call_args in post_event.call_args_list
-                if isinstance(call_args.args[0], SantaPostflightEvent)]
+                if isinstance(call_args.args[0], event_cls)]
+
+    def postflight_events(self, post_event):
+        return self._events(post_event, SantaPostflightEvent)
+
+    def preflight_events(self, post_event):
+        return self._events(post_event, SantaPreflightEvent)
 
     def last_preflight_sync_session(self, post_event):
-        events = [call_args.args[0] for call_args in post_event.call_args_list
-                  if isinstance(call_args.args[0], SantaPreflightEvent)]
-        return events[-1].payload["sync_session"]
+        return self.preflight_events(post_event)[-1].payload["sync_session"]
 
     # a full sync converges
 
@@ -438,7 +442,7 @@ class SantaSyncSessionTestCase(TestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_event_starts_a_session(self, post_event):
-        client, _, _ = self.force_client()
+        client, configuration, _ = self.force_client()
         client.preflight()
         client.enrolled_machine.refresh_from_db()
         self.assertEqual(
@@ -450,6 +454,10 @@ class SantaSyncSessionTestCase(TestCase):
              "sync_ok": True,
              "previous_session": None}
         )
+        event = self.preflight_events(post_event)[-1]
+        self.assertEqual(event.payload["configuration"],
+                         {"pk": configuration.pk, "name": configuration.name})
+        self.assertEqual(event.get_linked_objects_keys(), {"santa_configuration": [(configuration.pk,)]})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_preflight_event_clean_sync_requested(self, post_event):
