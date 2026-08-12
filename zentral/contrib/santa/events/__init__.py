@@ -15,22 +15,48 @@ logger = logging.getLogger('zentral.contrib.santa.events')
 ALL_EVENTS_SEARCH_DICT = {"tag": "santa"}
 
 
-class SantaEnrollmentEvent(BaseEvent):
-    event_type = "santa_enrollment"
-    tags = ["santa"]
+def iter_payload_dicts(value, keys):
+    """Yield the dicts at the end of a payload path, crossing the lists on the way"""
+    if isinstance(value, list):
+        # a path crosses a list when an event carries several of the same object, like the votes
+        # of a ballot or the configurations of a ruleset update
+        for item in value:
+            yield from iter_payload_dicts(item, keys)
+    elif not keys:
+        if isinstance(value, dict):
+            yield value
+    elif isinstance(value, dict):
+        child = value.get(keys[0])
+        if child is not None:
+            yield from iter_payload_dicts(child, keys[1:])
+
+
+class ConfigurationEventMixin:
+    """Link the configurations an event carries, wherever its payload holds them"""
+    configuration_attrs = ("configuration",)
+
+    def add_configurations_to_linked_objects_keys(self, keys):
+        for attr in self.configuration_attrs:
+            for configuration in iter_payload_dicts(self.payload, attr.split(".")):
+                pk = configuration.get("pk")
+                if pk:
+                    keys.setdefault("santa_configuration", []).append((pk,))
 
     def get_linked_objects_keys(self):
-        keys = {}
-        configuration = self.payload.get("configuration")
-        if configuration:
-            keys["santa_configuration"] = [(configuration.get("pk"),)]
+        keys = super().get_linked_objects_keys()
+        self.add_configurations_to_linked_objects_keys(keys)
         return keys
+
+
+class SantaEnrollmentEvent(ConfigurationEventMixin, BaseEvent):
+    event_type = "santa_enrollment"
+    tags = ["santa"]
 
 
 register_event_type(SantaEnrollmentEvent)
 
 
-class SantaPreflightEvent(BaseEvent):
+class SantaPreflightEvent(ConfigurationEventMixin, BaseEvent):
     event_type = "santa_preflight"
     tags = ["santa", "heartbeat"]
 
@@ -50,7 +76,7 @@ class SantaPreflightEvent(BaseEvent):
 register_event_type(SantaPreflightEvent)
 
 
-class BaseSantaEvent(BaseEvent):
+class BaseSantaEvent(ConfigurationEventMixin, BaseEvent):
     def iter_signing_chain(self):
         process_info = self.get_process_info()
         if not process_info:
@@ -65,7 +91,7 @@ class BaseSantaEvent(BaseEvent):
                 yield cert
 
     def get_linked_objects_keys(self):
-        keys = {}
+        keys = super().get_linked_objects_keys()
         file_args = []
         process_info = self.get_process_info()
         if not process_info:
@@ -151,19 +177,24 @@ class SantaLogEvent(BaseEvent):
 register_event_type(SantaLogEvent)
 
 
-class SantaRuleSetUpdateEvent(BaseEvent):
+class RuleSetEventMixin:
+    ruleset_attr = "ruleset"
+
+    def add_ruleset_to_linked_objects_keys(self, keys):
+        for ruleset in iter_payload_dicts(self.payload, self.ruleset_attr.split(".")):
+            pk = ruleset.get("pk")
+            if pk:
+                keys.setdefault("santa_ruleset", []).append((pk,))
+
+
+class SantaRuleSetUpdateEvent(RuleSetEventMixin, ConfigurationEventMixin, BaseEvent):
     event_type = "santa_ruleset_update"
     tags = ["santa"]
+    configuration_attrs = ("configurations",)
 
     def get_linked_objects_keys(self):
-        keys = {}
-        configurations = self.payload.get("configurations")
-        if configurations:
-            for configuration in configurations:
-                keys.setdefault("santa_configuration", []).append((configuration.get("pk"),))
-        ruleset = self.payload.get("ruleset")
-        if ruleset:
-            keys["santa_ruleset"] = [(ruleset.get("pk"),)]
+        keys = super().get_linked_objects_keys()
+        self.add_ruleset_to_linked_objects_keys(keys)
         return keys
 
 
@@ -171,12 +202,14 @@ register_event_type(SantaRuleSetUpdateEvent)
 
 
 class TargetEventMixin:
-    def add_target_to_linked_objects_keys(self, keys, attr="target"):
-        target = self.payload
-        for payload_key in attr.split("."):
-            target = target.get(payload_key)
-            if not target:
-                return
+    target_attrs = ("target",)
+
+    def add_targets_to_linked_objects_keys(self, keys):
+        for attr in self.target_attrs:
+            for target in iter_payload_dicts(self.payload, attr.split(".")):
+                self._add_target_to_linked_objects_keys(keys, target)
+
+    def _add_target_to_linked_objects_keys(self, keys, target):
         target_type = target.get("type")
         if not target_type:
             return
@@ -206,59 +239,51 @@ class TargetEventMixin:
                     key_attr = target_type.name.lower()
                 keys.setdefault(key_attr, []).append(("sha256", sha256))
 
+    def get_linked_objects_keys(self):
+        keys = super().get_linked_objects_keys()
+        self.add_targets_to_linked_objects_keys(keys)
+        return keys
 
-class SantaRuleUpdateEvent(TargetEventMixin, BaseEvent):
+
+class SantaRuleUpdateEvent(TargetEventMixin, RuleSetEventMixin, ConfigurationEventMixin, BaseEvent):
     event_type = "santa_rule_update"
     tags = ["santa"]
+    target_attrs = ("rule.target",)
+    configuration_attrs = ("rule.configuration",)
+    ruleset_attr = "rule.ruleset"
 
     def get_linked_objects_keys(self):
-        keys = {}
-        self.add_target_to_linked_objects_keys(keys, attr="rule.target")
-        rule = self.payload.get("rule")
-        if not rule:
-            return keys
-        configuration = rule.get("configuration")
-        if configuration:
-            keys["santa_configuration"] = [(configuration.get("pk"),)]
-        ruleset = rule.get("ruleset")
-        if ruleset:
-            keys["santa_ruleset"] = [(ruleset.get("pk"),)]
+        keys = super().get_linked_objects_keys()
+        self.add_ruleset_to_linked_objects_keys(keys)
         return keys
 
 
 register_event_type(SantaRuleUpdateEvent)
 
 
-class SantaBallotEvent(TargetEventMixin, BaseEvent):
+class SantaBallotEvent(TargetEventMixin, ConfigurationEventMixin, BaseEvent):
     event_type = "santa_ballot"
     tags = ["santa"]
+    target_attrs = ("target", "event_target")
+    # a ballot carries one vote per configuration the target was voted on in
+    configuration_attrs = ("votes.configuration",)
 
     def get_linked_objects_keys(self):
-        keys = {}
-        for attr in ("target", "event_target"):
-            self.add_target_to_linked_objects_keys(keys, attr)
+        keys = super().get_linked_objects_keys()
         realm_user = self.payload.get("realm_user")
         if realm_user:
-            keys["realm_user"] = [(realm_user["pk"],)]
-        for vote in self.payload.get("votes", []):
-            keys["santa_configuration"] = [(vote["configuration"]["pk"],)]
+            pk = realm_user.get("pk")
+            if pk:
+                keys["realm_user"] = [(pk,)]
         return keys
 
 
 register_event_type(SantaBallotEvent)
 
 
-class SantaTargetStateUpdateEvent(TargetEventMixin, BaseEvent):
+class SantaTargetStateUpdateEvent(TargetEventMixin, ConfigurationEventMixin, BaseEvent):
     event_type = "santa_target_state_update"
     tags = ["santa"]
-
-    def get_linked_objects_keys(self):
-        keys = {}
-        self.add_target_to_linked_objects_keys(keys)
-        configuration = self.payload.get("configuration")
-        if configuration:
-            keys["santa_configuration"] = [(configuration["pk"],)]
-        return keys
 
 
 register_event_type(SantaTargetStateUpdateEvent)

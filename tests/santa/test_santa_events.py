@@ -6,11 +6,13 @@ from django.utils.crypto import get_random_string
 
 from zentral.contrib.santa.events import (
     EventMetadata,
+    SantaBallotEvent,
     SantaEnrollmentEvent,
     SantaEventEvent,
     SantaFileAccessEvent,
     SantaRuleSetUpdateEvent,
     SantaRuleUpdateEvent,
+    SantaTargetStateUpdateEvent,
     _build_file_tree_from_santa_event,
     _create_bundle_binaries,
     _create_missing_bundles,
@@ -637,6 +639,40 @@ class SantaEventTestCase(TestCase):
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"santa_configuration": [(13,)]}
+        )
+
+    def test_ballot_linked_objects(self):
+        # a ballot carries one vote per configuration its target was voted on in, and every one of
+        # them is linked
+        sha256 = new_sha256()
+        event_d = {
+            "pk": "b6cf8e12-9b0e-4a3f-8b2e-1f2a3b4c5d6e",
+            "target": {"type": "BINARY", "sha256": sha256},
+            "event_target": {"type": "TEAMID", "team_id": "43AQ936H96"},
+            "realm_user": {"pk": "0c1b2a39-4d5e-6f70-8192-a3b4c5d6e7f8", "username": "yolo"},
+            "votes": [{"configuration": {"pk": 1, "name": "Default"}, "was_yes_vote": True},
+                      {"configuration": {"pk": 2, "name": "Testing"}, "was_yes_vote": False}],
+        }
+        event = SantaBallotEvent(EventMetadata(), event_d)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"santa_configuration": [(1,), (2,)],
+             "file": [("sha256", sha256)],
+             "apple_team_id": [("43AQ936H96",)],
+             "realm_user": [("0c1b2a39-4d5e-6f70-8192-a3b4c5d6e7f8",)]}
+        )
+
+    def test_target_state_update_linked_objects(self):
+        event_d = {
+            "configuration": {"pk": 7, "name": "Default"},
+            "target": {"type": "SIGNINGID", "signing_id": "43AQ936H96:org.mozilla.firefox"},
+            "state": 100,
+        }
+        event = SantaTargetStateUpdateEvent(EventMetadata(), event_d)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"santa_configuration": [(7,)],
+             "file": [("apple_signing_id", "43AQ936H96:org.mozilla.firefox")]}
         )
 
     # _update_targets
