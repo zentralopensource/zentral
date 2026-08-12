@@ -3,6 +3,27 @@
 
 ### Features
 
+
+#### Core
+
+The pages launching a background task report its outcome now, instead of reloading as if nothing had happened.
+
+The messages are stuck to the top of the page, so a task launched from a button far down a page still reports where it can be seen.
+
+The remaining background tasks are attributed to the user who started them, so they show up in their task list.
+
+The PBAC policy sets are parsed once and cached.
+
+The linked compliance check and job ids are exposed on the API serializers.
+
+#### Inventory
+
+The macOS app instances carry the Apple code signing information now — team id, executable path, cdhash, entitlements and the two signing times — on the machine page, in the full JSON export and in the per-machine CSV one.
+
+Reworked the machine macOS app instances list into a collapsible detail view.
+
+Committing a machine snapshot tree makes far fewer queries: the subtrees are prefetched in bulk instead of being looked up once per occurrence.
+
 #### MDM
 
 Recovery password configurations can schedule a password rotation after each reveal of the password, like DEP enrollments already do for the auto admin password.
@@ -11,39 +32,165 @@ FileVault configurations can schedule a PRK rotation after each reveal of the PR
 
 Synchronizing a DEP virtual server with Apple Business Manager now posts a `dep_device_change` event for every device it changed, with the previous and the new value of the record, like an audit event.
 
+The command creations, the device blocking, the artifact, blueprint artifact and enrollment changes, the push certificate, DEP token and Apps and Books location changes, and the DEP virtual server connection are audited now. No key material reaches the events.
+
+Assigning an enrollment profile to a DEP device via the API posts an audit event, like the web interface already did.
+
+The APNs notifications an operator asks for carry the request context, so an operator poke can be told from one Zentral decided on by itself.
+
+A queued command is verified again just before it is delivered, since the device state can change while it waits.
+
+The default DEP enrollment is assigned in a background task, chunked, and the assigned devices are read back from Apple instead of being guessed.
+
+The DEP requests are sized from the limits the account detail advertises.
+
+New `refresh_apps_books_asset_metadata` management command, for the assets created without their metadata.
+
+The enrollment used is reported in the enrollment request events, and in the re-enrollment ones. The DEP and user enrollment payloads gain the realm, and the DEP one the enrollment secret.
 
 #### Monolith
 
 Repository syncs now run in the background. Repositories that need more than the request timeout to sync are supported, and concurrent syncs of the same repository are prevented.
 
+#### Munki
+
+The Munki enrollment package is skipped when the Turbo agent is installed.
+
+A machine polling `job_details` without ever completing a run is not invisible server side anymore.
+
+#### Osquery
+
+The identical records of a status log upload are collapsed into one event carrying a `count`, and the number of events one upload can produce is bounded.
+
+#### Santa
+
+The rules of a sync are only recorded once the client confirms them in its postflight. A sync the client never confirms is settled during the next preflight, and its rules are sent again.
+
+One request less per rule download: the last batch does not need to be acknowledged anymore.
+
+New `santa_postflight` event, reporting what the client confirmed. Heartbeat, like the preflight event.
+
+The preflight event reports the sync session, the result of the rule comparison and the reason for a clean sync.
+
+The configuration is reported in every Santa event that has one, and links the event to it.
+
+New `zentral_santa_enrolled_machines_sync_total` and `zentral_santa_active_machines_bucket` metrics.
+
+The result of the last rule comparison and the sync stage timestamps are displayed on the machine page.
+
+#### Turbo
+
+New module for Turbo, the MDM-deployed Zentral agent running scripts and mSCP compliance checks on the macOS devices.
+
+Recurring and one-time job schedules on a job anchor, with a per-machine result ledger.
+
+Management UI and API for the configurations, enrollments, scripts, mSCP checks and jobs, the agent protocol endpoints, the script and mSCP compliance checks, and the agent request and result events.
+
 
 ### Backward incompatibilities
+
+
+#### 🧨 API endpoint PATCH
+
+The audited API endpoints answer a `PATCH` with a `405`. Zentral only does full updates — several serializers assume every declared field is present, which a partial update breaks. Use `PUT`.
+
+#### 🧨 Event payload datetimes and UUIDs
+
+The datetimes and UUIDs that were not serialized at their source reached the stores that dump the event themselves (ClickHouse, Splunk, Panther, …) wrapped in a `{"__type__": …, "__value__": …}` envelope, where Elasticsearch and OpenSearch got the plain string. They are ISO 8601 and UUID strings everywhere now. Queries and probes reading the two envelope subpaths need to be updated.
+
+#### 🧨 Preprocess worker upgrade order
+
+The raw events over 16KB are compressed now, and a preprocess worker still on the previous release drops the ones it receives. Restart the preprocess workers before the web workers.
 
 #### 🧨 MDM API endpoint pagination
 
 The API endpoints for the ACME issuer, SCEP issuer, FileVault configuration, recovery password configuration, software update enforcement, OTA enrollment, blueprint, blueprint artifact, location, location asset and push certificate lists are paginated now. Remember to upgrade the Terraform Provider.
 
-
 #### 🧨 MDM DEP token audit event payload
 
 The DEP token audit events do not carry the `has_expired` and `expires_soon` booleans anymore. They were computed when the event was serialized, and never refreshed afterwards, so a stored event kept reporting the state of the token at the time it was written. Use the `access_token_expiry` timestamp, which is still in the payload, and compare it with the event `created_at`. Probes keyed on the two removed fields need to be updated.
-
 
 #### 🧨 MDM DEP virtual server device sync task result
 
 In the result of `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`, `operations` gains `unchanged` and `marked_deleted`, `updated` only counts the devices whose record changed, and a `status` of `SUCCESS` or `SKIPPED` is added. Read `created + updated + unchanged` for the number of devices Apple reported.
 
+#### 🧨 MDM DEP device profile assignment time
+
+`profile_assign_time` stays null until a synchronization brings back the value Apple recorded. It used to be set to Zentral's clock as soon as Apple answered, which is a different value.
 
 #### 🧨 Monolith repository sync API endpoint
 
 `/api/monolith/repositories/<int:pk>/sync/` launches a background task instead of syncing the repository during the request. It responds with `201` and a `task_id`/`task_result_url` pair, in place of the `200 {"status": 0}` and `500 {"status": 1, "error": "…"}` responses it used to return. Poll `task_result_url` to know the outcome of the sync.
 
+#### 🧨 Osquery status log events
+
+The identical records of a status log upload are collapsed into one event carrying a `count`. Sum `count` instead of counting the events to get the number of lines the clients sent.
+
 
 ### Bug fixes
 
+
+The `Authorization` header, the cookies and the MDM signature are not written to the JSON logs anymore. Django logs the request on every 4xx it reports, so a `401` on a public endpoint wrote the credential the client just failed to authenticate with to stdout.
+
+Fixed the loss of the raw events too big for the queue: a machine snapshot tree carrying a full app inventory was rejected, and took the events it was batched with down with it. They are compressed with zstd, and the SQS batches are split by size.
+
+Fixed multiple races under threaded workers: the probe cache deadlock, the JMESPath compliance check cache, the MDM certificate issuer cache, the Apps and Books client cache, the event producer initialization and the event queue shutdown.
+
+The database connections are health checked and capped with a connect timeout, and recycled by every preprocessor on a recoverable error. A connection dropped by a pooler used to fail every following check-in until the worker was restarted.
+
+Fixed the ClickHouse JSON columns deserialization: the payload paths without a sub column were displayed as raw bytes.
+
+Fixed several machine snapshot commit failures: duplicated subtrees, concurrent version races, serialized datetimes, string `last_seen` values, empty JSON values, an in-band `mt_hash` key and certificates with non-canonical extensions.
+
+A machine snapshot tree that cannot be committed because of a data error is dropped with a log line, instead of crashing the preprocess worker on every redelivery.
+
+A committed object whose hash does not match is rolled back, instead of being left behind in a table where the hash is the identity.
+
 Fixed a 500 error on bulk machine tag changes made through the API with an expiring token.
 
+Fixed the MDM DDM declaration fetches answered with a `400` when the scope of the target changed between the token response and the fetch.
+
+Fixed the MDM DDM status report 500s when a device reports the same artifact version under two server tokens.
+
+Fixed the MDM `awaiting_configuration` lifecycle for the DEP enrollments awaiting the device configuration, and purge the DDM sync state with the rest of the state.
+
+The MDM managed and enterprise app install polling backs off exponentially. It used to give up after a couple of minutes, leaving the target artifact awaiting confirmation forever.
+
+The Apps and Books asset metadata is looked up in the storefront of the location, and not in the US one, so the assets that are not sold there get a name, a bundle id and an icon.
+
+An MDM device blocked through the API is notified, like the web interface already did, so it is released immediately instead of at its next check-in.
+
+The escrowed key is collected sooner when an MDM FileVault rotation does not return one.
+
+The MDM DEP web enrollment shows an error page when the Setup Assistant issues the navigation without the device info header.
+
+An MDM DEP synchronization does not wait on the advisory lock anymore: it reports `SKIPPED` instead of parking a worker and an open transaction for ten minutes.
+
+`updated_at` is bumped when an MDM DEP device is written in bulk, so a client paging the API on it does not miss what a synchronization changed.
+
+The `full_sync` parameter of the MDM DEP virtual server sync endpoint had no effect.
+
 Monolith repository syncs launched via the API now refresh the caches, like the ones launched in the UI already did.
+
+Fixed the Munki active machines and installed pkginfos metrics: they were built on a timestamp that moved on any write, so forcing a full sync on a long dead machine dropped it into the youngest bucket. Both follow the last postflight now.
+
+The compliance check id of an osquery query is cleared in the response to the request that disabled it.
+
+Fixed the Santa clean syncs, performed as normal syncs by the clients from 2024.6 on: the sync type of the preflight response was sent lowercase. Expect the machines asking for one to rebuild their rule database after the upgrade.
+
+Fixed the Santa rule ledger being dropped during a clean sync for the machines that kept all their rules.
+
+Fixed the Santa rule comparison: the counts missing from a preflight request are reset, the client transitive rules are not counted as synced binary rules, and a clean sync is not forced on the machines that simply have no rule.
+
+Fixed the Santa sync incidents: an unknown severity broke the event pipeline, every clean sync opened one, the incident of a re-enrolled machine could never be closed, and an enrollment could close the incident of a machine with another serial number.
+
+The result of the Santa rule comparison is recorded on every preflight, and not only on the configurations with a sync incident severity.
+
+A Santa sync incident is updated when the severity is raised on the configuration while a machine is out of sync.
+
+Santa ballot events link every configuration their votes name, and not only the last one.
+
+`santactl doctor` does not report a broken sync connection on a healthy server anymore.
 
 
 ## 2026.4
