@@ -1252,15 +1252,21 @@ class MachineRuleManager(models.Manager):
         self._discard(self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False))
 
     def commit_session(self, enrolled_machine, clean):
-        """Record the rules of the sync session the client just confirmed"""
+        """Record the rules of the sync session the client just confirmed
+
+        Returns what the session did to the ledger, for the postflight event.
+        """
         qs = self.filter(enrolled_machine=enrolled_machine)
         session_qs = qs.filter(sync_session=enrolled_machine.sync_session)
+        rules_dropped = 0
         if clean and session_qs.exists():
             # the client rebuilt its rule database from the rules of this session. Santa skips
             # the cleanup altogether when it does not receive any rule, hence the exists().
-            qs.filter(sync_session__isnull=True).delete()
-        session_qs.filter(staged_removal=True).delete()
-        session_qs.update(cursor=None, sync_session=None)
+            rules_dropped, _ = qs.filter(sync_session__isnull=True).delete()
+        removals_confirmed, _ = session_qs.filter(staged_removal=True).delete()
+        return {"rules_committed": session_qs.update(cursor=None, sync_session=None),
+                "removals_confirmed": removals_confirmed,
+                "rules_dropped": rules_dropped}
 
     def get_next_rule_batch(self, enrolled_machine, tags, cursor=None):
         if enrolled_machine.sync_session is None:

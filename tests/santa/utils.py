@@ -507,14 +507,20 @@ class SantaSyncClient:
         self._apply_rules(rules)
         return rules
 
-    def postflight(self, rules):
-        data = {
-            "machine_id": self.machine_id,
-            "rules_received": len(rules),
-            "rules_processed": len(rules),
-        }
+    def postflight(self, rules, rules_processed=None, **extra):
+        data = {"machine_id": self.machine_id}
         data["syncType"] = self.sync_type or "NORMAL"
-        return self._post("postflight", data)
+        if rules_processed is None:
+            # santa drops the rules it could not convert and processes the others
+            rules_processed = len(rules)
+        # santa omits the counts set to 0
+        for key, val in (("rules_received", len(rules)), ("rules_processed", rules_processed)):
+            if val:
+                data[key] = val
+        data.update(extra)
+        # santa omits the fields it does not set. syncType=None simulates a client older than
+        # 2025.1, which does not report the sync type it performed
+        return self._post("postflight", {k: v for k, v in data.items() if v is not None})
 
     def sync(self, request_clean_sync=False, max_batches=None, postflight=True, **extra):
         response = self.preflight(request_clean_sync=request_clean_sync, **extra)

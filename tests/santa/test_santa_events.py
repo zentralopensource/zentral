@@ -10,6 +10,8 @@ from zentral.contrib.santa.events import (
     SantaEnrollmentEvent,
     SantaEventEvent,
     SantaFileAccessEvent,
+    SantaPostflightEvent,
+    SantaPreflightEvent,
     SantaRuleSetUpdateEvent,
     SantaRuleUpdateEvent,
     SantaTargetStateUpdateEvent,
@@ -18,10 +20,10 @@ from zentral.contrib.santa.events import (
     _create_missing_bundles,
     _update_targets,
 )
-from zentral.contrib.santa.models import Bundle, Configuration, Target
+from zentral.contrib.santa.models import Bundle, Configuration, EnrolledMachine, Target
 from zentral.utils.time import naive_utcnow
 
-from .utils import new_sha256
+from .utils import force_enrolled_machine, new_sha256
 
 
 class SantaEventTestCase(TestCase):
@@ -640,6 +642,35 @@ class SantaEventTestCase(TestCase):
             event.get_linked_objects_keys(),
             {"santa_configuration": [(13,)]}
         )
+
+    # the heartbeat timeout of the sync events
+
+    def test_sync_event_heartbeat_timeout_no_enrolled_machine(self):
+        for event_cls in (SantaPreflightEvent, SantaPostflightEvent):
+            self.assertIsNone(event_cls.get_machine_heartbeat_timeout(get_random_string(12)))
+
+    def test_sync_event_heartbeat_timeout(self):
+        enrolled_machine = force_enrolled_machine()
+        configuration = enrolled_machine.enrollment.configuration
+        for event_cls in (SantaPreflightEvent, SantaPostflightEvent):
+            self.assertEqual(
+                event_cls.get_machine_heartbeat_timeout(enrolled_machine.serial_number),
+                2 * configuration.full_sync_interval
+            )
+
+    @patch("zentral.contrib.santa.events.logger.warning")
+    def test_sync_event_heartbeat_timeout_multiple_enrolled_machines(self, logger_warning):
+        enrolled_machine = force_enrolled_machine()
+        # a second enrollment of the same machine, in another configuration
+        other = force_enrolled_machine()
+        EnrolledMachine.objects.filter(pk=other.pk).update(serial_number=enrolled_machine.serial_number)
+        # the most recently updated one is used
+        self.assertEqual(
+            SantaPreflightEvent.get_machine_heartbeat_timeout(enrolled_machine.serial_number),
+            2 * other.enrollment.configuration.full_sync_interval
+        )
+        logger_warning.assert_called_once_with("Multiple enrolled machines found for %s",
+                                               enrolled_machine.serial_number)
 
     def test_ballot_linked_objects(self):
         # a ballot carries one vote per configuration its target was voted on in, and every one of

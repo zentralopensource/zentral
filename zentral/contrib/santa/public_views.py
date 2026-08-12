@@ -14,7 +14,8 @@ from zentral.contrib.inventory.models import MachineTag, PrincipalUserSource
 from zentral.contrib.inventory.utils import (add_machine_tags,
                                              commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
-from zentral.contrib.santa.events import post_enrollment_event, process_events, post_preflight_event
+from zentral.contrib.santa.events import (post_enrollment_event, process_events, post_postflight_event,
+                                          post_preflight_event)
 from zentral.contrib.santa.incidents import SyncIncident
 from zentral.contrib.santa.models import Configuration, EnrolledMachine, Enrollment, MachineRule
 from zentral.core.incidents.models import Severity
@@ -423,11 +424,58 @@ class EventUploadView(BaseSyncView):
 
 
 class PostflightView(BaseSyncView):
+    def _get_reported_rule_counts(self):
+        # santa serializes the postflight request with the protobuf JSON mapping, which drops the
+        # fields set to their default value. A missing count is a null one, not an unknown one, and
+        # a session whose rules the client all dropped is reported without any rules_processed.
+        counts = {}
+        for key in ("rules_received", "rules_processed"):
+            val = self.request_data.get(key, 0)
+            if not isinstance(val, int):
+                logger.error("Machine %s: reported %s %s not an integer",
+                             self.enrolled_machine.serial_number, key, val)
+                val = 0
+            elif val < 0:
+                logger.error("Machine %s: reported %s %s negative",
+                             self.enrolled_machine.serial_number, key, val)
+                val = 0
+            counts[key] = val
+        if counts["rules_processed"] < counts["rules_received"]:
+            # the client dropped the rules it could not convert, and logged them as bad rules
+            logger.error("Machine %s: received %s rules, processed %s",
+                         self.enrolled_machine.serial_number,
+                         counts["rules_received"], counts["rules_processed"])
+        return counts
+
+    def _commit_sync_session(self):
+        if not self.enrolled_machine.sync_session:
+            return {"committed": False}
+        # the client only sends a postflight once it has written the rules of the whole
+        # session to its own rule database
+        clean = self.enrolled_machine.sync_session_clean
+        sync_type = self.request_data.get("syncType")
+        # santa only reports the sync type it performed from 2025.1 on. An older client leaves the
+        # session unconfirmed, and it is committed as a normal one: the rules it dropped are kept
+        # in the ledger, and sent again as removals during the next session.
+        clean_confirmed = sync_type in ("CLEAN", "CLEAN_ALL") if sync_type else None
+        if clean_confirmed is not None and clean != clean_confirmed:
+            # the client only ever performs the sync type the preflight answered, and it is the
+            # sync type it reports here that says which rules it wrote
+            logger.error("Machine %s: sync session clean %s, client confirmed sync type %s",
+                         self.enrolled_machine.serial_number, clean, sync_type)
+        sync_session = {"id": self.enrolled_machine.sync_session,
+                        "clean": clean,
+                        "clean_confirmed": clean_confirmed,
+                        "committed": True}
+        sync_session.update(MachineRule.objects.commit_session(self.enrolled_machine, bool(clean_confirmed)))
+        return sync_session
+
     def do_post(self):
-        if self.enrolled_machine.sync_session:
-            # the client only sends a postflight once it has written the rules of the whole
-            # session to its own rule database
-            clean = self.request_data.get("syncType") in ("CLEAN", "CLEAN_ALL")
-            MachineRule.objects.commit_session(self.enrolled_machine, clean)
+        payload = dict(self.request_data)
+        payload.update(self._get_reported_rule_counts())
+        payload["sync_session"] = self._commit_sync_session()
+        payload["santa_version"] = self.enrolled_machine.santa_version
+        payload["configuration"] = self.enrolled_machine.enrollment.configuration.serialize_for_event(keys_only=True)
         self.enrolled_machine.end_sync_session(postflight_at=timezone.now())
+        post_postflight_event(self.enrolled_machine.serial_number, self.user_agent, self.ip, payload)
         return {}

@@ -56,8 +56,7 @@ class SantaEnrollmentEvent(ConfigurationEventMixin, BaseEvent):
 register_event_type(SantaEnrollmentEvent)
 
 
-class SantaPreflightEvent(ConfigurationEventMixin, BaseEvent):
-    event_type = "santa_preflight"
+class BaseSantaSyncEvent(ConfigurationEventMixin, BaseEvent):
     tags = ["santa", "heartbeat"]
 
     @classmethod
@@ -69,11 +68,22 @@ class SantaPreflightEvent(ConfigurationEventMixin, BaseEvent):
         if count > 1:
             logger.warning("Multiple enrolled machines found for %s", serial_number)
         timeout = 2 * enrolled_machines[0].enrollment.configuration.full_sync_interval
-        logger.debug("Santa preflight event heartbeat timeout for machine %s: %s", serial_number, timeout)
+        logger.debug("Santa %s event heartbeat timeout for machine %s: %s", cls.event_type, serial_number, timeout)
         return timeout
 
 
+class SantaPreflightEvent(BaseSantaSyncEvent):
+    event_type = "santa_preflight"
+
+
 register_event_type(SantaPreflightEvent)
+
+
+class SantaPostflightEvent(BaseSantaSyncEvent):
+    event_type = "santa_postflight"
+
+
+register_event_type(SantaPostflightEvent)
 
 
 class BaseSantaEvent(ConfigurationEventMixin, BaseEvent):
@@ -619,6 +629,16 @@ def post_preflight_event(msn, user_agent, ip, data, incident_update):
         request=event_request
     )
     event = SantaPreflightEvent(metadata, data)
+    event.post()
+
+
+def post_postflight_event(msn, user_agent, ip, data):
+    event_request = EventRequest(user_agent, ip)
+    metadata = EventMetadata(
+        machine_serial_number=msn,
+        request=event_request
+    )
+    event = SantaPostflightEvent(metadata, data)
     event.post()
 
 
