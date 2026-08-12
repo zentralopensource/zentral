@@ -1387,6 +1387,20 @@ class SantaAPIViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {})
 
+    # request body
+
+    def test_sync_stages_require_a_json_object(self):
+        for url_name in ("preflight", "ruledownload", "eventupload", "postflight"):
+            for body in (b"", b"not json", b"null", b"[]", b'"CLEAN"', b"1"):
+                with self.subTest(url_name=url_name, body=body):
+                    url = reverse(f"santa_public:{url_name}", args=(self.enrolled_machine.hardware_uuid,))
+                    response = self.client.post(
+                        url, body,
+                        content_type="application/json",
+                        headers={"Zentral-Authorization": f"Bearer {self.enrollment_secret.secret}"}
+                    )
+                    self.assertEqual(response.status_code, 400)
+
     def test_legacy_public_urls_are_disabled_on_tests(self):
         hardware_uuid = uuid.uuid4()
         routes = ['preflight', 'ruledownload', 'eventupload', 'postflight']

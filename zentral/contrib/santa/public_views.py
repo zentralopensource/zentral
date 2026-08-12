@@ -57,14 +57,19 @@ class BaseSyncView(View):
 
     def _get_json_data(self, request):
         payload = request.body
-        if not payload:
-            return None
         try:
             if request.META.get('HTTP_CONTENT_ENCODING', None) in ("zlib", "deflate"):
                 payload = zlib.decompress(payload)
-            return json.loads(payload)
+            data = json.loads(payload)
         except ValueError:
+            data = None
+        # every stage reads the payload as a mapping, and santa always sends one. An empty body,
+        # or a JSON value that is not an object, is a broken client, not a stage without a request
+        if not isinstance(data, dict):
+            logger.error("Machine %s: could not read a JSON object from the request body",
+                         self.hardware_uuid)
             raise SuspiciousOperation("Could not read JSON data")
+        return data
 
     def get_enrolled_machine(self):
         try:
