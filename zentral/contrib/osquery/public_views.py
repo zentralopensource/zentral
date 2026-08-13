@@ -22,6 +22,8 @@ from zentral.contrib.inventory.utils import (
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
 from zentral.contrib.osquery.conf import INVENTORY_QUERY_NAME, build_osquery_conf
 from zentral.contrib.osquery.events import (
+    DISTRIBUTED_QUERY_RESULT_INLINE_MAX_SIZE,
+    post_distributed_query_result_rows,
     post_enrollment_event,
     post_file_carve_events,
     post_request_event,
@@ -31,7 +33,6 @@ from zentral.contrib.osquery.events import (
 from zentral.contrib.osquery.models import (
     DistributedQuery,
     DistributedQueryMachine,
-    DistributedQueryResult,
     EnrolledMachine,
     FileCarvingBlock,
     FileCarvingSession,
@@ -42,7 +43,6 @@ from zentral.contrib.osquery.tags import TagUpdateAggregator
 from zentral.contrib.osquery.tasks import build_file_carving_session_archive
 from zentral.core.events.base import post_machine_conflict_event
 from zentral.utils.http import user_agent_and_ip_address_from_request
-from zentral.utils.json import remove_null_character
 from zentral.utils.time import naive_utcfromtimestamp, naive_utcnow
 
 from .views.utils import (
@@ -65,10 +65,12 @@ class BaseJsonPostView(View):
     def post(self, request, *args, **kwargs):
         try:
             if request.META.get("HTTP_CONTENT_ENCODING") == "gzip":
-                self.data = json.load(GzipFile(fileobj=request))
+                payload = GzipFile(fileobj=request).read()
             else:
-                self.data = json.loads(request.body)
-        except ValueError:
+                payload = request.body
+            self.data_size = len(payload)
+            self.data = json.loads(payload)
+        except (OSError, ValueError):
             raise SuspiciousOperation("Could not read JSON data")
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         try:
@@ -363,21 +365,16 @@ class DistributedWriteView(BaseNodeView):
                             setattr(dqm, stat_attr, val)
             dqm.save()
 
-        # save_results
-        dq_results = (
-            DistributedQueryResult(
-                distributed_query=dqm.distributed_query,
-                serial_number=self.machine.serial_number,
-                row=remove_null_character(row)
-            )
-            for dqm_pk, dqm in dqm_cache.items()
-            for row in results.get(dqm_pk, [])
-        )
-        while True:
-            batch = list(islice(dq_results, self.batch_size))
-            if not batch:
-                break
-            DistributedQueryResult.objects.bulk_create(batch, self.batch_size)
+        # post results to the queue, they are stored asynchronously by the preprocess workers.
+        # the decompressed request body size is an upper bound on the serialized size of each
+        # result set, so all of them can be posted inline when it is small enough.
+        inline_results = self.data_size <= DISTRIBUTED_QUERY_RESULT_INLINE_MAX_SIZE
+        for dqm_pk, dqm in dqm_cache.items():
+            dqm_results = results.get(dqm_pk)
+            if dqm_results:
+                post_distributed_query_result_rows(
+                    dqm.distributed_query_id, self.machine.serial_number, dqm_results, inline_results
+                )
 
         # process file carving
         for dqm_pk, dqm_results in results.items():

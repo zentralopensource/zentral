@@ -6,6 +6,41 @@
 
 To activate the osquery module, you need to add a `zentral.contrib.osquery` section to the `apps` section in `base.json`.
 
+### Distributed query result store
+
+The distributed query results are posted to the queue by the `distributed_write` endpoint, and stored asynchronously by the preprocess workers. Small result sets are posted inline. Larger ones are written to the default Django storage under the `osquery/distributed_query_results/` prefix, and only referenced in the queue messages, to stay within the broker message size limits. The files are deleted once the results are stored. It is recommended to set up a lifecycle policy on this prefix to remove the files that could be left over if the processing of some of the messages fails.
+
+By default, the results are stored in PostgreSQL. No configuration is required. To reduce the load on PostgreSQL, a ClickHouse store can be configured instead, with the optional `distributed_query_result_store` section:
+
+```json
+{
+  "apps": {
+    "zentral.contrib.osquery": {
+      "distributed_query_results_ttl_days": 90,
+      "distributed_query_result_store": {
+        "backend": "CLICKHOUSE",
+        "clickhouse_kwargs": {
+          "host": "clickhouse.example.com",
+          "username": "zentral",
+          "password": "{{ secret:ZENTRAL_CLICKHOUSE_PASSWORD }}",
+          "database": "zentral",
+          "table_name": "osquery_distributed_query_results"
+        }
+      }
+    }
+  }
+}
+```
+
+Only `host` is required in `clickhouse_kwargs`. `port` (default `8443`), `secure` (default `true`), `verify` (default `true`), `compress` (default `true`), `access_token`, `connect_timeout` and `send_receive_timeout` can also be set. The table is created automatically. Existing results are not migrated when switching backends.
+
+#### Results retention
+
+The `distributed_query_results_ttl_days` app setting (default `90`, minimum `1`) controls the results retention for both store backends:
+
+* In the ClickHouse store, it is applied as a table TTL: the results are automatically removed after that many days. The TTL is only applied when the table is created. To change it afterwards, use [`ALTER TABLE … MODIFY TTL`](https://clickhouse.com/docs/sql-reference/statements/alter/ttl) directly on the table.
+* In the PostgreSQL store, it is enforced by the `cleanup_osquery_distributed_query_results` management command, to be scheduled for example with a cron job. The command deletes the results of the runs that are no longer collecting results and were created more than that many days ago. Use the `--days` argument to override the app setting.
+
 ## HTTP API
 
 ### Requests
