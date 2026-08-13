@@ -106,7 +106,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name='incident',
             constraint=models.UniqueConstraint(
-                condition=models.Q(status__in={'REOPENED', 'OPEN', 'IN_PROGRESS'}),
+                condition=models.Q(status__in=('IN_PROGRESS', 'OPEN', 'REOPENED')),
                 fields=('incident_type', 'key'),
                 name='one_open_incident_per_incident_type_and_key'),
         ),

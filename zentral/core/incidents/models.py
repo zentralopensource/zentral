@@ -41,11 +41,13 @@ class Status(Enum):
 
     @classmethod
     def open_values(cls):
-        return {cls.OPEN.value, cls.IN_PROGRESS.value, cls.REOPENED.value}
+        # sorted tuple, not a set: used in migration-serialized constraint conditions,
+        # where the iteration order must not depend on the process hash seed
+        return (cls.IN_PROGRESS.value, cls.OPEN.value, cls.REOPENED.value)
 
     @classmethod
     def closed_values(cls):
-        return {cls.CLOSED.value, cls.RESOLVED.value}
+        return (cls.CLOSED.value, cls.RESOLVED.value)
 
     def next_statuses(self):
         if self == Status.OPEN or self == Status.REOPENED:

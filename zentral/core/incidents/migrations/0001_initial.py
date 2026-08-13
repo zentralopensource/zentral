@@ -47,10 +47,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='machineincident',
-            constraint=models.UniqueConstraint(condition=models.Q(status__in={'OPEN', 'IN_PROGRESS', 'REOPENED'}), fields=('incident', 'serial_number'), name='one_open_machine_incident_per_incident'),
+            constraint=models.UniqueConstraint(condition=models.Q(status__in=('IN_PROGRESS', 'OPEN', 'REOPENED')), fields=('incident', 'serial_number'), name='one_open_machine_incident_per_incident'),
         ),
         migrations.AddConstraint(
             model_name='incident',
-            constraint=models.UniqueConstraint(condition=models.Q(status__in={'OPEN', 'IN_PROGRESS', 'REOPENED'}), fields=('probe_source',), name='one_open_incident_per_probe'),
+            constraint=models.UniqueConstraint(condition=models.Q(status__in=('IN_PROGRESS', 'OPEN', 'REOPENED')), fields=('probe_source',), name='one_open_incident_per_probe'),
         ),
     ]
