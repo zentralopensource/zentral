@@ -12,6 +12,15 @@ logger = logging.getLogger("zentral.realms.backends.openidc")
 
 class OpenIDConnectRealmBackend(BaseBackend):
     name = "OpenID Connect"
+    kwargs_keys = (
+        "discovery_url",
+        "client_id",
+        "client_secret",
+        "extra_scopes",
+    )
+    encrypted_kwargs_paths = (
+        ["client_secret"],
+    )
 
     def ac_redirect_uri(self):
         "Authorization code flow redirect URI"
@@ -25,19 +34,16 @@ class OpenIDConnectRealmBackend(BaseBackend):
                              reverse("realms_public:login", args=(self.instance.uuid,)))
 
     def extra_attributes_for_display(self):
-        config = self.instance.config
         return [
-            ("Discovery URL", config.get("discovery_url"), False),
-            ("Client ID", config.get("client_id"), False),
-            ("Client secret", config.get("client_secret"), True),
+            ("Discovery URL", self.discovery_url, False),
+            ("Client ID", self.client_id, False),
+            ("Client secret", self.client_secret, True),
             ("Authorization code flow redirect URI", self.ac_redirect_uri(), False),
             ("IdP-initiated login URI", self.idp_initiated_login_uri(), False),
         ]
 
     def initialize_session(self, request, callback, **callback_kwargs):
-        config = self.instance.config
-
-        if not config.get("client_secret"):
+        if not self.client_secret:
             # PKCE
             code_challenge, code_verifier = generate_pkce_codes()
             backend_state = {"code_verifier": code_verifier}
@@ -59,22 +65,21 @@ class OpenIDConnectRealmBackend(BaseBackend):
         self._add_ras_to_session(request, ras)
 
         return build_authorization_code_flow_url(
-            config["discovery_url"],
-            config["client_id"],
+            self.discovery_url,
+            self.client_id,
             self.ac_redirect_uri(),
-            config["extra_scopes"],
+            self.extra_scopes,
             str(ras.pk),
             code_challenge
         )
 
     def update_or_create_realm_user(self, authorization_code, code_verifier):
-        config = self.instance.config
         claims = get_claims(
-            config["discovery_url"],
-            config["client_id"],
+            self.discovery_url,
+            self.client_id,
             self.ac_redirect_uri(),
             authorization_code,
-            config.get("client_secret"),
+            self.client_secret,
             code_verifier
         )
 

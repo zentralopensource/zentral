@@ -60,6 +60,7 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             response.json(),
             [{'uuid': str(realm.pk),
               'name': realm.name,
+              'description': '',
               'backend': 'ldap',
               'ldap_config': {
                   "host": "ldap.example.com",
@@ -94,6 +95,7 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             response.json(),
             [{'uuid': str(realm.pk),
               'name': realm.name,
+              'description': '',
               'backend': 'saml',
               'ldap_config': None,
               'openidc_config': None,
@@ -137,6 +139,7 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             response.json(),
             {'uuid': str(realm.pk),
              'name': realm.name,
+             'description': '',
              'backend': 'openidc',
              'ldap_config': None,
              'openidc_config': {

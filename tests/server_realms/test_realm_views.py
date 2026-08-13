@@ -179,11 +179,30 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, payload["name"])
         realm = Realm.objects.get(name=payload["name"])
         self.assertEqual(realm.username_claim, payload["username_claim"])
+        # the bind password is not stored in cleartext
+        self.assertNotEqual(realm.backend_kwargs["bind_password"], payload["bind_password"])
+        config = realm.get_backend_kwargs()
         for k in ("host", "bind_dn", "bind_password", "users_base_dn"):
-            self.assertEqual(realm.config[k], payload[k])
+            self.assertEqual(config[k], payload[k])
             self.assertContains(response, payload[k])
         get_ldap_connection.assert_called_once_with(payload["host"])
         conn.simple_bind_s.assert_called_once_with(payload["bind_dn"], payload["bind_password"])
+
+    @patch("realms.backends.ldap.forms.get_ldap_connection")
+    def test_create_ldap_realm_post_duplicate_name(self, get_ldap_connection):
+        conn = Mock()
+        get_ldap_connection.return_value = conn
+        realm = force_realm()
+        self.login("realms.add_realm")
+        payload = {
+            k: get_random_string(12)
+            for k in ("username_claim", "host", "bind_dn", "bind_password", "users_base_dn")
+        }
+        payload["name"] = realm.name
+        response = self.client.post(reverse("realms:create", args=("ldap",)), payload, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_form.html")
+        self.assertFormError(response.context["form"], "name", "Realm with this Name already exists.")
 
     def test_create_openidc_realm_post(self):
         self.login("realms.change_realm", "realms.view_realm")
@@ -204,10 +223,13 @@ class RealmViewsTestCase(TestCase, LoginCase):
         realm = Realm.objects.get(name=payload["name"])
         self.assertEqual(realm.login_session_expiry, payload["login_session_expiry"])
         self.assertEqual(realm.username_claim, payload["username_claim"])
+        # the client secret is not stored in cleartext
+        self.assertNotEqual(realm.backend_kwargs["client_secret"], payload["client_secret"])
+        config = realm.get_backend_kwargs()
         for k in ("discovery_url", "client_id", "client_secret"):
-            self.assertEqual(realm.config[k], payload[k])
+            self.assertEqual(config[k], payload[k])
             self.assertContains(response, payload[k])
-        self.assertEqual(realm.config["extra_scopes"], ["un", "deux"])
+        self.assertEqual(config["extra_scopes"], ["un", "deux"])
 
     def test_create_saml_realm_post_could_not_read_saml_metadata_file(self):
         self.login("realms.change_realm", "realms.view_realm")
@@ -249,8 +271,8 @@ class RealmViewsTestCase(TestCase, LoginCase):
         realm = Realm.objects.get(name=payload["name"])
         self.assertEqual(realm.login_session_expiry, payload["login_session_expiry"])
         self.assertEqual(realm.username_claim, payload["username_claim"])
-        self.assertEqual(realm.config["idp_metadata"], "yolo")
-        self.assertEqual(realm.config["allow_idp_initiated_login"], True)
+        self.assertEqual(realm.backend_kwargs["idp_metadata"], "yolo")
+        self.assertEqual(realm.backend_kwargs["allow_idp_initiated_login"], True)
 
     @patch("realms.backends.saml.forms.Saml2Client.prepare_for_authenticate")
     @patch("realms.backends.saml.forms.Saml2Config.load")
@@ -341,6 +363,43 @@ class RealmViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("realms:update", args=(realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_form.html")
+        # the decrypted bind password is used as initial value
+        self.assertEqual(response.context["form"].fields["bind_password"].initial, "yolo")
+
+    def test_update_openidc_realm_get(self):
+        realm = force_realm(backend="openidc")
+        self.login("realms.change_realm")
+        response = self.client.get(reverse("realms:update", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_form.html")
+        form = response.context["form"]
+        # the decrypted client secret is used as initial value
+        self.assertEqual(form.fields["client_secret"].initial, "fomo")
+        self.assertEqual(form.fields["extra_scopes"].initial, "profile")
+
+    def test_update_saml_realm_get(self):
+        realm = force_realm(backend="saml")
+        self.login("realms.change_realm")
+        response = self.client.get(reverse("realms:update", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_form.html")
+        self.assertIsNone(response.context["form"].fields["allow_idp_initiated_login"].initial)
+
+    def test_update_saml_realm_post_no_metadata_file(self):
+        realm = force_realm(backend="saml")
+        self.login("realms.change_realm", "realms.view_realm")
+        payload = {
+            "name": get_random_string(12),
+            "username_claim": realm.username_claim,
+        }
+        response = self.client.post(reverse("realms:update", args=(realm.pk,)), payload, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realm_detail.html")
+        realm.refresh_from_db()
+        self.assertEqual(realm.name, payload["name"])
+        # the existing IdP metadata and relay state are preserved
+        self.assertEqual(realm.backend_kwargs["idp_metadata"], "<md></md>")
+        self.assertEqual(realm.backend_kwargs["default_relay_state"], "29eb0205-3572-4901-b773-fc82bef847ef")
 
     @patch("realms.backends.ldap.forms.get_ldap_connection")
     def test_update_realm_post(self, get_ldap_connection):
@@ -359,8 +418,11 @@ class RealmViewsTestCase(TestCase, LoginCase):
         realm.refresh_from_db()
         self.assertEqual(realm.name, payload["name"])
         self.assertContains(response, payload["name"])
+        # the bind password is not stored in cleartext
+        self.assertNotEqual(realm.backend_kwargs["bind_password"], payload["bind_password"])
+        config = realm.get_backend_kwargs()
         for k in ("host", "bind_dn", "bind_password", "users_base_dn"):
-            self.assertEqual(realm.config[k], payload[k])
+            self.assertEqual(config[k], payload[k])
             self.assertContains(response, payload[k])
         get_ldap_connection.assert_called_once_with(payload["host"])
         conn.simple_bind_s.assert_called_once_with(payload["bind_dn"], payload["bind_password"])
