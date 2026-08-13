@@ -590,7 +590,7 @@ class ACMECredentialView(CertCredentialView):
         if not acme:
             raise SuspiciousOperation("Device not ACME compatible")
         get_cached_cert_issuer_backend(self.object.acme_issuer).update_acme_payload(
-            cert_payload, hardware_bound, attest, self.enrollment_session
+            cert_payload, hardware_bound, attest, self.enrollment_session, self.enrolled_user
         )
 
 
@@ -601,7 +601,7 @@ class SCEPCredentialView(CertCredentialView):
         if not self.object.scep_issuer:
             raise SuspiciousOperation("Certificate Asset without SCEP issuer")
         get_cached_cert_issuer_backend(self.object.scep_issuer).update_scep_payload(
-            cert_payload, self.enrollment_session
+            cert_payload, self.enrollment_session, self.enrolled_user
         )
 
 

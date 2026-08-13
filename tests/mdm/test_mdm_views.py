@@ -24,6 +24,7 @@ from realms.models import RealmGroup, RealmUserGroupMembership
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.apps_books import get_otf_association_cache_key
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
+from zentral.contrib.mdm.cert_issuer_backends.static_challenge import StaticChallenge
 from zentral.contrib.mdm.commands import (
     CustomCommand,
     DeviceLock,
@@ -2960,7 +2961,12 @@ class MDMViewsTestCase(TestCase):
         token = dump_cert_asset_token(
             session, Target(session.enrolled_device, enrolled_user), artifact_version.pk
         )
-        response = self.client.get(reverse("mdm_public:acme_credential", args=(token,)))
+        with patch(
+            "zentral.contrib.mdm.cert_issuer_backends.static_challenge.StaticChallenge.update_acme_payload",
+            autospec=True,
+            side_effect=StaticChallenge.update_acme_payload,
+        ) as update_acme_payload:
+            response = self.client.get(reverse("mdm_public:acme_credential", args=(token,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Content-Type"], "application/json")
         self.assertEqual(
@@ -2980,6 +2986,10 @@ class MDMViewsTestCase(TestCase):
                 "UsageFlags": 1,
             },
         )
+        update_acme_payload.assert_called_once()
+        _, _, _, _, req_enrollment_session, req_enrolled_user = update_acme_payload.call_args.args
+        self.assertEqual(req_enrollment_session, session)
+        self.assertEqual(req_enrolled_user, enrolled_user)
 
     # scep credential download view
 
@@ -3065,7 +3075,12 @@ class MDMViewsTestCase(TestCase):
         token = dump_cert_asset_token(
             session, Target(session.enrolled_device, enrolled_user), artifact_version.pk
         )
-        response = self.client.get(reverse("mdm_public:scep_credential", args=(token,)))
+        with patch(
+            "zentral.contrib.mdm.cert_issuer_backends.static_challenge.StaticChallenge.update_scep_payload",
+            autospec=True,
+            side_effect=StaticChallenge.update_scep_payload,
+        ) as update_scep_payload:
+            response = self.client.get(reverse("mdm_public:scep_credential", args=(token,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Content-Type"], "application/json")
         scep_issuer = artifact_version.cert_asset.scep_issuer
@@ -3087,6 +3102,10 @@ class MDMViewsTestCase(TestCase):
                 "URL": scep_issuer.url,
             },
         )
+        update_scep_payload.assert_called_once()
+        _, _, req_enrollment_session, req_enrolled_user = update_scep_payload.call_args.args
+        self.assertEqual(req_enrollment_session, session)
+        self.assertEqual(req_enrolled_user, enrolled_user)
 
     # data asset download view
 
