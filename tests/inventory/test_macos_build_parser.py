@@ -1,6 +1,11 @@
 from unittest import TestCase
-from zentral.contrib.inventory.conf import (is_apple_os, macos_version_from_build,
-                                            os_version_display, os_version_version_display)
+
+from zentral.contrib.inventory.conf import (
+    is_apple_os,
+    macos_version_from_build,
+    os_version_display,
+    os_version_version_display,
+)
 
 
 class MacOSBuildTestCase(TestCase):
@@ -155,6 +160,7 @@ class MacOSBuildTestCase(TestCase):
            ("25E253", ("macOS", 26, 4, 1, None), "macOS 26.4.1 (25E253)"),
            ("25F80", ("macOS", 26, 5, 1, None), "macOS 26.5.1 (25F80)"),
            ("25F84", ("macOS", 26, 5, 2, None), "macOS 26.5.2 (25F84)"),
+           ("25G76", ("macOS", 26, 6, 1, None), "macOS 26.6.1 (25G76)"),
         ):
             expected_version_d = {
                 "name": name,
