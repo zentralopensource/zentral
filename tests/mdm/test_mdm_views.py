@@ -271,6 +271,13 @@ class MDMViewsTestCase(TestCase):
         for k, v in kwargs.items():
             self.assertEqual(last_event.payload.get(k), v)
 
+    def _assertWarning(self, post_event, **kwargs):
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, MDMRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        for k, v in kwargs.items():
+            self.assertEqual(last_event.payload.get(k), v)
+
     def _assert_sync_tokens(self, actual, expected):
         iso_8601 = "%Y-%m-%dT%H:%M:%SZ"
         actual_datetime = datetime.strptime(actual["SyncTokens"]["Timestamp"], iso_8601)
@@ -723,10 +730,26 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
         payload = {
             "UDID": udid,
-            "MessageType": "UserAutenticate",
+            "MessageType": "UserAuthenticate",
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 410)
+        self._assertWarning(post_event, user_id=None)
+
+    def test_user_channel_user_authenticate(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        self.assertEqual(session.status, DEPEnrollmentSession.COMPLETED)
+        user_id = str(uuid.uuid4())
+        payload = {
+            "UDID": udid,
+            "UserID": user_id,  # → User channel
+            "MessageType": "UserAuthenticate",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 410)
+        self._assertWarning(post_event, user_id=user_id)
 
     # checkin - token update
 

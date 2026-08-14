@@ -465,8 +465,9 @@ class CheckinView(MDMView):
         # route the payload
         if self.message_type == "Authenticate":
             self.do_authenticate()
-        elif self.message_type == "UserAutenticate":
+        elif self.message_type == "UserAuthenticate":
             # TODO: network / mobile user management
+            # 410 tells the client we will not manage this user for the duration of the login session
             self.post_event("warning", user_id=self.enrolled_user_id)
             return HttpResponse(status=410)
         elif self.message_type == "TokenUpdate":
