@@ -24,11 +24,19 @@ class OIDCAPITokenIssuerMixin(PermissionRequiredMixin):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["service_account"] = self.service_account
+        ctx["can_manage_oidc_api_token_issuers"] = self.request.user.can_issue_credentials_for(self.service_account)
         return ctx
 
 
 class OIDCAPITokenIssuerFormMixin(OIDCAPITokenIssuerMixin):
     form_class = OIDCAPITokenIssuerForm
+
+    def has_permission(self):
+        # create and update only, deleting an issuer is not an escalation
+        return (
+            super().has_permission()
+            and self.request.user.can_issue_credentials_for(self.service_account)
+        )
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

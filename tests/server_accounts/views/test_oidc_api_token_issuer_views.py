@@ -4,7 +4,9 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
-from accounts.models import OIDCAPITokenIssuer, User
+from accounts.models import OIDCAPITokenIssuer, Policy, User
+from pbac.engine import engine
+from pbac.entities import Entity
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
 
@@ -46,6 +48,36 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
             issuer_uri="https://issuer.zentral.com",
             name=get_random_string(12),
             user=self.service_account,
+        )
+
+    def _put_service_account_out_of_reach(self):
+        """Give the service account a role the UI user doesn't have."""
+        group = Group.objects.create(name=get_random_string(12))
+        self.service_account.groups.add(group)
+        return group
+
+    def _promote_ui_user_to_superuser(self):
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+
+    def _issuer_form_payload(self):
+        return {"audience": get_random_string(12),
+                "issuer_uri": "https://accounts.google.com",
+                "max_validity": 600,
+                "name": get_random_string(12)}
+
+    def _force_policy_naming_service_account(self, is_active=True):
+        # separate policy: set_policy() overwrites the one carrying the perms
+        return Policy.objects.create(
+            name=get_random_string(12),
+            is_active=is_active,
+            source=(
+                'permit (\n'
+                f'  principal == {Entity("ServiceAccount", str(self.service_account.pk))},\n'
+                f'  action in [{engine.legacy_perm_actions["accounts.view_user"]}],\n'
+                '  resource\n'
+                ');'
+            ),
         )
 
     # user detail
@@ -387,6 +419,147 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    # role boundary
+
+    def test_create_issuer_service_account_with_ungrantable_role_permission_denied(self):
+        self._put_service_account_out_of_reach()
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_issuer_service_account_with_ungrantable_role_post_permission_denied(self):
+        self._put_service_account_out_of_reach()
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.post(
+            self.build_url("create_oidc_api_token_issuer", self.service_account.pk),
+            self._issuer_form_payload(),
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
+
+    def test_create_issuer_service_account_with_shared_role(self):
+        self.service_account.groups.add(self.ui_group)
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
+        self.assertEqual(response.status_code, 200)
+
+    def test_create_issuer_service_account_with_ungrantable_role_superuser(self):
+        self._put_service_account_out_of_reach()
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
+        self.assertEqual(response.status_code, 200)
+
+    def test_create_issuer_service_account_named_by_policy_permission_denied(self):
+        # its privileges no longer follow from its roles
+        self._force_policy_naming_service_account()
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_issuer_service_account_named_by_inactive_policy_permission_denied(self):
+        # a disabled grant is one superuser away from being live
+        self._force_policy_naming_service_account(is_active=False)
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_issuer_service_account_named_by_policy_superuser(self):
+        self._force_policy_naming_service_account()
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
+        self.assertEqual(response.status_code, 200)
+
+    def test_update_issuer_service_account_with_ungrantable_role_permission_denied(self):
+        issuer = self._force_issuer()
+        self._put_service_account_out_of_reach()
+        self.login("accounts.change_oidcapitokenissuer")
+        response = self.client.get(self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk))
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_issuer_service_account_with_ungrantable_role_post_permission_denied(self):
+        # repointing at a provider the requester controls is the escalation
+        issuer = self._force_issuer()
+        self._put_service_account_out_of_reach()
+        self.login("accounts.change_oidcapitokenissuer")
+        response = self.client.post(
+            self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+            self._issuer_form_payload(),
+        )
+        self.assertEqual(response.status_code, 403)
+        issuer.refresh_from_db()
+        self.assertEqual(issuer.issuer_uri, "https://issuer.zentral.com")
+
+    def test_view_issuer_service_account_with_ungrantable_role_allowed(self):
+        # reading an issuer grants nothing
+        issuer = self._force_issuer()
+        self._put_service_account_out_of_reach()
+        self.login("accounts.view_oidcapitokenissuer")
+        response = self.client.get(self.build_url("oidc_api_token_issuer", self.service_account.pk, issuer.pk))
+        self.assertEqual(response.status_code, 200)
+
+    def test_delete_issuer_service_account_with_ungrantable_role_allowed(self):
+        # revoking is not escalating
+        issuer = self._force_issuer()
+        self._put_service_account_out_of_reach()
+        self.login("accounts.delete_oidcapitokenissuer", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(pk=issuer.pk).exists())
+
+    def test_service_account_detail_hides_write_links_when_out_of_reach(self):
+        issuer = self._force_issuer()
+        self._put_service_account_out_of_reach()
+        self.login(
+            "accounts.add_oidcapitokenissuer",
+            "accounts.change_oidcapitokenissuer",
+            "accounts.delete_oidcapitokenissuer",
+            "accounts.view_oidcapitokenissuer",
+            "accounts.view_user",
+        )
+        response = self.client.get(self.service_account.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response,
+            self.build_url("create_oidc_api_token_issuer", self.service_account.pk),
+        )
+        self.assertNotContains(
+            response,
+            self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+        )
+        self.assertContains(
+            response,
+            self.build_url("oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+        )
+        self.assertContains(
+            response,
+            self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+        )
+
+    def test_view_issuer_hides_update_link_when_out_of_reach(self):
+        issuer = self._force_issuer()
+        self._put_service_account_out_of_reach()
+        self.login(
+            "accounts.change_oidcapitokenissuer",
+            "accounts.delete_oidcapitokenissuer",
+            "accounts.view_oidcapitokenissuer",
+        )
+        response = self.client.get(self.build_url("oidc_api_token_issuer", self.service_account.pk, issuer.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response,
+            self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+        )
+        self.assertContains(
+            response,
+            self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+        )
 
     # delete OIDC API token issuer
 

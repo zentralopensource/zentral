@@ -2,9 +2,12 @@ from datetime import datetime
 from unittest.mock import patch
 from uuid import uuid4
 
-from accounts.models import APIToken, OIDCAPITokenIssuer, User
+from accounts.models import APIToken, OIDCAPITokenIssuer, Policy, User
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from pbac.engine import engine
+from pbac.entities import Entity
 from rest_framework import serializers
 
 from tests.zentral_test_utils.zentral_api_test_case import ZentralAPITestCase
@@ -464,3 +467,110 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    # role boundary
+    #
+    # The requester here is self.service_account.
+
+    def _create_out_of_reach_service_account(self):
+        service_account = User.objects.create(
+            username=get_random_string(12),
+            email="{}@zentral.io".format(get_random_string(12)),
+            is_service_account=True,
+        )
+        service_account.groups.set([Group.objects.create(name=get_random_string(12))])
+        return service_account
+
+    def _issuer_payload(self, user, **kwargs):
+        payload = {
+            "user": user.pk,
+            "name": get_random_string(12),
+            "issuer_uri": "https://accounts.google.com",
+            "audience": f"aud-{get_random_string(10)}",
+            "max_validity": 60,
+        }
+        payload.update(kwargs)
+        return payload
+
+    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
+    def test_create_token_issuer_ungrantable_role(self, get_openid_configuration_from_issuer_uri):
+        service_account = self._create_out_of_reach_service_account()
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuers"),
+            data=self._issuer_payload(service_account),
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(
+            response.json(),
+            {"user": ["You cannot issue API tokens for this service account."]},
+        )
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=service_account).exists())
+
+    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
+    def test_create_token_issuer_service_account_named_by_policy(self, get_openid_configuration_from_issuer_uri):
+        # separate policy: set_permissions() overwrites the one carrying the perms
+        Policy.objects.create(
+            name=get_random_string(12),
+            source=(
+                'permit (\n'
+                f'  principal == {Entity("ServiceAccount", str(self.service_account.pk))},\n'
+                f'  action in [{engine.legacy_perm_actions["accounts.view_user"]}],\n'
+                '  resource\n'
+                ');'
+            ),
+        )
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuers"),
+            data=self._issuer_payload(self.service_account),
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(
+            response.json(),
+            {"user": ["You cannot issue API tokens for this service account."]},
+        )
+
+    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
+    def test_update_token_issuer_ungrantable_role(self, get_openid_configuration_from_issuer_uri):
+        # repointing an out-of-reach issuer is the escalation
+        service_account = self._create_out_of_reach_service_account()
+        issuer = self._create_token_issuer(user=service_account)
+        self.set_permissions("accounts.change_oidcapitokenissuer")
+        response = self.put(
+            reverse("accounts_api:oidc_api_token_issuer", args=(issuer.pk,)),
+            self._issuer_payload(service_account, issuer_uri="https://issuer.example.com"),
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(
+            response.json(),
+            {"user": ["You cannot issue API tokens for this service account."]},
+        )
+        issuer.refresh_from_db()
+        self.assertEqual(issuer.issuer_uri, "https://accounts.google.com")
+
+    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
+    def test_update_token_issuer_to_ungrantable_role(self, get_openid_configuration_from_issuer_uri):
+        service_account = self._create_out_of_reach_service_account()
+        self.set_permissions("accounts.change_oidcapitokenissuer")
+        response = self.put(
+            reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)),
+            self._issuer_payload(service_account),
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(
+            response.json(),
+            {"user": ["You cannot issue API tokens for this service account."]},
+        )
+        self.issuer.refresh_from_db()
+        self.assertEqual(self.issuer.user, self.service_account)
+
+    def test_delete_token_issuer_ungrantable_role(self):
+        # revoking is not escalating
+        service_account = self._create_out_of_reach_service_account()
+        issuer = self._create_token_issuer(user=service_account)
+        self.set_permissions("accounts.delete_oidcapitokenissuer")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse("accounts_api:oidc_api_token_issuer", args=(issuer.pk,)))
+        self.assertEqual(response.status_code, 204, response.data)
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(pk=issuer.pk).exists())

@@ -78,6 +78,9 @@ class UserView(PermissionRequiredMixin, DetailView):
         ctx["group_count"] = groups.count()
         ctx["oidc_api_token_issuers"] = self.object.oidcapitokenissuer_set.all()
         ctx["oidc_api_token_issuer_count"] = ctx["oidc_api_token_issuers"].count()
+        ctx["can_manage_oidc_api_token_issuers"] = (
+            self.object.is_service_account and self.request.user.can_issue_credentials_for(self.object)
+        )
         ctx["tokens"] = self.object.apitoken_set.all()
         ctx["token_count"] = ctx["tokens"].count()
         ctx["can_delete_token"] = (

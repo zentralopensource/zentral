@@ -1,5 +1,5 @@
 {% load ui_extras %}
-{% if perms.accounts.add_oidcapitokenissuer %}
+{% if perms.accounts.add_oidcapitokenissuer and can_manage_oidc_api_token_issuers %}
     <div class="d-flex flex-row-reverse">
         <a class="btn btn-link"
            href="{% url 'accounts:create_oidc_api_token_issuer' user.pk %}"
@@ -22,7 +22,7 @@
                 <td><a href="{{ issuer.get_absolute_url }}">{{ issuer.name }}</a></td>
                 <td>{{ issuer.issuer_uri }}</td>
                 <td class="text-center">
-                    {% if perms.accounts.change_oidcapitokenissuer %}
+                    {% if perms.accounts.change_oidcapitokenissuer and can_manage_oidc_api_token_issuers %}
                         {% url 'accounts:update_oidc_api_token_issuer' user.pk issuer.id as url %}
                         {% button 'UPDATE' url "Update OIDC API token issuer" %}
                     {% endif %}

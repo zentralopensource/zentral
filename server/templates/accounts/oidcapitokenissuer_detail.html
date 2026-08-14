@@ -16,7 +16,7 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">OIDC API token issuer</h3>
         <div class="ms-auto">
-            {% if perms.accounts.change_oidcapitokenissuer %}
+            {% if perms.accounts.change_oidcapitokenissuer and can_manage_oidc_api_token_issuers %}
                 {% url 'accounts:update_oidc_api_token_issuer' object.user.pk object.pk as url %}
                 {% button 'UPDATE' url "Update OIDC API token issuer" %}
             {% endif %}

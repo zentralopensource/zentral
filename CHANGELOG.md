@@ -126,6 +126,10 @@ In the result of `/api/mdm/dep/virtual_servers/<int:pk>/sync_devices/`, `operati
 
 The identical records of a status log upload are collapsed into one event carrying a `count`. Sum `count` instead of counting the events to get the number of lines the clients sent.
 
+#### 🧨 Privilege escalation hardening — OIDC API token issuers
+
+An issuer mints API tokens for its service account, so adding or changing one now requires the requester to hold every role of that account — otherwise the permission was a way around the rule that a non-superuser cannot grant a role they don't hold. Viewing and deleting issuers are unaffected. A service account a PBAC policy names directly — `ServiceAccount::"<pk>"`, active or not — is superuser-only; move those grants to a role to delegate it again.
+
 
 ### Bug fixes
 

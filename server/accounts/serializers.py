@@ -87,6 +87,12 @@ class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):
         ):
             self.fields[attr].validators.append(validator_constructor(serializers.ValidationError))
 
+    def validate_user(self, value):
+        # PUT always carries the user, so this covers the updates too
+        if not self.context["request"].user.can_issue_credentials_for(value):
+            raise serializers.ValidationError("You cannot issue API tokens for this service account.")
+        return value
+
 
 class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):
     jwt = serializers.CharField()
