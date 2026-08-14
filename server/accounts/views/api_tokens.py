@@ -23,7 +23,12 @@ class CreateUserAPITokenView(LoginRequiredMixin, CreateView):
         self.user = User.objects.get(pk=kwargs['user_pk'])
         if (
             self.user != self.request.user
-            and (not self.user.is_service_account or not self.request.user.has_perms(("accounts.add_apitoken",)))
+            and (
+                not self.user.is_service_account
+                or not self.request.user.has_perms(("accounts.add_apitoken",))
+                # the response shows the secret
+                or not self.request.user.can_issue_credentials_for(self.user)
+            )
         ):
             raise PermissionDenied("Not allowed")
 
@@ -73,7 +78,12 @@ class UpdateUserAPITokenView(LoginRequiredMixin, UpdateViewWithAudit):
         self.user = User.objects.get(pk=kwargs['user_pk'])
         if (
             self.user != self.request.user
-            and (not self.user.is_service_account or not self.request.user.has_perms(("accounts.change_apitoken",)))
+            and (
+                not self.user.is_service_account
+                or not self.request.user.has_perms(("accounts.change_apitoken",))
+                # no secret here, but pushing the expiry out keeps the credential alive
+                or not self.request.user.can_issue_credentials_for(self.user)
+            )
         ):
             raise PermissionDenied("Not allowed")
         self.token = get_object_or_404(APIToken, user=self.user, id=kwargs["pk"])

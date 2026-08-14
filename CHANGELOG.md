@@ -130,6 +130,10 @@ The identical records of a status log upload are collapsed into one event carryi
 
 An issuer mints API tokens for its service account, so adding or changing one now requires the requester to hold every role of that account — otherwise the permission was a way around the rule that a non-superuser cannot grant a role they don't hold. Viewing and deleting issuers are unaffected. A service account a PBAC policy names directly — `ServiceAccount::"<pk>"`, active or not — is superuser-only; move those grants to a role to delegate it again.
 
+#### 🧨 Privilege escalation hardening — service account API tokens
+
+Creating or updating a service account's API token now requires the requester to hold every role of that account, like the issuers above. Deleting a token is unaffected, and so are your own tokens.
+
 
 ### Bug fixes
 

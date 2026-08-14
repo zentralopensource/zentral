@@ -78,9 +78,11 @@ class UserView(PermissionRequiredMixin, DetailView):
         ctx["group_count"] = groups.count()
         ctx["oidc_api_token_issuers"] = self.object.oidcapitokenissuer_set.all()
         ctx["oidc_api_token_issuer_count"] = ctx["oidc_api_token_issuers"].count()
-        ctx["can_manage_oidc_api_token_issuers"] = (
+        # gates the add and change flags below, not the delete one
+        can_issue_credentials = (
             self.object.is_service_account and self.request.user.can_issue_credentials_for(self.object)
         )
+        ctx["can_manage_oidc_api_token_issuers"] = can_issue_credentials
         ctx["tokens"] = self.object.apitoken_set.all()
         ctx["token_count"] = ctx["tokens"].count()
         ctx["can_delete_token"] = (
@@ -88,11 +90,11 @@ class UserView(PermissionRequiredMixin, DetailView):
         )
         ctx["can_change_token"] = (
             self.object == self.request.user
-            or (self.object.is_service_account and self.request.user.has_perm("accounts.change_apitoken"))
+            or (can_issue_credentials and self.request.user.has_perm("accounts.change_apitoken"))
         )
         ctx["can_add_token"] = (
             self.object == self.request.user
-            or (self.object.is_service_account and self.request.user.has_perm("accounts.add_apitoken"))
+            or (can_issue_credentials and self.request.user.has_perm("accounts.add_apitoken"))
         )
         ctx["verification_devices"] = self.object.get_verification_devices()
         ctx["verification_device_count"] = len(ctx["verification_devices"])

@@ -2,12 +2,14 @@ import uuid
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, Policy, User
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from pbac.engine import engine
+from pbac.entities import Entity
 
 from tests.server_accounts.utils import force_user_token
 from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
@@ -414,3 +416,113 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"accounts_api_token": [str(token.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    # role boundary
+
+    def _put_service_account_out_of_reach(self):
+        """Give the service account a role the UI user doesn't have."""
+        group = Group.objects.create(name=get_random_string(12))
+        self.service_account.groups.add(group)
+        return group
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_api_token_service_account_with_ungrantable_role(self, post_event):
+        """Refused when the service account holds a role the user does not have."""
+        self._put_service_account_out_of_reach()
+        self.login("accounts.view_user", "accounts.add_apitoken")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:create_user_api_token", args=(self.service_account.id,)), follow=True)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(APIToken.objects.filter(user=self.service_account).count(), 0)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
+
+    def test_create_api_token_service_account_with_shared_role(self):
+        """The requester holds every role of the service account."""
+        self.service_account.groups.add(self.ui_group)
+        self.login("accounts.view_user", "accounts.add_apitoken")
+        response = self.client.get(
+            reverse("accounts:create_user_api_token", args=(self.service_account.id,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+
+    def test_create_api_token_service_account_with_ungrantable_role_superuser(self):
+        """Superusers are unrestricted."""
+        self._put_service_account_out_of_reach()
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+        self.login("accounts.view_user", "accounts.add_apitoken")
+        response = self.client.get(
+            reverse("accounts:create_user_api_token", args=(self.service_account.id,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+
+    def test_create_api_token_service_account_named_by_policy(self):
+        """Its privileges no longer follow from its roles."""
+        # separate policy: set_permissions() overwrites the one carrying the perms
+        Policy.objects.create(
+            name=get_random_string(12),
+            source=(
+                'permit (\n'
+                f'  principal == {Entity("ServiceAccount", str(self.service_account.pk))},\n'
+                f'  action in [{engine.legacy_perm_actions["accounts.view_user"]}],\n'
+                '  resource\n'
+                ');'
+            ),
+        )
+        self.login("accounts.view_user", "accounts.add_apitoken")
+        response = self.client.post(
+            reverse("accounts:create_user_api_token", args=(self.service_account.id,)), follow=True)
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_api_token_self_with_ungrantable_role(self):
+        """Own tokens are never gated."""
+        self.ui_user.groups.add(Group.objects.create(name=get_random_string(12)))
+        self.login()
+        response = self.client.post(
+            reverse("accounts:create_user_api_token", args=(self.ui_user.id,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+
+    def test_update_api_token_service_account_with_ungrantable_role(self):
+        """Pushing the expiry out keeps a credential alive, so it is gated the same way."""
+        _, token = force_user_token(self.service_account)
+        self._put_service_account_out_of_reach()
+        self.login("accounts.view_user", "accounts.change_apitoken")
+        response = self.client.post(
+            reverse("accounts:update_user_api_token", args=(self.service_account.id, token.id)), follow=True)
+        self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_api_token_service_account_with_ungrantable_role(self, post_event):
+        """Revoking is not escalating — same asymmetry as the role-grant rule."""
+        token, _ = APIToken.objects.create_for_user(self.service_account)
+        self._put_service_account_out_of_reach()
+        self.login("accounts.view_user", "accounts.delete_apitoken")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("accounts:delete_user_api_token", args=(self.service_account.id, token.id)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(APIToken.objects.filter(user=self.service_account).count(), 0)
+
+    def test_service_account_detail_hides_token_write_links_when_out_of_reach(self):
+        _, token = force_user_token(self.service_account)
+        self._put_service_account_out_of_reach()
+        self.login(
+            "accounts.add_apitoken",
+            "accounts.change_apitoken",
+            "accounts.delete_apitoken",
+            "accounts.view_apitoken",
+            "accounts.view_user",
+        )
+        response = self.client.get(self.service_account.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_add_token"])
+        self.assertFalse(response.context["can_change_token"])
+        self.assertTrue(response.context["can_delete_token"])
+        self.assertNotContains(
+            response, reverse("accounts:create_user_api_token", args=(self.service_account.pk,)))
+        self.assertNotContains(
+            response,
+            reverse("accounts:update_user_api_token", args=(self.service_account.pk, token.pk)))
+        self.assertContains(
+            response,
+            reverse("accounts:delete_user_api_token", args=(self.service_account.pk, token.pk)))
