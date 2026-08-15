@@ -91,27 +91,14 @@ class BasePackageBuilder(object):
 
 
 class ProductArchiveBuilder(BasePackageBuilder):
-    def __init__(self, title, product_archive=None):
+    def __init__(self, title):
         super().__init__()
         self.title = title
         self.package_name = "{}.pkg".format("_".join(s.lower() for s in self.title.split()))
         self.distribution = os.path.join(self.builddir, "Distribution")
         os.makedirs(self.builddir)
-        if product_archive:
-            self._extract_xar_archive(product_archive, self.builddir)
-            self._init_distribution()
-        else:
-            self._build_empty_distribution()
+        self._build_empty_distribution()
         self.package_dir = self.builddir
-
-    def _init_distribution(self):
-        tree = ET.parse(self.distribution)
-        title = tree.find("title")
-        title.text = self.title
-        tree.write(self.distribution, encoding="utf-8", xml_declaration=True)
-        for pkg_ref in tree.findall(".//pkg-ref[@version]"):
-            self.pkg_refs.append({"id": pkg_ref.get("id"),
-                                  "version": pkg_ref.get("version")})
 
     def get_host_architectures(self):
         # default to universal packages
@@ -222,13 +209,6 @@ class ProductArchiveBuilder(BasePackageBuilder):
         # Update pkg-refs
         self.pkg_refs.append({"id": pkg_identifier, "version": pkg_version})
 
-    def remove_pkg_ref_on_conclusion(self, pkg_ref_id):
-        tree = ET.parse(self.distribution)
-        root = tree.getroot()
-        for pkg_ref in root.findall('.//pkg-ref[@id="{}"]'.format(pkg_ref_id)):
-            pkg_ref.attrib.pop("onConclusion", None)
-        tree.write(self.distribution, encoding='utf-8', xml_declaration=True)
-
 
 def get_tls_hostname(for_client_cert_auth=False):
     if for_client_cert_auth:
@@ -329,9 +309,6 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
     def extra_build_steps(self):
         pass
 
-    def get_product_archive(self):
-        return None
-
     def get_product_archive_title(self):
         return None
 
@@ -353,12 +330,11 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
         self._build_bom()
 
         product_archive_title = self.get_product_archive_title()
-        product_archive = self.get_product_archive()
         extra_packages = self.get_extra_packages()
 
-        if product_archive_title or product_archive or extra_packages:
+        if product_archive_title or extra_packages:
             # build a product archive
-            builder = ProductArchiveBuilder(product_archive_title, product_archive)
+            builder = ProductArchiveBuilder(product_archive_title)
             for extra_package in extra_packages:
                 builder.add_package(extra_package)
             builder.add_package(self.package_dir)
