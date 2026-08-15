@@ -112,7 +112,11 @@ class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):
         )
 
         if not self.issuer.cel_condition:
-            return value
+            # only an issuer written before the field became required can land here, it used
+            # to mean "accept every token this provider signs for this audience"
+            msg = "The issuer has no CEL condition"
+            logger.error("%s %s", msg, self.issuer.pk)
+            raise serializers.ValidationError(msg)
 
         # TODO cache / optimize
         env = celpy.Environment()

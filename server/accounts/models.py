@@ -331,7 +331,7 @@ class OIDCAPITokenIssuer(models.Model):
     audience = models.TextField()
     cel_condition = models.TextField(
         verbose_name="CEL condition",
-        blank=True
+        help_text="Only the identity tokens whose claims satisfy this expression are accepted."
     )
     max_validity = models.IntegerField(
         default=3600,

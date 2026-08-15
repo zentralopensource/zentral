@@ -45,6 +45,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     def _force_issuer(self):
         return OIDCAPITokenIssuer.objects.create(
             audience=get_random_string(12),
+            cel_condition="claims.sub == 'existing'",
             issuer_uri="https://issuer.zentral.com",
             name=get_random_string(12),
             user=self.service_account,
@@ -62,6 +63,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     def _issuer_form_payload(self):
         return {"audience": get_random_string(12),
+                "cel_condition": "claims.sub == 'yolo'",
                 "issuer_uri": "https://accounts.google.com",
                 "max_validity": 600,
                 "name": get_random_string(12)}
@@ -186,6 +188,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(
             response.context["form"].errors,
             {'audience': ['This field is required.'],
+             'cel_condition': ['This field is required.'],
              'issuer_uri': ['This field is required.'],
              'max_validity': ['This field is required.'],
              'name': ['This field is required.']}
@@ -265,6 +268,44 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+
+    # mandatory CEL condition
+
+    def test_create_issuer_blank_cel_condition(self):
+        self.login("accounts.add_oidcapitokenissuer")
+        payload = self._issuer_form_payload()
+        payload["cel_condition"] = ""
+        response = self.client.post(
+            self.build_url("create_oidc_api_token_issuer", self.service_account.pk),
+            payload,
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/oidcapitokenissuer_form.html")
+        self.assertEqual(
+            response.context["form"].errors,
+            {"cel_condition": ["This field is required."]},
+        )
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
+
+    def test_update_issuer_blank_cel_condition(self):
+        """The condition cannot be dropped from an existing issuer."""
+        issuer = self._force_issuer()
+        self.login("accounts.change_oidcapitokenissuer")
+        payload = self._issuer_form_payload()
+        payload["cel_condition"] = ""
+        response = self.client.post(
+            self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
+            payload,
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["form"].errors,
+            {"cel_condition": ["This field is required."]},
+        )
+        issuer.refresh_from_db()
+        self.assertEqual(issuer.cel_condition, "claims.sub == 'existing'")
 
     # view OIDC API token issuer
 

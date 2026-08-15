@@ -27,7 +27,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
     @staticmethod
     def _create_token_issuer(
             user: User,
-            cel_condition: str = "",
+            cel_condition: str = "claims.sub == 'abc'",
             description: str = "",
             max_validity: int = 60,
     ):
@@ -256,6 +256,64 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'jwt': ["CEL condition evaluation didn't produce a boolean"]})
 
+    # mandatory CEL condition
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("accounts.serializers.verify_jws_with_discovery")
+    def test_auth_issuer_without_cel_condition(self, verify_jws_with_discovery, post_event):
+        """Refused, instead of accepting every token the provider signs for the audience."""
+        issuer = self._create_token_issuer(self.service_account, cel_condition="")
+        verify_jws_with_discovery.return_value = {
+            "sub": "abc",
+            "iss": issuer.issuer_uri,
+            "aud": issuer.audience,
+        }
+        # this service account already owns the test case's own token
+        token_count = APIToken.objects.filter(user=self.service_account).count()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(
+                url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(issuer.pk,)),
+                data={"jwt": "header.payload.sig"},
+                include_token=False,
+            )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.json(), {"jwt": ["The issuer has no CEL condition"]})
+        self.assertEqual(APIToken.objects.filter(user=self.service_account).count(), token_count)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
+
+    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
+    def test_create_token_issuer_without_cel_condition(self, get_openid_configuration_from_issuer_uri):
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        payload = self._issuer_payload(self.service_account)
+        payload.pop("cel_condition")
+        response = self.post(url=reverse("accounts_api:oidc_api_token_issuers"), data=payload)
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.json(), {"cel_condition": ["This field is required."]})
+
+    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
+    def test_create_token_issuer_blank_cel_condition(self, get_openid_configuration_from_issuer_uri):
+        self.set_permissions("accounts.add_oidcapitokenissuer")
+        response = self.post(
+            url=reverse("accounts_api:oidc_api_token_issuers"),
+            data=self._issuer_payload(self.service_account, cel_condition=""),
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.json(), {"cel_condition": ["This field may not be blank."]})
+
+    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
+    def test_update_token_issuer_blank_cel_condition(self, get_openid_configuration_from_issuer_uri):
+        """The condition cannot be dropped from an existing issuer."""
+        self.set_permissions("accounts.change_oidcapitokenissuer")
+        response = self.put(
+            reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)),
+            self._issuer_payload(self.service_account, cel_condition=""),
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.json(), {"cel_condition": ["This field may not be blank."]})
+        self.issuer.refresh_from_db()
+        self.assertEqual(self.issuer.cel_condition, "claims.sub == 'abc'")
+
     # list OIDC API token issuers
 
     def test_list_token_issuers_unauthorized(self):
@@ -397,6 +455,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
             "name": self.issuer.name,
             "issuer_uri": self.issuer.issuer_uri,
             "audience": self.issuer.audience,
+            "cel_condition": self.issuer.cel_condition,
             "description": "updated desc"
         }
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -487,6 +546,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
             "name": get_random_string(12),
             "issuer_uri": "https://accounts.google.com",
             "audience": f"aud-{get_random_string(10)}",
+            "cel_condition": "claims.sub == 'abc'",
             "max_validity": 60,
         }
         payload.update(kwargs)

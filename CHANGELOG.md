@@ -134,6 +134,10 @@ An issuer mints API tokens for its service account, so adding or changing one no
 
 Creating or updating a service account's API token now requires the requester to hold every role of that account, like the issuers above. Deleting a token is unaffected, and so are your own tokens.
 
+#### 🧨 OIDC API token issuer CEL condition required
+
+An issuer without a CEL condition accepted every identity token its provider signed for the configured audience. The condition is mandatory now, and an existing issuer without one is refused at exchange time. Set one — `claims.sub == "…"` is the usual shape — on every issuer before upgrading, or its clients stop getting tokens.
+
 
 ### Bug fixes
 
