@@ -6,7 +6,7 @@ import os
 import plistlib
 import shutil
 import stat
-from subprocess import check_call, check_output
+from subprocess import DEVNULL, PIPE, Popen, check_call, check_output
 import tempfile
 import xml.etree.ElementTree as ET
 from django.http import HttpResponse, HttpResponseNotModified
@@ -30,7 +30,7 @@ class BasePackageBuilder(object):
         check_call(["/usr/local/bin/xar", "-x", "-C", destination, "-f", xar_archive])
 
     def _get_signature_size(self, private_key):
-        return len(check_output(": | openssl dgst -sign '{}' -binary".format(private_key), shell=True))
+        return len(check_output(["openssl", "dgst", "-sign", private_key, "-binary"], stdin=DEVNULL))
 
     def _add_cert_and_get_digest_info(self, pkg_path, certificate, signature_size):
         digest_info_file = os.path.join(self.tempdir, "digestinfo.dat")
@@ -79,9 +79,7 @@ class BasePackageBuilder(object):
 
     def _build_pkg(self):
         package_path = os.path.join(self.tempdir, self.package_name)
-        check_call('cd "{}" && '
-                   'xar --compression none -cf "{}" .'.format(self.package_dir, package_path),
-                   shell=True)
+        check_call(["xar", "--compression", "none", "-cf", package_path, "."], cwd=self.package_dir)
         certificate, private_key = self._get_certificate_and_private_key()
         if certificate and private_key:
             self._sign_pkg(package_path, certificate, private_key)
@@ -300,9 +298,16 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
     def _build_gziped_cpio_arch(self, dirname, arch_name):
         input_path = self.get_build_path(dirname)
         output_path = self.get_build_path("base.pkg", arch_name)
-        check_call('(cd "{}" && find . | '
-                   'bsdcpio -o --quiet --format odc --owner 0:0 | '
-                   'gzip -c) > "{}"'.format(input_path, output_path), shell=True)
+        # equivalent to `find . | bsdcpio -o … | gzip -c > output_path`, run in input_path, without a shell
+        with open(output_path, "wb") as output_file:
+            find = Popen(["find", "."], cwd=input_path, stdout=PIPE)
+            cpio = Popen(["bsdcpio", "-o", "--quiet", "--format", "odc", "--owner", "0:0"],
+                         cwd=input_path, stdin=find.stdout, stdout=PIPE)
+            find.stdout.close()
+            check_call(["gzip", "-c"], stdin=cpio.stdout, stdout=output_file)
+            cpio.stdout.close()
+            find.wait()
+            cpio.wait()
 
     def _build_payload(self):
         self._build_gziped_cpio_arch("root", "Payload")
