@@ -59,7 +59,7 @@
           {% url 'realms:update_group' obj.pk as url %}
           {% button 'UPDATE' url "Edit group" %}
         {% endif %}
-        {% if perms.realms.delete_realmgroupmapping and obj.can_be_deleted %}
+        {% if perms.realms.delete_realmgroup and obj.can_be_deleted %}
           {% url 'realms:delete_group' obj.pk as url %}
           {% button 'DELETE' url "Delete group" %}
         {% endif %}

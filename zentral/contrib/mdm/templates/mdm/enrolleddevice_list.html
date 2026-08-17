@@ -50,7 +50,7 @@
         <td>
             {% with enrolled_device.get_urlsafe_serial_number as urlsafe_serial_number %}
             {% if urlsafe_serial_number %}
-            {% if perms.inventory.view_machinsnapshot %}
+            {% if perms.inventory.view_machinesnapshot %}
             <a href="{% url 'inventory:machine' urlsafe_serial_number %}">{{ enrolled_device.serial_number|default:"-"|privacywrapper }}</a>
             {% else %}
             {{ enrolled_device.serial_number|default:"-"|privacywrapper }}

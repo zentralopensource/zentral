@@ -12,10 +12,10 @@
 <div class="d-flex align-items-center mb-1">
     <h2 class="m-0">Group → Tag mapping{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
     <div class="ms-auto">
-        {% if perms.mdm.add_scepconfig %}
+        {% if perms.mdm.add_realmgrouptagmapping %}
             {% url 'mdm:create_realm_group_tag_mapping' as url %}
             {% button 'CREATE' url "Create new group → tag mapping" %}
-        {% endif %}  
+        {% endif %}
     </div>
 </div>
 
@@ -60,7 +60,7 @@
         {% url 'mdm:update_realm_group_tag_mapping' realm_group_tag_mapping.pk as url %}
         {% button 'UPDATE' url "Edit group → tag mapping" %}
         {% endif %}
-        {% if perms.mdm.delete_realmgroupmapping %}
+        {% if perms.mdm.delete_realmgrouptagmapping %}
         {% url 'mdm:delete_realm_group_tag_mapping' realm_group_tag_mapping.pk as url %}
         {% button 'DELETE' url "Delete group → tag mapping" %}
         {% endif %}
@@ -77,11 +77,11 @@
 
 {% else %}
 
-{% if perms.mdm.add_scepconfig %}
+{% if perms.mdm.add_realmgrouptagmapping %}
   {% url 'mdm:create_realm_group_tag_mapping' as link %}
   {% no_entities 'Group → Tag mappings' link %}
 {% else %}
-  {% no_entities 'Group → Tags' %}
+  {% no_entities 'Group → Tag mappings' %}
 {% endif %}
 
 {% endif %}
