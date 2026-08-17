@@ -3,10 +3,10 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlencode, urljoin
+from xml.etree.ElementTree import ParseError, fromstring
 
 import requests
 from base.utils import deployment_info
-from defusedxml.ElementTree import ParseError, fromstring
 from django.utils.functional import cached_property
 from django.utils.timezone import is_aware, make_naive
 from kombu.utils import json

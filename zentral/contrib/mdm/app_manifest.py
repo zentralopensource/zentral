@@ -5,8 +5,8 @@ import subprocess
 import tempfile
 import zipfile
 from hashlib import md5, sha256
+from xml.etree.ElementTree import ParseError, fromstring
 
-from defusedxml.ElementTree import ParseError, fromstring
 from django.core.files.uploadedfile import TemporaryUploadedFile, UploadedFile
 
 from .models import Platform

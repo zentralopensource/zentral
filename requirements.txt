@@ -8,7 +8,6 @@ celery<6
 clickhouse-connect
 django-celery-results==2.6.0
 cryptography                    # MDM, monolith (cloudfront), munki
-defusedxml
 django<6
 djangorestframework
 djangorestframework-yaml
