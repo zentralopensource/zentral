@@ -459,3 +459,39 @@ class JamfAPIClientTestCase(SimpleTestCase):
         self.assertEqual(machine_d["os_version"]["major"], 15)
         self.assertEqual(machine_d["os_version"]["minor"], 5)
         self.assertEqual(machine_d["os_version"]["patch"], 0)
+
+    # computer extension attributes
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_create_text_computer_extension_attribute(self, session_get, session_post):
+        get_response = Mock()
+        get_response.status_code = 404
+        session_get.return_value = get_response
+        post_response = Mock()
+        post_response.status_code = 201
+        post_response.content = (
+            b'<?xml version="1.0" encoding="UTF-8"?>'
+            b'<computer_extension_attribute><id>42</id></computer_extension_attribute>'
+        )
+        session_post.return_value = post_response
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        self.assertEqual(
+            api_client.get_or_create_text_computer_extension_attribute("YOLO", "General"),
+            42
+        )
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_create_text_computer_extension_attribute_no_id(self, session_get, session_post):
+        get_response = Mock()
+        get_response.status_code = 404
+        session_get.return_value = get_response
+        post_response = Mock()
+        post_response.status_code = 201
+        post_response.content = b"<computer_extension_attribute><name>YOLO</name></computer_extension_attribute>"
+        session_post.return_value = post_response
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        with self.assertRaises(APIClientError) as cm:
+            api_client.get_or_create_text_computer_extension_attribute("YOLO", "General")
+        self.assertEqual(cm.exception.args[0], "Could not get created text computer extension attribute ID")
