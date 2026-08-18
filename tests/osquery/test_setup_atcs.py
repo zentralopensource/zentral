@@ -145,6 +145,22 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("osquery:atcs"))
         self.assertEqual(response.status_code, 403)
 
+    def test_atc_list_update_link(self):
+        atc, _ = self._force_atc()
+        self.login("osquery.view_automatictableconstruction", "osquery.change_automatictableconstruction")
+        response = self.client.get(reverse("osquery:atcs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/automatictableconstruction_list.html")
+        self.assertContains(response, reverse("osquery:update_atc", args=(atc.pk,)))
+
+    def test_atc_list_no_update_link(self):
+        atc, _ = self._force_atc()
+        self.login("osquery.view_automatictableconstruction")
+        response = self.client.get(reverse("osquery:atcs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/automatictableconstruction_list.html")
+        self.assertNotContains(response, reverse("osquery:update_atc", args=(atc.pk,)))
+
     def test_atc_list(self):
         atc, _ = self._force_atc()
         self.login("osquery.view_automatictableconstruction")

@@ -24,7 +24,7 @@
         <thead>
         <tr>
             <th>Name</th>
-            {% if perms.osquery.change_automatictableconstrucion %}
+            {% if perms.osquery.change_automatictableconstruction %}
             <th></th>
             {% endif %}
         </tr>
@@ -35,7 +35,7 @@
             <td>
             <a href="{{ atc.get_absolute_url }}">{{ atc }}</a>
             </td>
-            {% if perms.osquery.change_automatictableconstrucion %}
+            {% if perms.osquery.change_automatictableconstruction %}
             <td class="text-end py-0">
                 {% url 'osquery:update_atc' atc.id as url %}
                 {% button 'UPDATE' url "Edit ATC" %}

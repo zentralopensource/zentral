@@ -135,6 +135,26 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase, LoginCase):
         self.assertIn(configuration, response.context["object_list"])
         self.assertContains(response, configuration.name)
 
+    # configuration
+
+    def test_configuration_add_pack_link(self):
+        configuration = self._force_configuration()
+        self._force_pack()
+        self.login("osquery.view_configuration", "osquery.change_configuration")
+        response = self.client.get(reverse("osquery:configuration", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/configuration_detail.html")
+        self.assertContains(response, reverse("osquery:add_configuration_pack", args=(configuration.pk,)))
+
+    def test_configuration_no_add_pack_link(self):
+        configuration = self._force_configuration()
+        self._force_pack()
+        self.login("osquery.view_configuration")
+        response = self.client.get(reverse("osquery:configuration", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/configuration_detail.html")
+        self.assertNotContains(response, reverse("osquery:add_configuration_pack", args=(configuration.pk,)))
+
     # add configuration pack
 
     def test_add_configuration_pack_redirect(self):
