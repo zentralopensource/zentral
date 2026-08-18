@@ -18,12 +18,6 @@
     </div>
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Store</h3>
-        <div class="ms-auto">
-            {% if perms.accounts.change_store and object.can_be_updated %}
-            {% endif %}
-            {% if perms.accounts.delete_store and object.can_be_deleted %}
-            {% endif %}
-        </div>
     </div>
 
     <div class="table-responsive mb-3">
@@ -57,7 +51,7 @@
                 <th>Authorized roles for store links</th>
                 <td>
                   {% for role in object.events_url_authorized_roles.all %}
-                  {% if perms.accounts.view_group %}<a href="{% url 'accounts:group' role.pk %}">{{ role }}</a>{% else %}{{ role }}{% endif %}{% if not forloop.last %}, {% endif %}
+                  {% if perms.auth.view_group %}<a href="{% url 'accounts:group' role.pk %}">{{ role }}</a>{% else %}{{ role }}{% endif %}{% if not forloop.last %}, {% endif %}
                   {% empty %}
                   -
                   {% endfor %}

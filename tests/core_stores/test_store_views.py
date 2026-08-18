@@ -79,6 +79,25 @@ class StoreViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, '<span class="store-backend">HTTP</span>')
         self.assertContains(response, "endpoint_url")
 
+    def test_store_authorized_role_link(self):
+        store = force_store()
+        store.instance.events_url_authorized_roles.add(self.group)
+        self.login("stores.view_store", "auth.view_group")
+        response = self.client.get(reverse("stores:store", args=(store.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "stores/store_detail.html")
+        self.assertContains(response, reverse("accounts:group", args=(self.group.pk,)))
+
+    def test_store_authorized_role_no_link(self):
+        store = force_store()
+        store.instance.events_url_authorized_roles.add(self.group)
+        self.login("stores.view_store")
+        response = self.client.get(reverse("stores:store", args=(store.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "stores/store_detail.html")
+        self.assertNotContains(response, reverse("accounts:group", args=(self.group.pk,)))
+        self.assertContains(response, self.group.name)
+
     def test_store_provisioned(self):
         store = force_store(provisioned=True)
         self.login("stores.view_store")
