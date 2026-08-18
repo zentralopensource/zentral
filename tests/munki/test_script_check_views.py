@@ -75,6 +75,15 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("munki:delete_script_check", args=(sc_one.pk,)))
         self.assertContains(response, reverse("munki:update_script_check", args=(sc_one.pk,)))
 
+    def test_script_checks_delete_link_only(self):
+        sc = force_script_check()
+        self.login("munki.view_scriptcheck", "munki.delete_scriptcheck")
+        response = self.client.get(reverse("munki:script_checks"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_list.html")
+        self.assertContains(response, reverse("munki:delete_script_check", args=(sc.pk,)))
+        self.assertNotContains(response, reverse("munki:update_script_check", args=(sc.pk,)))
+
     def test_script_check_no_search_no_script_checks(self):
         self.login("munki.view_scriptcheck")
         response = self.client.get(reverse("munki:script_checks"))

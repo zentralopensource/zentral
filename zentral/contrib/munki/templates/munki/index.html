@@ -12,7 +12,7 @@
     <div class="d-flex align-items-center mb-1">
         <h2 class="m-0">Munki</h2>
         <div class="me-auto">
-            {% if perms.view_configuration and perms.munki.view_enrollment and perms.view_scriptcheck %}
+            {% if perms.munki.view_configuration and perms.munki.view_enrollment and perms.munki.view_scriptcheck %}
                 {% url 'munki:terraform_export' as url %}
                 {% button 'DOWNLOAD' url "Download Terraform Config" %}
             {% endif %}

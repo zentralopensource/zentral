@@ -69,7 +69,7 @@
             {% endfor %}
         </td>
         {% endwith %}
-        {% if perms.munki.change_scriptcheck or perms.munki.delete_script_check %}
+        {% if perms.munki.change_scriptcheck or perms.munki.delete_scriptcheck %}
         <td class="text-end">
             {% if perms.munki.change_scriptcheck %}
             {% url 'munki:update_script_check' obj.pk as url %}

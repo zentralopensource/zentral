@@ -68,6 +68,18 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("munki:configurations"))
         self.assertContains(response, reverse("munki:script_checks"))
 
+    def test_index_terraform_export_link(self):
+        self.login("munki.view_configuration", "munki.view_enrollment", "munki.view_scriptcheck")
+        response = self.client.get(reverse("munki:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("munki:terraform_export"))
+
+    def test_index_no_terraform_export_link(self):
+        self.login("munki.view_configuration", "munki.view_enrollment")
+        response = self.client.get(reverse("munki:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("munki:terraform_export"))
+
     # configurations
 
     def test_configurations_redirect(self):
