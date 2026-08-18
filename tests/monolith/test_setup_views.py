@@ -744,6 +744,22 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
         self.assertContains(response, self.pkginfo_name_1.name)
 
+    def test_pkg_infos_create_links(self):
+        self.login("monolith.view_pkginfo", "monolith.add_pkginfo", "monolith.add_pkginfoname")
+        response = self.client.get(reverse("monolith:pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
+        self.assertContains(response, reverse("monolith:create_pkg_info_name"))
+        self.assertContains(response, reverse("monolith:upload_package"))
+
+    def test_pkg_infos_no_create_links(self):
+        self.login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/pkginfo_list.html")
+        self.assertNotContains(response, reverse("monolith:create_pkg_info_name"))
+        self.assertNotContains(response, reverse("monolith:upload_package"))
+
     def test_pkg_infos_search(self):
         self.login("monolith.view_pkginfo")
         response = self.client.get(reverse("monolith:pkg_infos"))

@@ -28,17 +28,17 @@
         </button>
     </form>
     <div class="ms-auto">
-        {% if perms.add_pkginfoname or perms.add_pkginfo %}
+        {% if perms.monolith.add_pkginfoname or perms.monolith.add_pkginfo %}
         <div class="dropdown">
             <button class="btn btn-link dropdown-toggle" type="button" id="pkgInfoAdd"
                     data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
                 <i class="bi bi-plus-circle"></i>
             </button>
             <ul class="dropdown-menu" aria-labelledby="pkgInfoAdd">
-            {% if perms.add_pkginfoname %}
+            {% if perms.monolith.add_pkginfoname %}
                 <li><a class="dropdown-item" href="{% url 'monolith:create_pkg_info_name' %}">Package info name</a></li>
             {% endif %}
-            {% if perms.add_pkginfo %}
+            {% if perms.monolith.add_pkginfo %}
                 <li><a class="dropdown-item" href="{% url 'monolith:upload_package' %}">Package</a></li>
             {% endif %}
             </ul>
