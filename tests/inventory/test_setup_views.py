@@ -50,6 +50,20 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "inventory/mbu_list.html")
         self.assertContains(response, self.mbu.name)
 
+    def test_meta_business_units_update_link(self):
+        self.login("inventory.view_metabusinessunit", "inventory.change_metabusinessunit")
+        response = self.client.get(reverse("inventory:mbu"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/mbu_list.html")
+        self.assertContains(response, reverse("inventory:update_mbu", args=(self.mbu.pk,)))
+
+    def test_meta_business_units_no_update_link(self):
+        self.login("inventory.view_metabusinessunit")
+        response = self.client.get(reverse("inventory:mbu"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/mbu_list.html")
+        self.assertNotContains(response, reverse("inventory:update_mbu", args=(self.mbu.pk,)))
+
     # create meta business unit
 
     def test_create_meta_business_unit_redirect(self):

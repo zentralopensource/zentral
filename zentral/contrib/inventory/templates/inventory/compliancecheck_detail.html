@@ -27,7 +27,7 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Compliance check</h3>
         <div class="ms-auto">
-            {% if perms.inventory.update_jmespathcheck %}
+            {% if perms.inventory.change_jmespathcheck %}
                 {% url 'inventory:update_compliance_check' object.pk as url %}
                 {% button 'UPDATE' url "Edit Compliance Check" %}
             {% endif %}

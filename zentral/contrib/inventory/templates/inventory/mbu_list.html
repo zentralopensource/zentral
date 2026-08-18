@@ -76,7 +76,7 @@
                     {% endif %}
                 </td>
                 <td class="text-end py-0">
-                    {% if perms.mbu.change_metabusinessunit %}
+                    {% if perms.inventory.change_metabusinessunit %}
                         {% url 'inventory:update_mbu' mbu.pk as url %}
                         {% button 'UPDATE' url "Edit Business Unit" %}
                     {% endif %}

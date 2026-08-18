@@ -211,6 +211,22 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, cc.compliance_check.name)
         self.assertContains(response, f"/inventory/compliance_checks/{cc.pk}/events/store_redirect/")
 
+    def test_compliance_check_update_link(self):
+        cc = self._force_jmespath_check()
+        self.login("inventory.view_jmespathcheck", "inventory.change_jmespathcheck")
+        response = self.client.get(cc.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
+        self.assertContains(response, reverse("inventory:update_compliance_check", args=(cc.pk,)))
+
+    def test_compliance_check_no_update_link(self):
+        cc = self._force_jmespath_check()
+        self.login("inventory.view_jmespathcheck")
+        response = self.client.get(cc.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
+        self.assertNotContains(response, reverse("inventory:update_compliance_check", args=(cc.pk,)))
+
     # events
 
     def test_cc_events_redirect(self):
