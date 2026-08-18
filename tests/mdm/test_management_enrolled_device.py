@@ -84,6 +84,31 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
                 self.assertContains(response, udid)
                 self.assertContains(response, serial_number)
 
+    def test_enrolled_devices_machine_link(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        self.login("mdm.view_enrolleddevice", "inventory.view_machinesnapshot")
+        response = self.client.get(reverse("mdm:enrolled_devices"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertContains(
+            response,
+            reverse("inventory:machine", args=(enrolled_device.get_urlsafe_serial_number(),))
+        )
+
+    def test_enrolled_devices_no_machine_link(self):
+        session, _, serial_number = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_devices"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_list.html")
+        self.assertNotContains(
+            response,
+            reverse("inventory:machine", args=(enrolled_device.get_urlsafe_serial_number(),))
+        )
+        self.assertContains(response, serial_number)
+
     def test_enrolled_devices_search(self):
         self.login("mdm.view_enrolleddevice")
         response = self.client.get(reverse("mdm:enrolled_devices"),)

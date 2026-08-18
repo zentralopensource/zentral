@@ -63,6 +63,43 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Group → Tag mappings (3)")
         self.assertContains(response, "page 2 of 3")
 
+    def test_realm_group_tag_mappings_links(self):
+        rgtm = force_realm_group_tag_mapping()
+        self.login("mdm.view_realmgrouptagmapping", "mdm.add_realmgrouptagmapping",
+                   "mdm.change_realmgrouptagmapping", "mdm.delete_realmgrouptagmapping")
+        response = self.client.get(reverse("mdm:realm_group_tag_mappings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_list.html")
+        self.assertContains(response, reverse("mdm:create_realm_group_tag_mapping"))
+        self.assertContains(response, reverse("mdm:update_realm_group_tag_mapping", args=(rgtm.pk,)))
+        self.assertContains(response, reverse("mdm:delete_realm_group_tag_mapping", args=(rgtm.pk,)))
+
+    def test_realm_group_tag_mappings_no_links(self):
+        rgtm = force_realm_group_tag_mapping()
+        self.login("mdm.view_realmgrouptagmapping")
+        response = self.client.get(reverse("mdm:realm_group_tag_mappings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_list.html")
+        self.assertNotContains(response, reverse("mdm:create_realm_group_tag_mapping"))
+        self.assertNotContains(response, reverse("mdm:update_realm_group_tag_mapping", args=(rgtm.pk,)))
+        self.assertNotContains(response, reverse("mdm:delete_realm_group_tag_mapping", args=(rgtm.pk,)))
+
+    def test_realm_group_tag_mappings_none_create_link(self):
+        self.login("mdm.view_realmgrouptagmapping", "mdm.add_realmgrouptagmapping")
+        response = self.client.get(reverse("mdm:realm_group_tag_mappings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_list.html")
+        self.assertContains(response, "There are no Group → Tag mappings created.")
+        self.assertContains(response, reverse("mdm:create_realm_group_tag_mapping"))
+
+    def test_realm_group_tag_mappings_none_no_create_link(self):
+        self.login("mdm.view_realmgrouptagmapping")
+        response = self.client.get(reverse("mdm:realm_group_tag_mappings"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/realmgrouptagmapping_list.html")
+        self.assertContains(response, "There are no Group → Tag mappings created.")
+        self.assertNotContains(response, reverse("mdm:create_realm_group_tag_mapping"))
+
     # create
 
     def test_create_realm_group_tag_mapping_redirect(self):

@@ -889,6 +889,24 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Group (1)")
         self.assertNotContains(response, "We didn't find any item related to your search")
 
+    def test_realm_groups_update_delete_links(self):
+        self.login("realms.view_realmgroup", "realms.change_realmgroup", "realms.delete_realmgroup")
+        group = force_realm_group()
+        response = self.client.get(reverse("realms:groups"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_list.html")
+        self.assertContains(response, reverse("realms:update_group", args=(group.pk,)))
+        self.assertContains(response, reverse("realms:delete_group", args=(group.pk,)))
+
+    def test_realm_groups_no_update_delete_links(self):
+        self.login("realms.view_realmgroup")
+        group = force_realm_group()
+        response = self.client.get(reverse("realms:groups"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroup_list.html")
+        self.assertNotContains(response, reverse("realms:update_group", args=(group.pk,)))
+        self.assertNotContains(response, reverse("realms:delete_group", args=(group.pk,)))
+
     # realm group
 
     def test_realm_group_redirect(self):
