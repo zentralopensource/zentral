@@ -62,6 +62,20 @@ class BaseViewsTestCase(TestCase, LoginCase):
         self.assertIn(";script-src 'self' 'nonce-", response["Content-Security-Policy"])
         self.assertNotIn("unsafe-eval", response["Content-Security-Policy"])
 
+    # user menu
+
+    def test_index_roles_link(self):
+        self.login("auth.view_group")
+        response = self.client.get(reverse("base:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("accounts:groups"))
+
+    def test_index_no_roles_link(self):
+        self.login()
+        response = self.client.get(reverse("base:index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("accounts:groups"))
+
     # app histograms
 
     def test_index_no_perms(self):
