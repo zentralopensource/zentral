@@ -30,8 +30,8 @@ class Command(BaseCommand):
                 else:
                     self.write("OK")
 
-                    def notify():
-                        notifier.send_notification("monolith.repository", str(db_repository.pk))
+                    def notify(pk=str(db_repository.pk)):
+                        notifier.send_notification("monolith.repository", pk)
 
                     transaction.on_commit(notify)
         queues.stop()
