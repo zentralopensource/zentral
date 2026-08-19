@@ -1197,8 +1197,6 @@ class UpdateArtifactForm(forms.ModelForm):
             del self.fields["install_during_setup_assistant"]
         else:
             self.fields["requires"].queryset = self.fields["requires"].queryset.exclude(pk=self.instance.pk)
-            if self.artifact_type.is_ddm_only:
-                del self.fields["install_during_setup_assistant"]
         if self.artifact_type.is_declaration:
             self.fields["auto_update"].disabled = True
 
@@ -1206,9 +1204,6 @@ class UpdateArtifactForm(forms.ModelForm):
         if not self.artifact_type.can_be_linked_to_blueprint:
             self.instance.requires.clear()
             self.instance.install_during_setup_assistant = False
-        else:
-            if self.artifact_type.is_ddm_only:
-                self.instance.install_during_setup_assistant = False
         if self.artifact_type.is_declaration:
             self.instance.auto_update = True
         instance = super().save()

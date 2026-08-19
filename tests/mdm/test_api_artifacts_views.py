@@ -307,6 +307,27 @@ class MDMArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         blueprint.refresh_from_db()
         self.assertEqual(blueprint.serialized_artifacts[str(artifact.pk)]["requires"], [str(required_artifact.pk)])
 
+    def test_update_ddm_only_artifact_install_during_setup_assistant(self):
+        # the API accepts the flag on a declaration artifact, like the artifact update form
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
+        self.assertFalse(artifact.install_during_setup_assistant)
+        self.set_permissions("mdm.change_artifact")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse("mdm_api:artifact", args=(artifact.pk,)),
+                                {"name": artifact.name,
+                                 "type": artifact.type,
+                                 "channel": artifact.channel,
+                                 "platforms": artifact.platforms,
+                                 "install_during_setup_assistant": True,
+                                 "auto_update": True,
+                                 "reinstall_interval": 0,
+                                 "reinstall_on_os_update": "No",
+                                 })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["install_during_setup_assistant"])
+        artifact.refresh_from_db()
+        self.assertTrue(artifact.install_during_setup_assistant)
+
     # delete artifact
 
     def test_delete_artifact_unauthorized(self):
