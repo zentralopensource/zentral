@@ -229,6 +229,9 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 ### /api/santa/rules/
 
+Terraform resource: [`zentral_santa_rule`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/santa_rule)  
+Terraform data source: [`zentral_santa_rule`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/santa_rule)
+
 #### List all Santa rules
 
 * method: GET
@@ -831,6 +834,9 @@ Nothing was changed:
 
 ### /api/santa/configurations/
 
+Terraform resource: [`zentral_santa_configuration`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/santa_configuration)  
+Terraform data source: [`zentral_santa_configuration`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/santa_configuration)
+
 #### List all Santa configurations.
 
 * method: GET
@@ -1066,6 +1072,9 @@ $ curl -X DELETE \
 
 ### /api/santa/enrollments/
 
+Terraform resource: [`zentral_santa_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/santa_enrollment)  
+Terraform data source: [`zentral_santa_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/santa_enrollment)
+
 #### List all Santa enrollments.
 
 * method: GET
@@ -1284,6 +1293,8 @@ $ curl -X DELETE \
 
 ### /api/santa/enrollments/`<int:pk>`/plist/
 
+The [`zentral_santa_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/santa_enrollment) Terraform resource exposes this URL as its read-only `plist_url` attribute.
+
 #### Download Santa enrollment plist file.
 
 * method: GET
@@ -1299,6 +1310,8 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 ```
 
 ### /api/santa/enrollments/`<int:pk>`/configuration_profile/
+
+The [`zentral_santa_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/santa_enrollment) Terraform resource exposes this URL as its read-only `configuration_profile_url` attribute.
 
 #### Download Santa enrollment configuration profile file.
 
