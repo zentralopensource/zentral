@@ -12,7 +12,8 @@ from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .models import (CurrentMachineSnapshot,
@@ -419,11 +420,12 @@ class JMESPathCheckList(generics.ListCreateAPIView):
     """
     List, search by name or create JMESPath compliance checks.
     """
-    queryset = JMESPathCheck.objects.select_related("compliance_check").all()
+    queryset = JMESPathCheck.objects.select_related("compliance_check").all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = JMESPathCheckSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = JMESPathCheckFilter
+    pagination_class = MaxLimitOffsetPagination
 
     def perform_create(self, serializer):
         serializer.save()
@@ -457,6 +459,7 @@ class MetaBusinessUnitList(ListCreateAPIViewWithAudit):
     queryset = MetaBusinessUnit.objects.all()
     serializer_class = MetaBusinessUnitSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class MetaBusinessUnitDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -480,6 +483,7 @@ class TagList(ListCreateAPIViewWithAudit):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class TagDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -497,6 +501,7 @@ class TaxonomyList(ListCreateAPIViewWithAudit):
     queryset = Taxonomy.objects.all()
     serializer_class = TaxonomySerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class TaxonomyDetail(RetrieveUpdateDestroyAPIViewWithAudit):

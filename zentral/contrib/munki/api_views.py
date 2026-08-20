@@ -5,7 +5,8 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .models import Configuration, Enrollment, ScriptCheck
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, ScriptCheckSerializer
@@ -15,11 +16,12 @@ from .serializers import ConfigurationSerializer, EnrollmentSerializer, ScriptCh
 
 
 class ConfigurationList(ListCreateAPIViewWithAudit):
-    queryset = Configuration.objects.all()
+    queryset = Configuration.objects.all().order_by("name")
     serializer_class = ConfigurationSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("name",)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -32,11 +34,12 @@ class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class EnrollmentList(generics.ListCreateAPIView):
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("configuration_id",)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -67,9 +70,10 @@ class ScriptCheckFilter(filters.FilterSet):
 
 
 class ScriptCheckList(ListCreateAPIViewWithAudit):
-    queryset = ScriptCheck.objects.select_related("compliance_check").all()
+    queryset = ScriptCheck.objects.select_related("compliance_check").all().order_by("pk")
     serializer_class = ScriptCheckSerializer
     filterset_class = ScriptCheckFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ScriptCheckDetail(RetrieveUpdateDestroyAPIViewWithAudit):

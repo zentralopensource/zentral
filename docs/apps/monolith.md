@@ -118,6 +118,10 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * `Content-Type: application/json`
 
+#### Pagination
+
+The list endpoints are paginated. See [Pagination](core.md#pagination) for the response envelope and the `limit` and `offset` query parameters.
+
 ### /api/monolith/repositories/`<int:pk>`/sync/
 
 #### Fetch the package infos, the icons, the client resources from the repository
@@ -211,14 +215,19 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[{
-  "id": 1,
-  "name": "default",
-  "meta_business_unit": 1,
-  "version": 1,
-  "created_at": "2023-01-30T09:39:35.965003",
-  "updated_at": "2023-01-30T09:39:35.965004"
-}]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [{
+    "id": 1,
+    "name": "default",
+    "meta_business_unit": 1,
+    "version": 1,
+    "created_at": "2023-01-30T09:39:35.965003",
+    "updated_at": "2023-01-30T09:39:35.965004"
+  }]
+}
 ```
 
 #### Add a manifest
@@ -371,14 +380,19 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[{
-  "id": 1,
-  "repository": 1,
-  "name": "production",
-  "created_at": "2023-01-30T09:39:35.965003",
-  "updated_at": "2023-01-30T09:39:35.965004",
-  "archived_at": null
-}]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [{
+    "id": 1,
+    "repository": 1,
+    "name": "production",
+    "created_at": "2023-01-30T09:39:35.965003",
+    "updated_at": "2023-01-30T09:39:35.965004",
+    "archived_at": null
+  }]
+}
 ```
 
 #### Add a catalog
@@ -532,13 +546,18 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[{
-  "id": 1,
-  "name": "laptop",
-  "predicate": "machine_type == \"laptop\"",
-  "created_at": "2023-01-30T09:39:35.965003",
-  "updated_at": "2023-01-30T09:39:35.965004",
-}]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [{
+    "id": 1,
+    "name": "laptop",
+    "predicate": "machine_type == \"laptop\"",
+    "created_at": "2023-01-30T09:39:35.965003",
+    "updated_at": "2023-01-30T09:39:35.965004"
+  }]
+}
 ```
 
 #### Add a condition
@@ -688,28 +707,33 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-  {
-    "id": 1,
-    "manifest": 2,
-    "enrolled_machines_count": 0,
-    "secret": {
-      "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
-      "request_count": 0,
-      "id": 3,
-      "serial_numbers": [],
-      "meta_business_unit": 1,
-      "quota": null,
-      "tags": [],
-      "udids": []
-    },
-    "version": 1,
-    "configuration_profile_download_url": "https://zentral.example.com/api/monolith/enrollments/1/configuration_profile/",
-    "plist_download_url": "https://zentral.example.com/api/monolith/enrollments/1/plist/",
-    "created_at": "2023-01-10T11:02:51.831544",
-    "updated_at": "2023-01-10T11:02:51.831553"
-  }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "manifest": 2,
+      "enrolled_machines_count": 0,
+      "secret": {
+        "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+        "request_count": 0,
+        "id": 3,
+        "serial_numbers": [],
+        "meta_business_unit": 1,
+        "quota": null,
+        "tags": [],
+        "udids": []
+      },
+      "version": 1,
+      "configuration_profile_download_url": "https://zentral.example.com/api/monolith/enrollments/1/configuration_profile/",
+      "plist_download_url": "https://zentral.example.com/api/monolith/enrollments/1/plist/",
+      "created_at": "2023-01-10T11:02:51.831544",
+      "updated_at": "2023-01-10T11:02:51.831553"
+    }
+  ]
+}
 ```
 
 #### Add an enrollment
@@ -912,12 +936,17 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[{
-  "id": 1,
-  "manifest": 1,
-  "catalog": 2,
-  "tags": []
-}]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [{
+    "id": 1,
+    "manifest": 1,
+    "catalog": 2,
+    "tags": []
+  }]
+}
 ```
 
 #### Add a manifest catalog
@@ -1073,12 +1102,17 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[{
-  "id": 1,
-  "manifest": 1,
-  "sub_manifest": 2,
-  "tags": []
-}]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [{
+    "id": 1,
+    "manifest": 1,
+    "sub_manifest": 2,
+    "tags": []
+  }]
+}
 ```
 
 #### Add a manifest sub manifest
@@ -1227,14 +1261,19 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[{
-  "id": 1,
-  "name": "Browsers",
-  "description": "The supported browsers",
-  "meta_business_unit": null,
-  "created_at": "2023-01-30T09:49:35.965003",
-  "updated_at": "2023-01-30T09:49:35.965004"
-}]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [{
+    "id": 1,
+    "name": "Browsers",
+    "description": "The supported browsers",
+    "meta_business_unit": null,
+    "created_at": "2023-01-30T09:49:35.965003",
+    "updated_at": "2023-01-30T09:49:35.965004"
+  }]
+}
 ```
 
 #### Add a sub manifest
@@ -1388,29 +1427,34 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[{
-    "id": 1,
-    "sub_manifest": 1,
-    "key": "managed_installs",
-    "featured_item": false,
-    "condition": null,
-    "pkg_info_name": "Nudge",
-    "shard_modulo": 100,
-    "default_shard": 0,
-    "excluded_tags": [],
-    "tag_shards": [
-        {
-            "tag": 2,
-            "shard": 10
-        },
-        {
-            "tag": 1,
-            "shard": 20
-        }
-    ],
-    "created_at": "2023-03-06T09:19:21.342194",
-    "updated_at": "2023-03-06T09:19:21.342209"
-}]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [{
+      "id": 1,
+      "sub_manifest": 1,
+      "key": "managed_installs",
+      "featured_item": false,
+      "condition": null,
+      "pkg_info_name": "Nudge",
+      "shard_modulo": 100,
+      "default_shard": 0,
+      "excluded_tags": [],
+      "tag_shards": [
+          {
+              "tag": 2,
+              "shard": 10
+          },
+          {
+              "tag": 1,
+              "shard": 20
+          }
+      ],
+      "created_at": "2023-03-06T09:19:21.342194",
+      "updated_at": "2023-03-06T09:19:21.342209"
+  }]
+}
 ```
 
 #### Add a sub manifest pkg info

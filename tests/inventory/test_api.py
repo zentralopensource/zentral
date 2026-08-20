@@ -695,7 +695,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_permissions("inventory.view_metabusinessunit")
         response = self.get(url, {"name": meta_business_unit.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data,
+        self.assertEqual(response.data["results"],
                          [{"id": meta_business_unit.pk,
                            "name": meta_business_unit.name,
                            "api_enrollment_enabled": meta_business_unit.api_enrollment_enabled(),
@@ -960,9 +960,9 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_permissions("inventory.view_tag")
         response = self.get(reverse('inventory_api:tags'), {"name": tag.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data["count"], 1)
         self.assertEqual(
-            response.data[0],
+            response.data["results"][0],
             {"id": tag.pk,
              "taxonomy": taxonomy.pk,
              "meta_business_unit": meta_business_unit.pk,
@@ -970,6 +970,26 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
              "slug": tag.slug,
              "color": tag.color}
         )
+
+    def test_list_tag_pages(self):
+        tags = [Tag.objects.create(name=f"{get_random_string(12)}-{i:02d}") for i in range(3)]
+        self.set_permissions("inventory.view_tag")
+        seen = []
+        url = reverse('inventory_api:tags') + "?limit=2"
+        while url:
+            response = self.get(url)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.data["count"], Tag.objects.count())
+            seen.extend(t["id"] for t in response.data["results"])
+            url = response.data["next"]
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertTrue(set(t.pk for t in tags) <= set(seen))
+
+    def test_list_tag_max_limit(self):
+        self.set_permissions("inventory.view_tag")
+        response = self.get(reverse('inventory_api:tags'), {"limit": 10000})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertLessEqual(len(response.data["results"]), 500)
 
     # create taxonomy
 
@@ -1222,9 +1242,9 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_permissions("inventory.view_taxonomy")
         response = self.get(reverse('inventory_api:taxonomies'), {"name": taxonomy.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data["count"], 1)
         self.assertEqual(
-            response.data[0],
+            response.data["results"][0],
             {"id": taxonomy.pk,
              "meta_business_unit": meta_business_unit.pk,
              "name": taxonomy.name,

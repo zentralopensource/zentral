@@ -16,7 +16,8 @@ from accounts.api_authentication import APITokenAuthentication
 from zentral.contrib.inventory.models import File, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
 from .models import Configuration, Rule, RuleSet, Target, Enrollment
 from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
@@ -28,9 +29,10 @@ class ConfigurationList(ListCreateAPIViewWithAudit):
     """
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
-    queryset = Configuration.objects.all()
+    queryset = Configuration.objects.all().order_by("name")
     serializer_class = ConfigurationSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -51,11 +53,12 @@ class EnrollmentList(generics.ListCreateAPIView):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('configuration_id',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -173,11 +176,12 @@ class RuleList(generics.ListCreateAPIView):
     """
     List, Create or search rules.
     """
-    queryset = Rule.objects.select_related("configuration", "ruleset", "target")
+    queryset = Rule.objects.select_related("configuration", "ruleset", "target").order_by("pk")
     permission_classes = (DefaultDjangoModelPermissions,)
     serializer_class = RuleSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = RuleFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class RuleDetail(generics.RetrieveUpdateDestroyAPIView):

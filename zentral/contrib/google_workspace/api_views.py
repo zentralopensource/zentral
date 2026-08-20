@@ -8,7 +8,7 @@ from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
-from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermissions
+from zentral.utils.drf import DjangoPermissionRequired, DefaultDjangoModelPermissions, MaxLimitOffsetPagination
 from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
 from zentral.contrib.google_workspace.serializers import (
     ConnectionSerializer,
@@ -41,11 +41,12 @@ class SyncTagsView(APIView):
 
 
 class ConnectionList(ListAPIView):
-    queryset = Connection.objects.all()
+    queryset = Connection.objects.all().order_by("name")
     serializer_class = ConnectionSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConnectionDetail(RetrieveAPIView):
@@ -55,9 +56,10 @@ class ConnectionDetail(RetrieveAPIView):
 
 
 class GroupTagMappingList(ListCreateAPIViewWithAudit):
-    queryset = GroupTagMapping.objects.all()
+    queryset = GroupTagMapping.objects.all().order_by("pk")
     serializer_class = GroupTagMappingSerializer
     filterset_fields = ('connection_id', 'group_email')
+    pagination_class = MaxLimitOffsetPagination
 
 
 class GroupTagMappingDetail(RetrieveUpdateDestroyAPIViewWithAudit):

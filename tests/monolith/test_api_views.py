@@ -99,7 +99,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_repository")
         response = self.get(reverse("monolith_api:repositories"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_repositories_filter_by_name(self):
         force_repository()
@@ -107,7 +107,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_repository")
         response = self.get(reverse("monolith_api:repositories"), {"name": repository.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': repository.pk,
             'provisioning_uid': None,
             'backend': 'VIRTUAL',
@@ -127,7 +127,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         repository = force_repository(mbu=self.mbu)
         response = self.get(reverse("monolith_api:repositories"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': repository.pk,
             'provisioning_uid': None,
             'backend': 'S3',
@@ -148,7 +148,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         repository = force_repository(mbu=self.mbu, provisioning_uid=provisioning_uid)
         response = self.get(reverse("monolith_api:repositories"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': repository.pk,
             'provisioning_uid': provisioning_uid,
             # no backend, azure_kwargs and s3_kwargs
@@ -829,7 +829,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_manifest")
         response = self.get(reverse("monolith_api:manifests"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_manifests_filter_by_meta_business_unit_id_not_found(self):
         self.set_permissions("monolith.view_manifest")
@@ -846,7 +846,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifests"), {"name": manifest.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest.pk,
             'name': manifest.name,
             'version': 1,
@@ -861,7 +861,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:manifests"),
                             {"meta_business_unit_id": self.mbu.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest.pk,
             'name': manifest.name,
             'version': 1,
@@ -875,7 +875,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifests"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest.pk,
             'name': manifest.name,
             'version': 1,
@@ -1374,7 +1374,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:conditions"), {"name": "foo"})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_conditions_filter_by_name(self):
         force_condition()
@@ -1382,7 +1382,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:conditions"), {"name": condition.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': condition.pk,
             'name': condition.name,
             'predicate': condition.predicate,
@@ -1395,7 +1395,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_condition")
         response = self.get(reverse("monolith_api:conditions"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': condition.pk,
             'name': condition.name,
             'predicate': condition.predicate,
@@ -1606,14 +1606,14 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": manifest.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_enrollments_filter_by_manifest_id(self):
         enrollment, tags = force_enrollment(mbu=self.mbu, tag_count=1)
         self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": enrollment.manifest.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': enrollment.pk,
             'manifest': enrollment.manifest.pk,
             'enrolled_machines_count': 0,
@@ -1645,7 +1645,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_enrollment")
         response = self.get(reverse("monolith_api:enrollments"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': enrollment.pk,
             'manifest': enrollment.manifest.pk,
             'enrolled_machines_count': 0,
@@ -1992,7 +1992,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifest_catalogs"), {"manifest_id": manifest.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_manifest_catalogs_filter_by_manifest_id(self):
         manifest1 = force_manifest()
@@ -2003,7 +2003,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:manifest_catalogs"),
                             {"manifest_id": manifest2.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest2.manifestcatalog_set.first().pk,
             'manifest': manifest2.id,
             'catalog': catalog.id,
@@ -2018,7 +2018,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:manifest_catalogs"),
                             {"catalog_id": catalog.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest.manifestcatalog_set.get(catalog=catalog).pk,
             'manifest': manifest.id,
             'catalog': catalog.id,
@@ -2031,7 +2031,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_manifestcatalog")
         response = self.get(reverse("monolith_api:manifest_catalogs"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest.manifestcatalog_set.first().pk,
             'manifest': manifest.id,
             'catalog': catalog.id,
@@ -2261,7 +2261,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         manifest = force_manifest()
         response = self.get(reverse("monolith_api:manifest_sub_manifests"), {"manifest_id": manifest.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_manifest_sub_manifests_filter_by_manifest_id(self):
         manifest = force_manifest()
@@ -2271,7 +2271,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:manifest_sub_manifests"),
                             {"manifest_id": manifest.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest.manifestsubmanifest_set.filter(sub_manifest=sub_manifest).first().pk,
             'manifest': manifest.id,
             'sub_manifest': sub_manifest.id,
@@ -2287,7 +2287,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:manifest_sub_manifests"),
                             {"sub_manifest_id": sub_manifest.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest_sub_manifest.pk,
             'manifest': manifest.id,
             'sub_manifest': sub_manifest.id,
@@ -2301,7 +2301,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_manifestsubmanifest")
         response = self.get(reverse("monolith_api:manifest_sub_manifests"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': manifest_sub_manifest.pk,
             'manifest': manifest.id,
             'sub_manifest': sub_manifest.id,
@@ -2533,7 +2533,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_submanifest")
         response = self.get(reverse("monolith_api:sub_manifests"), {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_sub_manifests_filter_by_name(self):
         force_sub_manifest()
@@ -2542,7 +2542,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:sub_manifests"),
                             {"name": sub_manifest.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': sub_manifest.pk,
             'name': sub_manifest.name,
             'description': sub_manifest.description,
@@ -2556,7 +2556,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_submanifest")
         response = self.get(reverse("monolith_api:sub_manifests"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': sub_manifest.pk,
             'name': sub_manifest.name,
             'description': sub_manifest.description,
@@ -2776,7 +2776,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         sub_manifest = force_sub_manifest()
         response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"), {"sub_manifest_id": sub_manifest.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_sub_manifest_pkg_infos_filter_by_sub_manifest_id(self):
         force_sub_manifest_pkg_info()
@@ -2785,7 +2785,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"),
                             {"sub_manifest_id": sub_manifest_pkg_info.sub_manifest.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': sub_manifest_pkg_info.pk,
             'sub_manifest': sub_manifest_pkg_info.sub_manifest.pk,
             'key': 'managed_installs',
@@ -2805,7 +2805,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_submanifestpkginfo")
         response = self.get(reverse("monolith_api:sub_manifest_pkg_infos"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': sub_manifest_pkg_info.pk,
             'sub_manifest': sub_manifest_pkg_info.sub_manifest.pk,
             'key': 'managed_installs',

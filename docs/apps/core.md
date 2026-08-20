@@ -108,6 +108,31 @@ Issuers can also be managed over the API, at `/api/accounts/token_issuers/oidc/`
 
 ## HTTP API
 
+### Pagination
+
+Every list endpoint is paginated. The response is an object with the total `count`, a `next` and a `previous` URL, and the `results` array:
+
+```json
+{
+    "count": 137,
+    "next": "https://zentral.example.com/api/inventory/tags/?limit=50&offset=50",
+    "previous": null,
+    "results": [
+        {"...": "..."}
+    ]
+}
+```
+
+Use the `limit` and `offset` query parameters to page through the results. `limit` defaults to `50` and is capped at `500`. `next` is `null` on the last page, so a client can follow it until it runs out:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/inventory/tags/?limit=100&offset=100" \
+  |python3 -m json.tool
+```
+
+Filter parameters combine with the pagination ones, and `count` then reports the number of filtered results.
+
 ### `/api/task_result/<uuid:task_id>/`
 
 * method: GET

@@ -11,7 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               MaxLimitOffsetPagination)
 from .events import post_osquery_pack_update_events
 from .models import Configuration, ConfigurationPack, Enrollment, Pack, Query, AutomaticTableConstruction, FileCategory
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
@@ -33,11 +34,12 @@ class AutomaticTableConstructionList(generics.ListCreateAPIView):
     """
     List all AutomaticTableConstructions or create a new AutomaticTableConstruction
     """
-    queryset = AutomaticTableConstruction.objects.all()
+    queryset = AutomaticTableConstruction.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = AutomaticTableConstructionSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = AutomaticTableConstructionFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class AutomaticTableConstructionDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -53,11 +55,12 @@ class ConfigurationList(generics.ListCreateAPIView):
     """
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
-    queryset = Configuration.objects.all()
+    queryset = Configuration.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -79,9 +82,10 @@ class EnrollmentList(generics.ListCreateAPIView):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -155,11 +159,12 @@ class FileCategoryList(generics.ListCreateAPIView):
     """
     List, Create file categories, search by name or configuration_id
     """
-    queryset = FileCategory.objects.all()
+    queryset = FileCategory.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = FileCategorySerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = FileCategoryFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class FileCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -257,11 +262,12 @@ class PackFilter(filters.FilterSet):
 
 
 class PackList(generics.ListCreateAPIView):
-    queryset = Pack.objects.all()
+    queryset = Pack.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = PackSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = PackFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class PackDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -279,11 +285,12 @@ class QueryFilter(filters.FilterSet):
 
 
 class QueryList(generics.ListCreateAPIView):
-    queryset = Query.objects.all()
+    queryset = Query.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = QueryFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -301,11 +308,12 @@ class ConfigurationPackFilter(filters.FilterSet):
 
 
 class ConfigurationPackList(generics.ListCreateAPIView):
-    queryset = ConfigurationPack.objects.all()
+    queryset = ConfigurationPack.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationPackSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = ConfigurationPackFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationPackDetail(generics.RetrieveUpdateDestroyAPIView):

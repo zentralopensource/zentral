@@ -33,6 +33,10 @@ Authorization: Token the_token_string
 
 See [API authentication](core.md#api-authentication) for how to create a service account, issue a token for it and set an expiry.
 
+#### Pagination
+
+The list endpoints are paginated. See [Pagination](core.md#pagination) for the response envelope and the `limit` and `offset` query parameters.
+
 ### /api/munki/configurations/
 
 
@@ -62,31 +66,36 @@ curl \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "name": "Default",
-        "description": "",
-        "inventory_apps_full_info_shard": 100,
-        "principal_user_detection_sources": [
-            "logged_in_user"
-        ],
-        "principal_user_detection_domains": [
-            "zentral.io"
-        ],
-        "collected_condition_keys": [
-            "arch",
-            "machine_type"
-        ],
-        "managed_installs_sync_interval_days": 7,
-        "script_checks_run_interval_seconds": 86400,
-        "auto_reinstall_incidents": true,
-        "auto_failed_install_incidents": false,
-        "version": 6,
-        "created_at": "2021-03-17T10:14:00.493868",
-        "updated_at": "2023-02-08T06:57:49.358674"
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "name": "Default",
+          "description": "",
+          "inventory_apps_full_info_shard": 100,
+          "principal_user_detection_sources": [
+              "logged_in_user"
+          ],
+          "principal_user_detection_domains": [
+              "zentral.io"
+          ],
+          "collected_condition_keys": [
+              "arch",
+              "machine_type"
+          ],
+          "managed_installs_sync_interval_days": 7,
+          "script_checks_run_interval_seconds": 86400,
+          "auto_reinstall_incidents": true,
+          "auto_failed_install_incidents": false,
+          "version": 6,
+          "created_at": "2021-03-17T10:14:00.493868",
+          "updated_at": "2023-02-08T06:57:49.358674"
+      }
+  ]
+}
 ```
 
 #### Add a configuration
@@ -321,27 +330,32 @@ curl \
 Response:
 
 ```json
-[
-    {
-        "configuration": 1,
-        "created_at": "2020-06-16T14:10:32.322536",
-        "enrolled_machines_count": 5,
-        "id": 1,
-        "package_download_url": "https://$ZTL_FQDN/api/munki/enrollments/1/package/",
-        "secret": {
-            "id": 11,
-            "meta_business_unit": 1,
-            "quota": null,
-            "request_count": 5,
-            "secret": "CtX89oaZJeoXAkEDatwRdDX2y5Ubr3fl9rRUDCtkLFXovdFvFjXz37g4rFm0mQy7",
-            "serial_numbers": [],
-            "tags": [],
-            "udids": []
-        },
-        "updated_at": "2021-03-17T10:14:00.496743",
-        "version": 1
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "configuration": 1,
+          "created_at": "2020-06-16T14:10:32.322536",
+          "enrolled_machines_count": 5,
+          "id": 1,
+          "package_download_url": "https://$ZTL_FQDN/api/munki/enrollments/1/package/",
+          "secret": {
+              "id": 11,
+              "meta_business_unit": 1,
+              "quota": null,
+              "request_count": 5,
+              "secret": "CtX89oaZJeoXAkEDatwRdDX2y5Ubr3fl9rRUDCtkLFXovdFvFjXz37g4rFm0mQy7",
+              "serial_numbers": [],
+              "tags": [],
+              "udids": []
+          },
+          "updated_at": "2021-03-17T10:14:00.496743",
+          "version": 1
+      }
+  ]
+}
 ```
 
 #### Add an enrollment

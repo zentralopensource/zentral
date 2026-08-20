@@ -28,6 +28,10 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * `Content-Type: application/x-osquery-conf`
 * `Content-Type: application/yaml`
 
+#### Pagination
+
+The list endpoints are paginated. See [Pagination](core.md#pagination) for the response envelope and the `limit` and `offset` query parameters.
+
 ### /api/osquery/atcs/
 
 #### List all ATCs.
@@ -58,28 +62,33 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "name": "Santa rules",
-        "description": "Access the Google Santa rules.db",
-        "table_name": "santa_rules",
-        "query": "SELECT * FROM rules;",
-        "path": "/var/db/santa/rules.db",
-        "columns": [
-            "identifier",
-            "state",
-            "type",
-            "custommsg",
-            "timestamp"
-        ],
-        "platforms": [
-            "darwin"
-        ],
-        "created_at": "2023-01-30T09:39:35.965003",
-        "updated_at": "2023-01-30T09:39:35.965011"
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "name": "Santa rules",
+          "description": "Access the Google Santa rules.db",
+          "table_name": "santa_rules",
+          "query": "SELECT * FROM rules;",
+          "path": "/var/db/santa/rules.db",
+          "columns": [
+              "identifier",
+              "state",
+              "type",
+              "custommsg",
+              "timestamp"
+          ],
+          "platforms": [
+              "darwin"
+          ],
+          "created_at": "2023-01-30T09:39:35.965003",
+          "updated_at": "2023-01-30T09:39:35.965011"
+      }
+  ]
+}
 ```
 
 #### Add a new ATC.
@@ -300,26 +309,31 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "name": "example",
-        "description": "",
-        "inventory": true,
-        "inventory_apps": true,
-        "inventory_ec2": false,
-        "inventory_interval": 600,
-        "options": {
-            "config_refresh": 120
-        },
-        "created_at": "2023-01-06T13:05:02.535763",
-        "updated_at": "2023-01-30T09:40:23.912582",
-        "file_categories": [],
-        "automatic_table_constructions": [
-            1
-        ]
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "name": "example",
+          "description": "",
+          "inventory": true,
+          "inventory_apps": true,
+          "inventory_ec2": false,
+          "inventory_interval": 600,
+          "options": {
+              "config_refresh": 120
+          },
+          "created_at": "2023-01-06T13:05:02.535763",
+          "updated_at": "2023-01-30T09:40:23.912582",
+          "file_categories": [],
+          "automatic_table_constructions": [
+              1
+          ]
+      }
+  ]
+}
 ```
 
 #### Add a new Configuration.
@@ -536,16 +550,21 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "configuration": 2,
-        "pack": 2,
-        "tags": [
-            1
-        ]
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "configuration": 2,
+          "pack": 2,
+          "tags": [
+              1
+          ]
+      }
+  ]
+}
 ```
 
 #### Add a new Configuration Pack.
@@ -720,20 +739,25 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "name": "example",
-        "slug": "example",
-        "description": "example description",
-        "file_paths": [],
-        "exclude_paths": [],
-        "file_paths_queries": [],
-        "access_monitoring": false,
-        "created_at": "2023-01-31T11:48:53.014319",
-        "updated_at": "2023-01-31T11:48:53.014332"
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "name": "example",
+          "slug": "example",
+          "description": "example description",
+          "file_paths": [],
+          "exclude_paths": [],
+          "file_paths_queries": [],
+          "access_monitoring": false,
+          "created_at": "2023-01-31T11:48:53.014319",
+          "updated_at": "2023-01-31T11:48:53.014332"
+      }
+  ]
+}
 ```
 
 #### Add a new FileCategory.
@@ -931,19 +955,24 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "name": "Default",
-        "slug": "default",
-        "description": "",
-        "discovery_queries": [],
-        "shard": null,
-        "event_routing_key": "",
-        "created_at": "2023-01-13T07:06:51.000733",
-        "updated_at": "2023-01-13T07:06:51.000743"
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "name": "Default",
+          "slug": "default",
+          "description": "",
+          "discovery_queries": [],
+          "shard": null,
+          "event_routing_key": "",
+          "created_at": "2023-01-13T07:06:51.000733",
+          "updated_at": "2023-01-13T07:06:51.000743"
+      }
+  ]
+}
 ```
 
 #### Add a new Pack.
@@ -1329,23 +1358,28 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "compliance_check_enabled": false,
-        "compliance_check_id": null,
-        "name": "GetApps",
-        "sql": "SELECT * FROM apps;",
-        "platforms": [],
-        "scheduling": null,
-        "minimum_osquery_version": null,
-        "description": "Get list of Apps",
-        "value": "",
-        "version": 2,
-        "created_at": "2023-01-13T07:10:12.571288",
-        "updated_at": "2023-01-13T09:24:39.779067"
-    }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "compliance_check_enabled": false,
+          "compliance_check_id": null,
+          "name": "GetApps",
+          "sql": "SELECT * FROM apps;",
+          "platforms": [],
+          "scheduling": null,
+          "minimum_osquery_version": null,
+          "description": "Get list of Apps",
+          "value": "",
+          "version": 2,
+          "created_at": "2023-01-13T07:10:12.571288",
+          "updated_at": "2023-01-13T09:24:39.779067"
+      }
+  ]
+}
 ```
 
 #### Add a new query.

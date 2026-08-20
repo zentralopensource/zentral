@@ -113,6 +113,7 @@ class RepositoryList(ListCreateAPIViewWithAudit):
     queryset = Repository.objects.all()
     serializer_class = RepositorySerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
     def on_commit_callback_extra(self, instance):
         notifier.send_notification("monolith.repository", str(instance.pk))
@@ -163,11 +164,12 @@ class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ConditionList(generics.ListCreateAPIView):
-    queryset = Condition.objects.all()
+    queryset = Condition.objects.all().order_by("name")
     serializer_class = ConditionSerializer
     permission_classes = (DefaultDjangoModelPermissions,)
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConditionDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -188,11 +190,12 @@ class EnrollmentList(generics.ListCreateAPIView):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('manifest_id',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -261,6 +264,7 @@ class ManifestList(ListCreateAPIViewWithAudit):
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("meta_business_unit_id", "name")
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -273,11 +277,12 @@ class ManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class ManifestCatalogList(ListCreateAPIViewWithAudit):
-    queryset = ManifestCatalog.objects.all()
+    queryset = ManifestCatalog.objects.all().order_by("catalog__name", "pk")
     serializer_class = ManifestCatalogSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("manifest_id", "catalog_id")
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ManifestCatalogDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -293,11 +298,12 @@ class ManifestCatalogDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class ManifestEnrollmentPackageList(generics.ListCreateAPIView):
-    queryset = ManifestEnrollmentPackage.objects.all()
+    queryset = ManifestEnrollmentPackage.objects.all().order_by("pk")
     serializer_class = ManifestEnrollmentPackageSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("manifest_id", "builder")
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ManifestEnrollmentPackageDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -315,11 +321,12 @@ class ManifestEnrollmentPackageDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ManifestSubManifestList(ListCreateAPIViewWithAudit):
-    queryset = ManifestSubManifest.objects.all()
+    queryset = ManifestSubManifest.objects.all().order_by("sub_manifest__name", "pk")
     serializer_class = ManifestSubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("manifest_id", "sub_manifest_id")
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ManifestSubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -338,11 +345,12 @@ class ManifestSubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class SubManifestList(ListCreateAPIViewWithAudit):
-    queryset = SubManifest.objects.all()
+    queryset = SubManifest.objects.all().order_by("name", "pk")
     serializer_class = SubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class SubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -355,11 +363,12 @@ class SubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class SubManifestPkgInfoList(ListCreateAPIViewWithAudit):
-    queryset = SubManifestPkgInfo.objects.all()
+    queryset = SubManifestPkgInfo.objects.all().order_by("pkg_info_name", "pk")
     serializer_class = SubManifestPkgInfoSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('sub_manifest_id',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class SubManifestPkgInfoDetail(RetrieveUpdateDestroyAPIViewWithAudit):

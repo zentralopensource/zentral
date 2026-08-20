@@ -4,7 +4,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .models import Tenant
 from .serializers import TenantSerializer
 from .tasks import sync_inventory
@@ -14,9 +15,10 @@ class TenantList(ListCreateAPIViewWithAudit):
     """
     List or Create Tenants
     """
-    queryset = Tenant.objects.all()
+    queryset = Tenant.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TenantSerializer
+    pagination_class = MaxLimitOffsetPagination
 
 
 class TenantDetail(RetrieveUpdateDestroyAPIViewWithAudit):
