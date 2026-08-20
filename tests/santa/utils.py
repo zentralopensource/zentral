@@ -487,7 +487,7 @@ class SantaSyncClient:
                 self.sync_type = "CLEAN"
         return response
 
-    def rule_download(self, max_batches=None):
+    def rule_download(self, max_batches=None, between_batches=None):
         """Download the rules, and apply them unless the download was interrupted."""
         rules = []
         cursor = None
@@ -508,6 +508,9 @@ class SantaSyncClient:
                 return None
             if not cursor:
                 break
+            if between_batches:
+                # something happens on the server between two batch requests
+                between_batches(batches)
         self._apply_rules(rules)
         return rules
 

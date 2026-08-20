@@ -363,6 +363,139 @@ class SantaSyncSessionTestCase(TestCase):
         client.enrolled_machine.refresh_from_db()
         self.assertTrue(client.enrolled_machine.sync_ok())
 
+    # a session that removes a rule it staged itself
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_discarded_removal_of_a_rule_added_during_the_session_is_forgotten(self, post_event):
+        client, configuration, targets = self.force_client(batch_size=1, rule_count=1)
+        client.sync()
+        # two new rules. The first one is deleted right after the batch that staged it,
+        # so the next batch stages its removal
+        added_rule = force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                                target_identifier="0" * 63 + "a")
+        force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                   target_identifier="f" * 64)
+
+        def delete_added_rule(batches):
+            if batches == 1:
+                added_rule.delete()
+
+        client.preflight()
+        # the download dies before the end: the client writes nothing
+        self.assertIsNone(client.rule_download(max_batches=3, between_batches=delete_added_rule))
+        # the client only has the rule it confirmed, and the ledger agrees
+        with self.assertNoLogs("zentral.contrib.santa.models", level="ERROR"):
+            client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertTrue(sync_session["sync_ok"])
+        self.assertEqual(sync_session["previous_session"]["outcome"], "discarded")
+        self.assertEqual(sync_session["previous_session"]["removals_discarded"], 1)
+        self.assertEqual(sync_session["previous_session"]["rules_discarded"], 1)
+        # the rule is created again before the next download: the client never held it,
+        # so it must be sent
+        Rule.objects.create(configuration=configuration, target=added_rule.target,
+                            policy=added_rule.policy)
+        client.sync()
+        self.assertEqual(len(client.rules), 3)
+        client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertTrue(client.enrolled_machine.sync_ok())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_committed_removal_of_a_rule_added_during_the_session(self, post_event):
+        client, configuration, targets = self.force_client(batch_size=1, rule_count=1)
+        client.sync()
+        added_rule = force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                                target_identifier="0" * 63 + "a")
+        added_identifier = added_rule.target.identifier
+        force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                   target_identifier="f" * 64)
+
+        def delete_added_rule(batches):
+            if batches == 1:
+                added_rule.delete()
+
+        client.preflight()
+        rules = client.rule_download(between_batches=delete_added_rule)
+        # the client received the rule, then its removal: it holds nothing for the target
+        self.assertEqual([r["policy"] for r in rules if r["identifier"] == added_identifier],
+                         ["BLOCKLIST", "REMOVE"])
+        self.assertNotIn((Target.Type.BINARY, added_identifier), client.rules)
+        client.postflight(rules)
+        sync_session = self.postflight_events(post_event)[-1].payload["sync_session"]
+        self.assertEqual(sync_session["removals_confirmed"], 1)
+        self.assertEqual(sync_session["rules_committed"], 1)
+        # both sides agree
+        with self.assertNoLogs("zentral.contrib.santa.models", level="ERROR"):
+            client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertTrue(client.enrolled_machine.sync_ok())
+        self.assertEqual(self.synced_rule_count(client.enrolled_machine), 2)
+
+    # a session that removes a rule it had already replaced
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_discarded_session_restores_the_rule_it_replaced_then_removed(self, post_event):
+        client, configuration, _ = self.force_client(batch_size=1)
+        replaced_rule = force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                                   target_identifier="0" * 63 + "a")
+        client.sync()
+        # the rule is updated, another one is added, and the rule is deleted right after
+        # the batch that staged its update, so the next batch stages its removal
+        Rule.objects.filter(pk=replaced_rule.pk).update(version=F("version") + 1)
+        force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                   target_identifier="f" * 64)
+
+        def delete_replaced_rule(batches):
+            if batches == 1:
+                replaced_rule.delete()
+
+        client.preflight()
+        # the download dies before the end: the client writes nothing
+        self.assertIsNone(client.rule_download(max_batches=3, between_batches=delete_replaced_rule))
+        # the client still holds the rule it confirmed, and the ledger agrees
+        with self.assertNoLogs("zentral.contrib.santa.models", level="ERROR"):
+            client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertTrue(sync_session["sync_ok"])
+        self.assertEqual(sync_session["previous_session"]["outcome"], "discarded")
+        self.assertEqual(sync_session["previous_session"]["removals_restored"], 1)
+        self.assertEqual(sync_session["previous_session"]["rules_discarded"], 1)
+        # the rule is still out of the configuration: the next session removes it from the client
+        client.sync()
+        self.assertEqual(len(client.rules), 1)
+        client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertTrue(client.enrolled_machine.sync_ok())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_committed_session_removes_the_rule_it_replaced_then_removed(self, post_event):
+        client, configuration, _ = self.force_client(batch_size=1)
+        replaced_rule = force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                                   target_identifier="0" * 63 + "a")
+        client.sync()
+        Rule.objects.filter(pk=replaced_rule.pk).update(version=F("version") + 1)
+        force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                   target_identifier="f" * 64)
+
+        def delete_replaced_rule(batches):
+            if batches == 1:
+                replaced_rule.delete()
+
+        client.preflight()
+        rules = client.rule_download(between_batches=delete_replaced_rule)
+        client.postflight(rules)
+        # the client applied the update, then the removal
+        self.assertNotIn((Target.Type.BINARY, replaced_rule.target.identifier), client.rules)
+        sync_session = self.postflight_events(post_event)[-1].payload["sync_session"]
+        self.assertEqual(sync_session["removals_confirmed"], 1)
+        self.assertEqual(sync_session["rules_committed"], 1)
+        with self.assertNoLogs("zentral.contrib.santa.models", level="ERROR"):
+            client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertTrue(client.enrolled_machine.sync_ok())
+        self.assertEqual(self.synced_rule_count(client.enrolled_machine), 1)
+
     # the postflight event reports what the client confirmed
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -584,6 +717,7 @@ class SantaSyncSessionTestCase(TestCase):
                           # the session sent the rules again, the ledger goes back to the versions
                           # the client confirmed
                           "rules_discarded": 0,
+                          "removals_discarded": 0,
                           "rules_restored": 2,
                           "removals_restored": 0})
 

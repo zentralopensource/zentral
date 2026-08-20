@@ -929,14 +929,13 @@ class EnrolledMachine(models.Model):
     def committed_rules(self):
         """The rules the client is expected to have, ignoring the rules staged by a current session, if any.
 
-        A staged removal was committed before the session, so the client still has the rule. It
-        also still has the version a staged rule replaced. Only a row staged for a target it has
-        no rule for is left out. The batch a rule was sent in makes no difference: the client
-        writes the rules of the whole session at once, at the very end.
+        A rule the client holds is kept in the committed policy and version when the session
+        stages a replacement or a removal over it, so the row still counts. A staged row without
+        a committed policy is for a target the client has no rule for: a new rule, or the removal
+        of a rule staged during the same session. The batch a rule was sent in makes no
+        difference: the client writes the rules of the whole session at once, at the very end.
         """
-        return self.machinerule_set.filter(
-            Q(sync_session__isnull=True) | Q(staged_removal=True) | Q(committed_policy__isnull=False)
-        )
+        return self.machinerule_set.filter(Q(sync_session__isnull=True) | Q(committed_policy__isnull=False))
 
     def sync_ok(self):
         """
@@ -1272,36 +1271,54 @@ class MachineRuleManager(models.Manager):
                     rule_info_d[key] = val
             yield rule_info_d
 
+    def _restore_committed_rules(self, qs):
+        return qs.update(cursor=None, sync_session=None, staged_removal=False,
+                         policy=F("committed_policy"), version=F("committed_version"),
+                         committed_policy=None, committed_version=None)
+
     def _unstage(self, qs):
-        """Put the given staged rules back to the state the client last confirmed.
+        """Roll back the batches of an ongoing session the client has not acknowledged.
 
-        Called for the rules of a session the client never confirmed, and for the batches of a
-        session it stopped downloading.
+        Called before a batch is generated, so every rolled back change is sent again. A row
+        with a committed policy goes back to the rule the client confirmed. A staged removal
+        without one covered a rule staged by an acknowledged batch of the same session: the
+        client received that rule and holds it in its download buffer, so the row goes back to
+        it, and the removal is generated again. Every other row only exists because of the
+        rolled back send, and is deleted.
 
-        A staged removal was committed before the session staged it, so the client still holds the
-        rule: the row is committed again, and the removal is sent again during the next session. A
-        row that replaced a committed one goes back to the version the client holds, and the new
-        one is sent again. Every other staged row only exists because of the send being unstaged,
-        so it is deleted, and the rule is sent again.
-
-        The three statements select rows on the state they had on entry, and no row is selected by
-        more than one of them, so that none depends on the others, nor on the columns the caller
-        filtered on.
+        The removal rollback rewrites rows into the state the first statement deletes, so the
+        deletion has to stay ahead of it.
         """
-        rules_discarded, _ = qs.filter(staged_removal=False, committed_policy__isnull=True).delete()
-        removals_restored = (qs.filter(staged_removal=True, committed_policy__isnull=True)
-                               .update(cursor=None, sync_session=None, staged_removal=False))
-        rules_restored = (qs.filter(committed_policy__isnull=False)
-                            .update(cursor=None, sync_session=None, staged_removal=False,
-                                    policy=F("committed_policy"), version=F("committed_version"),
-                                    committed_policy=None, committed_version=None))
-        return {"rules_discarded": rules_discarded,
-                "rules_restored": rules_restored,
-                "removals_restored": removals_restored}
+        qs.filter(staged_removal=False, committed_policy__isnull=True).delete()
+        (qs.filter(staged_removal=True, committed_policy__isnull=True)
+           .update(cursor=None, staged_removal=False))
+        self._restore_committed_rules(qs.filter(committed_policy__isnull=False))
 
     def discard_session(self, enrolled_machine):
-        """Forget the rules sent during the sync sessions the client never confirmed"""
-        return self._unstage(self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False))
+        """Forget the rules sent during the sync sessions the client never confirmed.
+
+        The ledger goes back to the last state the client confirmed. A row with a committed
+        policy holds the rule the client still has, covered by a staged rule or a staged
+        removal: it goes back to that rule, and the change is sent again during the next
+        session. Every other staged row is for a target the client holds nothing for — a new
+        rule, or the removal of a rule staged during the same session — and is deleted.
+
+        The statements select rows on the state they had on entry, and no entry state is
+        selected by more than one of them, so that none depends on the others.
+        """
+        qs = self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False)
+        rules_discarded, _ = qs.filter(staged_removal=False, committed_policy__isnull=True).delete()
+        removals_discarded, _ = qs.filter(staged_removal=True, committed_policy__isnull=True).delete()
+        removals_restored = self._restore_committed_rules(
+            qs.filter(staged_removal=True, committed_policy__isnull=False)
+        )
+        rules_restored = self._restore_committed_rules(
+            qs.filter(staged_removal=False, committed_policy__isnull=False)
+        )
+        return {"rules_discarded": rules_discarded,
+                "removals_discarded": removals_discarded,
+                "rules_restored": rules_restored,
+                "removals_restored": removals_restored}
 
     def commit_session(self, enrolled_machine, clean):
         """Record the rules of the sync session the client just confirmed
@@ -1369,19 +1386,17 @@ class MachineRuleManager(models.Manager):
             if use_sha256_attr and Target.Type(rule["rule_type"]).has_sha256_identifier:
                 rule["sha256"] = rule.pop("identifier")
             defaults = {"cursor": new_cursor, "sync_session": enrolled_machine.sync_session}
+            # a rule the client holds is kept in the committed policy and version when a
+            # replacement or a removal is staged over it: the ledger is the only place where it
+            # still exists, and it is what the client reports until the session is over. A row
+            # already staged by the session either keeps it there, or replaced nothing.
+            (self.filter(enrolled_machine=enrolled_machine, target=target_id, sync_session__isnull=True)
+                 .update(committed_policy=F("policy"), committed_version=F("version")))
             if policy == Rule.Policy.REMOVE:
-                # keep the committed policy and version, the ledger is the only place where
-                # the rule still exists
                 defaults["staged_removal"] = True
                 self.filter(enrolled_machine=enrolled_machine, target=target_id).update(**defaults)
             else:
                 defaults.update({"policy": policy, "version": version, "staged_removal": False})
-                # keep the version the client holds, if it has one: the ledger is the only place
-                # where it still exists, and it is what the client reports until the session is over
-                (self.filter(Q(sync_session__isnull=True) | Q(staged_removal=True),
-                             enrolled_machine=enrolled_machine, target=target_id,
-                             committed_policy__isnull=True)
-                     .update(committed_policy=F("policy"), committed_version=F("version")))
                 self.update_or_create(enrolled_machine=enrolled_machine,
                                       target=Target(pk=target_id),
                                       defaults=defaults)
@@ -1403,11 +1418,13 @@ class MachineRule(models.Model):
     # that the rule is in its own rule database.
     sync_session = models.CharField(max_length=8, null=True)
     # a removal was sent to the client during the current sync session. The policy and the
-    # version are left untouched, so that the ledger can be restored if the session is lost.
+    # version are left untouched, so that a removal staged over a rule of the same session can
+    # go back to that rule if its batch is lost.
     staged_removal = models.BooleanField(default=False)
-    # the policy and the version the client confirmed, kept when the rule sent during the current
-    # sync session replaced them. Null means that the client has no other version of the rule,
-    # either because it has confirmed this one, or because it has never received any.
+    # the policy and the version the client confirmed, kept when a rule or a removal sent during
+    # the current sync session replaced them. Null means that the client holds nothing else for
+    # the target: it has confirmed this rule, it has never received any, or a staged removal
+    # covers a rule staged during the same session.
     committed_policy = models.PositiveSmallIntegerField(choices=Rule.Policy.choices, null=True)
     committed_version = models.PositiveIntegerField(null=True)
 

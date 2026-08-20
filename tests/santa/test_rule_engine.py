@@ -73,6 +73,25 @@ class SantaRuleEngineTestCase(TestCase):
         self.enrolled_machine.refresh_from_db()
         MachineRule.objects.commit_session(self.enrolled_machine, False)
 
+    def force_batch_size_one_machine(self):
+        configuration = Configuration.objects.create(name=get_random_string(32), batch_size=1)
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
+        enrollment = Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
+        return EnrolledMachine.objects.create(enrollment=enrollment,
+                                              hardware_uuid=uuid.uuid4(),
+                                              serial_number=get_random_string(64),
+                                              client_mode=Configuration.MONITOR_MODE,
+                                              santa_version="2024.5")
+
+    def create_ordered_rules(self, configuration):
+        # identifiers chosen so that the rules always come in this order
+        rules = []
+        for identifier in ("0" * 63 + "a", "f" * 64):
+            target = Target.objects.create(type=Target.Type.BINARY, identifier=identifier)
+            rules.append(Rule.objects.create(configuration=configuration, target=target,
+                                             policy=Rule.Policy.ALLOWLIST))
+        return rules
+
     def create_and_serialize_rule(
         self,
         target_type=Target.Type.BINARY,
@@ -622,9 +641,11 @@ class SantaRuleEngineTestCase(TestCase):
             self.assertEqual(machine_rule_qs.count(), 1)
             machine_rule = machine_rule_qs.first()
             self.assertEqual(machine_rule.target, target)
-            # the removal is staged, the ledger keeps the policy of the rule the client has
+            # the removal is staged, the ledger keeps the rule the client has
             self.assertTrue(machine_rule.staged_removal)
             self.assertEqual(machine_rule.policy, rule_policy)
+            self.assertEqual(machine_rule.committed_policy, rule_policy)
+            self.assertEqual(machine_rule.committed_version, 1)
             self.assertIsNotNone(machine_rule.cursor)
         # the machine rule is only removed from the ledger once the client confirms the session
         self.assertEqual(machine_rule_qs.count(), 1)
@@ -679,38 +700,45 @@ class SantaRuleEngineTestCase(TestCase):
         rule_batch, _ = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [tags[0].pk, tags[-2].pk])
         self.assertEqual(rule_batch, [])
 
-    # unstaging a session
+    # discarding a session
 
-    def test_unstage_does_not_delete_the_removal_it_restored(self):
-        # the private method is called directly: it must work on any set of staged rows, whatever
-        # the caller selected them on, and the two callers both filter on a column it clears
+    def test_discard_session_does_not_delete_the_removal_it_restored(self):
+        # the restored rows must not feed the delete statements, whatever the statement order
         removal_target, _ = self.create_rule()
         addition_target, _ = self.create_rule()
         removal = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=removal_target,
                                              policy=Rule.Policy.ALLOWLIST, version=1,
-                                             sync_session="session1", staged_removal=True)
+                                             sync_session="session1", staged_removal=True,
+                                             committed_policy=Rule.Policy.ALLOWLIST,
+                                             committed_version=1)
         addition = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=addition_target,
                                               policy=Rule.Policy.ALLOWLIST, version=1,
                                               sync_session="session1")
-        counts = MachineRule.objects._unstage(MachineRule.objects.filter(pk__in=[removal.pk, addition.pk]))
-        self.assertEqual(counts, {"rules_discarded": 1, "rules_restored": 0, "removals_restored": 1})
+        counts = MachineRule.objects.discard_session(self.enrolled_machine)
+        self.assertEqual(counts, {"rules_discarded": 1, "removals_discarded": 0,
+                                  "rules_restored": 0, "removals_restored": 1})
         # the client still holds the rule, the removal is committed again and sent again next session
         removal.refresh_from_db()
         self.assertIsNone(removal.sync_session)
         self.assertIsNone(removal.cursor)
         self.assertFalse(removal.staged_removal)
+        self.assertEqual(removal.policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(removal.version, 1)
+        self.assertIsNone(removal.committed_policy)
+        self.assertIsNone(removal.committed_version)
         # the staged rule only existed because of the session
         self.assertEqual(MachineRule.objects.filter(pk=addition.pk).count(), 0)
 
-    def test_unstage_restores_the_rule_the_client_confirmed(self):
+    def test_discard_session_restores_the_rule_the_client_confirmed(self):
         target, _ = self.create_rule()
         replacement = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=target,
                                                  policy=Rule.Policy.BLOCKLIST, version=2,
                                                  sync_session="session1",
                                                  committed_policy=Rule.Policy.ALLOWLIST,
                                                  committed_version=1)
-        counts = MachineRule.objects._unstage(MachineRule.objects.filter(pk=replacement.pk))
-        self.assertEqual(counts, {"rules_discarded": 0, "rules_restored": 1, "removals_restored": 0})
+        counts = MachineRule.objects.discard_session(self.enrolled_machine)
+        self.assertEqual(counts, {"rules_discarded": 0, "removals_discarded": 0,
+                                  "rules_restored": 1, "removals_restored": 0})
         # the client still holds the rule the session replaced, and it is sent again next session
         replacement.refresh_from_db()
         self.assertIsNone(replacement.sync_session)
@@ -719,3 +747,173 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertEqual(replacement.version, 1)
         self.assertIsNone(replacement.committed_policy)
         self.assertIsNone(replacement.committed_version)
+
+    def test_discard_session_discards_the_removal_of_a_rule_of_the_same_session(self):
+        target, _ = self.create_rule()
+        removal = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=target,
+                                             policy=Rule.Policy.ALLOWLIST, version=1,
+                                             sync_session="session1", staged_removal=True)
+        counts = MachineRule.objects.discard_session(self.enrolled_machine)
+        self.assertEqual(counts, {"rules_discarded": 0, "removals_discarded": 1,
+                                  "rules_restored": 0, "removals_restored": 0})
+        # the removal covered a rule staged during the same session: the client holds nothing
+        self.assertEqual(MachineRule.objects.filter(pk=removal.pk).count(), 0)
+
+    # rolling back an unacknowledged batch
+
+    def test_unstage_goes_back_to_the_rule_a_removal_of_the_same_session_covered(self):
+        target, _ = self.create_rule()
+        removal = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=target,
+                                             policy=Rule.Policy.ALLOWLIST, version=1,
+                                             cursor="cursor01", sync_session="session1", staged_removal=True)
+        MachineRule.objects._unstage(MachineRule.objects.filter(pk=removal.pk))
+        # back to the rule staged by the acknowledged batch, so that the removal is sent again
+        removal.refresh_from_db()
+        self.assertEqual(removal.sync_session, "session1")
+        self.assertIsNone(removal.cursor)
+        self.assertFalse(removal.staged_removal)
+        self.assertEqual(removal.policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(removal.version, 1)
+        self.assertIsNone(removal.committed_policy)
+        self.assertIsNone(removal.committed_version)
+
+    # a session that removes a rule it staged itself
+
+    def test_discarded_session_forgets_the_removal_of_a_rule_it_staged(self):
+        enrolled_machine = self.force_batch_size_one_machine()
+        added_rule, _ = self.create_ordered_rules(enrolled_machine.enrollment.configuration)
+        added_target = added_rule.target
+        # the rule is staged by the first batch, acknowledged by the second request
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [])
+        self.assertEqual([r["identifier"] for r in rule_batch], [added_target.identifier])
+        # the rule is deleted before the next batch, which stages its removal
+        added_rule.delete()
+        rule_batch, _ = MachineRule.objects.get_next_rule_batch(enrolled_machine, [], response_cursor)
+        self.assertEqual(rule_batch, [{"rule_type": Target.Type.BINARY,
+                                       "identifier": added_target.identifier,
+                                       "policy": "REMOVE"}])
+        machine_rule = MachineRule.objects.get(enrolled_machine=enrolled_machine, target=added_target)
+        self.assertTrue(machine_rule.staged_removal)
+        # the removal covers a rule of the same session: the client holds nothing
+        self.assertIsNone(machine_rule.committed_policy)
+        self.assertIsNone(machine_rule.committed_version)
+        # the client never confirms the session
+        counts = MachineRule.objects.discard_session(enrolled_machine)
+        self.assertEqual(counts, {"rules_discarded": 0, "removals_discarded": 1,
+                                  "rules_restored": 0, "removals_restored": 0})
+        self.assertEqual(MachineRule.objects.filter(enrolled_machine=enrolled_machine).count(), 0)
+        # the rule is created again: the client never held it, it must be sent
+        Rule.objects.create(configuration=enrolled_machine.enrollment.configuration,
+                            target=added_target, policy=Rule.Policy.ALLOWLIST)
+        rule_batch, _ = MachineRule.objects.get_next_rule_batch(enrolled_machine, [])
+        self.assertEqual([(r["identifier"], r["policy"]) for r in rule_batch],
+                         [(added_target.identifier, "ALLOWLIST")])
+
+    def test_committed_session_confirms_the_removal_of_a_rule_it_staged(self):
+        enrolled_machine = self.force_batch_size_one_machine()
+        added_rule, other_rule = self.create_ordered_rules(enrolled_machine.enrollment.configuration)
+        _, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [])
+        # the rule of the first batch is deleted, the second batch stages its removal
+        added_rule.delete()
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [],
+                                                                              response_cursor)
+        self.assertEqual([r["policy"] for r in rule_batch], ["REMOVE"])
+        # the last batch, with the second rule
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [],
+                                                                              response_cursor)
+        self.assertEqual([r["identifier"] for r in rule_batch], [other_rule.target.identifier])
+        self.assertIsNone(response_cursor)
+        # the client applied the rule, then its removal: it holds nothing for the first target
+        counts = MachineRule.objects.commit_session(enrolled_machine, False)
+        self.assertEqual(counts, {"rules_committed": 1, "removals_confirmed": 1, "rules_dropped": 0})
+        machine_rule = MachineRule.objects.get(enrolled_machine=enrolled_machine)
+        self.assertEqual(machine_rule.target, other_rule.target)
+        self.assertIsNone(machine_rule.sync_session)
+
+    def test_lost_batch_sends_the_removal_of_a_rule_of_the_same_session_again(self):
+        enrolled_machine = self.force_batch_size_one_machine()
+        added_rule, _ = self.create_ordered_rules(enrolled_machine.enrollment.configuration)
+        _, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [])
+        added_rule.delete()
+        rule_batch, _ = MachineRule.objects.get_next_rule_batch(enrolled_machine, [], response_cursor)
+        self.assertEqual([r["policy"] for r in rule_batch], ["REMOVE"])
+        # the batch is lost, the client asks for it again with the same cursor
+        rule_batch_again, _ = MachineRule.objects.get_next_rule_batch(enrolled_machine, [], response_cursor)
+        self.assertEqual(rule_batch_again, rule_batch)
+        machine_rule = MachineRule.objects.get(enrolled_machine=enrolled_machine, target=added_rule.target)
+        self.assertTrue(machine_rule.staged_removal)
+        self.assertIsNone(machine_rule.committed_policy)
+        # the client applied the rule, then its removal
+        counts = MachineRule.objects.commit_session(enrolled_machine, False)
+        self.assertEqual(counts["removals_confirmed"], 1)
+        self.assertEqual(MachineRule.objects.filter(enrolled_machine=enrolled_machine).count(), 0)
+
+    # a session that removes a rule it had already replaced
+
+    def test_discarded_session_restores_the_rule_it_replaced_then_removed(self):
+        enrolled_machine = self.force_batch_size_one_machine()
+        configuration = enrolled_machine.enrollment.configuration
+        replaced_rule, _ = self.create_ordered_rules(configuration)
+        replaced_target = replaced_rule.target
+        # the client confirms the two rules
+        response_cursor = None
+        for _ in range(2):
+            _, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [],
+                                                                         response_cursor)
+        MachineRule.objects.commit_session(enrolled_machine, False)
+        # the rules are updated. The first one is staged by the first batch of a new session,
+        # then deleted, and the second batch stages its removal
+        Rule.objects.filter(configuration=configuration).update(version=F("version") + 1)
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [])
+        self.assertEqual([r["identifier"] for r in rule_batch], [replaced_target.identifier])
+        replaced_rule.delete()
+        rule_batch, _ = MachineRule.objects.get_next_rule_batch(enrolled_machine, [], response_cursor)
+        self.assertEqual([r["policy"] for r in rule_batch], ["REMOVE"])
+        machine_rule = MachineRule.objects.get(enrolled_machine=enrolled_machine, target=replaced_target)
+        self.assertTrue(machine_rule.staged_removal)
+        # the ledger keeps the rule the client confirmed
+        self.assertEqual(machine_rule.committed_policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(machine_rule.committed_version, 1)
+        # the client never confirms the session
+        counts = MachineRule.objects.discard_session(enrolled_machine)
+        self.assertEqual(counts, {"rules_discarded": 0, "removals_discarded": 0,
+                                  "rules_restored": 0, "removals_restored": 1})
+        machine_rule.refresh_from_db()
+        self.assertIsNone(machine_rule.sync_session)
+        self.assertFalse(machine_rule.staged_removal)
+        self.assertEqual(machine_rule.policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(machine_rule.version, 1)
+        # the rule is still gone from the configuration: the removal is sent again
+        rule_batch, _ = MachineRule.objects.get_next_rule_batch(enrolled_machine, [])
+        self.assertEqual([(r["identifier"], r["policy"]) for r in rule_batch],
+                         [(replaced_target.identifier, "REMOVE")])
+
+    def test_committed_session_confirms_the_removal_of_a_rule_it_replaced(self):
+        enrolled_machine = self.force_batch_size_one_machine()
+        configuration = enrolled_machine.enrollment.configuration
+        replaced_rule, other_rule = self.create_ordered_rules(configuration)
+        replaced_target = replaced_rule.target
+        # the client confirms the two rules
+        response_cursor = None
+        for _ in range(2):
+            _, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [],
+                                                                         response_cursor)
+        MachineRule.objects.commit_session(enrolled_machine, False)
+        # the rules are updated. The first one is staged by the first batch of a new session,
+        # then deleted, and the second batch stages its removal
+        Rule.objects.filter(configuration=configuration).update(version=F("version") + 1)
+        _, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [])
+        replaced_rule.delete()
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [],
+                                                                              response_cursor)
+        self.assertEqual([r["policy"] for r in rule_batch], ["REMOVE"])
+        # the update of the second rule, last batch
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(enrolled_machine, [],
+                                                                              response_cursor)
+        self.assertEqual([r["identifier"] for r in rule_batch], [other_rule.target.identifier])
+        self.assertIsNone(response_cursor)
+        # the client applied the update, then the removal: it holds nothing for the target
+        counts = MachineRule.objects.commit_session(enrolled_machine, False)
+        self.assertEqual(counts, {"rules_committed": 1, "removals_confirmed": 1, "rules_dropped": 0})
+        self.assertEqual(MachineRule.objects.filter(enrolled_machine=enrolled_machine,
+                                                    target=replaced_target).count(), 0)

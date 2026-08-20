@@ -10,6 +10,9 @@ Fixed the version of a Munki script check being bumped by every API update, incl
 Fixed Santa machines being reported out of sync when a rule sent during the current sync session replaced one they already had: the rule ledger did not count the version the client still holds, so a machine with a session open when it checked in was one rule short of what it reported. The ledger now keeps the rule the client confirmed until it confirms its replacement, and a session the client never confirmed goes back to that version instead of forgetting about it — a rule the ledger forgot about could not be removed from the client anymore.
 
 
+Fixed a Santa rule that was added and removed during the same sync session being recorded as held by the machine when the session was lost: the discarded session turned the staged removal into a rule the client never received. If the rule was then created again, it matched the phantom ledger entry and was never sent, and the machine stayed out of sync until a clean sync. The removal of a rule staged during the same session is now dropped with the session it belongs to.
+
+
 ## 2026.5
 
 
