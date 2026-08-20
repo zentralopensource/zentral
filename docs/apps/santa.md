@@ -246,14 +246,14 @@ Example:
 ```bash
 curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/santa/rules/" \
+  "https://$ZTL_FQDN/api/santa/rules/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/santa/rules/?target_type=TEAMID" \
+  "https://$ZTL_FQDN/api/santa/rules/?target_type=TEAMID" \
   |python3 -m json.tool
 ```
 
@@ -341,7 +341,7 @@ $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @rule.json \
-  "https://zentral.example.com/api/santa/rules/"\
+  "https://$ZTL_FQDN/api/santa/rules/"\
   |python3 -m json.tool
 ```
 
@@ -397,7 +397,7 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/santa/rules/1/" \
+  "https://$ZTL_FQDN/api/santa/rules/1/" \
   |python3 -m json.tool
 ```
 
@@ -466,7 +466,7 @@ $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @rule_update.json \
-  "https://zentral.example.com/api/santa/rules/8/"\
+  "https://$ZTL_FQDN/api/santa/rules/8/"\
   |python3 -m json.tool
 ```
 
@@ -522,7 +522,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/santa/rules/8/"
+  "https://$ZTL_FQDN/api/santa/rules/8/"
 ```
 
 ### /api/santa/ingest/fileinfo/
@@ -542,7 +542,7 @@ $ santactl fileinfo --json \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d @- \
-  https://zentral.example.com/api/santa/ingest/fileinfo/
+  https://$ZTL_FQDN/api/santa/ingest/fileinfo/
 ```
 
 This response is a JSON object with some counters:
@@ -655,7 +655,7 @@ $ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @ruleset.json \
-  https://zentral.example.com/api/santa/rulesets/update/\
+  https://$ZTL_FQDN/api/santa/rulesets/update/\
   |python3 -m json.tool
 ```
 
@@ -800,7 +800,7 @@ $ curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/yaml' \
   --data-binary @ruleset2.yml \
-  https://zentral.example.com/api/santa/rulesets/update/\
+  https://$ZTL_FQDN/api/santa/rulesets/update/\
   |python3 -m json.tool
 ```
 
@@ -843,13 +843,13 @@ Examples
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/configurations/ \
+  https://$ZTL_FQDN/api/santa/configurations/ \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/configurations/?name=Default \
+  https://$ZTL_FQDN/api/santa/configurations/?name=Default \
   |python3 -m json.tool
 ```
 
@@ -914,7 +914,7 @@ $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @configuration.json \
-  https://zentral.example.com/api/santa/configurations/\
+  https://$ZTL_FQDN/api/santa/configurations/\
   |python3 -m json.tool
 ```
 
@@ -956,7 +956,7 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/configurations/1/ \
+  https://$ZTL_FQDN/api/santa/configurations/1/ \
   |python3 -m json.tool
 ```
 
@@ -1021,7 +1021,7 @@ $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @configuration.json \
-  https://zentral.example.com/api/santa/configurations/1/\
+  https://$ZTL_FQDN/api/santa/configurations/1/\
   |python3 -m json.tool
 ```
 
@@ -1061,7 +1061,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/configurations/1/
+  https://$ZTL_FQDN/api/santa/configurations/1/
 ```
 
 ### /api/santa/enrollments/
@@ -1078,13 +1078,13 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/enrollments/ \
+  https://$ZTL_FQDN/api/santa/enrollments/ \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/enrollments/?configuration_id=1 \
+  https://$ZTL_FQDN/api/santa/enrollments/?configuration_id=1 \
   |python3 -m json.tool
 ```
 
@@ -1142,7 +1142,7 @@ $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @enrollment.json \
-  https://zentral.example.com/api/santa/enrollments/\
+  https://$ZTL_FQDN/api/santa/enrollments/\
   |python3 -m json.tool
 ```
 
@@ -1185,7 +1185,7 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/enrollments/1/ \
+  https://$ZTL_FQDN/api/santa/enrollments/1/ \
   |python3 -m json.tool
 ```
 
@@ -1239,7 +1239,7 @@ $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @configuration.json \
-  https://zentral.example.com/api/santa/enrollments/1/\
+  https://$ZTL_FQDN/api/santa/enrollments/1/\
   |python3 -m json.tool
 ```
 
@@ -1279,7 +1279,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/enrollments/5/
+  https://$ZTL_FQDN/api/santa/enrollments/5/
 ```
 
 ### /api/santa/enrollments/`<int:pk>`/plist/
@@ -1294,7 +1294,7 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/enrollments/1/plist/ \
+  https://$ZTL_FQDN/api/santa/enrollments/1/plist/ \
   --output zentral_santa_configuration.enrollment.plist
 ```
 
@@ -1310,6 +1310,6 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://zentral.example.com/api/santa/enrollments/1/configuration_profile/ \
+  https://$ZTL_FQDN/api/santa/enrollments/1/configuration_profile/ \
   --output com.example.zentral.santa_configuration.mobileconfig
 ```

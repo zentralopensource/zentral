@@ -44,14 +44,14 @@ Examples:
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/atcs/" \
+  "https://$ZTL_FQDN/api/osquery/atcs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/atcs/?name=Santa+rules" \
+  "https://$ZTL_FQDN/api/osquery/atcs/?name=Santa+rules" \
   |python3 -m json.tool
 ```
 
@@ -115,7 +115,7 @@ atc.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/atcs/" \
+  "https://$ZTL_FQDN/api/osquery/atcs/" \
   -d @atc.json \
   |python3 -m json.tool
 ```
@@ -158,7 +158,7 @@ Example
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/atcs/2/" \
+  "https://$ZTL_FQDN/api/osquery/atcs/2/" \
   |python3 -m json.tool
 ```
 
@@ -223,7 +223,7 @@ atc_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/atcs/2/" \
+  "https://$ZTL_FQDN/api/osquery/atcs/2/" \
   -d @atc_update.json \
   |python3 -m json.tool
 ```
@@ -266,7 +266,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/atcs/2/" 
+  "https://$ZTL_FQDN/api/osquery/atcs/2/" 
 ```
 
 Response (204 No Content)
@@ -286,14 +286,14 @@ Examples:
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurations/" \
+  "https://$ZTL_FQDN/api/osquery/configurations/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurations/?name=example" \
+  "https://$ZTL_FQDN/api/osquery/configurations/?name=example" \
   |python3 -m json.tool
 ```
 
@@ -358,7 +358,7 @@ configuration.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurations/" \
+  "https://$ZTL_FQDN/api/osquery/configurations/" \
   -d @configuration.json \
   |python3 -m json.tool
 ```
@@ -402,7 +402,7 @@ Example
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurations/2/" \
+  "https://$ZTL_FQDN/api/osquery/configurations/2/" \
   |python3 -m json.tool
 ```
 
@@ -464,7 +464,7 @@ configuration_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configurations/2/" \
+  "https://$ZTL_FQDN/api/osquery/configurations/2/" \
   -d @configuration_update.json \
   |python3 -m json.tool
 ```
@@ -501,7 +501,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/configurations/2/" 
+  "https://$ZTL_FQDN/api/osquery/configurations/2/" 
 ```
 
 Response (204 No Content)
@@ -522,14 +522,14 @@ Examples:
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configuration_packs/" \
+  "https://$ZTL_FQDN/api/osquery/configuration_packs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configuration_packs/?pack_id=2" \
+  "https://$ZTL_FQDN/api/osquery/configuration_packs/?pack_id=2" \
   |python3 -m json.tool
 ```
 
@@ -577,7 +577,7 @@ configurationpack.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configuration_packs/" \
+  "https://$ZTL_FQDN/api/osquery/configuration_packs/" \
   -d @configurationpack.json \
   |python3 -m json.tool
 ```
@@ -609,7 +609,7 @@ Example
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configuration_packs/2/" \
+  "https://$ZTL_FQDN/api/osquery/configuration_packs/2/" \
   |python3 -m json.tool
 ```
 
@@ -656,7 +656,7 @@ configurationpack_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/configuration_packs/2/" \
+  "https://$ZTL_FQDN/api/osquery/configuration_packs/2/" \
   -d @configurationpack_update.json \
   |python3 -m json.tool
 ```
@@ -685,7 +685,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/configuration_packs/2/" 
+  "https://$ZTL_FQDN/api/osquery/configuration_packs/2/" 
 ```
 
 Response (204 No Content)
@@ -706,14 +706,14 @@ Examples:
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/" \
+  "https://$ZTL_FQDN/api/osquery/file_categories/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/?name=example" \
+  "https://$ZTL_FQDN/api/osquery/file_categories/?name=example" \
   |python3 -m json.tool
 ```
 
@@ -762,7 +762,7 @@ file_category.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/" \
+  "https://$ZTL_FQDN/api/osquery/file_categories/" \
   -d @file_category.json \
   |python3 -m json.tool
 ```
@@ -803,7 +803,7 @@ Example
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/2/" \
+  "https://$ZTL_FQDN/api/osquery/file_categories/2/" \
   |python3 -m json.tool
 ```
 
@@ -859,7 +859,7 @@ file_category_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/file_categories/2/" \
+  "https://$ZTL_FQDN/api/osquery/file_categories/2/" \
   -d @file_categories_update.json \
   |python3 -m json.tool
 ```
@@ -896,7 +896,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/file_categories/2/" 
+  "https://$ZTL_FQDN/api/osquery/file_categories/2/" 
 ```
 
 Response (204 No Content)
@@ -917,14 +917,14 @@ Examples:
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/" \
+  "https://$ZTL_FQDN/api/osquery/packs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/?name=Default" \
+  "https://$ZTL_FQDN/api/osquery/packs/?name=Default" \
   |python3 -m json.tool
 ```
 
@@ -971,7 +971,7 @@ pack.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/" \
+  "https://$ZTL_FQDN/api/osquery/packs/" \
   -d @pack.json \
   |python3 -m json.tool
 ```
@@ -1008,7 +1008,7 @@ Example
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/2/" \
+  "https://$ZTL_FQDN/api/osquery/packs/2/" \
   |python3 -m json.tool
 ```
 
@@ -1056,7 +1056,7 @@ pack_update.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/osquery/packs/2/" \
+  "https://$ZTL_FQDN/api/osquery/packs/2/" \
   -d @pack_update.json \
   |python3 -m json.tool
 ```
@@ -1090,7 +1090,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/packs/2/" 
+  "https://$ZTL_FQDN/api/osquery/packs/2/" 
 ```
 
 Response (204 No Content)
@@ -1137,7 +1137,7 @@ $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @pack.json \
-  "https://zentral.example.com/api/osquery/packs/first-pack-slug/" \
+  "https://$ZTL_FQDN/api/osquery/packs/first-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1184,7 +1184,7 @@ If you make a `DELETE` request on the same URL, the pack and all its rules will 
 $ curl -XDELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
-  "https://zentral.example.com/api/osquery/packs/first-pack-slug/" \
+  "https://$ZTL_FQDN/api/osquery/packs/first-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1233,7 +1233,7 @@ $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/x-osquery-conf' \
   --data-binary @pack.conf \
-  "https://zentral.example.com/api/osquery/packs/second-pack-slug/" \
+  "https://$ZTL_FQDN/api/osquery/packs/second-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1280,7 +1280,7 @@ $ curl -XPUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/yaml' \
   --data-binary @pack.yml \
-  "https://zentral.example.com/api/osquery/packs/second-pack-slug/" \
+  "https://$ZTL_FQDN/api/osquery/packs/second-pack-slug/" \
   |python3 -m json.tool
 ```
 
@@ -1316,13 +1316,13 @@ Examples
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/queries/" \
+  "https://$ZTL_FQDN/api/osquery/queries/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/queries/?name=GetApps" \
+  "https://$ZTL_FQDN/api/osquery/queries/?name=GetApps" \
   |python3 -m json.tool
 ```
 
@@ -1377,7 +1377,7 @@ $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @query.json \
-  "https://zentral.example.com/api/osquery/queries/" \
+  "https://$ZTL_FQDN/api/osquery/queries/" \
   |python3 -m json.tool
 ```
 
@@ -1421,7 +1421,7 @@ Example
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/queries/1/" \
+  "https://$ZTL_FQDN/api/osquery/queries/1/" \
   |python3 -m json.tool
 ```
 
@@ -1468,7 +1468,7 @@ $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d @query_update.json \
-  "https://zentral.example.com/api/osquery/queries/1/" \
+  "https://$ZTL_FQDN/api/osquery/queries/1/" \
   |python3 -m json.tool
 ```
 
@@ -1503,7 +1503,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/queries/1/"
+  "https://$ZTL_FQDN/api/osquery/queries/1/"
 ```
 
 Response (204 No Content)
@@ -1525,7 +1525,7 @@ Example
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/osquery/runs/1/results/export/" \
+  "https://$ZTL_FQDN/api/osquery/runs/1/results/export/" \
   |python3 -m json.tool
 ```
 

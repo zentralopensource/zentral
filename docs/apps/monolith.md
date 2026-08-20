@@ -136,7 +136,7 @@ Example:
 ```
 curl -X POST \
      -H "Authorization: Token $TOKEN" \
-     https://$FQDN/api/monolith/repositories/1/sync/
+     https://$ZTL_FQDN/api/monolith/repositories/1/sync/
 ```
 
 Response:
@@ -192,19 +192,19 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifests/" \
+  "https://$ZTL_FQDN/api/monolith/manifests/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifests/?name=default" \
+  "https://$ZTL_FQDN/api/monolith/manifests/?name=default" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifests/?meta_business_unit_id=1" \
+  "https://$ZTL_FQDN/api/monolith/manifests/?meta_business_unit_id=1" \
   |python3 -m json.tool
 ```
 
@@ -242,7 +242,7 @@ manifest.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/manifests/" \
+  "https://$ZTL_FQDN/api/monolith/manifests/" \
   -d @manifest.json \
   |python3 -m json.tool
 ```
@@ -272,7 +272,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifests/1/" \
+  "https://$ZTL_FQDN/api/monolith/manifests/1/" \
   |python3 -m json.tool
 ```
 
@@ -311,7 +311,7 @@ manifest.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/manifests/1/" \
+  "https://$ZTL_FQDN/api/monolith/manifests/1/" \
   -d @manifest.json \
   |python3 -m json.tool
 ```
@@ -340,7 +340,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifests/1/"
+  "https://$ZTL_FQDN/api/monolith/manifests/1/"
 ```
 
 Response (204 No Content)
@@ -358,13 +358,13 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/catalogs/" \
+  "https://$ZTL_FQDN/api/monolith/catalogs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/catalogs/?name=production" \
+  "https://$ZTL_FQDN/api/monolith/catalogs/?name=production" \
   |python3 -m json.tool
 ```
 
@@ -403,7 +403,7 @@ catalog.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/catalogs/" \
+  "https://$ZTL_FQDN/api/monolith/catalogs/" \
   -d @catalog.json \
   |python3 -m json.tool
 ```
@@ -433,7 +433,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/catalogs/1/" \
+  "https://$ZTL_FQDN/api/monolith/catalogs/1/" \
   |python3 -m json.tool
 ```
 
@@ -472,7 +472,7 @@ catalog.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/catalogs/1/" \
+  "https://$ZTL_FQDN/api/monolith/catalogs/1/" \
   -d @catalog.json \
   |python3 -m json.tool
 ```
@@ -501,7 +501,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/catalogs/1/"
+  "https://$ZTL_FQDN/api/monolith/catalogs/1/"
 ```
 
 Response (204 No Content)
@@ -519,13 +519,13 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/conditions/" \
+  "https://$ZTL_FQDN/api/monolith/conditions/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/conditions/?name=desktop" \
+  "https://$ZTL_FQDN/api/monolith/conditions/?name=desktop" \
   |python3 -m json.tool
 ```
 
@@ -562,7 +562,7 @@ condition.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/conditions/" \
+  "https://$ZTL_FQDN/api/monolith/conditions/" \
   -d @condition.json \
   |python3 -m json.tool
 ```
@@ -591,7 +591,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/conditions/1/" \
+  "https://$ZTL_FQDN/api/monolith/conditions/1/" \
   |python3 -m json.tool
 ```
 
@@ -629,7 +629,7 @@ condition.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/conditions/1/" \
+  "https://$ZTL_FQDN/api/monolith/conditions/1/" \
   -d @condition.json \
   |python3 -m json.tool
 ```
@@ -657,7 +657,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/conditions/1/"
+  "https://$ZTL_FQDN/api/monolith/conditions/1/"
 ```
 
 Response (204 No Content)
@@ -675,13 +675,13 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/enrollments/" \
+  "https://$ZTL_FQDN/api/monolith/enrollments/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/enrollments/?manifest_id=2" \
+  "https://$ZTL_FQDN/api/monolith/enrollments/?manifest_id=2" \
   |python3 -m json.tool
 ```
 
@@ -736,7 +736,7 @@ enrollment.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/enrollments/" \
+  "https://$ZTL_FQDN/api/monolith/enrollments/" \
   -d @enrollment.json \
   |python3 -m json.tool
 ```
@@ -778,7 +778,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/enrollments/1/" \
+  "https://$ZTL_FQDN/api/monolith/enrollments/1/" \
   |python3 -m json.tool
 ```
 
@@ -833,7 +833,7 @@ enrollment.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/enrollments/1/" \
+  "https://$ZTL_FQDN/api/monolith/enrollments/1/" \
   -d @enrollment.json \
   |python3 -m json.tool
 ```
@@ -874,7 +874,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/enrollments/1/"
+  "https://$ZTL_FQDN/api/monolith/enrollments/1/"
 ```
 
 Response (204 No Content)
@@ -893,19 +893,19 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_catalogs/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_catalogs/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_catalogs/?manifest_id=1" \
+  "https://$ZTL_FQDN/api/monolith/manifest_catalogs/?manifest_id=1" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_catalogs/?catalog_id=2" \
+  "https://$ZTL_FQDN/api/monolith/manifest_catalogs/?catalog_id=2" \
   |python3 -m json.tool
 ```
 
@@ -942,7 +942,7 @@ manifest\_catalog.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/manifest_catalogs/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_catalogs/" \
   -d @manifest_catalog.json \
   |python3 -m json.tool
 ```
@@ -970,7 +970,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_catalogs/1/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_catalogs/1/" \
   |python3 -m json.tool
 ```
 
@@ -1008,7 +1008,7 @@ manifest\_catalog.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/manifest_catalogs/1/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_catalogs/1/" \
   -d @manifest_catalog.json \
   |python3 -m json.tool
 ```
@@ -1035,7 +1035,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_catalogs/1/"
+  "https://$ZTL_FQDN/api/monolith/manifest_catalogs/1/"
 ```
 
 Response (204 No Content)
@@ -1054,19 +1054,19 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_sub_manifests/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_sub_manifests/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_sub_manifests/?manifest_id=1" \
+  "https://$ZTL_FQDN/api/monolith/manifest_sub_manifests/?manifest_id=1" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_sub_manifests/?sub_manifest_id=2" \
+  "https://$ZTL_FQDN/api/monolith/manifest_sub_manifests/?sub_manifest_id=2" \
   |python3 -m json.tool
 ```
 
@@ -1103,7 +1103,7 @@ manifest\_sub_manifest.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/manifest_sub_manifests/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_sub_manifests/" \
   -d @manifest_sub_manifest.json \
   |python3 -m json.tool
 ```
@@ -1131,7 +1131,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_sub_manifests/1/" \
   |python3 -m json.tool
 ```
 
@@ -1169,7 +1169,7 @@ manifest\_sub_manifest.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/" \
+  "https://$ZTL_FQDN/api/monolith/manifest_sub_manifests/1/" \
   -d @manifest_sub_manifest.json \
   |python3 -m json.tool
 ```
@@ -1196,7 +1196,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/manifest_sub_manifests/1/"
+  "https://$ZTL_FQDN/api/monolith/manifest_sub_manifests/1/"
 ```
 
 Response (204 No Content)
@@ -1214,13 +1214,13 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifests/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifests/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifests/?name=Browsers" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifests/?name=Browsers" \
   |python3 -m json.tool
 ```
 
@@ -1258,7 +1258,7 @@ sub\_manifest.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/sub_manifests/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifests/" \
   -d @sub_manifest.json \
   |python3 -m json.tool
 ```
@@ -1288,7 +1288,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifests/1/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifests/1/" \
   |python3 -m json.tool
 ```
 
@@ -1328,7 +1328,7 @@ sub\_manifest.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/sub_manifests/1/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifests/1/" \
   -d @sub_manifest.json \
   |python3 -m json.tool
 ```
@@ -1357,7 +1357,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifests/1/"
+  "https://$ZTL_FQDN/api/monolith/sub_manifests/1/"
 ```
 
 Response (204 No Content)
@@ -1375,13 +1375,13 @@ Examples:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifest_pkg_infos/" \
   |python3 -m json.tool
 ```
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/?sub_manifest_id=1" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifest_pkg_infos/?sub_manifest_id=1" \
   |python3 -m json.tool
 ```
 
@@ -1438,7 +1438,7 @@ sub\_manifest_pkg_info.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifest_pkg_infos/" \
   -d @sub_manifest_pkg_info.json \
   |python3 -m json.tool
 ```
@@ -1476,7 +1476,7 @@ Example:
 
 ```bash
 $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/2/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifest_pkg_infos/2/" \
   |python3 -m json.tool
 ```
 
@@ -1532,7 +1532,7 @@ sub\_manifest.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/2/" \
+  "https://$ZTL_FQDN/api/monolith/sub_manifest_pkg_infos/2/" \
   -d @sub_manifest_pkg_info.json \
   |python3 -m json.tool
 ```
@@ -1572,7 +1572,7 @@ Example
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://zentral.example.com/api/monolith/sub_manifest_pkg_infos/2/"
+  "https://$ZTL_FQDN/api/monolith/sub_manifest_pkg_infos/2/"
 ```
 
 Response (204 No Content)

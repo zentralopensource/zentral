@@ -48,14 +48,14 @@ Examples:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/munki/configurations/ \
+  https://$ZTL_FQDN/api/munki/configurations/ \
   |python3 -m json.tool
 ```
 
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://$ZTL_HOST/api/munki/configurations/?name=Default" \
+  "https://$ZTL_FQDN/api/munki/configurations/?name=Default" \
   |python3 -m json.tool
 ```
 
@@ -127,7 +127,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @configuration.json \
-  https://$ZTL_HOST/api/munki/configurations/ \
+  https://$ZTL_FQDN/api/munki/configurations/ \
   |python3 -m json.tool
 ```
 
@@ -173,7 +173,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/munki/configurations/2/ \
+  https://$ZTL_FQDN/api/munki/configurations/2/ \
   |python3 -m json.tool
 ```
 
@@ -245,7 +245,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @configuration.json \
-  https://$ZTL_HOST/api/munki/configurations/2/ \
+  https://$ZTL_FQDN/api/munki/configurations/2/ \
   |python3 -m json.tool
 ```
 
@@ -288,7 +288,7 @@ Response:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://$ZTL_HOST/api/munki/configurations/6/
+  https://$ZTL_FQDN/api/munki/configurations/6/
 ```
 
 Response (204 No Content)
@@ -307,14 +307,14 @@ Examples:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/munki/enrollments/ \
+  https://$ZTL_FQDN/api/munki/enrollments/ \
   |python3 -m json.tool
 ```
 
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/munki/enrollments/?configuration_id=1 \
+  https://$ZTL_FQDN/api/munki/enrollments/?configuration_id=1 \
   |python3 -m json.tool
 ```
 
@@ -327,7 +327,7 @@ Response:
         "created_at": "2020-06-16T14:10:32.322536",
         "enrolled_machines_count": 5,
         "id": 1,
-        "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
+        "package_download_url": "https://$ZTL_FQDN/api/munki/enrollments/1/package/",
         "secret": {
             "id": 11,
             "meta_business_unit": 1,
@@ -368,7 +368,7 @@ enrollment.json
 $ curl -X POST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://$ZTL_HOST/api/munki/enrollments/" \
+  "https://$ZTL_FQDN/api/munki/enrollments/" \
   -d @enrollment.json \
   |python3 -m json.tool
 ```
@@ -391,7 +391,7 @@ Response:
     "udids": []
   },
   "version": 1,
-  "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
+  "package_download_url": "https://$ZTL_FQDN/api/munki/enrollments/1/package/",
   "created_at": "2023-01-10T11:02:51.831544",
   "updated_at": "2023-01-10T11:02:51.831553"
 }
@@ -408,7 +408,7 @@ Response:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/munki/enrollments/1/ \
+  https://$ZTL_FQDN/api/munki/enrollments/1/ \
   |python3 -m json.tool
 ```
 
@@ -420,7 +420,7 @@ Response:
     "created_at": "2020-06-16T14:10:32.322536",
     "enrolled_machines_count": 5,
     "id": 1,
-    "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
+    "package_download_url": "https://$ZTL_FQDN/api/munki/enrollments/1/package/",
     "secret": {
         "id": 11,
         "meta_business_unit": 1,
@@ -461,7 +461,7 @@ enrollment.json
 $ curl -X PUT \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  "https://$ZTL_HOST/api/munki/enrollments/1/" \
+  "https://$ZTL_FQDN/api/munki/enrollments/1/" \
   -d @enrollment.json \
   |python3 -m json.tool
 ```
@@ -484,7 +484,7 @@ Response:
     "udids": []
   },
   "version": 2,
-  "package_download_url": "https://$ZTL_HOST/api/munki/enrollments/1/package/",
+  "package_download_url": "https://$ZTL_FQDN/api/munki/enrollments/1/package/",
   "created_at": "2023-01-10T11:02:51.831544",
   "updated_at": "2023-01-10T11:02:51.831553"
 }
@@ -501,7 +501,7 @@ Example:
 ```bash
 $ curl -X DELETE \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://$ZTL_HOST/api/munki/enrollments/1/"
+  "https://$ZTL_FQDN/api/munki/enrollments/1/"
 ```
 
 Response (204 No Content)
@@ -519,5 +519,5 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -o zentral_munki_enrollment_package.pkg \
-  https://$ZTL_HOST/api/munki/enrollments/1/package/
+  https://$ZTL_FQDN/api/munki/enrollments/1/package/
 ```

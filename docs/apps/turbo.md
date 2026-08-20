@@ -349,7 +349,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://$ZTL_HOST/api/turbo/configurations/?name=Default" \
+  "https://$ZTL_FQDN/api/turbo/configurations/?name=Default" \
   |python3 -m json.tool
 ```
 
@@ -404,7 +404,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @configuration.json \
-  https://$ZTL_HOST/api/turbo/configurations/ \
+  https://$ZTL_FQDN/api/turbo/configurations/ \
   |python3 -m json.tool
 ```
 
@@ -438,7 +438,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/configurations/194a8af8-9e57-41b2-9b17-66ebc568c2dc/ \
+  https://$ZTL_FQDN/api/turbo/configurations/194a8af8-9e57-41b2-9b17-66ebc568c2dc/ \
   |python3 -m json.tool
 ```
 
@@ -487,7 +487,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @configuration.json \
-  https://$ZTL_HOST/api/turbo/configurations/194a8af8-9e57-41b2-9b17-66ebc568c2dc/ \
+  https://$ZTL_FQDN/api/turbo/configurations/194a8af8-9e57-41b2-9b17-66ebc568c2dc/ \
   |python3 -m json.tool
 ```
 
@@ -522,7 +522,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://$ZTL_HOST/api/turbo/configurations/194a8af8-9e57-41b2-9b17-66ebc568c2dc/
+  https://$ZTL_FQDN/api/turbo/configurations/194a8af8-9e57-41b2-9b17-66ebc568c2dc/
 ```
 
 Response (204 No Content):
@@ -546,7 +546,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/enrollments/ \
+  https://$ZTL_FQDN/api/turbo/enrollments/ \
   |python3 -m json.tool
 ```
 
@@ -610,7 +610,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @enrollment.json \
-  https://$ZTL_HOST/api/turbo/enrollments/ \
+  https://$ZTL_FQDN/api/turbo/enrollments/ \
   |python3 -m json.tool
 ```
 
@@ -654,7 +654,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/enrollments/1/ \
+  https://$ZTL_FQDN/api/turbo/enrollments/1/ \
   |python3 -m json.tool
 ```
 
@@ -687,7 +687,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @enrollment.json \
-  https://$ZTL_HOST/api/turbo/enrollments/1/ \
+  https://$ZTL_FQDN/api/turbo/enrollments/1/ \
   |python3 -m json.tool
 ```
 
@@ -705,7 +705,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://$ZTL_HOST/api/turbo/enrollments/1/
+  https://$ZTL_FQDN/api/turbo/enrollments/1/
 ```
 
 ### /api/turbo/enrollments/`<int:pk>`/plist/
@@ -724,7 +724,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -o zentral_turbo_configuration.plist \
-  https://$ZTL_HOST/api/turbo/enrollments/1/plist/
+  https://$ZTL_FQDN/api/turbo/enrollments/1/plist/
 ```
 
 ### /api/turbo/enrollments/`<int:pk>`/configuration_profile/
@@ -743,7 +743,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -o zentral_turbo_configuration.mobileconfig \
-  https://$ZTL_HOST/api/turbo/enrollments/1/configuration_profile/
+  https://$ZTL_FQDN/api/turbo/enrollments/1/configuration_profile/
 ```
 
 ### /api/turbo/scripts/
@@ -763,7 +763,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/scripts/ \
+  https://$ZTL_FQDN/api/turbo/scripts/ \
   |python3 -m json.tool
 ```
 
@@ -829,7 +829,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @script.json \
-  https://$ZTL_HOST/api/turbo/scripts/ \
+  https://$ZTL_FQDN/api/turbo/scripts/ \
   |python3 -m json.tool
 ```
 
@@ -868,7 +868,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/scripts/e6479cde-e17e-4f56-940e-7ccd59211c1a/ \
+  https://$ZTL_FQDN/api/turbo/scripts/e6479cde-e17e-4f56-940e-7ccd59211c1a/ \
   |python3 -m json.tool
 ```
 
@@ -904,7 +904,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @script.json \
-  https://$ZTL_HOST/api/turbo/scripts/e6479cde-e17e-4f56-940e-7ccd59211c1a/ \
+  https://$ZTL_FQDN/api/turbo/scripts/e6479cde-e17e-4f56-940e-7ccd59211c1a/ \
   |python3 -m json.tool
 ```
 
@@ -946,7 +946,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://$ZTL_HOST/api/turbo/scripts/e6479cde-e17e-4f56-940e-7ccd59211c1a/
+  https://$ZTL_FQDN/api/turbo/scripts/e6479cde-e17e-4f56-940e-7ccd59211c1a/
 ```
 
 ### /api/turbo/mscp_checks/
@@ -967,7 +967,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  "https://$ZTL_HOST/api/turbo/mscp_checks/?baseline=cis_lvl1" \
+  "https://$ZTL_FQDN/api/turbo/mscp_checks/?baseline=cis_lvl1" \
   |python3 -m json.tool
 ```
 
@@ -1020,7 +1020,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @mscp_check.json \
-  https://$ZTL_HOST/api/turbo/mscp_checks/ \
+  https://$ZTL_FQDN/api/turbo/mscp_checks/ \
   |python3 -m json.tool
 ```
 
@@ -1084,7 +1084,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/mscp_checks/a657104d-952b-489c-9816-14a32f12c7b6/ \
+  https://$ZTL_FQDN/api/turbo/mscp_checks/a657104d-952b-489c-9816-14a32f12c7b6/ \
   |python3 -m json.tool
 ```
 
@@ -1113,7 +1113,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @mscp_check.json \
-  https://$ZTL_HOST/api/turbo/mscp_checks/a657104d-952b-489c-9816-14a32f12c7b6/ \
+  https://$ZTL_FQDN/api/turbo/mscp_checks/a657104d-952b-489c-9816-14a32f12c7b6/ \
   |python3 -m json.tool
 ```
 
@@ -1131,7 +1131,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://$ZTL_HOST/api/turbo/mscp_checks/a657104d-952b-489c-9816-14a32f12c7b6/
+  https://$ZTL_FQDN/api/turbo/mscp_checks/a657104d-952b-489c-9816-14a32f12c7b6/
 ```
 
 ### /api/turbo/recurring_jobs/
@@ -1151,7 +1151,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/recurring_jobs/ \
+  https://$ZTL_FQDN/api/turbo/recurring_jobs/ \
   |python3 -m json.tool
 ```
 
@@ -1216,7 +1216,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @recurring_job.json \
-  https://$ZTL_HOST/api/turbo/recurring_jobs/ \
+  https://$ZTL_FQDN/api/turbo/recurring_jobs/ \
   |python3 -m json.tool
 ```
 
@@ -1260,7 +1260,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/recurring_jobs/a4193fe0-4011-4926-8f54-b83d3e9d6987/ \
+  https://$ZTL_FQDN/api/turbo/recurring_jobs/a4193fe0-4011-4926-8f54-b83d3e9d6987/ \
   |python3 -m json.tool
 ```
 
@@ -1294,7 +1294,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @recurring_job.json \
-  https://$ZTL_HOST/api/turbo/recurring_jobs/a4193fe0-4011-4926-8f54-b83d3e9d6987/ \
+  https://$ZTL_FQDN/api/turbo/recurring_jobs/a4193fe0-4011-4926-8f54-b83d3e9d6987/ \
   |python3 -m json.tool
 ```
 
@@ -1310,7 +1310,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://$ZTL_HOST/api/turbo/recurring_jobs/a4193fe0-4011-4926-8f54-b83d3e9d6987/
+  https://$ZTL_FQDN/api/turbo/recurring_jobs/a4193fe0-4011-4926-8f54-b83d3e9d6987/
 ```
 
 ### /api/turbo/one_time_jobs/
@@ -1330,7 +1330,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/one_time_jobs/ \
+  https://$ZTL_FQDN/api/turbo/one_time_jobs/ \
   |python3 -m json.tool
 ```
 
@@ -1388,7 +1388,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X POST -d @one_time_job.json \
-  https://$ZTL_HOST/api/turbo/one_time_jobs/ \
+  https://$ZTL_FQDN/api/turbo/one_time_jobs/ \
   |python3 -m json.tool
 ```
 
@@ -1425,7 +1425,7 @@ Example:
 ```bash
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
-  https://$ZTL_HOST/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/ \
+  https://$ZTL_FQDN/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/ \
   |python3 -m json.tool
 ```
 
@@ -1457,7 +1457,7 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
   -X PUT -d @one_time_job.json \
-  https://$ZTL_HOST/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/ \
+  https://$ZTL_FQDN/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/ \
   |python3 -m json.tool
 ```
 
@@ -1473,7 +1473,7 @@ Example:
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
-  https://$ZTL_HOST/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/
+  https://$ZTL_FQDN/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/
 ```
 
 ## Device API

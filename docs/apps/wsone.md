@@ -67,7 +67,7 @@ Use this endpoint to list all available Zentral Workspace ONE instances.
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
-  https://zentral.example.com/api/wsone/instances/ \
+  https://$ZTL_FQDN/api/wsone/instances/ \
   |python3 -m json.tool
 ```
 
@@ -101,7 +101,7 @@ Use this endpoint to get a specific Zentral Workspace ONE instance.
 curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
-  https://zentral.example.com/api/wsone/instances/1/ \
+  https://$ZTL_FQDN/api/wsone/instances/1/ \
   |python3 -m json.tool
 ```
 
@@ -135,7 +135,7 @@ curl \
   -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H 'Content-Type: application/json' \
-  https://zentral.example.com/api/wsone/instances/1/sync/ \
+  https://$ZTL_FQDN/api/wsone/instances/1/sync/ \
   |python3 -m json.tool
 ```
 
