@@ -7,6 +7,9 @@
 Fixed the version of a Munki script check being bumped by every API update, including the ones that changed nothing: the excluded tags were compared with the included tags. A version change discards the results still in flight and makes every machine in scope run the check again.
 
 
+Fixed Santa machines being reported out of sync when a rule sent during the current sync session replaced one they already had: the rule ledger did not count the version the client still holds, so a machine with a session open when it checked in was one rule short of what it reported. The ledger now keeps the rule the client confirmed until it confirms its replacement, and a session the client never confirmed goes back to that version instead of forgetting about it — a rule the ledger forgot about could not be removed from the client anymore.
+
+
 ## 2026.5
 
 

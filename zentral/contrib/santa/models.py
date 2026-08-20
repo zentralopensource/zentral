@@ -9,7 +9,7 @@ from django.core.validators import (
     MinValueValidator,
 )
 from django.db import connection, models
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
@@ -929,11 +929,14 @@ class EnrolledMachine(models.Model):
     def committed_rules(self):
         """The rules the client is expected to have, ignoring the rules staged by a current session, if any.
 
-        A staged removal was committed before the session, so the client still has it. A staged
-        rule that replaced a committed one cannot be told apart from a new one, and is left out.
+        A staged removal was committed before the session, so the client still has the rule. It
+        also still has the version a staged rule replaced. Only a row staged for a target it has
+        no rule for is left out. The batch a rule was sent in makes no difference: the client
+        writes the rules of the whole session at once, at the very end.
         """
-        return (self.machinerule_set.filter(cursor__isnull=True)
-                                    .filter(Q(sync_session__isnull=True) | Q(staged_removal=True)))
+        return self.machinerule_set.filter(
+            Q(sync_session__isnull=True) | Q(staged_removal=True) | Q(committed_policy__isnull=False)
+        )
 
     def sync_ok(self):
         """
@@ -1276,18 +1279,25 @@ class MachineRuleManager(models.Manager):
         session it stopped downloading.
 
         A staged removal was committed before the session staged it, so the client still holds the
-        rule: the row is committed again, and the removal is sent again during the next session.
-        Every other staged row only exists because of the send being unstaged - including one that
-        replaced a committed row, which nothing tells apart from a new one - so it is deleted, and
-        the rule is sent again.
+        rule: the row is committed again, and the removal is sent again during the next session. A
+        row that replaced a committed one goes back to the version the client holds, and the new
+        one is sent again. Every other staged row only exists because of the send being unstaged,
+        so it is deleted, and the rule is sent again.
 
-        The delete runs first, so that neither statement depends on the other, nor on the columns
-        the caller filtered on.
+        The three statements select rows on the state they had on entry, and no row is selected by
+        more than one of them, so that none depends on the others, nor on the columns the caller
+        filtered on.
         """
-        rules_discarded, _ = qs.filter(staged_removal=False).delete()
-        removals_restored = qs.filter(staged_removal=True).update(cursor=None, sync_session=None,
-                                                                 staged_removal=False)
-        return {"rules_discarded": rules_discarded, "removals_restored": removals_restored}
+        rules_discarded, _ = qs.filter(staged_removal=False, committed_policy__isnull=True).delete()
+        removals_restored = (qs.filter(staged_removal=True, committed_policy__isnull=True)
+                               .update(cursor=None, sync_session=None, staged_removal=False))
+        rules_restored = (qs.filter(committed_policy__isnull=False)
+                            .update(cursor=None, sync_session=None, staged_removal=False,
+                                    policy=F("committed_policy"), version=F("committed_version"),
+                                    committed_policy=None, committed_version=None))
+        return {"rules_discarded": rules_discarded,
+                "rules_restored": rules_restored,
+                "removals_restored": removals_restored}
 
     def discard_session(self, enrolled_machine):
         """Forget the rules sent during the sync sessions the client never confirmed"""
@@ -1306,7 +1316,8 @@ class MachineRuleManager(models.Manager):
             # the cleanup altogether when it does not receive any rule, hence the exists().
             rules_dropped, _ = qs.filter(sync_session__isnull=True).delete()
         removals_confirmed, _ = session_qs.filter(staged_removal=True).delete()
-        return {"rules_committed": session_qs.update(cursor=None, sync_session=None),
+        return {"rules_committed": session_qs.update(cursor=None, sync_session=None,
+                                                     committed_policy=None, committed_version=None),
                 "removals_confirmed": removals_confirmed,
                 "rules_dropped": rules_dropped}
 
@@ -1365,6 +1376,12 @@ class MachineRuleManager(models.Manager):
                 self.filter(enrolled_machine=enrolled_machine, target=target_id).update(**defaults)
             else:
                 defaults.update({"policy": policy, "version": version, "staged_removal": False})
+                # keep the version the client holds, if it has one: the ledger is the only place
+                # where it still exists, and it is what the client reports until the session is over
+                (self.filter(Q(sync_session__isnull=True) | Q(staged_removal=True),
+                             enrolled_machine=enrolled_machine, target=target_id,
+                             committed_policy__isnull=True)
+                     .update(committed_policy=F("policy"), committed_version=F("version")))
                 self.update_or_create(enrolled_machine=enrolled_machine,
                                       target=Target(pk=target_id),
                                       defaults=defaults)
@@ -1388,6 +1405,11 @@ class MachineRule(models.Model):
     # a removal was sent to the client during the current sync session. The policy and the
     # version are left untouched, so that the ledger can be restored if the session is lost.
     staged_removal = models.BooleanField(default=False)
+    # the policy and the version the client confirmed, kept when the rule sent during the current
+    # sync session replaced them. Null means that the client has no other version of the rule,
+    # either because it has confirmed this one, or because it has never received any.
+    committed_policy = models.PositiveSmallIntegerField(choices=Rule.Policy.choices, null=True)
+    committed_version = models.PositiveIntegerField(null=True)
 
     objects = MachineRuleManager()
 

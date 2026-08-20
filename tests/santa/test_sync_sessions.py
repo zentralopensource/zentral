@@ -1,4 +1,5 @@
 from unittest.mock import patch
+from django.db.models import F
 from django.test import TestCase
 from zentral.contrib.santa.events import SantaPostflightEvent, SantaPreflightEvent
 from zentral.contrib.santa.models import MachineRule, Rule, Target
@@ -283,6 +284,85 @@ class SantaSyncSessionTestCase(TestCase):
         # nothing has to be sent again
         self.assertEqual(client.rule_download(), [])
 
+    # a session that replaces a rule the client already has
+
+    def test_open_session_with_a_replaced_rule_compares_ok(self):
+        client, configuration, targets = self.force_client(rule_count=2)
+        client.sync()
+        # the rule is updated, and sent again during a session the client has not confirmed yet
+        Rule.objects.filter(configuration=configuration, target=targets[0]).update(version=F("version") + 1)
+        client.preflight()
+        self.assertEqual(len(client.rule_download()), 1)
+        client.enrolled_machine.refresh_from_db()
+        # the client reported the rules it had before the session, the replaced one included
+        with self.assertNoLogs("zentral.contrib.santa.models", level="ERROR"):
+            self.assertTrue(client.enrolled_machine.sync_ok())
+
+    def test_open_session_with_a_staged_removal_compares_ok(self):
+        client, configuration, targets = self.force_client(rule_count=2)
+        client.sync()
+        Rule.objects.filter(configuration=configuration, target=targets[0]).delete()
+        client.preflight()
+        # the removal is sent, the client only applies it at the end of the session
+        self.assertEqual(len(client.rule_download()), 1)
+        client.enrolled_machine.refresh_from_db()
+        with self.assertNoLogs("zentral.contrib.santa.models", level="ERROR"):
+            self.assertTrue(client.enrolled_machine.sync_ok())
+
+    def test_open_session_with_a_replaced_rule_and_a_lost_rule_is_out_of_sync(self):
+        client, configuration, targets = self.force_client(rule_count=2)
+        client.sync()
+        # the client loses one of the rules it confirmed
+        client.rules.popitem()
+        Rule.objects.filter(configuration=configuration, target=targets[0]).update(version=F("version") + 1)
+        client.preflight()
+        self.assertEqual(len(client.rule_download()), 1)
+        client.enrolled_machine.refresh_from_db()
+        with self.assertLogs("zentral.contrib.santa.models", level="ERROR"):
+            self.assertFalse(client.enrolled_machine.sync_ok())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_interrupted_session_with_a_replaced_rule_is_discarded(self, post_event):
+        client, configuration, targets = self.force_client(rule_count=2)
+        client.sync()
+        # one rule is updated, another one is added
+        Rule.objects.filter(configuration=configuration, target=targets[0]).update(version=F("version") + 1)
+        force_rule(configuration=configuration, target_type=Target.Type.BINARY, target_identifier=new_sha256())
+        client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        lost_session = client.enrolled_machine.sync_session
+        # the download dies after the first batch, the client writes nothing
+        self.assertIsNone(client.rule_download(max_batches=1))
+        with self.assertNoLogs("zentral.contrib.santa.models", level="ERROR"):
+            client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertTrue(sync_session["sync_ok"])
+        self.assertEqual(sync_session["previous_session"]["id"], lost_session)
+        self.assertEqual(sync_session["previous_session"]["outcome"], "discarded")
+        # the client still has the two rules it confirmed, and the ledger says so
+        self.assertEqual(self.synced_rule_count(client.enrolled_machine), 2)
+
+    def test_replaced_rule_of_a_discarded_session_can_still_be_removed(self):
+        client, configuration, targets = self.force_client(rule_count=2)
+        client.sync()
+        # one rule is updated, another one is added, so that the counts of the session tell it
+        # apart from the state of the client and the lost session is discarded
+        Rule.objects.filter(configuration=configuration, target=targets[0]).update(version=F("version") + 1)
+        added_rule = force_rule(configuration=configuration, target_type=Target.Type.BINARY,
+                                target_identifier=new_sha256())
+        client.preflight()
+        # the download dies, the client writes nothing
+        self.assertIsNone(client.rule_download(max_batches=1))
+        # the updated rule is removed from the configuration before the next session
+        Rule.objects.filter(configuration=configuration, target=targets[0]).delete()
+        client.sync()
+        # the ledger knows the client still has the rule it replaced, and sends the removal
+        self.assertEqual({identifier for _, identifier in client.rules},
+                         {targets[1].identifier, added_rule.target.identifier})
+        client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertTrue(client.enrolled_machine.sync_ok())
+
     # the postflight event reports what the client confirmed
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -501,7 +581,10 @@ class SantaSyncSessionTestCase(TestCase):
                          {"id": lost_session,
                           "clean": True,
                           "outcome": "discarded",
-                          "rules_discarded": 2,
+                          # the session sent the rules again, the ledger goes back to the versions
+                          # the client confirmed
+                          "rules_discarded": 0,
+                          "rules_restored": 2,
                           "removals_restored": 0})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

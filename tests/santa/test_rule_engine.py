@@ -589,11 +589,17 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertEqual(machine_rule.target, target)
         self.assertEqual(machine_rule.policy, rule.policy)
         self.assertEqual(machine_rule.version, 2)
+        # the rule the client still has is kept, this update only bumped the version
+        self.assertEqual(machine_rule.committed_policy, rule.policy)
+        self.assertEqual(machine_rule.committed_version, 1)
         self.commit_session()
         self.assertEqual(machine_rule_qs.count(), 1)
         self.assertEqual(machine_rule.pk, machine_rule_qs.first().pk)
         machine_rule.refresh_from_db()
         self.assertIsNone(machine_rule.cursor)
+        # the client confirmed the update, there is no other version of the rule anymore
+        self.assertIsNone(machine_rule.committed_policy)
+        self.assertIsNone(machine_rule.committed_version)
         rule_batch2, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
         self.assertEqual(rule_batch2, [])
         self.assertEqual(response_cursor, None)
@@ -687,7 +693,7 @@ class SantaRuleEngineTestCase(TestCase):
                                               policy=Rule.Policy.ALLOWLIST, version=1,
                                               sync_session="session1")
         counts = MachineRule.objects._unstage(MachineRule.objects.filter(pk__in=[removal.pk, addition.pk]))
-        self.assertEqual(counts, {"rules_discarded": 1, "removals_restored": 1})
+        self.assertEqual(counts, {"rules_discarded": 1, "rules_restored": 0, "removals_restored": 1})
         # the client still holds the rule, the removal is committed again and sent again next session
         removal.refresh_from_db()
         self.assertIsNone(removal.sync_session)
@@ -695,3 +701,21 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertFalse(removal.staged_removal)
         # the staged rule only existed because of the session
         self.assertEqual(MachineRule.objects.filter(pk=addition.pk).count(), 0)
+
+    def test_unstage_restores_the_rule_the_client_confirmed(self):
+        target, _ = self.create_rule()
+        replacement = MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=target,
+                                                 policy=Rule.Policy.BLOCKLIST, version=2,
+                                                 sync_session="session1",
+                                                 committed_policy=Rule.Policy.ALLOWLIST,
+                                                 committed_version=1)
+        counts = MachineRule.objects._unstage(MachineRule.objects.filter(pk=replacement.pk))
+        self.assertEqual(counts, {"rules_discarded": 0, "rules_restored": 1, "removals_restored": 0})
+        # the client still holds the rule the session replaced, and it is sent again next session
+        replacement.refresh_from_db()
+        self.assertIsNone(replacement.sync_session)
+        self.assertIsNone(replacement.cursor)
+        self.assertEqual(replacement.policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(replacement.version, 1)
+        self.assertIsNone(replacement.committed_policy)
+        self.assertIsNone(replacement.committed_version)
