@@ -19,7 +19,7 @@ class ActionDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class ActionList(ListCreateAPIViewWithAudit):
-    queryset = Action.objects.all()
+    queryset = Action.objects.all().order_by("name")
     serializer_class = ActionSerializer
     filterset_fields = ('name',)
 

@@ -419,7 +419,7 @@ class JMESPathCheckList(generics.ListCreateAPIView):
     """
     List, search by name or create JMESPath compliance checks.
     """
-    queryset = JMESPathCheck.objects.select_related("compliance_check").all()
+    queryset = JMESPathCheck.objects.select_related("compliance_check").all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = JMESPathCheckSerializer
     filter_backends = (filters.DjangoFilterBackend,)

@@ -28,7 +28,7 @@ class ConfigurationList(ListCreateAPIViewWithAudit):
     """
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
-    queryset = Configuration.objects.all()
+    queryset = Configuration.objects.all().order_by("name")
     serializer_class = ConfigurationSerializer
     filterset_fields = ('name',)
 
@@ -51,7 +51,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -173,7 +173,7 @@ class RuleList(generics.ListCreateAPIView):
     """
     List, Create or search rules.
     """
-    queryset = Rule.objects.select_related("configuration", "ruleset", "target")
+    queryset = Rule.objects.select_related("configuration", "ruleset", "target").order_by("pk")
     permission_classes = (DefaultDjangoModelPermissions,)
     serializer_class = RuleSerializer
     filter_backends = (filters.DjangoFilterBackend,)

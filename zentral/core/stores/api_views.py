@@ -36,7 +36,7 @@ class StoreDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class StoreList(ListCreateAPIViewWithAudit):
-    queryset = Store.objects.all()
+    queryset = Store.objects.all().order_by("name")
     serializer_class = StoreSerializer
     filterset_fields = ('name',)
 

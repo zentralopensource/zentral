@@ -41,7 +41,7 @@ class SyncTagsView(APIView):
 
 
 class ConnectionList(ListAPIView):
-    queryset = Connection.objects.all()
+    queryset = Connection.objects.all().order_by("name")
     serializer_class = ConnectionSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
@@ -55,7 +55,7 @@ class ConnectionDetail(RetrieveAPIView):
 
 
 class GroupTagMappingList(ListCreateAPIViewWithAudit):
-    queryset = GroupTagMapping.objects.all()
+    queryset = GroupTagMapping.objects.all().order_by("pk")
     serializer_class = GroupTagMappingSerializer
     filterset_fields = ('connection_id', 'group_email')
 

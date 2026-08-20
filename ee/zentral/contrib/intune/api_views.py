@@ -14,7 +14,7 @@ class TenantList(ListCreateAPIViewWithAudit):
     """
     List or Create Tenants
     """
-    queryset = Tenant.objects.all()
+    queryset = Tenant.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = TenantSerializer
 

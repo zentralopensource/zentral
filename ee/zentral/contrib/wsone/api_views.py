@@ -14,7 +14,7 @@ class InstanceList(generics.ListAPIView):
     """
     List all Instances
     """
-    queryset = Instance.objects.all()
+    queryset = Instance.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = InstanceSerializer
 

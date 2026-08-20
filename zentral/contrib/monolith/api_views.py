@@ -163,7 +163,7 @@ class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ConditionList(generics.ListCreateAPIView):
-    queryset = Condition.objects.all()
+    queryset = Condition.objects.all().order_by("name")
     serializer_class = ConditionSerializer
     permission_classes = (DefaultDjangoModelPermissions,)
     filter_backends = (filters.DjangoFilterBackend,)
@@ -188,7 +188,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -273,7 +273,7 @@ class ManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class ManifestCatalogList(ListCreateAPIViewWithAudit):
-    queryset = ManifestCatalog.objects.all()
+    queryset = ManifestCatalog.objects.all().order_by("catalog__name", "pk")
     serializer_class = ManifestCatalogSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
@@ -293,7 +293,7 @@ class ManifestCatalogDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class ManifestEnrollmentPackageList(generics.ListCreateAPIView):
-    queryset = ManifestEnrollmentPackage.objects.all()
+    queryset = ManifestEnrollmentPackage.objects.all().order_by("pk")
     serializer_class = ManifestEnrollmentPackageSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
@@ -315,7 +315,7 @@ class ManifestEnrollmentPackageDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ManifestSubManifestList(ListCreateAPIViewWithAudit):
-    queryset = ManifestSubManifest.objects.all()
+    queryset = ManifestSubManifest.objects.all().order_by("sub_manifest__name", "pk")
     serializer_class = ManifestSubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
@@ -338,7 +338,7 @@ class ManifestSubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class SubManifestList(ListCreateAPIViewWithAudit):
-    queryset = SubManifest.objects.all()
+    queryset = SubManifest.objects.all().order_by("name", "pk")
     serializer_class = SubManifestSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
@@ -355,7 +355,7 @@ class SubManifestDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class SubManifestPkgInfoList(ListCreateAPIViewWithAudit):
-    queryset = SubManifestPkgInfo.objects.all()
+    queryset = SubManifestPkgInfo.objects.all().order_by("pkg_info_name", "pk")
     serializer_class = SubManifestPkgInfoSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)

@@ -33,7 +33,7 @@ class AutomaticTableConstructionList(generics.ListCreateAPIView):
     """
     List all AutomaticTableConstructions or create a new AutomaticTableConstruction
     """
-    queryset = AutomaticTableConstruction.objects.all()
+    queryset = AutomaticTableConstruction.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = AutomaticTableConstructionSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -53,7 +53,7 @@ class ConfigurationList(generics.ListCreateAPIView):
     """
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
-    queryset = Configuration.objects.all()
+    queryset = Configuration.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -79,7 +79,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
@@ -155,7 +155,7 @@ class FileCategoryList(generics.ListCreateAPIView):
     """
     List, Create file categories, search by name or configuration_id
     """
-    queryset = FileCategory.objects.all()
+    queryset = FileCategory.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = FileCategorySerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -257,7 +257,7 @@ class PackFilter(filters.FilterSet):
 
 
 class PackList(generics.ListCreateAPIView):
-    queryset = Pack.objects.all()
+    queryset = Pack.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = PackSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -279,7 +279,7 @@ class QueryFilter(filters.FilterSet):
 
 
 class QueryList(generics.ListCreateAPIView):
-    queryset = Query.objects.all()
+    queryset = Query.objects.all().order_by("name")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -301,7 +301,7 @@ class ConfigurationPackFilter(filters.FilterSet):
 
 
 class ConfigurationPackList(generics.ListCreateAPIView):
-    queryset = ConfigurationPack.objects.all()
+    queryset = ConfigurationPack.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationPackSerializer
     filter_backends = (filters.DjangoFilterBackend,)

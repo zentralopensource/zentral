@@ -6,7 +6,7 @@ from .serializers import RealmSerializer
 
 
 class RealmList(ListAPIView):
-    queryset = Realm.objects.all()
+    queryset = Realm.objects.all().order_by("name", "-created_at", "pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = RealmSerializer
     filter_backends = (filters.DjangoFilterBackend,)

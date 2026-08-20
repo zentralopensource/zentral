@@ -15,7 +15,7 @@ from .serializers import ConfigurationSerializer, EnrollmentSerializer, ScriptCh
 
 
 class ConfigurationList(ListCreateAPIViewWithAudit):
-    queryset = Configuration.objects.all()
+    queryset = Configuration.objects.all().order_by("name")
     serializer_class = ConfigurationSerializer
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
@@ -32,7 +32,7 @@ class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 
 
 class EnrollmentList(generics.ListCreateAPIView):
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -67,7 +67,7 @@ class ScriptCheckFilter(filters.FilterSet):
 
 
 class ScriptCheckList(ListCreateAPIViewWithAudit):
-    queryset = ScriptCheck.objects.select_related("compliance_check").all()
+    queryset = ScriptCheck.objects.select_related("compliance_check").all().order_by("pk")
     serializer_class = ScriptCheckSerializer
     filterset_class = ScriptCheckFilter
 
