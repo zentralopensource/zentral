@@ -1,6 +1,7 @@
 from rest_framework.exceptions import ValidationError
 from zentral.core.queues import queues
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .conf import stores
 from .models import Store
 from .serializers import StoreSerializer
@@ -39,6 +40,7 @@ class StoreList(ListCreateAPIViewWithAudit):
     queryset = Store.objects.all().order_by("name")
     serializer_class = StoreSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
     def on_commit_callback_extra(self, instance):
         signal_store_change(instance)

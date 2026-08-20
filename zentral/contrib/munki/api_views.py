@@ -5,7 +5,8 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .models import Configuration, Enrollment, ScriptCheck
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, ScriptCheckSerializer
@@ -20,6 +21,7 @@ class ConfigurationList(ListCreateAPIViewWithAudit):
     permission_classes = [DefaultDjangoModelPermissions]
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("name",)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -37,6 +39,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("configuration_id",)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -70,6 +73,7 @@ class ScriptCheckList(ListCreateAPIViewWithAudit):
     queryset = ScriptCheck.objects.select_related("compliance_check").all().order_by("pk")
     serializer_class = ScriptCheckSerializer
     filterset_class = ScriptCheckFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ScriptCheckDetail(RetrieveUpdateDestroyAPIViewWithAudit):

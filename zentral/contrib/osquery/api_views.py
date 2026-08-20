@@ -11,7 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               MaxLimitOffsetPagination)
 from .events import post_osquery_pack_update_events
 from .models import Configuration, ConfigurationPack, Enrollment, Pack, Query, AutomaticTableConstruction, FileCategory
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
@@ -38,6 +39,7 @@ class AutomaticTableConstructionList(generics.ListCreateAPIView):
     serializer_class = AutomaticTableConstructionSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = AutomaticTableConstructionFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class AutomaticTableConstructionDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -58,6 +60,7 @@ class ConfigurationList(generics.ListCreateAPIView):
     serializer_class = ConfigurationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -82,6 +85,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     queryset = Enrollment.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -160,6 +164,7 @@ class FileCategoryList(generics.ListCreateAPIView):
     serializer_class = FileCategorySerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = FileCategoryFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class FileCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -262,6 +267,7 @@ class PackList(generics.ListCreateAPIView):
     serializer_class = PackSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = PackFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class PackDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -284,6 +290,7 @@ class QueryList(generics.ListCreateAPIView):
     serializer_class = QuerySerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = QueryFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -306,6 +313,7 @@ class ConfigurationPackList(generics.ListCreateAPIView):
     serializer_class = ConfigurationPackSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = ConfigurationPackFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationPackDetail(generics.RetrieveUpdateDestroyAPIView):

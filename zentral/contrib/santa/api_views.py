@@ -16,7 +16,8 @@ from accounts.api_authentication import APITokenAuthentication
 from zentral.contrib.inventory.models import File, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
 from .models import Configuration, Rule, RuleSet, Target, Enrollment
 from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
@@ -31,6 +32,7 @@ class ConfigurationList(ListCreateAPIViewWithAudit):
     queryset = Configuration.objects.all().order_by("name")
     serializer_class = ConfigurationSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -56,6 +58,7 @@ class EnrollmentList(generics.ListCreateAPIView):
     serializer_class = EnrollmentSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('configuration_id',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -178,6 +181,7 @@ class RuleList(generics.ListCreateAPIView):
     serializer_class = RuleSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = RuleFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class RuleDetail(generics.RetrieveUpdateDestroyAPIView):

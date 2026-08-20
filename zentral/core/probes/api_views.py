@@ -1,5 +1,6 @@
 from rest_framework.exceptions import ValidationError
-from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.drf import (ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .models import Action, ProbeSource
 from .serializers import ActionSerializer, ProbeSourceSerializer
 from .sync import signal_probe_change
@@ -22,6 +23,7 @@ class ActionList(ListCreateAPIViewWithAudit):
     queryset = Action.objects.all().order_by("name")
     serializer_class = ActionSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
     def on_commit_callback_extra(self, instance):
         signal_probe_change()
@@ -36,3 +38,4 @@ class ProbeList(ListCreateAPIViewWithAudit):
     queryset = ProbeSource.objects.all()
     serializer_class = ProbeSourceSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination

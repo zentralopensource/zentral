@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters
 from rest_framework.generics import ListAPIView, RetrieveAPIView
-from zentral.utils.drf import DefaultDjangoModelPermissions
+from zentral.utils.drf import DefaultDjangoModelPermissions, MaxLimitOffsetPagination
 from .models import Realm
 from .serializers import RealmSerializer
 
@@ -11,6 +11,7 @@ class RealmList(ListAPIView):
     serializer_class = RealmSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class RealmDetail(RetrieveAPIView):

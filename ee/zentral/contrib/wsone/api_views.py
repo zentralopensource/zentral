@@ -4,7 +4,8 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from zentral.core.events.base import EventRequest
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               MaxLimitOffsetPagination)
 from .models import Instance
 from .serializers import InstanceSerializer
 from .tasks import sync_inventory
@@ -17,6 +18,7 @@ class InstanceList(generics.ListAPIView):
     queryset = Instance.objects.all().order_by("pk")
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = InstanceSerializer
+    pagination_class = MaxLimitOffsetPagination
 
 
 class InstanceDetail(generics.RetrieveAPIView):
