@@ -54,6 +54,10 @@ Authorization: Token the_token_string
 
 See [API authentication](core.md#api-authentication) for how to create a service account, issue a token for it and set an expiry.
 
+#### Pagination
+
+The list endpoints are paginated. See [Pagination](core.md#pagination) for the response envelope and the `limit` and `offset` query parameters.
+
 ### `/api/wsone/instances/`
 
 * method: GET
@@ -74,18 +78,23 @@ curl \
 Response:
 
 ```json
-[
-  {
-    "id": 1,
-    "business_unit": 1,
-    "client_id": "d2186IFnISnulzGIIwHOAJ68opAWUnFc",
-    "server_url": "https://cn000.awmdm.com",
-    "excluded_groups": ["iPads"],
-    "version": 12,
-    "created_at": "2022-01-18T16:07:59.826640",
-    "updated_at": "2022-01-19T09:25:20.530703"
-  }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "business_unit": 1,
+      "client_id": "d2186IFnISnulzGIIwHOAJ68opAWUnFc",
+      "server_url": "https://cn000.awmdm.com",
+      "excluded_groups": ["iPads"],
+      "version": 12,
+      "created_at": "2022-01-18T16:07:59.826640",
+      "updated_at": "2022-01-19T09:25:20.530703"
+    }
+  ]
+}
 ```
 
 ### `/api/wsone/instances/{id}/`

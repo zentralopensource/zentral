@@ -227,6 +227,10 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * `Content-Type: application/json`
 * `Content-Type: application/yaml`
 
+#### Pagination
+
+The list endpoints are paginated. See [Pagination](core.md#pagination) for the response envelope and the `limit` and `offset` query parameters.
+
 ### /api/santa/rules/
 
 #### List all Santa rules
@@ -260,50 +264,55 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-    {
-        "id": 1,
-        "target_type": "TEAMID",
-        "target_identifier": "9BNSXJN65R",
-        "ruleset": null,
-        "version": 1,
-        "policy": 1,
-        "custom_msg": "",
-        "description": "",
-        "serial_numbers": [],
-        "excluded_serial_numbers": [],
-        "primary_users": [],
-        "excluded_primary_users": [],
-        "created_at": "2023-01-17T13:08:19.503831",
-        "updated_at": "2023-01-17T13:08:19.503837",
-        "configuration": 1,
-        "tags": [
-            2
-        ],
-        "excluded_tags": [
-            1
-        ]
-    },
-    {
-        "id": 2,
-        "target_type": "TEAMID",
-        "target_identifier": "1234567890",
-        "ruleset": null,
-        "version": 1,
-        "policy": 1,
-        "custom_msg": "",
-        "description": "",
-        "serial_numbers": [],
-        "excluded_serial_numbers": [],
-        "primary_users": [],
-        "excluded_primary_users": [],
-        "created_at": "2023-01-20T06:10:15.059545",
-        "updated_at": "2023-01-20T06:10:15.059556",
-        "configuration": 1,
-        "tags": [],
-        "excluded_tags": []
-    }
-]
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+      {
+          "id": 1,
+          "target_type": "TEAMID",
+          "target_identifier": "9BNSXJN65R",
+          "ruleset": null,
+          "version": 1,
+          "policy": 1,
+          "custom_msg": "",
+          "description": "",
+          "serial_numbers": [],
+          "excluded_serial_numbers": [],
+          "primary_users": [],
+          "excluded_primary_users": [],
+          "created_at": "2023-01-17T13:08:19.503831",
+          "updated_at": "2023-01-17T13:08:19.503837",
+          "configuration": 1,
+          "tags": [
+              2
+          ],
+          "excluded_tags": [
+              1
+          ]
+      },
+      {
+          "id": 2,
+          "target_type": "TEAMID",
+          "target_identifier": "1234567890",
+          "ruleset": null,
+          "version": 1,
+          "policy": 1,
+          "custom_msg": "",
+          "description": "",
+          "serial_numbers": [],
+          "excluded_serial_numbers": [],
+          "primary_users": [],
+          "excluded_primary_users": [],
+          "created_at": "2023-01-20T06:10:15.059545",
+          "updated_at": "2023-01-20T06:10:15.059556",
+          "configuration": 1,
+          "tags": [],
+          "excluded_tags": []
+      }
+  ]
+}
 ```
 
 #### Add new Santa rule
@@ -856,27 +865,32 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "Default",
-    "client_mode": 1,
-    "client_certificate_auth": false,
-    "batch_size": 50,
-    "full_sync_interval": 600,
-    "enable_bundles": true,
-    "enable_transitive_rules": false,
-    "allowed_path_regex": "",
-    "blocked_path_regex": "",
-    "block_usb_mount": false,
-    "remount_usb_mode": [],
-    "allow_unknown_shard": 100,
-    "enable_all_event_upload_shard": 0,
-    "sync_incident_severity": 0,
-    "created_at": "2023-01-06T13:07:23.768829",
-    "updated_at": "2023-01-12T12:15:30.457577"
-  }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "name": "Default",
+      "client_mode": 1,
+      "client_certificate_auth": false,
+      "batch_size": 50,
+      "full_sync_interval": 600,
+      "enable_bundles": true,
+      "enable_transitive_rules": false,
+      "allowed_path_regex": "",
+      "blocked_path_regex": "",
+      "block_usb_mount": false,
+      "remount_usb_mode": [],
+      "allow_unknown_shard": 100,
+      "enable_all_event_upload_shard": 0,
+      "sync_incident_severity": 0,
+      "created_at": "2023-01-06T13:07:23.768829",
+      "updated_at": "2023-01-12T12:15:30.457577"
+    }
+  ]
+}
 ```
 
 #### Add new Santa configuration.
@@ -1091,31 +1105,36 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 Response:
 
 ```json
-[
-  {
-    "secret": {
-      "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
-      "request_count": 0,
-      "id": 3,
-      "serial_numbers": [
-      ],
-      "meta_business_unit": 1,
-      "quota": null,
-      "tags": [
-      ],
-      "udids": [
-      ]
-    },
-    "id": 2,
-    "configuration_profile_download_url": "https://zentral.example.com/api/santa/enrollments/1/configuration_profile/",
-    "created_at": "2023-01-10T11:02:51.831544",
-    "configuration": 1,
-    "enrolled_machines_count": 0,
-    "version": 1,
-    "updated_at": "2023-01-10T11:02:51.831553",
-    "plist_download_url": "https://zentral.example.com/api/santa/enrollments/1/plist/"
-  }
-]
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "secret": {
+        "secret": "AzZhxoWDXDqpUr06O8SQG53eE7fkiOy0U02uOghjQG3zowXMlJqpblSFXvkk05ak",
+        "request_count": 0,
+        "id": 3,
+        "serial_numbers": [
+        ],
+        "meta_business_unit": 1,
+        "quota": null,
+        "tags": [
+        ],
+        "udids": [
+        ]
+      },
+      "id": 2,
+      "configuration_profile_download_url": "https://zentral.example.com/api/santa/enrollments/1/configuration_profile/",
+      "created_at": "2023-01-10T11:02:51.831544",
+      "configuration": 1,
+      "enrolled_machines_count": 0,
+      "version": 1,
+      "updated_at": "2023-01-10T11:02:51.831553",
+      "plist_download_url": "https://zentral.example.com/api/santa/enrollments/1/plist/"
+    }
+  ]
+}
 ```
 
 #### Add new Santa enrollment.
