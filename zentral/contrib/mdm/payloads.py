@@ -2,7 +2,7 @@ import logging
 import plistlib
 from django.http import HttpResponse
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url, settings
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 from zentral.utils.payloads import sign_payload
@@ -183,7 +183,7 @@ def build_profile_service_configuration_profile(ota_obj):
         raise ValueError("ota_obj not an OTAEnrollment nor an OTAEnrollmentSession")
     return build_profile(display_name,
                          "profile-service",
-                         {"URL": "{}{}".format(settings["api"]["tls_hostname"], url_path),
+                         {"URL": f"{api_base_url()}{url_path}",
                           "DeviceAttributes": ["UDID",
                                                "VERSION",
                                                "PRODUCT",

@@ -2,6 +2,7 @@ import plistlib
 from unittest.mock import patch
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
+from zentral.conf import settings
 from zentral.contrib.turbo.models import Enrollment
 from zentral.contrib.turbo.utils import build_configuration_profile
 from zentral.utils.payloads import get_payload_identifier
@@ -212,7 +213,8 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         self.assertEqual(int(response["Content-Length"]), len(content))
         data = plistlib.loads(content)
         self.assertEqual(data["EnrollmentSecret"], enrollment.secret.secret)
-        self.assertIn("BaseURL", data)
+        # the agent uses BaseURL as-is: without the scheme it cannot build a request
+        self.assertEqual(data["BaseURL"], f'https://{settings["api"]["fqdn"]}')
         self.assertNotIn("ManagedAgents", data)
 
     @patch("zentral.contrib.turbo.api_views.enrollments.build_configuration_plist")
@@ -251,7 +253,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         # modern flat custom-settings payload: keys directly on the com.zentral.turbo payload
         self.assertEqual(payload["PayloadType"], "com.zentral.turbo")
         self.assertEqual(payload["EnrollmentSecret"], enrollment.secret.secret)
-        self.assertIn("BaseURL", payload)
+        self.assertEqual(payload["BaseURL"], f'https://{settings["api"]["fqdn"]}')
         self.assertNotIn("PayloadContent", payload)
         self.assertNotIn("mcx_preference_settings", content.decode("utf-8"))
 

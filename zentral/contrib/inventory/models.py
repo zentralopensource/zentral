@@ -23,7 +23,7 @@ from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import RealmUser
 
-from zentral.conf import settings
+from zentral.conf import api_base_url, settings
 from zentral.core.compliance_checks.utils import get_machine_compliance_check_statuses
 from zentral.core.incidents.models import MachineIncident, Status
 from zentral.utils.model_extras import find_all_related_objects
@@ -992,11 +992,11 @@ class MetaMachine:
 
     def get_url(self):
         try:
-            tls_hostname = settings['api']['tls_hostname']
+            base_url = api_base_url()
         except KeyError:
-            logger.warning("Missing api.tls_hostname configuration key")
+            logger.warning("Missing api.fqdn configuration key")
         else:
-            return "{}{}".format(tls_hostname.rstrip('/'), self.get_absolute_url())
+            return f"{base_url}{self.get_absolute_url()}"
 
     @property
     def names_with_sources(self):

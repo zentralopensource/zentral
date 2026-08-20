@@ -1,22 +1,39 @@
 import json
 from datetime import datetime
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from tests.mdm.utils import force_software_update_enforcement
 from tests.munki.utils import force_enrollment as force_munki_enrollment
+from zentral.conf import settings
 from zentral.contrib.inventory.models import (
     BusinessUnit,
     EnrollmentSecret,
     MachineTag,
     MetaBusinessUnit,
+    MetaMachine,
     Tag,
     Taxonomy,
 )
 
 
 class InventoryModelsTestCase(TestCase):
+
+    # MetaMachine
+
+    def test_meta_machine_get_url(self):
+        machine = MetaMachine(get_random_string(12))
+        self.assertEqual(machine.get_url(),
+                         f'https://{settings["api"]["fqdn"]}{machine.get_absolute_url()}')
+
+    def test_meta_machine_get_url_missing_fqdn(self):
+        machine = MetaMachine(get_random_string(12))
+        with patch("zentral.contrib.inventory.models.api_base_url", side_effect=KeyError("fqdn")):
+            with self.assertLogs("zentral.contrib.inventory.models", level="WARNING") as cm:
+                self.assertIsNone(machine.get_url())
+        self.assertIn("Missing api.fqdn configuration key", cm.output[0])
 
     # BusinessUnit
 

@@ -1,6 +1,5 @@
 import json
 import logging
-from urllib.parse import urlparse
 
 import celpy
 import pyotp
@@ -20,7 +19,7 @@ from webauthn import generate_authentication_options, options_to_json, verify_au
 from webauthn.helpers import parse_authentication_credential_json
 from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 
-from zentral.conf import settings as zentral_settings
+from zentral.conf import api_base_url, settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
 from zentral.utils.forms import SelectMultipleWithDisabledOptions
@@ -322,7 +321,7 @@ class AddTOTPForm(forms.Form):
             return self.fields["secret"].initial
 
     def get_provisioning_uri(self):
-        label = urlparse(zentral_settings["api"]["tls_hostname"]).netloc
+        label = zentral_settings["api"]["fqdn"]
         return pyotp.totp.TOTP(self.initial_secret).provisioning_uri(self.user.email, label)
 
     def clean_name(self):
@@ -446,7 +445,7 @@ class VerifyWebAuthnForm(BaseVerifyForm):
                 credential=credential,
                 expected_challenge=trimmed_urlsafe_b64decode(webauthn_challenge["challenge"]),
                 expected_rp_id=expected_rp_id,
-                expected_origin=zentral_settings["api"]["tls_hostname"],
+                expected_origin=api_base_url(),
                 credential_public_key=device.public_key.tobytes(),
                 credential_current_sign_count=device.sign_count,
                 require_user_verification=False,

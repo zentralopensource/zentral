@@ -4,11 +4,12 @@ import uuid
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.models import EnrolledDevice, OTAEnrollment, OTAEnrollmentSession, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
-from .utils import complete_enrollment_session, force_ota_enrollment, force_realm_user
+from .utils import complete_enrollment_session, force_ota_enrollment, force_realm, force_realm_user
 
 
 class TestOTAEnrollment(TestCase):
@@ -16,6 +17,19 @@ class TestOTAEnrollment(TestCase):
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+
+    def test_ota_enrollment_no_realm_no_enroll_full_url(self):
+        enrollment = force_ota_enrollment(self.mbu)
+        self.assertIsNone(enrollment.get_enroll_full_url())
+
+    def test_ota_enrollment_enroll_full_url(self):
+        enrollment = force_ota_enrollment(self.mbu, realm=force_realm())
+        # the URL is displayed for an operator to hand out, it needs the scheme
+        self.assertEqual(
+            enrollment.get_enroll_full_url(),
+            f'https://{settings["api"]["fqdn"]}'
+            + reverse("mdm_public:ota_enrollment_enroll", args=(enrollment.pk,))
+        )
 
     def test_ota_enrollment_cannot_be_deleted(self):
         enrollment = force_ota_enrollment(self.mbu)
