@@ -22,6 +22,7 @@ You can deploy it on your machine with [Docker](./deployment/docker-compose).
 * Munki
 * Osquery
 * Santa
+* Turbo (the Zentral agent)
 
 ## Inventory sources
 

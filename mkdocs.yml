@@ -37,6 +37,7 @@ nav:
       - Munki: apps/munki.md
       - Osquery: apps/osquery.md
       - Santa: apps/santa.md
+      - Turbo: apps/turbo.md
       - Workspace One: apps/wsone.md
   - Deployment:
       - Intro: deployment/index.md
