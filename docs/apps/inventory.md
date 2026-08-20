@@ -264,7 +264,306 @@ Authorization: Token the_token_string
 
 See [API authentication](core.md#api-authentication) for how to create a service account, issue a token for it and set an expiry.
 
-### `/api/inventory/machines/<url_safe_serial_number>/meta/`
+### `/api/inventory/meta_business_units/`
+
+A meta business unit groups the business units reported by the different inventory sources, and is what enrollments are scoped to.
+
+#### List all meta business units
+
+* method: GET
+* PBAC action: `Inventory::Action::"viewMetaBusinessUnit"`
+* Optional filter parameter:
+    * `name`: name of the meta business unit
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     https://$ZTL_FQDN/api/inventory/meta_business_units/ \
+     |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 8,
+        "name": "Acme",
+        "api_enrollment_enabled": true,
+        "created_at": "2026-08-20T13:17:44.071303",
+        "updated_at": "2026-08-20T13:17:44.071308"
+    }
+]
+```
+
+#### Add a meta business unit
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Inventory::Action::"createMetaBusinessUnit"`
+
+Set `api_enrollment_enabled` to `true` to create the business unit that enrollments require. It can be turned on later, but **not off again** — a request trying to disable it is a `400`.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "Acme", "api_enrollment_enabled": true}' \
+     https://$ZTL_FQDN/api/inventory/meta_business_units/ \
+     |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 8,
+    "name": "Acme",
+    "api_enrollment_enabled": true,
+    "created_at": "2026-08-20T13:17:44.071303",
+    "updated_at": "2026-08-20T13:17:44.071308"
+}
+```
+
+### `/api/inventory/meta_business_units/<int:pk>/`
+
+* methods: GET, PUT, DELETE
+* PBAC actions: `Inventory::Action::"viewMetaBusinessUnit"`, `Inventory::Action::"updateMetaBusinessUnit"`, `Inventory::Action::"deleteMetaBusinessUnit"`
+* `<int:pk>`: the primary key of the meta business unit
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     https://$ZTL_FQDN/api/inventory/meta_business_units/8/ \
+     |python3 -m json.tool
+```
+
+### `/api/inventory/taxonomies/`
+
+A taxonomy groups tags that are alternatives to one another — a machine carries at most one tag per taxonomy.
+
+#### List all taxonomies
+
+* method: GET
+* PBAC action: `Inventory::Action::"viewTaxonomy"`
+* Optional filter parameter:
+    * `name`: name of the taxonomy
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     https://$ZTL_FQDN/api/inventory/taxonomies/ \
+     |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "meta_business_unit": null,
+        "name": "Location",
+        "created_at": "2026-08-20T13:17:44.078865",
+        "updated_at": "2026-08-20T13:17:44.078867"
+    }
+]
+```
+
+#### Add a taxonomy
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Inventory::Action::"createTaxonomy"`
+
+`meta_business_unit` is optional — leave it out for a taxonomy available everywhere.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "Location"}' \
+     https://$ZTL_FQDN/api/inventory/taxonomies/ \
+     |python3 -m json.tool
+```
+
+### `/api/inventory/taxonomies/<int:pk>/`
+
+* methods: GET, PUT, DELETE
+* PBAC actions: `Inventory::Action::"viewTaxonomy"`, `Inventory::Action::"updateTaxonomy"`, `Inventory::Action::"deleteTaxonomy"`
+* `<int:pk>`: the primary key of the taxonomy
+
+### `/api/inventory/tags/`
+
+#### List all tags
+
+* method: GET
+* PBAC action: `Inventory::Action::"viewTag"`
+* Optional filter parameter:
+    * `name`: name of the tag
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     https://$ZTL_FQDN/api/inventory/tags/ \
+     |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 5,
+        "taxonomy": 1,
+        "meta_business_unit": null,
+        "name": "Berlin",
+        "slug": "berlin",
+        "color": "0079bf"
+    }
+]
+```
+
+#### Add a tag
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Inventory::Action::"createTag"`
+
+|Attribute|Description|
+|---|---|
+|`name`|Required, and unique across every tag. The `slug` is derived from it and is read only.|
+|`taxonomy`|Optional. The primary key of a taxonomy. This is the usual way to scope a tag.|
+|`meta_business_unit`|Optional. Restricts the tag to one meta business unit.|
+|`color`|A six-digit hex colour, without the leading `#`. `0079bf` by default.|
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "Berlin", "taxonomy": 1, "color": "0079bf"}' \
+     https://$ZTL_FQDN/api/inventory/tags/ \
+     |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 5,
+    "taxonomy": 1,
+    "meta_business_unit": null,
+    "name": "Berlin",
+    "slug": "berlin",
+    "color": "0079bf"
+}
+```
+
+### `/api/inventory/tags/<int:pk>/`
+
+* methods: GET, PUT, DELETE
+* PBAC actions: `Inventory::Action::"viewTag"`, `Inventory::Action::"updateTag"`, `Inventory::Action::"deleteTag"`
+* `<int:pk>`: the primary key of the tag
+
+Deleting a tag removes it from every machine that carries it.
+
+### `/api/inventory/jmespath_checks/`
+
+The [inventory compliance checks](#compliance-checks) described above.
+
+|Attribute|Description|
+|---|---|
+|`name`|Required, and unique across the inventory JMESPath checks. It is the name of the compliance check.|
+|`description`|Optional, free text.|
+|`source_name`|The name of the inventory source the check is evaluated against — `Zentral`, `Munki`, `Osquery`, …|
+|`platforms`|The platforms the check applies to: `LINUX`, `MACOS`, `WINDOWS`, `ANDROID`, `IOS`, `IPADOS`, `TVOS`.|
+|`tags`|Restrict the check to the machines carrying any of these tags. Empty means every machine of the source and platforms.|
+|`jmespath_expression`|The [JMESPath](https://jmespath.org/) expression evaluated against the machine snapshot tree. It must return a boolean.|
+
+`version` and `compliance_check_id` are read only.
+
+#### List all JMESPath checks
+
+* method: GET
+* PBAC action: `Inventory::Action::"viewJMESPathCheck"`
+* Optional filter parameter:
+    * `name`: name of the check
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     https://$ZTL_FQDN/api/inventory/jmespath_checks/ \
+     |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "name": "SIP enabled",
+        "description": "System Integrity Protection must be on",
+        "version": 1,
+        "compliance_check_id": 11,
+        "id": 1,
+        "source_name": "Zentral",
+        "platforms": [
+            "MACOS"
+        ],
+        "tags": [],
+        "jmespath_expression": "os_version.name == 'macOS'",
+        "created_at": "2026-08-20T13:17:44.088465",
+        "updated_at": "2026-08-20T13:17:44.088467"
+    }
+]
+```
+
+#### Add a JMESPath check
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Inventory::Action::"createJMESPathCheck"`
+
+Example:
+
+jmespath_check.json
+
+```json
+{
+  "name": "SIP enabled",
+  "description": "System Integrity Protection must be on",
+  "source_name": "Zentral",
+  "platforms": ["MACOS"],
+  "tags": [],
+  "jmespath_expression": "os_version.name == 'macOS'"
+}
+```
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d @jmespath_check.json \
+     https://$ZTL_FQDN/api/inventory/jmespath_checks/ \
+     |python3 -m json.tool
+```
+
+### `/api/inventory/jmespath_checks/<int:pk>/`
+
+* methods: GET, PUT, DELETE
+* PBAC actions: `Inventory::Action::"viewJMESPathCheck"`, `Inventory::Action::"updateJMESPathCheck"`, `Inventory::Action::"deleteJMESPathCheck"`
+* `<int:pk>`: the primary key of the check
+
+Deleting a check deletes its compliance check and all its machine statuses.
+
+### `/api/inventory/machines/<str:urlsafe_serial_number>/meta/`
 
 * method: GET
 * PBAC action: `Inventory::Action::"viewMachineSnapshot"`
@@ -757,6 +1056,37 @@ Example:
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   https://$ZTL_FQDN/api/inventory/machines/export_program_instances/\
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
+}
+```
+
+### `/api/inventory/machines/export/`
+
+* method: POST
+* PBAC actions:
+	* `Inventory::Action::"viewMachineSnapshot"`
+* optional parameters, in the **query string**:
+	* `export_format`: `xlsx` or `zip`. `xlsx` by default. Any other value is a `400`.
+	* the filters of the machine search, exactly as they appear in the *Inventory > Machines* URL — `sf` (search filter), `q`, `pf` (platform), `tf` (type), and the tag / source / business-unit filters.
+
+Use this endpoint to export the machine list. The `zip` format produces one file per section of the inventory rather than a single sheet.
+
+Unlike the other inventory export endpoints, which take their parameters in the JSON body, this one reads them from the query string — it accepts the same query as the machine list page, so the simplest way to build a call is to filter the list in the web console and copy its query string.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/inventory/machines/export/?export_format=zip" \
   |python3 -m json.tool
 ```
 
