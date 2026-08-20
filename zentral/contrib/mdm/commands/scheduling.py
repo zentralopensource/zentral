@@ -9,6 +9,7 @@ from zentral.contrib.mdm.models import (
     Artifact,
     Blueprint,
     Command,
+    DEFAULT_AWAIT_DECLARATIONS_TIMEOUT,
     DeviceCommand,
     Platform,
     ReEnrollmentSession,
@@ -351,9 +352,41 @@ def _configure_dep_enrollment_accounts(target, enrollment_session, status):
     return AccountConfiguration.create_for_target_and_dep_enrollment(target, dep_enrollment)
 
 
+def _await_declarations_delay(enrollment_session):
+    dep_enrollment = getattr(enrollment_session, "dep_enrollment", None)
+    if not dep_enrollment:
+        # should never happen: only a DEP enrollment awaits DeviceConfigured
+        logger.error("Enrollment session %s has no DEP enrollment", enrollment_session.pk)
+        return DEFAULT_AWAIT_DECLARATIONS_TIMEOUT * 60
+    return dep_enrollment.await_declarations_timeout * 60
+
+
+def _get_queued_device_configured(target):
+    db_command_model, db_command_kwargs = target.get_db_command_model_and_kwargs()
+    db_command = db_command_model.objects.filter(
+        name=DeviceConfigured.get_db_name(), time__isnull=True, **db_command_kwargs
+    ).first()
+    if db_command:
+        return load_command(db_command)
+
+
 def _finish_dep_enrollment_configuration(target, enrollment_session, status):
     if not DeviceConfigured.verify_target(target):
         return
+    queued_command = _get_queued_device_configured(target)
+    if target.declarative_management and target.ddm_declarations_pending():
+        if not queued_command:
+            # Queue it with a deadline instead of waiting in band. Reporting the declarations
+            # notifies the device, which then comes back for the command, so the deadline is
+            # only reached by a device that reports nothing at all.
+            DeviceConfigured.create_for_target(
+                target, queue=True, delay=_await_declarations_delay(enrollment_session)
+            )
+        return
+    if queued_command:
+        # the declarations were reported before the deadline, no need to wait for it
+        queued_command.set_time()
+        return queued_command
     return DeviceConfigured.create_for_target(target)
 
 
