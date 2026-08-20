@@ -26,7 +26,7 @@ from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmGroup, RealmUser
 
-from zentral.conf import settings
+from zentral.conf import api_base_url, settings
 from zentral.contrib.inventory.models import (
     EnrollmentSecret,
     EnrollmentSecretRequest,
@@ -1727,8 +1727,7 @@ class OTAEnrollment(MDMEnrollment):
 
     def get_enroll_full_url(self):
         if self.realm:
-            return "{}{}".format(settings["api"]["tls_hostname"],
-                                 reverse("mdm_public:ota_enrollment_enroll", args=(self.pk,)))
+            return f'{api_base_url()}{reverse("mdm_public:ota_enrollment_enroll", args=(self.pk,))}'
 
     def revoke(self):
         if not self.enrollment_secret.revoked_at:

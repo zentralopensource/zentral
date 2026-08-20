@@ -3,7 +3,7 @@ from tempfile import NamedTemporaryFile
 from unittest.mock import call, Mock
 from django.test import SimpleTestCase
 from zentral.conf.config import ConfigDict, ConfigList
-from zentral.conf import ZentralSettings
+from zentral.conf import api_base_url, settings, ZentralSettings
 
 
 class ConfTestCase(SimpleTestCase):
@@ -190,3 +190,12 @@ class ConfTestCase(SimpleTestCase):
                                      "tls_hostname_for_client_cert_auth": "https://zentral-mtls"}})
         self.assertEqual(c["api"]["fqdn"], "zentral")
         self.assertEqual(c["api"]["fqdn_mtls"], "zentral-mtls")
+
+    def test_api_base_url(self):
+        self.assertEqual(api_base_url(), "https://zentral")
+        # deployments still configured with the deprecated key must get the same base URL
+        self.assertEqual(api_base_url(), settings["api"]["tls_hostname"])
+
+    def test_api_base_url_for_client_cert_auth(self):
+        self.assertEqual(api_base_url(True), "https://zentral-mtls")
+        self.assertEqual(api_base_url(True), settings["api"]["tls_hostname_for_client_cert_auth"])

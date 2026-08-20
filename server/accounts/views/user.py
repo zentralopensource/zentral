@@ -23,7 +23,7 @@ from accounts.forms import (
     UpdateProfileForm,
 )
 from accounts.models import UserTOTP, UserWebAuthn
-from zentral.conf import settings as zentral_settings
+from zentral.conf import api_base_url, settings as zentral_settings
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
 
 logger = logging.getLogger("zentral.accounts.views.user")
@@ -155,7 +155,7 @@ class RegisterWebAuthnDeviceView(LoginRequiredMixin, FormView):
             verification = verify_registration_response(
                 credential=credential,
                 expected_challenge=trimmed_urlsafe_b64decode(webauthn_challenge["challenge"]),
-                expected_origin=zentral_settings["api"]["tls_hostname"],
+                expected_origin=api_base_url(),
                 expected_rp_id=zentral_settings["api"]["fqdn"],
                 require_user_verification=False
             )

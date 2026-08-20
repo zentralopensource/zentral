@@ -1,6 +1,6 @@
 import plistlib
 
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload
 
 
@@ -8,7 +8,7 @@ def build_turbo_enrollment_configuration(enrollment):
     # Managed defaults for the com.zentral.turbo domain. The agent reads BaseURL as the host root and
     # appends public/turbo/ itself, then exchanges EnrollmentSecret for a per-device token at enroll time.
     return {
-        "BaseURL": settings["api"]["tls_hostname"],
+        "BaseURL": api_base_url(),
         "EnrollmentSecret": enrollment.secret.secret,
     }
 

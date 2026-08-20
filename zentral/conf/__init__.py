@@ -9,7 +9,7 @@ from zentral.core.exceptions import ImproperlyConfigured
 from .config import ConfigDict, ResolverMethodProxy
 
 
-__all__ = ['settings', 'user_templates_dir']
+__all__ = ['api_base_url', 'settings', 'user_templates_dir']
 
 
 logger = logging.getLogger("zentral.conf")
@@ -141,6 +141,21 @@ class ZentralSettings(ConfigDict):
 
 
 settings = ZentralSettings(get_configuration())
+
+
+#
+# API base URLs
+#
+# api.fqdn and api.fqdn_mtls only hold the host, but a lot of the payloads, profiles and
+# scripts we generate need the full base URL. Going through APIDict, which also accepts the
+# deprecated api.tls_hostname* keys, would work too, but it makes the shape of the value
+# impossible to guess from the call site: api.fqdn is a host, api.tls_hostname is a URL.
+#
+
+
+def api_base_url(for_client_cert_auth=False):
+    fqdn = settings["api"]["fqdn_mtls" if for_client_cert_auth else "fqdn"]
+    return f"https://{fqdn}"
 
 
 #
