@@ -690,6 +690,251 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
+### /api/osquery/enrollments/
+
+An enrollment ties an Osquery configuration to a [meta business unit](inventory.md) and, optionally, to tags and enrollment restrictions. Its secret is baked into the packages and scripts the three download endpoints below produce.
+
+|Attribute|Description|
+|---|---|
+|`configuration`|Required. The primary key of the Osquery configuration.|
+|`osquery_release`|Optional. The Osquery release to install, for the enrollment packages that bundle one. Blank to install none.|
+|`secret.meta_business_unit`|Required. The primary key of the meta business unit the machines are assigned to at enrollment.|
+|`secret.tags`|Optional. The tags the machines get at enrollment.|
+|`secret.serial_numbers`, `secret.udids`|Optional. Restrict the enrollment to these machines. Blank means any machine.|
+|`secret.quota`|Optional. Maximum number of enrollments. Blank means no limit.|
+
+`version`, `enrolled_machines_count`, the three `*_download_url` attributes and `secret.secret` are read only.
+
+#### List all enrollments.
+
+* method: GET
+* Content-Type: application/json
+* PBAC action: `Osquery::Action::"viewEnrollment"`
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "id": 1,
+        "configuration": 1,
+        "osquery_release": "5.12.1",
+        "secret": {
+            "id": 5,
+            "secret": "z1DRxu4HJaN9mI4H5u097McsM2XqLSzvwtmDn2tx3PVUoTVBu6cZXDUdDJPWJbAD",
+            "meta_business_unit": 6,
+            "tags": [],
+            "serial_numbers": [
+                "012345678"
+            ],
+            "udids": null,
+            "quota": 10,
+            "request_count": 0
+        },
+        "version": 1,
+        "enrolled_machines_count": 0,
+        "package_download_url": "https://zentral.example.com/api/osquery/enrollments/1/package/",
+        "powershell_script_download_url": "https://zentral.example.com/api/osquery/enrollments/1/powershell_script/",
+        "script_download_url": "https://zentral.example.com/api/osquery/enrollments/1/script/",
+        "created_at": "2026-08-20T13:08:24.788735",
+        "updated_at": "2026-08-20T13:08:24.788737"
+    }
+]
+```
+
+#### Add a new enrollment.
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Osquery::Action::"createEnrollment"`
+
+Example:
+
+enrollment.json
+
+```json
+{
+  "configuration": 1,
+  "osquery_release": "5.12.1",
+  "secret": {
+    "meta_business_unit": 6,
+    "quota": 10,
+    "serial_numbers": ["012345678"]
+  }
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/" \
+  -d @enrollment.json \
+  |python3 -m json.tool
+```
+
+Response (201 Created):
+
+```json
+{
+    "id": 1,
+    "configuration": 1,
+    "osquery_release": "5.12.1",
+    "secret": {
+        "id": 5,
+        "secret": "z1DRxu4HJaN9mI4H5u097McsM2XqLSzvwtmDn2tx3PVUoTVBu6cZXDUdDJPWJbAD",
+        "meta_business_unit": 6,
+        "tags": [],
+        "serial_numbers": [
+            "012345678"
+        ],
+        "udids": null,
+        "quota": 10,
+        "request_count": 0
+    },
+    "version": 1,
+    "enrolled_machines_count": 0,
+    "package_download_url": "https://zentral.example.com/api/osquery/enrollments/1/package/",
+    "powershell_script_download_url": "https://zentral.example.com/api/osquery/enrollments/1/powershell_script/",
+    "script_download_url": "https://zentral.example.com/api/osquery/enrollments/1/script/",
+    "created_at": "2026-08-20T13:08:24.788735",
+    "updated_at": "2026-08-20T13:08:24.788737"
+}
+```
+
+### /api/osquery/enrollments/`<int:pk>`/
+
+#### Get an enrollment.
+
+* method: GET
+* Content-Type: application/json
+* PBAC action: `Osquery::Action::"viewEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/1/" \
+  |python3 -m json.tool
+```
+
+#### Update an enrollment.
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Osquery::Action::"updateEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+Updating an enrollment bumps its version, and the download endpoints below start serving the new artifacts. The secret itself is unchanged.
+
+Example:
+
+enrollment.json
+
+```json
+{
+  "configuration": 1,
+  "osquery_release": "5.12.1",
+  "secret": {
+    "meta_business_unit": 6,
+    "quota": 20,
+    "serial_numbers": ["012345678"]
+  }
+}
+```
+
+```bash
+$ curl -X PUT \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/1/" \
+  -d @enrollment.json \
+  |python3 -m json.tool
+```
+
+#### Delete an enrollment.
+
+* method: DELETE
+* PBAC action: `Osquery::Action::"deleteEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+An enrollment owned by a distributor — a [monolith](monolith.md) manifest enrollment package, for instance — cannot be deleted here; it is managed by that distributor. Enrolled machines do **not** block the deletion.
+
+Example:
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/1/"
+```
+
+Response (204 No Content)
+
+### /api/osquery/enrollments/`<int:pk>`/package/
+
+#### Download the macOS enrollment package.
+
+* method: GET
+* PBAC action: `Osquery::Action::"viewEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+A macOS installer package that configures the Osquery agent and, when `osquery_release` is set, installs that release. This endpoint honours conditional requests — an `If-None-Match` or `If-Modified-Since` matching the current version gets a `304`.
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/1/package/" \
+  --output zentral_osquery_enroll.pkg
+```
+
+### /api/osquery/enrollments/`<int:pk>`/script/
+
+#### Download the Linux enrollment script.
+
+* method: GET
+* PBAC action: `Osquery::Action::"viewEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+A bash script that configures the Osquery agent on Linux.
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/1/script/" \
+  --output zentral_osquery_setup.sh
+```
+
+### /api/osquery/enrollments/`<int:pk>`/powershell_script/
+
+#### Download the Windows enrollment script.
+
+* method: GET
+* PBAC action: `Osquery::Action::"viewEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+A PowerShell script that configures the Osquery agent on Windows.
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/osquery/enrollments/1/powershell_script/" \
+  --output zentral_osquery_setup.ps1
+```
+
 ### /api/osquery/file_categories/
 
 #### List all FileCategories.
