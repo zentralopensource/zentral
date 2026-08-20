@@ -35,6 +35,8 @@ See [API authentication](core.md#api-authentication) for how to create a service
 
 ### /api/munki/configurations/
 
+Terraform resource: [`zentral_munki_configuration`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/munki_configuration)  
+Terraform data source: [`zentral_munki_configuration`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/munki_configuration)
 
 #### List all configurations
 
@@ -295,6 +297,9 @@ Response (204 No Content)
 
 ### /api/munki/enrollments/
 
+Terraform resource: [`zentral_munki_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/munki_enrollment)  
+Terraform data source: [`zentral_munki_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/munki_enrollment)
+
 #### List all enrollments
 
 * method: GET
@@ -508,6 +513,8 @@ Response (204 No Content)
 
 ### /api/munki/enrollments/`<int:pk>`/package/
 
+The [`zentral_munki_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/munki_enrollment) Terraform resource exposes this URL as its read-only `package_url` attribute.
+
 #### Download a Zentral enrollment package
 
 * method: GET
@@ -523,6 +530,9 @@ curl \
 ```
 
 ### /api/munki/script_checks/
+
+Terraform resource: [`zentral_munki_script_check`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/munki_script_check)  
+Terraform data source: [`zentral_munki_script_check`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/munki_script_check)
 
 A script check is a script the Munki agent runs on the machines in its scope, at most once every `script_checks_run_interval_seconds` (a [configuration](#apimunkiconfigurations) attribute). It is a [compliance check](inventory.md#compliance-checks): the agent reports the script's output, and Zentral compares it to the expected result to derive the machine's status.
 
