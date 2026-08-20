@@ -307,19 +307,13 @@ Rows removed more than 30 days ago are purged; use `--days` to change that. One-
 
 #### Authentication
 
-API requests are authenticated using a token in the `Authorization` HTTP header.
-
-To get a token, you can create a service account. As a superuser, go to Setup > Manage users, and in the "Service accounts" subsection, click on the [Create] button. Pick a name for your service account and [Save]. You will be redirected to a token view. The token is only displayed once. To reveal it, click on the eye icon. Once you have saved it (in a password manager, in a configuration variable, …), you can click on the [OK] button.
-
-You can also add an API token to a normal user, although it is not recommended. To do so, click on the user in the User list, and click on the [+] button next to the API token boolean.
-
-If you have lost or leaked a token, you can delete it by clicking on the user or service account name, and then click on the 🗑 next to the API token boolean.
-
-The format for the `Authorization` header is the following:
+API requests are authenticated using a token in the `Authorization` HTTP header:
 
 ```
 Authorization: Token the_token_string
 ```
+
+See [API authentication](core.md#api-authentication) for how to create a service account, issue a token for it and set an expiry.
 
 #### Content type
 

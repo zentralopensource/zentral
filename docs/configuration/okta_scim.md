@@ -12,7 +12,7 @@ The SCIM synchronization is part of the Zentral API. To let Okta authenticate wi
 
 ### Service account
 
-A Zentral service account is a Zentral user that cannot log into the admin console. Create a service account for your SCIM integration. Pick a name and a description. Do not forget to note the API token — you will need it later to configure the Okta application. Note also the service account's numeric primary key (visible in the URL of the service-account detail page).
+A Zentral service account is a Zentral account that cannot log into the admin console. [Create one](../apps/core.md#service-accounts) for your SCIM integration, then [add an API token](../apps/core.md#api-tokens) to it from its detail page — the token is displayed once, and you will need it later to configure the Okta application. Note also the service account's numeric primary key (visible in the URL of the service-account detail page).
 
 ### Policy
 

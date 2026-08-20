@@ -252,6 +252,18 @@ This boolean is used to toggle the inclusion of the principal user in the event 
 
 ## HTTP API
 
+### Requests
+
+#### Authentication
+
+API requests are authenticated using a token in the `Authorization` HTTP header:
+
+```
+Authorization: Token the_token_string
+```
+
+See [API authentication](core.md#api-authentication) for how to create a service account, issue a token for it and set an expiry.
+
 ### `/api/inventory/machines/<url_safe_serial_number>/meta/`
 
 * method: GET
