@@ -950,6 +950,17 @@ class EnrolledMachine(models.Model):
             )
         return ok
 
+    def acquire_sync_lock(self):
+        """Serialize the sync ledger operations of the machine on its own row lock.
+
+        Santa retries a sync request after 30s, so a duplicate request can overlap the
+        transaction of the original one, miss its uncommitted staging, and skip a batch
+        for good. Only the one machine row is ever locked, the lock is held until the
+        end of the request transaction. Returns the current row: the wait can outlast
+        a concurrent session change.
+        """
+        return EnrolledMachine.objects.select_for_update().get(pk=self.pk)
+
     def start_sync_session(self, clean, preflight_at=None, sync_ok=None):
         self.sync_session = get_random_string(8)
         self.sync_session_clean = clean
@@ -981,6 +992,9 @@ class EnrolledMachine(models.Model):
         """
         if self.sync_session is None:
             return {"sync_ok": self.sync_ok(), "lost_clean_session": False, "previous_session": None}
+        # the reads deciding the outcome of the session must not interleave with an
+        # in-flight rule download still staging rules for it
+        self.acquire_sync_lock()
         previous_session = {"id": self.sync_session, "clean": self.sync_session_clean}
 
         def discard():
@@ -1306,6 +1320,7 @@ class MachineRuleManager(models.Manager):
         The statements select rows on the state they had on entry, and no entry state is
         selected by more than one of them, so that none depends on the others.
         """
+        enrolled_machine.acquire_sync_lock()
         qs = self.filter(enrolled_machine=enrolled_machine, sync_session__isnull=False)
         rules_discarded, _ = qs.filter(staged_removal=False, committed_policy__isnull=True).delete()
         removals_discarded, _ = qs.filter(staged_removal=True, committed_policy__isnull=True).delete()
@@ -1325,6 +1340,7 @@ class MachineRuleManager(models.Manager):
 
         Returns what the session did to the ledger, for the postflight event.
         """
+        enrolled_machine.acquire_sync_lock()
         qs = self.filter(enrolled_machine=enrolled_machine)
         session_qs = qs.filter(sync_session=enrolled_machine.sync_session)
         rules_dropped = 0
@@ -1339,10 +1355,15 @@ class MachineRuleManager(models.Manager):
                 "rules_dropped": rules_dropped}
 
     def get_next_rule_batch(self, enrolled_machine, tags, cursor=None):
+        locked_machine = enrolled_machine.acquire_sync_lock()
+        # the wait for the lock can outlast a concurrent preflight, the rules have to be
+        # staged under the session it started, not under the one loaded with the request
+        enrolled_machine.sync_session = locked_machine.sync_session
+        enrolled_machine.sync_session_clean = locked_machine.sync_session_clean
         if enrolled_machine.sync_session is None:
             # a rule download without a preflight, the rules still have to be staged
             enrolled_machine.start_sync_session(False)
-        qs = self.filter(enrolled_machine=enrolled_machine).select_for_update()
+        qs = self.filter(enrolled_machine=enrolled_machine)
 
         # fresh start from the last known OK state: unstage the batches that have not been
         # acknowledged, they will be sent again

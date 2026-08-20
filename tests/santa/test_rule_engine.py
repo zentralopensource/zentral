@@ -1,6 +1,9 @@
+import threading
 import uuid
+from django.db import connection, connections, transaction
 from django.db.models import F
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.santa.models import (Configuration, EnrolledMachine, Enrollment,
@@ -917,3 +920,153 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertEqual(counts, {"rules_committed": 1, "removals_confirmed": 1, "rules_dropped": 0})
         self.assertEqual(MachineRule.objects.filter(enrolled_machine=enrolled_machine,
                                                     target=replaced_target).count(), 0)
+
+    def assertMachineLockTaken(self, ctx, taken=True):
+        lock_queries = [
+            q["sql"] for q in ctx.captured_queries
+            if "santa_enrolledmachine" in q["sql"] and "FOR UPDATE" in q["sql"]
+        ]
+        if taken:
+            self.assertTrue(lock_queries)
+        else:
+            self.assertEqual(lock_queries, [])
+
+    def test_get_next_rule_batch_takes_the_machine_lock(self):
+        self.create_rule()
+        with CaptureQueriesContext(connection) as ctx:
+            MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
+        self.assertMachineLockTaken(ctx)
+
+    def test_commit_session_takes_the_machine_lock(self):
+        self.create_rule()
+        MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
+        self.enrolled_machine.refresh_from_db()
+        with CaptureQueriesContext(connection) as ctx:
+            MachineRule.objects.commit_session(self.enrolled_machine, False)
+        self.assertMachineLockTaken(ctx)
+
+    def test_discard_session_takes_the_machine_lock(self):
+        with CaptureQueriesContext(connection) as ctx:
+            MachineRule.objects.discard_session(self.enrolled_machine)
+        self.assertMachineLockTaken(ctx)
+
+    def test_reconcile_sync_session_takes_the_machine_lock(self):
+        self.enrolled_machine.start_sync_session(False)
+        with CaptureQueriesContext(connection) as ctx:
+            self.enrolled_machine.reconcile_sync_session()
+        self.assertMachineLockTaken(ctx)
+
+    def test_reconcile_without_session_does_not_take_the_machine_lock(self):
+        # the common preflight path, without a dangling session, must stay lock free
+        with CaptureQueriesContext(connection) as ctx:
+            self.enrolled_machine.reconcile_sync_session()
+        self.assertMachineLockTaken(ctx, taken=False)
+
+    def test_rule_download_stages_under_the_current_row_session(self):
+        target, rule, serialized_rule = self.create_and_serialize_rule()
+        # a concurrent preflight started a session after the request loaded the machine
+        sync_session = get_random_string(8)
+        EnrolledMachine.objects.filter(pk=self.enrolled_machine.pk).update(
+            sync_session=sync_session, sync_session_clean=False
+        )
+        self.assertIsNone(self.enrolled_machine.sync_session)
+        rule_batch, response_cursor = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
+        self.assertEqual(rule_batch, [serialized_rule])
+        self.assertIsNone(response_cursor)
+        machine_rule = self.enrolled_machine.machinerule_set.get()
+        self.assertEqual(machine_rule.sync_session, sync_session)
+        # the row session was adopted, not replaced
+        self.enrolled_machine.refresh_from_db()
+        self.assertEqual(self.enrolled_machine.sync_session, sync_session)
+
+
+class SantaRuleEngineConcurrencyTestCase(TransactionTestCase):
+    def setUp(self):
+        self.configuration = Configuration.objects.create(name=get_random_string(256), batch_size=2)
+        self.meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(64))
+        self.enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit)
+        self.enrollment = Enrollment.objects.create(configuration=self.configuration,
+                                                    secret=self.enrollment_secret)
+        self.enrolled_machine = EnrolledMachine.objects.create(enrollment=self.enrollment,
+                                                               hardware_uuid=uuid.uuid4(),
+                                                               serial_number=get_random_string(64),
+                                                               client_mode=Configuration.MONITOR_MODE,
+                                                               santa_version="2024.5")
+        self.identifiers = set()
+        for _ in range(5):
+            target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+            Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.ALLOWLIST)
+            self.identifiers.add(target.identifier)
+
+    def test_duplicate_rule_download_regenerates_the_in_flight_batch(self):
+        # santa retries a rule download with the same cursor after 30s. The retry must wait for
+        # the in-flight request and send its batch again: without the machine lock, it could not
+        # see the uncommitted staging, and skipped the batch for good.
+        with transaction.atomic():
+            batch1, cursor1 = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [])
+        self.assertEqual(len(batch1), 2)
+        staged = threading.Event()
+        release = threading.Event()
+        results = {}
+
+        def original_request():
+            # the in-flight request for cursor1, stalled after staging the second batch
+            try:
+                enrolled_machine = EnrolledMachine.objects.get(pk=self.enrolled_machine.pk)
+                with transaction.atomic():
+                    results["original"] = MachineRule.objects.get_next_rule_batch(enrolled_machine, [], cursor1)
+                    staged.set()
+                    release.wait(timeout=10)
+            except Exception as exception:
+                results["original_error"] = exception
+            finally:
+                staged.set()
+                connections.close_all()
+
+        def retried_request():
+            # the client timed out on the original request, and retries it with the same cursor
+            try:
+                staged.wait(timeout=10)
+                enrolled_machine = EnrolledMachine.objects.get(pk=self.enrolled_machine.pk)
+                with transaction.atomic():
+                    results["retry"] = MachineRule.objects.get_next_rule_batch(enrolled_machine, [], cursor1)
+            except Exception as exception:
+                results["retry_error"] = exception
+            finally:
+                connections.close_all()
+
+        original = threading.Thread(target=original_request)
+        retry = threading.Thread(target=retried_request)
+        original.start()
+        retry.start()
+        # give the retry the time to block on the machine lock before releasing the original
+        retry.join(timeout=1)
+        self.assertTrue(retry.is_alive(), "the retry did not wait for the in-flight request")
+        release.set()
+        original.join(timeout=10)
+        retry.join(timeout=10)
+        self.assertFalse(original.is_alive())
+        self.assertFalse(retry.is_alive())
+        self.assertIsNone(results.get("original_error"))
+        self.assertIsNone(results.get("retry_error"))
+        original_batch, _ = results["original"]
+        retry_batch, retry_cursor = results["retry"]
+        # the retry sent the second batch again, it did not skip to the third one
+        self.assertEqual([r["identifier"] for r in retry_batch],
+                         [r["identifier"] for r in original_batch])
+        self.assertIsNotNone(retry_cursor)
+        with transaction.atomic():
+            batch3, cursor3 = MachineRule.objects.get_next_rule_batch(self.enrolled_machine, [], retry_cursor)
+        self.assertEqual(len(batch3), 1)
+        self.assertIsNone(cursor3)
+        # the client received every rule exactly once
+        received = [r["identifier"] for r in batch1 + retry_batch + batch3]
+        self.assertEqual(len(received), 5)
+        self.assertEqual(set(received), self.identifiers)
+        self.enrolled_machine.refresh_from_db()
+        with transaction.atomic():
+            session_result = MachineRule.objects.commit_session(self.enrolled_machine, False)
+        self.assertEqual(session_result["rules_committed"], 5)
+        machine_rule_qs = self.enrolled_machine.machinerule_set.all()
+        self.assertEqual(machine_rule_qs.count(), 5)
+        self.assertEqual(machine_rule_qs.filter(cursor__isnull=True, sync_session__isnull=True).count(), 5)

@@ -13,6 +13,9 @@ Fixed Santa machines being reported out of sync when a rule sent during the curr
 Fixed a Santa rule that was added and removed during the same sync session being recorded as held by the machine when the session was lost: the discarded session turned the staged removal into a rule the client never received. If the rule was then created again, it matched the phantom ledger entry and was never sent, and the machine stayed out of sync until a clean sync. The removal of a rule staged during the same session is now dropped with the session it belongs to.
 
 
+The Santa sync operations of a machine are serialized on its enrolled machine row lock now. Santa retries a rule download after 30 seconds with the same cursor, and the retry could overlap the transaction of the original request, miss the batch it was staging, and skip it for good: the ledger counted rules the client never received. The rule downloads also pick up the sync session started by a concurrent preflight, instead of staging rules under a stale one.
+
+
 ## 2026.5
 
 
