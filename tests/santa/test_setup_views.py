@@ -669,6 +669,23 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
              }}
         )
 
+    def test_enrollment_plist_client_certificate_auth(self):
+        configuration, enrollment = self._force_enrollment()
+        configuration.client_certificate_auth = True
+        configuration.save()
+        self.login("santa.view_enrollment")
+        response = self.client.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
+        self.assertEqual(response.status_code, 200)
+        plist_config = plistlib.loads(response.content)
+        self.assertEqual(
+            plist_config,
+            {'ClientMode': configuration.client_mode,
+             'SyncBaseURL': f'https://{settings["api"]["fqdn_mtls"]}/public/santa/sync/',
+             'SyncExtraHeaders': {
+                 'Zentral-Authorization': f'Bearer {enrollment.secret.secret}'
+             }}
+        )
+
     def test_enrollment_with_voting_plist(self):
         realm = force_realm(user_portal=True)
         configuration, enrollment = self._force_enrollment(voting_realm=realm)

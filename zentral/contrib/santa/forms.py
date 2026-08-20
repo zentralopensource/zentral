@@ -62,18 +62,11 @@ class ConfigurationForm(forms.ModelForm):
                            "Can't use a bloked path regex in Lockdown mode.")
 
         # client certificate authentication
-        client_certificate_auth = cleaned_data.get("client_certificate_auth", False)
-        client_auth_certificate_issuer_cn = cleaned_data.get("client_auth_certificate_issuer_cn")
-        if client_auth_certificate_issuer_cn and not client_certificate_auth:
-            self.add_error("client_certificate_auth",
-                           "Needs to be checked to use Client auth certificate issuer CN")
-        if (client_certificate_auth or client_auth_certificate_issuer_cn) and \
-           "tls_hostname_for_client_cert_auth" not in settings["api"]:
-            for field in ("client_certificate_auth", "client_auth_certificate_issuer_cn"):
-                self.add_error(
-                    field,
-                    "The server requiring the client cert for authentication is not configured."
-                )
+        if cleaned_data.get("client_certificate_auth") and "fqdn_mtls" not in settings["api"]:
+            self.add_error(
+                "client_certificate_auth",
+                "The server requiring the client cert for authentication is not configured."
+            )
 
         # block USB
         block_usb_mount = cleaned_data.get("block_usb_mount")

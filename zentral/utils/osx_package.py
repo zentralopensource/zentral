@@ -210,7 +210,7 @@ class ProductArchiveBuilder(BasePackageBuilder):
         self.pkg_refs.append({"id": pkg_identifier, "version": pkg_version})
 
 
-def get_tls_hostname(for_client_cert_auth=False):
+def get_api_fqdn(for_client_cert_auth=False):
     if for_client_cert_auth:
         key = "fqdn_mtls"
     else:
@@ -223,8 +223,8 @@ def distribute_tls_server_certs():
 
 
 class APIConfigToolsMixin(object):
-    def get_tls_hostname(self, for_client_cert_auth=False):
-        return get_tls_hostname(for_client_cert_auth)
+    def get_api_fqdn(self, for_client_cert_auth=False):
+        return get_api_fqdn(for_client_cert_auth)
 
     def get_tls_fullchain(self):
         if distribute_tls_server_certs():

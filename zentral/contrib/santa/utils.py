@@ -6,7 +6,7 @@ from dateutil import parser
 from django.db import connection, transaction
 from django.urls import reverse
 
-from zentral.conf import settings
+from zentral.conf import api_base_url, settings
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload
 from zentral.utils.time import naive_utcnow
 
@@ -16,11 +16,8 @@ from .models import Rule, Target
 def build_santa_enrollment_configuration(enrollment):
     configuration = enrollment.configuration
     config = configuration.get_local_config()
-    base_url_key = "tls_hostname"
-    if configuration.client_certificate_auth:
-        base_url_key = "tls_hostname_for_client_cert_auth"
     config.update({
-        "SyncBaseURL": "{}/public/santa/sync/".format(settings["api"][base_url_key]),
+        "SyncBaseURL": f"{api_base_url(configuration.client_certificate_auth)}/public/santa/sync/",
         # See https://developer.apple.com/documentation/foundation/nsurlrequest#1776617
         # Authorization is reserved, so we use 'Zentral-Authorization'
         # See also https://github.com/northpolesec/santa/blob/344a35aaf63c24a56f7a021ce18ecab090584da3/Source/common/SNTConfigurator.h#L418-L421  # NOQA

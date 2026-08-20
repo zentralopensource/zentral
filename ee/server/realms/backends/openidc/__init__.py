@@ -1,6 +1,6 @@
 import logging
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from realms.backends.base import BaseBackend
 from realms.exceptions import RealmUserError
 from zentral.utils.json import remove_null_character
@@ -18,11 +18,10 @@ class OpenIDConnectRealmBackend(BaseBackend):
         path = reverse("realms_public:openidc_ac_redirect", args=(self.instance.uuid,))
         if self.legacy_public_endpoints_mounted:
             path = path.removeprefix("/public")
-        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"), path)
+        return f"{api_base_url()}{path}"
 
     def idp_initiated_login_uri(self):
-        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"),
-                             reverse("realms_public:login", args=(self.instance.uuid,)))
+        return f'{api_base_url()}{reverse("realms_public:login", args=(self.instance.uuid,))}'
 
     def extra_attributes_for_display(self):
         config = self.instance.config

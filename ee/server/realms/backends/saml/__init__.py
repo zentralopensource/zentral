@@ -9,7 +9,7 @@ from saml2.client import Saml2Client
 from saml2.config import Config as Saml2Config
 from saml2.saml import NAMEID_FORMAT_EMAILADDRESS
 
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.utils.json import remove_null_character
 
 logger = logging.getLogger("zentral.realms.backends.saml")
@@ -35,7 +35,7 @@ class SAMLRealmBackend(BaseBackend):
         path = reverse("realms_public:saml_acs", args=(self.instance.uuid,))
         if self.legacy_public_endpoints_mounted:
             path = path.removeprefix("/public")
-        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"), path)
+        return f"{api_base_url()}{path}"
 
     def entity_id(self):
         """
@@ -48,7 +48,7 @@ class SAMLRealmBackend(BaseBackend):
         path = reverse("realms_public:saml_metadata", args=(self.instance.uuid,))
         if self.legacy_public_endpoints_mounted:
             path = path.removeprefix("/public")
-        return "{}{}".format(settings["api"]["tls_hostname"].rstrip("/"), path)
+        return f"{api_base_url()}{path}"
 
     def get_saml2_config(self, missing_idp_metadata_ok=False):
         settings = {

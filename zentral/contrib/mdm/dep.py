@@ -15,7 +15,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
-from zentral.conf import settings
+from zentral.conf import api_base_url, settings
 from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.time import naive_utcnow
 
@@ -86,11 +86,9 @@ def decrypt_dep_token(dep_token, payload):
 
 
 def serialize_dep_profile(dep_enrollment):
+    enroll_path = reverse("mdm_public:dep_enroll", args=(dep_enrollment.enrollment_secret.secret,))
     payload = {"profile_name": dep_enrollment.name[:125],
-               "url": "{}{}".format(
-                   settings["api"]["tls_hostname"],
-                   reverse("mdm_public:dep_enroll", args=(dep_enrollment.enrollment_secret.secret,))
-               )}
+               "url": f"{api_base_url()}{enroll_path}"}
     if dep_enrollment.pk:
         payload["devices"] = list(dep_enrollment.depdevice_set.values_list("serial_number", flat=True))
     else:
@@ -98,10 +96,8 @@ def serialize_dep_profile(dep_enrollment):
 
     # do authentication in webview if a realm is present
     if dep_enrollment.realm:
-        payload["configuration_web_url"] = "{}{}".format(
-            settings["api"]["tls_hostname"],
-            reverse("mdm_public:dep_web_enroll", args=(dep_enrollment.enrollment_secret.secret,))
-        )
+        web_enroll_path = reverse("mdm_public:dep_web_enroll", args=(dep_enrollment.enrollment_secret.secret,))
+        payload["configuration_web_url"] = f"{api_base_url()}{web_enroll_path}"
 
     # standard attibutes
     for attr in ("allow_pairing",

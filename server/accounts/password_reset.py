@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.functional import SimpleLazyObject
 from django.utils.http import urlsafe_base64_encode
-from zentral.conf import settings
+from zentral.conf import api_base_url, settings
 from zentral.conf.config import ConfigDict
 from zentral.core.exceptions import ImproperlyConfigured
 
@@ -36,10 +36,7 @@ class BasePasswordResetHandler:
         if isinstance(uid, bytes):
             uid = uid.decode("ascii")
         token = default_token_generator.make_token(user)
-        return "{}{}".format(
-            settings["api"]["tls_hostname"],
-            reverse('password_reset_confirm', args=(uid, token))
-        )
+        return f"{api_base_url()}{reverse('password_reset_confirm', args=(uid, token))}"
 
     def get_password_reset_context(self, user, invitation=False):
         ctx = {
