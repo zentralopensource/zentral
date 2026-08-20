@@ -4,7 +4,7 @@ import plistlib
 
 from django.core.files.base import ContentFile
 
-from zentral.utils.osx_package import get_tls_hostname
+from zentral.utils.osx_package import get_api_fqdn
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 from zentral.utils.text import shard as compute_shard
 from zentral.utils.time import naive_utc_fromisoformat
@@ -34,7 +34,7 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
         'FQDN="$($PLUTIL -extract fqdn raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
         f'if [[ "$ENROLLMENT_ID" != "{builder.enrollment.pk}" ]] '
         f'|| [[ "$ENROLLMENT_VERSION" != "{builder.enrollment.version}" ]] '
-        f'|| [[ "$FQDN" != "{builder.get_tls_hostname()}" ]]\n'
+        f'|| [[ "$FQDN" != "{builder.get_api_fqdn()}" ]]\n'
         'then\n'
         # the current values are not the expected values, install
         'exit 0\n'
@@ -77,7 +77,7 @@ def build_configuration(enrollment):
     # TODO: hardcoded
     config = {
         "ClientIdentifier": "$SERIALNUMBER",
-        "SoftwareRepoURL": "https://{}/public/monolith/munki_repo".format(get_tls_hostname()),
+        "SoftwareRepoURL": f"https://{get_api_fqdn()}/public/monolith/munki_repo",
         "FollowHTTPRedirects": "all",
         # "ManifestURL": None,  # no special Manifest URL with monolith
         # force redirect via monolith for Icon and Client Resource

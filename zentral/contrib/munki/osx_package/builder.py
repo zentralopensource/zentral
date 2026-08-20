@@ -16,10 +16,10 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     local_subfolder = "munki"
 
     def extra_build_steps(self):
-        tls_hostname = self.get_tls_hostname()
+        fqdn = self.get_api_fqdn()
         # munki zentral preflight and postflight script
         replacements = [
-            ("%TLS_HOSTNAME%", tls_hostname),
+            ("%TLS_HOSTNAME%", fqdn),
             ("%TLS_SERVER_CERTS%", self.include_tls_server_certs() or ""),
         ]
         for phase in ("preflight", "postflight"):
@@ -30,7 +30,7 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         postinstall_script = self.get_build_path("scripts", "postinstall")
         replacements.extend([
             ("%ENROLLMENT_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
-            ("%ENROLLMENT_URL%", "https://{}{}".format(tls_hostname, reverse("munki_public:enroll"))),
+            ("%ENROLLMENT_URL%", f'https://{fqdn}{reverse("munki_public:enroll")}'),
             ("%HAS_DISTRIBUTOR%", "YES" if self.build_kwargs.get("has_distributor") else "NO"),
         ])
         self.replace_in_file(postinstall_script, replacements)
@@ -39,4 +39,4 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         with open(self.get_root_path(f"usr/local/zentral/{self.local_subfolder}/enrollment.plist"), "wb") as f:
             plistlib.dump({"enrollment": {"id": self.enrollment.pk,
                                           "version": self.enrollment.version},
-                           "fqdn": tls_hostname}, f)
+                           "fqdn": fqdn}, f)

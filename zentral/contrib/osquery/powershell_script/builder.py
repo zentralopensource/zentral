@@ -25,7 +25,7 @@ class OsqueryZentralEnrollPowershellScriptBuilder(APIConfigToolsMixin):
             content = f.read()
 
         # tls hostname
-        tls_hostname = self.get_tls_hostname()
+        tls_hostname = self.get_api_fqdn()
         content = content.replace("%TLS_HOSTNAME%", tls_hostname)
 
         serialized_flags = self.build_kwargs["serialized_flags"]

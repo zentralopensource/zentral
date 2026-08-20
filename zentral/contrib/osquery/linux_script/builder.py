@@ -25,7 +25,7 @@ class OsqueryZentralEnrollScriptBuilder(APIConfigToolsMixin):
             content = f.read()
 
         # tls hostname
-        content = content.replace("%TLS_HOSTNAME%", self.get_tls_hostname())
+        content = content.replace("%TLS_HOSTNAME%", self.get_api_fqdn())
 
         serialized_flags = self.build_kwargs["serialized_flags"]
 

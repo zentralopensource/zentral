@@ -38,7 +38,7 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
                              (("%ENROLL_SECRET_SECRET%", self.build_kwargs["enrollment_secret_secret"]),))
 
         # tls_hostname in postinstall
-        tls_hostname = self.get_tls_hostname()
+        tls_hostname = self.get_api_fqdn()
         hostname_replacement = (("%TLS_HOSTNAME%", tls_hostname),)
         self.replace_in_file(self.get_build_path("scripts", "postinstall"), hostname_replacement)
 
