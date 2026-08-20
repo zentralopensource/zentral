@@ -521,3 +521,229 @@ curl \
   -o zentral_munki_enrollment_package.pkg \
   https://$ZTL_FQDN/api/munki/enrollments/1/package/
 ```
+
+### /api/munki/script_checks/
+
+A script check is a script the Munki agent runs on the machines in its scope, at most once every `script_checks_run_interval_seconds` (a [configuration](#apimunkiconfigurations) attribute). It is a [compliance check](inventory.md#compliance-checks): the agent reports the script's output, and Zentral compares it to the expected result to derive the machine's status.
+
+|Attribute|Description|
+|---|---|
+|`name`|Required, and unique across the Munki script checks. It is the name of the compliance check.|
+|`description`|Optional, free text.|
+|`type`|`ZSH_STR`, `ZSH_INT` or `ZSH_BOOL` — the type the script's output is compared as. `ZSH_STR` by default.|
+|`source`|The zsh script. Its output is compared to `expected_result`.|
+|`expected_result`|The value the output must equal for the machine to be compliant. It has to parse as the declared `type` — an integer for `ZSH_INT`, `true`/`false` for `ZSH_BOOL`.|
+|`tags`|Run only on the machines carrying any of these tags. Empty means every machine.|
+|`excluded_tags`|Never run on the machines carrying any of these tags. Must be disjoint from `tags`.|
+|`arch_amd64` / `arch_arm64`|Whether the check runs on Intel, on Apple Silicon, or on both. At least one is required.|
+|`min_os_version` / `max_os_version`|The macOS version range the check runs on. Blank for no bound. `max_os_version` is exclusive.|
+
+`version` and `compliance_check_id` are read only.
+
+#### List all script checks
+
+* method: GET
+* PBAC action: `Munki::Action::"viewScriptCheck"`
+* Optional filter parameter:
+    * `name`: name of the script check
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/munki/script_checks/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+[
+    {
+        "name": "FileVault enabled",
+        "description": "Check that FileVault is on",
+        "version": 1,
+        "compliance_check_id": 10,
+        "id": 1,
+        "tags": [
+            3
+        ],
+        "excluded_tags": [
+            4
+        ],
+        "arch_amd64": true,
+        "arch_arm64": true,
+        "min_os_version": "14",
+        "max_os_version": "",
+        "type": "ZSH_BOOL",
+        "source": "/usr/bin/fdesetup isactive",
+        "expected_result": "true",
+        "created_at": "2026-08-20T13:03:23.767041",
+        "updated_at": "2026-08-20T13:03:23.767043"
+    }
+]
+```
+
+#### Add a script check
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Munki::Action::"createScriptCheck"`
+
+Example:
+
+script_check.json
+
+```json
+{
+  "name": "FileVault enabled",
+  "description": "Check that FileVault is on",
+  "type": "ZSH_BOOL",
+  "source": "/usr/bin/fdesetup isactive",
+  "expected_result": "true",
+  "tags": [3],
+  "excluded_tags": [4],
+  "arch_amd64": true,
+  "arch_arm64": true,
+  "min_os_version": "14",
+  "max_os_version": ""
+}
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST -d @script_check.json \
+  https://$ZTL_FQDN/api/munki/script_checks/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "name": "FileVault enabled",
+    "description": "Check that FileVault is on",
+    "version": 1,
+    "compliance_check_id": 10,
+    "id": 1,
+    "tags": [
+        3
+    ],
+    "excluded_tags": [
+        4
+    ],
+    "arch_amd64": true,
+    "arch_arm64": true,
+    "min_os_version": "14",
+    "max_os_version": "",
+    "type": "ZSH_BOOL",
+    "source": "/usr/bin/fdesetup isactive",
+    "expected_result": "true",
+    "created_at": "2026-08-20T13:03:23.767041",
+    "updated_at": "2026-08-20T13:03:23.767043"
+}
+```
+
+### /api/munki/script_checks/`<int:pk>`/
+
+#### Get a script check
+
+* method: GET
+* PBAC action: `Munki::Action::"viewScriptCheck"`
+* `<int:pk>`: the primary key of the script check
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/munki/script_checks/1/ \
+  |python3 -m json.tool
+```
+
+#### Update a script check
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Munki::Action::"updateScriptCheck"`
+* `<int:pk>`: the primary key of the script check
+
+**Any** change to the check — its source, its expected result, its scope or its compatibility gate — bumps the version, and the machines in scope run it again on their next check-in. This is unlike the [Turbo scripts](turbo.md#apiturboscripts), where only a source change bumps the version.
+
+Example:
+
+script_check.json
+
+```json
+{
+  "name": "FileVault enabled",
+  "description": "Check that FileVault is on",
+  "type": "ZSH_BOOL",
+  "source": "/usr/bin/fdesetup isactive",
+  "expected_result": "true",
+  "tags": [3],
+  "excluded_tags": [4],
+  "arch_amd64": true,
+  "arch_arm64": false,
+  "min_os_version": "14",
+  "max_os_version": ""
+}
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X PUT -d @script_check.json \
+  https://$ZTL_FQDN/api/munki/script_checks/1/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "name": "FileVault enabled",
+    "description": "Check that FileVault is on",
+    "version": 2,
+    "compliance_check_id": 10,
+    "id": 1,
+    "tags": [
+        3
+    ],
+    "excluded_tags": [
+        4
+    ],
+    "arch_amd64": true,
+    "arch_arm64": false,
+    "min_os_version": "14",
+    "max_os_version": "",
+    "type": "ZSH_BOOL",
+    "source": "/usr/bin/fdesetup isactive",
+    "expected_result": "true",
+    "created_at": "2026-08-20T13:03:23.767041",
+    "updated_at": "2026-08-20T13:03:23.786024"
+}
+```
+
+#### Delete a script check
+
+* method: DELETE
+* PBAC action: `Munki::Action::"deleteScriptCheck"`
+* `<int:pk>`: the primary key of the script check
+
+Deleting a script check deletes its compliance check and all its machine statuses.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -X DELETE \
+  https://$ZTL_FQDN/api/munki/script_checks/1/
+```
+
+Response (204 No Content)
