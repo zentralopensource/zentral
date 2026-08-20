@@ -681,7 +681,9 @@ curl \
 * PBAC action: `Munki::Action::"updateScriptCheck"`
 * `<int:pk>`: the primary key of the script check
 
-**Any** change to the check — its source, its expected result, its scope or its compatibility gate — bumps the version, and the machines in scope run it again on their next check-in. This is unlike the [Turbo scripts](turbo.md#apiturboscripts), where only a source change bumps the version.
+A change to the check itself — its source, its expected result, its scope (`tags` / `excluded_tags`) or its compatibility gate — bumps the version, and the machines in scope run it again on their next check-in. This is unlike the [Turbo scripts](turbo.md#apiturboscripts), where only a source change bumps the version.
+
+Renaming a check or editing its description does **not** bump the version. Those two attributes belong to the compliance check rather than to the script check, and neither changes what the machines have to run.
 
 Example:
 
