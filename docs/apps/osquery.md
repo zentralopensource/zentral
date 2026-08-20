@@ -30,6 +30,9 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 ### /api/osquery/atcs/
 
+Terraform resource: [`zentral_osquery_atc`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_atc)  
+Terraform data source: [`zentral_osquery_atc`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/osquery_atc)
+
 #### List all ATCs.
 
 * method: GET
@@ -273,6 +276,9 @@ Response (204 No Content)
 
 ### /api/osquery/configurations/
 
+Terraform resource: [`zentral_osquery_configuration`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_configuration)  
+Terraform data source: [`zentral_osquery_configuration`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/osquery_configuration)
+
 #### List all Configurations.
 
 * method: GET
@@ -508,6 +514,8 @@ Response (204 No Content)
 
 ### /api/osquery/configuration_packs/
 
+Terraform resource: [`zentral_osquery_configuration_pack`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_configuration_pack)
+
 #### List all Configuration Packs.
 
 * method: GET
@@ -691,6 +699,9 @@ $ curl -X DELETE \
 Response (204 No Content)
 
 ### /api/osquery/enrollments/
+
+Terraform resource: [`zentral_osquery_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_enrollment)  
+Terraform data source: [`zentral_osquery_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/osquery_enrollment)
 
 An enrollment ties an Osquery configuration to a [meta business unit](inventory.md) and, optionally, to tags and enrollment restrictions. Its secret is baked into the packages and scripts the three download endpoints below produce.
 
@@ -883,6 +894,8 @@ Response (204 No Content)
 
 ### /api/osquery/enrollments/`<int:pk>`/package/
 
+The [`zentral_osquery_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_enrollment) Terraform resource exposes this URL as its read-only `package_url` attribute.
+
 #### Download the macOS enrollment package.
 
 * method: GET
@@ -900,6 +913,8 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 ```
 
 ### /api/osquery/enrollments/`<int:pk>`/script/
+
+The [`zentral_osquery_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_enrollment) Terraform resource exposes this URL as its read-only `script_url` attribute.
 
 #### Download the Linux enrollment script.
 
@@ -919,6 +934,8 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 
 ### /api/osquery/enrollments/`<int:pk>`/powershell_script/
 
+The [`zentral_osquery_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_enrollment) Terraform resource exposes this URL as its read-only `powershell_script_url` attribute.
+
 #### Download the Windows enrollment script.
 
 * method: GET
@@ -936,6 +953,9 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 ```
 
 ### /api/osquery/file_categories/
+
+Terraform resource: [`zentral_osquery_file_category`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_file_category)  
+Terraform data source: [`zentral_osquery_file_category`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/osquery_file_category)
 
 #### List all FileCategories.
 
@@ -1147,6 +1167,9 @@ $ curl -X DELETE \
 Response (204 No Content)
 
 ### /api/osquery/packs/
+
+Terraform resource: [`zentral_osquery_pack`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_pack)  
+Terraform data source: [`zentral_osquery_pack`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/osquery_pack)
 
 #### List all Packs.
 
@@ -1548,6 +1571,9 @@ You should get a response close to this one:
 ```
 
 ### /api/osquery/queries/
+
+Terraform resource: [`zentral_osquery_query`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/osquery_query)  
+Terraform data source: [`zentral_osquery_query`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/osquery_query)
 
 #### List all queries.
 
