@@ -167,7 +167,7 @@ class ScriptCheckSerializer(serializers.ModelSerializer):
             setattr(instance, key, value)
         if sorted(instance.tags.all(), key=lambda t: t.pk) != tags:
             script_check_updated = True
-        if sorted(instance.excluded_tags.all(), key=lambda t: t.pk) != tags:
+        if sorted(instance.excluded_tags.all(), key=lambda t: t.pk) != excluded_tags:
             script_check_updated = True
         if script_check_updated:
             compliance_check.version = F("version") + 1

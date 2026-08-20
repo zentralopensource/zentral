@@ -57,6 +57,24 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         return Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
 
+    def script_check_update_data(self, script_check, **updates):
+        # mirrors the stored state, so a call without updates builds a no-op PUT payload
+        data = {
+            "name": script_check.compliance_check.name,
+            "description": script_check.compliance_check.description,
+            "type": script_check.type,
+            "source": script_check.source,
+            "expected_result": script_check.expected_result,
+            "arch_amd64": script_check.arch_amd64,
+            "arch_arm64": script_check.arch_arm64,
+            "min_os_version": script_check.min_os_version,
+            "max_os_version": script_check.max_os_version,
+            "tags": [t.pk for t in script_check.tags.all()],
+            "excluded_tags": [t.pk for t in script_check.excluded_tags.all()],
+        }
+        data.update(updates)
+        return data
+
     # RequestCase implementation
 
     def _get_api_key(self):
@@ -1222,6 +1240,77 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
         self.assertEqual(len(callbacks), 1)
+
+    def test_update_script_check_no_change_no_version_bump(self):
+        tags = [Tag.objects.create(name=get_random_string(12))]
+        excluded_tags = [Tag.objects.create(name=get_random_string(12))]
+        script_check = force_script_check(tags=tags, excluded_tags=excluded_tags)
+        self.set_permissions("munki.change_scriptcheck")
+        response = self.put(reverse("munki_api:script_check", args=(script_check.pk,)),
+                            self.script_check_update_data(script_check))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version"], 1)
+        script_check.refresh_from_db()
+        self.assertEqual(script_check.compliance_check.version, 1)
+        self.assertEqual(list(script_check.tags.all()), tags)
+        self.assertEqual(list(script_check.excluded_tags.all()), excluded_tags)
+
+    def test_update_script_check_only_tags_version_bump(self):
+        excluded_tags = [Tag.objects.create(name=get_random_string(12))]
+        script_check = force_script_check(tags=[Tag.objects.create(name=get_random_string(12))],
+                                          excluded_tags=excluded_tags)
+        tags = [Tag.objects.create(name=get_random_string(12))]
+        self.set_permissions("munki.change_scriptcheck")
+        response = self.put(reverse("munki_api:script_check", args=(script_check.pk,)),
+                            self.script_check_update_data(script_check, tags=[t.pk for t in tags]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version"], 2)
+        script_check.refresh_from_db()
+        self.assertEqual(script_check.compliance_check.version, 2)
+        self.assertEqual(list(script_check.tags.all()), tags)
+        self.assertEqual(list(script_check.excluded_tags.all()), excluded_tags)
+
+    def test_update_script_check_only_excluded_tags_version_bump(self):
+        # the script check must start without tags: the excluded tags are the only thing left to change,
+        # so a comparison made against the wrong attribute cannot be masked by the included tags one
+        script_check = force_script_check()
+        excluded_tags = [Tag.objects.create(name=get_random_string(12))]
+        self.set_permissions("munki.change_scriptcheck")
+        response = self.put(reverse("munki_api:script_check", args=(script_check.pk,)),
+                            self.script_check_update_data(script_check,
+                                                          excluded_tags=[t.pk for t in excluded_tags]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version"], 2)
+        script_check.refresh_from_db()
+        self.assertEqual(script_check.compliance_check.version, 2)
+        self.assertEqual(list(script_check.tags.all()), [])
+        self.assertEqual(list(script_check.excluded_tags.all()), excluded_tags)
+
+    def test_update_script_check_only_max_os_version_version_bump(self):
+        # unlike turbo, munki bumps the version for any script check change, not only a source change:
+        # a different scope means a different set of machines has to run the check
+        script_check = force_script_check()
+        self.set_permissions("munki.change_scriptcheck")
+        response = self.put(reverse("munki_api:script_check", args=(script_check.pk,)),
+                            self.script_check_update_data(script_check, max_os_version="15"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version"], 2)
+        script_check.refresh_from_db()
+        self.assertEqual(script_check.compliance_check.version, 2)
+        self.assertEqual(script_check.max_os_version, "15")
+
+    def test_update_script_check_only_name_and_description_no_version_bump(self):
+        script_check = force_script_check()
+        name = get_random_string(12)
+        self.set_permissions("munki.change_scriptcheck")
+        response = self.put(reverse("munki_api:script_check", args=(script_check.pk,)),
+                            self.script_check_update_data(script_check, name=name, description="yolo"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["version"], 1)
+        script_check.refresh_from_db()
+        self.assertEqual(script_check.compliance_check.name, name)
+        self.assertEqual(script_check.compliance_check.description, "yolo")
+        self.assertEqual(script_check.compliance_check.version, 1)
 
     # delete script check
 

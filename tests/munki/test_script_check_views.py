@@ -419,6 +419,64 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["script_check_form"], "expected_result", "Invalid integer")
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_script_check_post_no_change_no_version_bump(self, post_event):
+        tags = [Tag.objects.create(name=get_random_string(12))]
+        excluded_tags = [Tag.objects.create(name=get_random_string(12))]
+        sc = force_script_check(tags=tags, excluded_tags=excluded_tags)
+        self.login("munki.change_scriptcheck", "munki.view_scriptcheck")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("munki:update_script_check", args=(sc.pk,)),
+                {"ccf-name": sc.compliance_check.name,
+                 "ccf-description": sc.compliance_check.description,
+                 "scf-type": sc.type,
+                 "scf-source": sc.source,
+                 "scf-expected_result": sc.expected_result,
+                 "scf-tags": [t.pk for t in tags],
+                 "scf-excluded_tags": [t.pk for t in excluded_tags],
+                 "scf-arch_amd64": sc.arch_amd64,
+                 "scf-arch_arm64": sc.arch_arm64,
+                 "scf-min_os_version": sc.min_os_version,
+                 "scf-max_os_version": sc.max_os_version},
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "munki/scriptcheck_detail.html")
+        script_check = response.context["object"]
+        self.assertEqual(script_check.compliance_check.version, 1)
+        self.assertEqual(list(script_check.tags.all()), tags)
+        self.assertEqual(list(script_check.excluded_tags.all()), excluded_tags)
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_script_check_post_only_excluded_tags_version_bump(self, post_event):
+        sc = force_script_check()
+        excluded_tags = [Tag.objects.create(name=get_random_string(12))]
+        self.login("munki.change_scriptcheck", "munki.view_scriptcheck")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("munki:update_script_check", args=(sc.pk,)),
+                {"ccf-name": sc.compliance_check.name,
+                 "ccf-description": sc.compliance_check.description,
+                 "scf-type": sc.type,
+                 "scf-source": sc.source,
+                 "scf-expected_result": sc.expected_result,
+                 "scf-excluded_tags": [t.pk for t in excluded_tags],
+                 "scf-arch_amd64": sc.arch_amd64,
+                 "scf-arch_arm64": sc.arch_arm64,
+                 "scf-min_os_version": sc.min_os_version,
+                 "scf-max_os_version": sc.max_os_version},
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        script_check = response.context["object"]
+        self.assertEqual(script_check.compliance_check.version, 2)
+        self.assertEqual(list(script_check.excluded_tags.all()), excluded_tags)
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(post_event.call_args_list), 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_script_check_post_ok(self, post_event):
         sc = force_script_check()
         prev_value = sc.serialize_for_event()
