@@ -213,6 +213,16 @@ These configurations are typically applied by assigning a dedicated blueprint du
 
 For more details on configuring Automated Device Enrollment (ADE), refer to the [Setup an Enrollment Profile](#setup-an-enrollment-profile) section.
 
+### Artifacts during the Setup Assistant
+
+Artifacts can be flagged with *Install during setup assistant*. During an Automated Device Enrollment that awaits the `DeviceConfigured` command, only the flagged artifacts are in scope, and the device stays in the Setup Assistant until they are installed.
+
+Declarations — Activations and Configurations — can be flagged too. Zentral enables declarative management as soon as the device enrolls, without waiting for the end of the Setup Assistant, and advertises the flagged declarations. `DeviceConfigured` is then withheld until the device has reported each of them in a status report, so that the configurations are applied before the user reaches the desktop. Reporting is what counts, not the outcome: a declaration the device rejects, or deliberately leaves inactive, does not hold the enrollment back.
+
+Reporting the declarations notifies the device, so it comes back for `DeviceConfigured` immediately instead of waiting. A declarative synchronization has no guaranteed response though, so the wait still has a deadline, set on the enrollment with *Await declarations timeout* — 5 minutes by default, 1 minute at the least, 1 hour at the most. The `DeviceConfigured` command is queued with that deadline, so a device that reports nothing at all is notified and released once it passes.
+
+Once `DeviceConfigured` is acknowledged, the remaining artifacts come into scope and a second declarative synchronization follows.
+
 ## FileVault Configuration
 
 Zentral manages FileVault settings for full disk encryption on macOS devices via MDM. Using a dedicated configuration, it allows the creation and assignment of an individual FileVault configuration to one or more MDM Blueprints. This approach provides centralized control over FileVault application, user experience, and key management, ensuring compliance with the organization’s data encryption policies.
