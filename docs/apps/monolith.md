@@ -120,6 +120,9 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 ### /api/monolith/repositories/
 
+Terraform resource: [`zentral_monolith_repository`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_repository)  
+Terraform data source: [`zentral_monolith_repository`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_repository)
+
 A repository is where the Munki packages and pkginfo files come from. See [Repositories](#repositories) for the difference between the backends.
 
 |Attribute|Description|
@@ -328,6 +331,9 @@ Only one sync runs at a time for a given repository. If a sync is already in pro
 
 ### /api/monolith/manifests/
 
+Terraform resource: [`zentral_monolith_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest)  
+Terraform data source: [`zentral_monolith_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_manifest)
+
 #### List all manifests
 
 * method: GET
@@ -535,6 +541,9 @@ Response
 
 ### /api/monolith/catalogs/
 
+Terraform resource: [`zentral_monolith_catalog`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_catalog)  
+Terraform data source: [`zentral_monolith_catalog`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_catalog)
+
 #### List all catalogs
 
 * method: GET
@@ -696,6 +705,9 @@ Response (204 No Content)
 
 ### /api/monolith/conditions/
 
+Terraform resource: [`zentral_monolith_condition`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_condition)  
+Terraform data source: [`zentral_monolith_condition`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_condition)
+
 #### List all conditions
 
 * method: GET
@@ -851,6 +863,9 @@ $ curl -X DELETE \
 Response (204 No Content)
 
 ### /api/monolith/enrollments/
+
+Terraform resource: [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_enrollment)  
+Terraform data source: [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_enrollment)
 
 #### List all enrollments
 
@@ -1069,6 +1084,8 @@ Response (204 No Content)
 
 ### /api/monolith/enrollments/`<int:pk>`/plist/
 
+The [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_enrollment) Terraform resource exposes this URL as its read-only `plist_url` attribute.
+
 #### Download the enrollment plist file
 
 * method: GET
@@ -1087,6 +1104,8 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 
 ### /api/monolith/enrollments/`<int:pk>`/configuration_profile/
 
+The [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_enrollment) Terraform resource exposes this URL as its read-only `configuration_profile_url` attribute.
+
 #### Download the enrollment configuration profile
 
 * method: GET
@@ -1104,6 +1123,8 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 ```
 
 ### /api/monolith/manifest_enrollment_packages/
+
+Terraform resource: [`zentral_monolith_manifest_enrollment_package`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest_enrollment_package)
 
 A manifest enrollment package attaches another module's enrollment — munki, osquery, … — to a manifest, so that monolith adds the corresponding package to the manifest of the machines in scope. The builders available are the ones listed under `enrollment_package_builders` in the [monolith configuration](#zentral-configuration).
 
@@ -1215,6 +1236,8 @@ $ curl -X DELETE \
 Response (204 No Content)
 
 ### /api/monolith/manifest_catalogs/
+
+Terraform resource: [`zentral_monolith_manifest_catalog`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest_catalog)
 
 #### List all manifest catalogs
 
@@ -1377,6 +1400,8 @@ Response (204 No Content)
 
 ### /api/monolith/manifest_sub_manifests/
 
+Terraform resource: [`zentral_monolith_manifest_sub_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest_sub_manifest)
+
 #### List all manifest sub manifests
 
 * method: GET
@@ -1538,6 +1563,9 @@ Response (204 No Content)
 
 ### /api/monolith/sub_manifests/
 
+Terraform resource: [`zentral_monolith_sub_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_sub_manifest)  
+Terraform data source: [`zentral_monolith_sub_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_sub_manifest)
+
 #### List all sub manifests
 
 * method: GET
@@ -1698,6 +1726,8 @@ $ curl -X DELETE \
 Response (204 No Content)
 
 ### /api/monolith/sub_manifest_pkg_infos/
+
+Terraform resource: [`zentral_monolith_sub_manifest_pkg_info`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_sub_manifest_pkg_info)
 
 #### List all sub manifest pkg infos
 
