@@ -222,6 +222,7 @@ class EnrollmentAuditEventTestCase(TestCase, LoginCase):
                                          "de-is_supervised": "",
                                          "de-admin_password_complexity": 3,
                                          "de-admin_password_rotation_delay": 60,
+                                         "de-await_declarations_timeout": 5,
                                          "es-meta_business_unit": self.mbu.pk},
                                         follow=True)
         self.assertEqual(response.status_code, 200)
@@ -247,6 +248,7 @@ class EnrollmentAuditEventTestCase(TestCase, LoginCase):
                                          "de-is_supervised": "",
                                          "de-admin_password_complexity": 3,
                                          "de-admin_password_rotation_delay": 60,
+                                         "de-await_declarations_timeout": 5,
                                          "es-meta_business_unit": self.mbu.pk})
         self.assertEqual(response.status_code, 200)
         self.assertFormError(response.context["dep_enrollment_form"], None, "Boom")

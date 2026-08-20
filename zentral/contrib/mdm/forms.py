@@ -451,7 +451,8 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
             "blueprint",
             "virtual_server", "name",
             "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable", "is_multi_user",
-            "await_device_configured", "auto_advance_setup", "include_tls_certificates",
+            "await_device_configured", "await_declarations_timeout",
+            "auto_advance_setup", "include_tls_certificates",
             "support_phone_number", "support_email_address",
             "org_magic", "department", "language", "region"
         ]
@@ -495,6 +496,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
                   'allow_pairing',
                   'auto_advance_setup',
                   'await_device_configured',
+                  'await_declarations_timeout',
                   'department',
                   'is_mandatory',
                   'is_mdm_removable',
