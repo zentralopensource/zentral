@@ -673,6 +673,89 @@ Authorization: Token the_token_string
 
 See [API authentication](core.md#api-authentication) for how to create a service account, issue a token for it and set an expiry.
 
+### Object endpoints
+
+Most of the MDM objects described earlier on this page — artifacts, blueprints, enrollments, issuers and the various configurations — are exposed as plain REST collections that all behave the same way:
+
+* `GET` on the collection lists it, `POST` creates;
+* `GET`, `PUT` and `DELETE` on the detail route read, replace and remove one object;
+* `PUT` is a full replacement. `PATCH` is a `405` throughout Zentral, so send every attribute;
+* the `Content-Type` is `application/json`;
+* where a list endpoint is filterable it is filterable on `name`.
+
+They are grouped in tables below rather than given a section each: the request and response bodies mirror the corresponding web-console forms, which are documented above, and the [Terraform provider](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs) documents every attribute of the ones it covers. The endpoints that do **not** follow the pattern — the device and user commands, the DEP device operations, the exports and the sync triggers — keep their own sections further down.
+
+#### Artifacts and blueprints
+
+An **artifact** is a named thing to install, and carries one or more **artifact versions**. A **blueprint** collects artifacts, and a **blueprint artifact** is the link between the two, carrying the scope. See [MDM Blueprints](#mdm-blueprints).
+
+|Endpoint|Methods|PBAC actions|
+|---|---|---|
+|`/api/mdm/artifacts/`|GET, POST|`MDM::Action::"viewArtifact"`, `MDM::Action::"createArtifact"`|
+|`/api/mdm/artifacts/<uuid:pk>/`|GET, PUT, DELETE|`MDM::Action::"viewArtifact"`, `MDM::Action::"updateArtifact"`, `MDM::Action::"deleteArtifact"`|
+|`/api/mdm/blueprints/`|GET, POST|`MDM::Action::"viewBlueprint"`, `MDM::Action::"createBlueprint"`|
+|`/api/mdm/blueprints/<int:pk>/`|GET, PUT, DELETE|`MDM::Action::"viewBlueprint"`, `MDM::Action::"updateBlueprint"`, `MDM::Action::"deleteBlueprint"`|
+|`/api/mdm/blueprint_artifacts/`|GET, POST|`MDM::Action::"viewBlueprintArtifact"`, `MDM::Action::"createBlueprintArtifact"`|
+|`/api/mdm/blueprint_artifacts/<int:pk>/`|GET, PUT, DELETE|`MDM::Action::"viewBlueprintArtifact"`, `MDM::Action::"updateBlueprintArtifact"`, `MDM::Action::"deleteBlueprintArtifact"`|
+
+#### Artifact versions
+
+One collection per kind of artifact version. Each object belongs to an artifact and carries its own version number and scope; creating one is how you ship a new version of an artifact.
+
+Note the path parameter: these detail routes key on the **artifact version** primary key, `<uuid:artifact_version_pk>` — except packages, which key on `<uuid:pk>`.
+
+|Endpoint|Methods|PBAC actions|
+|---|---|---|
+|`/api/mdm/profiles/`, `/api/mdm/profiles/<uuid:artifact_version_pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewProfile"`, `"createProfile"`, `"updateProfile"`, `"deleteProfile"`|
+|`/api/mdm/declarations/`, `/api/mdm/declarations/<uuid:artifact_version_pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewDeclaration"`, `"createDeclaration"`, `"updateDeclaration"`, `"deleteDeclaration"`|
+|`/api/mdm/cert_assets/`, `/api/mdm/cert_assets/<uuid:artifact_version_pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewCertAsset"`, `"createCertAsset"`, `"updateCertAsset"`, `"deleteCertAsset"`|
+|`/api/mdm/data_assets/`, `/api/mdm/data_assets/<uuid:artifact_version_pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewDataAsset"`, `"createDataAsset"`, `"updateDataAsset"`, `"deleteDataAsset"`|
+|`/api/mdm/enterprise_apps/`, `/api/mdm/enterprise_apps/<uuid:artifact_version_pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewEnterpriseApp"`, `"createEnterpriseApp"`, `"updateEnterpriseApp"`, `"deleteEnterpriseApp"`|
+|`/api/mdm/store_apps/`, `/api/mdm/store_apps/<uuid:artifact_version_pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewStoreApp"`, `"createStoreApp"`, `"updateStoreApp"`, `"deleteStoreApp"`|
+|`/api/mdm/provisioning_profiles/`, `/api/mdm/provisioning_profiles/<uuid:artifact_version_pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewProvisioningProfile"`, `"createProvisioningProfile"`, `"updateProvisioningProfile"`, `"deleteProvisioningProfile"`|
+|`/api/mdm/packages/`, `/api/mdm/packages/<uuid:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewPackage"`, `"createPackage"`, `"updatePackage"`, `"deletePackage"`|
+
+#### Enrollments
+
+|Endpoint|Methods|PBAC actions|
+|---|---|---|
+|`/api/mdm/dep_enrollments/`, `/api/mdm/dep_enrollments/<int:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewDEPEnrollment"`, `"createDEPEnrollment"`, `"updateDEPEnrollment"`, `"deleteDEPEnrollment"`|
+|`/api/mdm/ota_enrollments/`, `/api/mdm/ota_enrollments/<int:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewOTAEnrollment"`, `"createOTAEnrollment"`, `"updateOTAEnrollment"`, `"deleteOTAEnrollment"`|
+|`/api/mdm/dep_enrollment_custom_views/`, `/api/mdm/dep_enrollment_custom_views/<uuid:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewDEPEnrollmentCustomView"`, `"createDEPEnrollmentCustomView"`, `"updateDEPEnrollmentCustomView"`, `"deleteDEPEnrollmentCustomView"`|
+|`/api/mdm/enrollment_custom_views/`, `/api/mdm/enrollment_custom_views/<uuid:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewEnrollmentCustomView"`, `"createEnrollmentCustomView"`, `"updateEnrollmentCustomView"`, `"deleteEnrollmentCustomView"`|
+
+#### Certificate issuers
+
+The ACME and SCEP issuers a profile or a DEP enrollment references to have the devices obtain their identity certificates.
+
+|Endpoint|Methods|PBAC actions|
+|---|---|---|
+|`/api/mdm/acme_issuers/`, `/api/mdm/acme_issuers/<uuid:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewACMEIssuer"`, `"createACMEIssuer"`, `"updateACMEIssuer"`, `"deleteACMEIssuer"`|
+|`/api/mdm/scep_issuers/`, `/api/mdm/scep_issuers/<uuid:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewSCEPIssuer"`, `"createSCEPIssuer"`, `"updateSCEPIssuer"`, `"deleteSCEPIssuer"`|
+
+#### Configurations
+
+The configurations a blueprint links to, described under [FileVault Configuration](#filevault-configuration), [Recovery Password Configuration](#recovery-password-configuration) and [Software Update Enforcement Configuration](#software-update-enforcement-configuration).
+
+|Endpoint|Methods|PBAC actions|
+|---|---|---|
+|`/api/mdm/filevault_configs/`, `/api/mdm/filevault_configs/<int:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewFileVaultConfig"`, `"createFileVaultConfig"`, `"updateFileVaultConfig"`, `"deleteFileVaultConfig"`|
+|`/api/mdm/recovery_password_configs/`, `/api/mdm/recovery_password_configs/<int:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewRecoveryPasswordConfig"`, `"createRecoveryPasswordConfig"`, `"updateRecoveryPasswordConfig"`, `"deleteRecoveryPasswordConfig"`|
+|`/api/mdm/software_update_enforcements/`, `/api/mdm/software_update_enforcements/<int:pk>/`|GET, POST / GET, PUT, DELETE|`MDM::Action::"viewSoftwareUpdateEnforcement"`, `"createSoftwareUpdateEnforcement"`, `"updateSoftwareUpdateEnforcement"`, `"deleteSoftwareUpdateEnforcement"`|
+
+#### Read-only objects
+
+These three are owned by Apple's side of the integration, not by Zentral: a push certificate is uploaded through the web console after a round trip to the Apple Push Certificates Portal, and DEP virtual servers and Apps and Books locations come from tokens. The API therefore only reads them — there is no `POST`, `PUT` or `DELETE`.
+
+|Endpoint|Methods|PBAC action|
+|---|---|---|
+|`/api/mdm/push_certificates/`, `/api/mdm/push_certificates/<int:pk>/`|GET|`MDM::Action::"viewPushCertificate"`|
+|`/api/mdm/dep/virtual_servers/`, `/api/mdm/dep/virtual_servers/<int:pk>/`|GET|`MDM::Action::"viewDEPVirtualServer"`|
+|`/api/mdm/dep/virtual_servers/<int:pk>/beta_tokens/`|GET|`MDM::Action::"viewDEPVirtualServer"`|
+|`/api/mdm/locations/<int:pk>/`|GET|`MDM::Action::"viewLocation"`|
+
+`/api/mdm/dep/virtual_servers/<int:pk>/beta_tokens/` returns the seeding tokens of the virtual server — see [Browse the beta tokens](#browse-the-beta-tokens). `/api/mdm/locations/` is documented [below](#apimdmlocations).
+
 ### `/api/mdm/dep/devices/`
 
  * method: `GET`
