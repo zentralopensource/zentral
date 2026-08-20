@@ -1072,6 +1072,30 @@ class TestMDMArtifacts(TestCase):
                           f"zentral.declaration.{artifact.pk}"})
         self.assertEqual(len(declarations["Management"]), 0)
 
+    def test_device_declaration_items_awaiting_configuration(self):
+        _, setup_artifact, _ = force_blueprint_artifact(
+            blueprint=self.blueprint1,
+            artifact_type=Artifact.Type.CONFIGURATION,
+            install_during_setup_assistant=True,
+        )
+        _, other_artifact, _ = force_blueprint_artifact(
+            blueprint=self.blueprint1,
+            artifact_type=Artifact.Type.CONFIGURATION,
+        )
+        mss_identifier = f"zentral.blueprint.{self.blueprint1.pk}.management-status-subscriptions"
+        items = Target(self.enrolled_device).declaration_items
+        self.assertEqual(set(d["Identifier"] for d in items["Declarations"]["Configurations"]),
+                         {mss_identifier,
+                          f"zentral.declaration.{setup_artifact.pk}",
+                          f"zentral.declaration.{other_artifact.pk}"})
+        # during the setup assistant, only the flagged declaration is advertised
+        awaiting_items = Target(self.enrolled_device_awaiting_configuration).declaration_items
+        self.assertEqual(set(d["Identifier"] for d in awaiting_items["Declarations"]["Configurations"]),
+                         {mss_identifier,
+                          f"zentral.declaration.{setup_artifact.pk}"})
+        # the scope change is what triggers the second sync when DeviceConfigured is acknowledged
+        self.assertNotEqual(items["DeclarationsToken"], awaiting_items["DeclarationsToken"])
+
     # update_target_artifact
 
     @patch("zentral.contrib.mdm.artifacts.naive_utcnow")

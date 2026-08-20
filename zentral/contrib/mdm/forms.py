@@ -451,7 +451,8 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
             "blueprint",
             "virtual_server", "name",
             "allow_pairing", "is_supervised", "is_mandatory", "is_mdm_removable", "is_multi_user",
-            "await_device_configured", "auto_advance_setup", "include_tls_certificates",
+            "await_device_configured", "await_declarations_timeout",
+            "auto_advance_setup", "include_tls_certificates",
             "support_phone_number", "support_email_address",
             "org_magic", "department", "language", "region"
         ]
@@ -495,6 +496,7 @@ class CreateDEPEnrollmentForm(forms.ModelForm):
                   'allow_pairing',
                   'auto_advance_setup',
                   'await_device_configured',
+                  'await_declarations_timeout',
                   'department',
                   'is_mandatory',
                   'is_mdm_removable',
@@ -1197,8 +1199,6 @@ class UpdateArtifactForm(forms.ModelForm):
             del self.fields["install_during_setup_assistant"]
         else:
             self.fields["requires"].queryset = self.fields["requires"].queryset.exclude(pk=self.instance.pk)
-            if self.artifact_type.is_ddm_only:
-                del self.fields["install_during_setup_assistant"]
         if self.artifact_type.is_declaration:
             self.fields["auto_update"].disabled = True
 
@@ -1206,9 +1206,6 @@ class UpdateArtifactForm(forms.ModelForm):
         if not self.artifact_type.can_be_linked_to_blueprint:
             self.instance.requires.clear()
             self.instance.install_during_setup_assistant = False
-        else:
-            if self.artifact_type.is_ddm_only:
-                self.instance.install_during_setup_assistant = False
         if self.artifact_type.is_declaration:
             self.instance.auto_update = True
         instance = super().save()

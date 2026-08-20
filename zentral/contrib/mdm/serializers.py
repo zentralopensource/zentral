@@ -1381,6 +1381,7 @@ class DEPEnrollmentSerializer(serializers.ModelSerializer):
             'allow_pairing',
             'auto_advance_setup',
             'await_device_configured',
+            'await_declarations_timeout',
             'department',
             'is_mandatory',
             'is_mdm_removable',

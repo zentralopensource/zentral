@@ -240,7 +240,7 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/artifact_form.html")
         form = response.context["form"]
         self.assertIn("requires", form.fields)
-        self.assertNotIn("install_during_setup_assistant", form.fields)
+        self.assertIn("install_during_setup_assistant", form.fields)
 
     def test_update_artifact_get_profile(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.PROFILE)
@@ -349,8 +349,7 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
     def test_update_artifact_post_ddm_only(self):
         required_artifact, _ = force_artifact()
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        artifact.install_during_setup_assistant = True
-        artifact.save()
+        self.assertFalse(artifact.install_during_setup_assistant)
         self.login("mdm.change_artifact", "mdm.view_artifact")
         new_name = get_random_string(12)
         response = self.client.post(reverse("mdm:update_artifact", args=(artifact.pk,)),
@@ -366,9 +365,8 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
         artifact2 = response.context["object"]
         self.assertEqual(artifact2, artifact)
         self.assertEqual(artifact2.name, new_name)
-        # cannot be linked to blueprint, so no requirements OK but cannot be installed during setup assistant
         self.assertEqual(artifact2.requires.count(), 1)
-        self.assertFalse(artifact2.install_during_setup_assistant)
+        self.assertTrue(artifact2.install_during_setup_assistant)
 
     # delete artifact
 

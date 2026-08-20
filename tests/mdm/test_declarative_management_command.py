@@ -69,14 +69,15 @@ class DeclarativeManagementCommandTestCase(TestCase):
             DeclarativeManagement.verify_channel_and_device(Channel.DEVICE, self.enrolled_device) is False
         )
 
-    def test_awaiting_configuration_true_false(self):
+    def test_awaiting_configuration_does_not_block(self):
         target = Target(self.enrolled_device)
         self.assertTrue(
             DeclarativeManagement.verify_target(target) is True
         )
+        # the command is sent during the setup assistant, before DeviceConfigured
         self.enrolled_device.awaiting_configuration = True
         self.assertTrue(
-            DeclarativeManagement.verify_target(target) is False
+            DeclarativeManagement.verify_target(target) is True
         )
 
     # load_kwargs
@@ -166,10 +167,22 @@ class DeclarativeManagementCommandTestCase(TestCase):
             )
         )
 
-    def test_trigger_declarative_management_sync_awaiting_configuration_noop(self):
+    def test_trigger_declarative_management_sync_awaiting_configuration(self):
         self.assertIsNotNone(self.enrolled_device.blueprint)
         self.enrolled_device.declarative_management = True
         self.enrolled_device.os_version = "13.1.0"
+        self.enrolled_device.awaiting_configuration = True
+        cmd = _trigger_declarative_management_sync(
+            Target(self.enrolled_device),
+            self.dep_enrollment_session,
+            RequestStatus.IDLE,
+        )
+        self.assertIsInstance(cmd, DeclarativeManagement)
+
+    def test_trigger_declarative_management_sync_awaiting_configuration_os_too_old_noop(self):
+        self.assertIsNotNone(self.enrolled_device.blueprint)
+        self.enrolled_device.declarative_management = True
+        self.enrolled_device.os_version = "12.6.0"
         self.enrolled_device.awaiting_configuration = True
         self.assertIsNone(
             _trigger_declarative_management_sync(

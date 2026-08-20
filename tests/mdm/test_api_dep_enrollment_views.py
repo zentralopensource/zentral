@@ -129,6 +129,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
             'allow_pairing': enrollment.allow_pairing,
             'auto_advance_setup': enrollment.auto_advance_setup,
             'await_device_configured': enrollment.await_device_configured,
+            'await_declarations_timeout': enrollment.await_declarations_timeout,
             'department': enrollment.department,
             'is_mandatory': enrollment.is_mandatory,
             'is_mdm_removable': enrollment.is_mdm_removable,
