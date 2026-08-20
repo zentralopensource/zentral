@@ -266,6 +266,9 @@ See [API authentication](core.md#api-authentication) for how to create a service
 
 ### `/api/inventory/meta_business_units/`
 
+Terraform resource: [`zentral_meta_business_unit`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/meta_business_unit)  
+Terraform data source: [`zentral_meta_business_unit`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/meta_business_unit)
+
 A meta business unit groups the business units reported by the different inventory sources, and is what enrollments are scoped to.
 
 #### List all meta business units
@@ -343,6 +346,9 @@ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 
 ### `/api/inventory/taxonomies/`
 
+Terraform resource: [`zentral_taxonomy`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/taxonomy)  
+Terraform data source: [`zentral_taxonomy`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/taxonomy)
+
 A taxonomy groups tags that are alternatives to one another — a machine carries at most one tag per taxonomy.
 
 #### List all taxonomies
@@ -399,6 +405,9 @@ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 * `<int:pk>`: the primary key of the taxonomy
 
 ### `/api/inventory/tags/`
+
+Terraform resource: [`zentral_tag`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/tag)  
+Terraform data source: [`zentral_tag`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/tag)
 
 #### List all tags
 
@@ -475,6 +484,9 @@ Response:
 Deleting a tag removes it from every machine that carries it.
 
 ### `/api/inventory/jmespath_checks/`
+
+Terraform resource: [`zentral_jmespath_check`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/jmespath_check)  
+Terraform data source: [`zentral_jmespath_check`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/jmespath_check)
 
 The [inventory compliance checks](#compliance-checks) described above.
 
