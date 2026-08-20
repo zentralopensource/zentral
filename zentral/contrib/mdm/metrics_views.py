@@ -112,6 +112,64 @@ class MetricsView(BasePrometheusMetricsView):
                 for le, val in row_d.items():
                     edg.labels(le=le, **default_labels).set(val)
 
+    def populate_devices_per_realm_group(self):
+        drgg = Gauge(
+            'zentral_mdm_devices_per_realm_group', 'Zentral MDM devices per realm group',
+            ['realm', 'realm_group', 'platform', 'blueprint', 'le'],
+            registry=self.registry,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                # enrolled devices carry no realm user, only the enrollment sessions do. A device can have
+                # more than one session, and those sessions can point at different realm users, so the
+                # (device, group) pairs have to be deduplicated before the devices are counted.
+                "with device_realm_groups as ("
+                "  select distinct es.enrolled_device_id device_id, m.group_id"
+                "  from ("
+                "    select enrolled_device_id, realm_user_id from mdm_depenrollmentsession"
+                "    union"
+                "    select enrolled_device_id, realm_user_id from mdm_otaenrollmentsession"
+                "    union"
+                "    select enrolled_device_id, realm_user_id from mdm_reenrollmentsession"
+                "    union"
+                "    select enrolled_device_id, realm_user_id from mdm_userenrollmentsession"
+                "  ) es"
+                "  join realms_realmusergroupmembership m on (m.user_id = es.realm_user_id)"
+                "  where es.enrolled_device_id is not null"
+                "), devices as ("
+                "  select r.name realm, rg.display_name realm_group, d.platform, b.name blueprint,"
+                "  case when d.last_seen_at is not null"
+                "  then date_part('days', now() - d.last_seen_at)"
+                "  else null end age"
+                "  from mdm_enrolleddevice d"
+                "  left join mdm_blueprint b on (d.blueprint_id = b.id)"
+                "  left join device_realm_groups drg on (drg.device_id = d.id)"
+                "  left join realms_realmgroup rg on (rg.uuid = drg.group_id)"
+                "  left join realms_realm r on (r.uuid = rg.realm_id)"
+                ") "
+                "select realm, realm_group, platform, blueprint,"
+                'count(*) filter (where age is not null and age < 1) "1",'
+                'count(*) filter (where age is not null and age < 7) "7",'
+                'count(*) filter (where age is not null and age < 14) "14",'
+                'count(*) filter (where age is not null and age < 30) "30",'
+                'count(*) filter (where age is not null and age < 45) "45",'
+                'count(*) filter (where age is not null and age < 90) "90",'
+                'count(*) as "+Inf" '
+                'from devices '
+                'group by realm, realm_group, platform, blueprint'
+            )
+            columns = [c.name for c in cursor.description]
+            for row in cursor.fetchall():
+                row_d = dict(zip(columns, row))
+                default_labels = {
+                    "realm": row_d.pop("realm") or "_",
+                    "realm_group": row_d.pop("realm_group") or "_",
+                    "platform": row_d.pop("platform") or "_",
+                    "blueprint": row_d.pop("blueprint") or "_",
+                }
+                for le, val in row_d.items():
+                    drgg.labels(le=le, **default_labels).set(val)
+
     def populate_target_artifacts_buckets(self):
         tag = Gauge(
             "zentral_mdm_target_artifacts_bucket",
@@ -169,4 +227,5 @@ class MetricsView(BasePrometheusMetricsView):
         self.populate_enrollment_sessions()
         self.populate_commands()
         self.populate_enrolled_devices()
+        self.populate_devices_per_realm_group()
         self.populate_target_artifacts_buckets()
