@@ -1313,3 +1313,43 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
   https://$ZTL_FQDN/api/santa/enrollments/1/configuration_profile/ \
   --output com.example.zentral.santa_configuration.mobileconfig
 ```
+
+### /api/santa/targets/export/
+
+#### Trigger a Santa targets export task.
+
+* method: POST
+* PBAC action: `Santa::Action::"viewTarget"`
+* mandatory query parameter:
+    * `export_format`: `xlsx` or `zip`. Unlike the other export endpoints, this one has no default — a missing or unknown value is a `400`.
+* optional query parameters — the filters of the *Targets* search form:
+    * `q`: a search string, matched against the target identifier (SHA256, team ID, …) and the collected names.
+    * `target_type`: `BINARY`, `BUNDLE`, `CDHASH`, `CERTIFICATE`, `METABUNDLE`, `SIGNINGID` or `TEAMID`.
+    * `target_state`: the voting state, as an integer — `-100` (banned), `-50` (suspect), `0` (untrusted), `50` (partially allowlisted) or `100` (globally allowlisted).
+    * `configuration`: the primary key of a Santa configuration.
+    * `has_yes_votes`, `has_no_votes`, `todo`: booleans.
+    * `last_seen_days`: `1`, `3`, `7`, `14`, `30`, `45` or `90`.
+
+Use this endpoint to trigger a Santa targets export task. With `xlsx`, the result is a single spreadsheet; with `zip`, it is an archive of one file per target type.
+
+**NB:** the filters are passed in the query string, not in the request body.
+
+Example
+
+```bash
+$ curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/santa/targets/export/?export_format=xlsx&target_type=TEAMID" \
+  |python3 -m json.tool
+```
+
+Response (201 Created)
+
+```json
+{
+  "task_id": "b1512b8d-1e17-4181-a1c3-93a7243fddd3",
+  "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd3/"
+}
+```
+
+Poll [`/api/task_result/<uuid:task_id>/`](core.md#apitask_resultuuidtask_id) for the status, and download the file from the `download_url` it returns once the task is done.
