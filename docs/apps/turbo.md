@@ -335,7 +335,13 @@ Zentral only does full updates: use `PUT` and send every attribute. `PATCH` retu
 
 The list endpoints are paginated. The response is an object with a `count`, a `next` and a `previous` URL, and the `results` array. Use the `limit` and `offset` query parameters to page through them – the default limit is 50, and the maximum is 500.
 
+#### Terraform
+
+Every Turbo object below can also be managed with the [Zentral Terraform provider](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs), which is built on these endpoints. The matching resource is linked at the top of each section.
+
 ### /api/turbo/configurations/
+
+Terraform resource: [`zentral_turbo_configuration`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_configuration)
 
 #### List all configurations
 
@@ -532,6 +538,8 @@ Response (204 No Content):
 
 ### /api/turbo/enrollments/
 
+Terraform resource: [`zentral_turbo_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_enrollment)
+
 #### List all enrollments
 
 * method: GET
@@ -708,6 +716,8 @@ curl \
 
 ### /api/turbo/enrollments/`<int:pk>`/plist/
 
+The [`zentral_turbo_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_enrollment) Terraform resource exposes this URL as its read-only `plist_url` attribute.
+
 #### Download the enrollment plist file
 
 * method: GET
@@ -725,6 +735,8 @@ curl \
 
 ### /api/turbo/enrollments/`<int:pk>`/configuration_profile/
 
+The [`zentral_turbo_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_enrollment) Terraform resource exposes this URL as its read-only `configuration_profile_url` attribute.
+
 #### Download the enrollment configuration profile
 
 * method: GET
@@ -741,6 +753,8 @@ curl \
 ```
 
 ### /api/turbo/scripts/
+
+Terraform resource: [`zentral_turbo_script`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_script)
 
 #### List all scripts
 
@@ -943,6 +957,8 @@ curl \
 
 ### /api/turbo/mscp_checks/
 
+Terraform resource: [`zentral_turbo_mscp_check`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_mscp_check)
+
 #### List all mSCP checks
 
 * method: GET
@@ -1126,6 +1142,8 @@ curl \
 
 ### /api/turbo/recurring_jobs/
 
+Terraform resource: [`zentral_turbo_recurring_job`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_recurring_job)
+
 #### List all recurring jobs
 
 * method: GET
@@ -1302,6 +1320,8 @@ curl \
 ```
 
 ### /api/turbo/one_time_jobs/
+
+Terraform resource: [`zentral_turbo_one_time_job`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_one_time_job)
 
 #### List all one-time jobs
 
