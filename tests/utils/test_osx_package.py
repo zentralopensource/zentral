@@ -7,8 +7,8 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from django.test import SimpleTestCase
-from zentral.utils.osx_package import (BasePackageBuilder, get_package_builders,
-                                       get_standalone_package_builders, get_tls_hostname)
+from zentral.utils.osx_package import (BasePackageBuilder, get_api_fqdn, get_package_builders,
+                                       get_standalone_package_builders)
 from .packages import DummyPackageBuilder, build_dummy_package
 
 
@@ -125,13 +125,13 @@ class OSXPackageBuilderTestCase(SimpleTestCase):
         self.assertIsNone(builder.get_etag())
         self.assertIsNone(builder.get_last_modified_dt())
 
-    # tls hostname
+    # api fqdn
 
-    def test_get_tls_hostname(self):
+    def test_get_api_fqdn(self):
         api = {"fqdn": "zentral.example.com", "fqdn_mtls": "zentral-mtls.example.com"}
         with patch("zentral.utils.osx_package.settings", {"api": api}):
-            self.assertEqual(get_tls_hostname(), "zentral.example.com")
-            self.assertEqual(get_tls_hostname(for_client_cert_auth=True), "zentral-mtls.example.com")
+            self.assertEqual(get_api_fqdn(), "zentral.example.com")
+            self.assertEqual(get_api_fqdn(for_client_cert_auth=True), "zentral-mtls.example.com")
 
     # package builders
 

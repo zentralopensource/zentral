@@ -79,7 +79,7 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
         )
 
         # tls_hostname and osqueryd paths in postinstall
-        tls_hostname = self.get_tls_hostname()
+        tls_hostname = self.get_api_fqdn()
         self.replace_in_file(self.get_build_path("scripts", "postinstall"),
                              (("%TLS_HOSTNAME%", tls_hostname), osqueryd_paths_replacement))
 
