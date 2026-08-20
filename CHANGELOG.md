@@ -1,3 +1,12 @@
+## 2026.6
+
+
+### Bug fixes
+
+
+Fixed the version of a Munki script check being bumped by every API update, including the ones that changed nothing: the excluded tags were compared with the included tags. A version change discards the results still in flight and makes every machine in scope run the check again.
+
+
 ## 2026.5
 
 
