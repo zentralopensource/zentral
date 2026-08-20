@@ -202,7 +202,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_automatictableconstruction")
         response = self.get(reverse('osquery_api:atcs'), data={"name": get_random_string(24)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_atcs_filter_by_configuration_id_not_found(self):
         self.set_permissions("osquery.view_automatictableconstruction")
@@ -218,8 +218,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_automatictableconstruction")
         response = self.get(reverse('osquery_api:atcs'), data={"name": atc.name})
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
-        self.assertEqual(response.json(), [{
+        self.assertIsInstance(response.json()["results"], list)
+        self.assertEqual(response.json()["results"], [{
             "platforms": ["darwin", "windows"],
             "updated_at": atc.updated_at.isoformat(),
             "columns": ["un", "deux"],
@@ -239,8 +239,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_automatictableconstruction")
         response = self.get(reverse('osquery_api:atcs'), data={"configuration_id": configuration.id})
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
-        self.assertEqual(response.json(), [{
+        self.assertIsInstance(response.json()["results"], list)
+        self.assertEqual(response.json()["results"], [{
             "platforms": ["darwin", "windows"],
             "updated_at": atc.updated_at.isoformat(),
             "columns": ["un", "deux"],
@@ -258,8 +258,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_automatictableconstruction")
         response = self.get(reverse('osquery_api:atcs'))
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
-        self.assertEqual(response.json(), [{
+        self.assertIsInstance(response.json()["results"], list)
+        self.assertEqual(response.json()["results"], [{
             "platforms": ["darwin", "windows"],
             "updated_at": atc.updated_at.isoformat(),
             "columns": ["un", "deux"],
@@ -519,7 +519,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'), data={"name": get_random_string(35)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_file_categories_filter_by_configuration_id_not_found(self):
         self.set_permissions("osquery.view_filecategory")
@@ -535,7 +535,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'), data={"name": file_category.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "name": file_category.name,
             "slug": file_category.slug,
             "id": file_category.id,
@@ -556,7 +556,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse('osquery_api:file_categories'),
                             data={"configuration_id": configuration.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "name": file_category.name,
             "slug": file_category.slug,
             "id": file_category.id,
@@ -574,8 +574,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_filecategory")
         response = self.get(reverse('osquery_api:file_categories'))
         self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.json(), list)
-        self.assertEqual(response.json(), [{
+        self.assertIsInstance(response.json()["results"], list)
+        self.assertEqual(response.json()["results"], [{
             "name": file_category.name,
             "slug": file_category.slug,
             "id": file_category.id,
@@ -835,7 +835,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_configuration")
         response = self.get(reverse("osquery_api:configurations"), {"name": get_random_string(32)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_configurations_filter_by_name(self):
         for _ in range(3):
@@ -844,7 +844,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_configuration")
         response = self.get(reverse("osquery_api:configurations"), {"name": configuration.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "id": configuration.id,
             "name": configuration.name,
             "description": "",
@@ -864,7 +864,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_configuration")
         response = self.get(reverse('osquery_api:configurations'))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, [{
+        self.assertEqual(response.data["results"], [{
             "id": configuration.pk,
             "name": configuration.name,
             'description': "",
@@ -1250,7 +1250,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'script_download_url': f'https://{fqdn}/api/osquery/enrollments/{enrollment.pk}/script/',
              'created_at': enrollment.created_at.isoformat(),
              'updated_at': enrollment.updated_at.isoformat()},
-            response.json()
+            response.json()["results"]
         )
 
     # get enrollment
@@ -1577,7 +1577,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_pack")
         response = self.get(reverse("osquery_api:packs"), {"name": get_random_string(12)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_packs_filter_by_configuration_id_not_found(self):
         self.set_permissions("osquery.view_pack")
@@ -1593,7 +1593,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         configuration = self.force_configuration()
         response = self.get(reverse("osquery_api:packs"), {"configuration_id": configuration.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_packs_filter_by_name(self):
         for _ in range(3):
@@ -1602,7 +1602,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_pack")
         response = self.get(reverse("osquery_api:packs"), {"name": pack.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "id": pack.pk,
             "name": pack.name,
             "slug": slugify(pack.name),
@@ -1621,7 +1621,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_pack")
         response = self.get(reverse("osquery_api:packs"), {"configuration_id": configuration.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "id": pack.pk,
             "name": pack.name,
             "slug": slugify(pack.name),
@@ -1638,7 +1638,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_pack")
         response = self.get(reverse("osquery_api:packs"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "id": pack.pk,
             "name": pack.name,
             "slug": slugify(pack.name),
@@ -2476,7 +2476,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_query")
         response = self.get(reverse("osquery_api:queries"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(),
+        self.assertEqual(response.json()["results"],
                          [{"id": query.pk,
                            "name": query.name,
                            "version": 1,
@@ -2508,7 +2508,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_query")
         response = self.get(reverse("osquery_api:queries"), {"name": query.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(),
+        self.assertEqual(response.json()["results"],
                          [{"id": query.pk,
                            "name": query.name,
                            "version": 1,
@@ -2533,7 +2533,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.view_query")
         response = self.get(reverse("osquery_api:queries"), {"pack_id": pack.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(),
+        self.assertEqual(response.json()["results"],
                          [{"id": query.pk,
                            "name": query.name,
                            "version": 1,
@@ -3297,7 +3297,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         configuration, pack, configuration_pack = self.force_configuration(force_pack=True)
         response = self.get(reverse("osquery_api:configuration_packs"), {"configuration_id": configuration.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "id": configuration_pack.pk,
             "configuration": configuration.pk,
             "tags": [],
@@ -3312,7 +3312,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         configuration, pack, configuration_pack = self.force_configuration(force_pack=True)
         response = self.get(reverse("osquery_api:configuration_packs"), {"pack_id": pack.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "id": configuration_pack.pk,
             "configuration": configuration.pk,
             "tags": [],
@@ -3325,7 +3325,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         configuration_pack = self.force_configuration_pack()
         response = self.get(reverse("osquery_api:configuration_packs"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             "id": configuration_pack.pk,
             "configuration": configuration_pack.configuration.pk,
             "tags": [],

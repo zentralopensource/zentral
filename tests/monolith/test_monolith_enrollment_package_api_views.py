@@ -66,7 +66,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         force_manifest_enrollment_package()
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"), {"manifest_id": manifest.pk})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_get_manifest_enrollment_packages_filter_by_manifest_id(self):
         mep1 = force_manifest_enrollment_package()
@@ -78,7 +78,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"),
                             {"manifest_id": manifest1.id})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': mep1.pk,
             'manifest': manifest1.id,
             'builder': 'zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder',
@@ -101,7 +101,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"),
                             {"builder": mep2.builder})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': mep2.pk,
             'manifest': manifest2.id,
             'builder': 'zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder',
@@ -117,7 +117,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.view_manifestenrollmentpackage")
         response = self.get(reverse("monolith_api:manifest_enrollment_packages"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [{
+        self.assertEqual(response.json()["results"], [{
             'id': mep.pk,
             'manifest': mep.manifest.id,
             'builder': 'zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder',

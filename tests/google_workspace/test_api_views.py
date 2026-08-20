@@ -122,8 +122,9 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
                 'updated_at': connection.updated_at.isoformat()
             }
 
-    def _connection_to_list(self, connection: Connection):
-        return [self._connection_to_dict(connection)]
+    def _connection_to_page(self, connection: Connection):
+        return {'count': 1, 'next': None, 'previous': None,
+                'results': [self._connection_to_dict(connection)]}
 
     def _group_tag_mapping_to_dict(self, group_tag_mapping: GroupTagMapping):
         return {
@@ -135,8 +136,9 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
             'updated_at': group_tag_mapping.updated_at.isoformat()
         }
 
-    def _group_tag_mapping_to_list(self, group_tag_mapping: GroupTagMapping):
-        return [self._group_tag_mapping_to_dict(group_tag_mapping)]
+    def _group_tag_mapping_to_page(self, group_tag_mapping: GroupTagMapping):
+        return {'count': 1, 'next': None, 'previous': None,
+                'results': [self._group_tag_mapping_to_dict(group_tag_mapping)]}
 
     def _group_tag_mapping_request(self, connection_pk: uuid, group_email: str, tag_pk: int):
         return {
@@ -197,13 +199,13 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            self._connection_to_list(connection))
+            self._connection_to_page(connection))
 
     def test_list_connections_by_name_no_results(self):
         self.set_permissions("google_workspace.view_connection")
         response = self.get(reverse("google_workspace_api:connections") + f"?name={get_random_string(12)}")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_list_connections_by_name(self):
         self.set_permissions("google_workspace.view_connection")
@@ -212,7 +214,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            self._connection_to_list(connection))
+            self._connection_to_page(connection))
 
     # ConnectionDetail
 
@@ -302,9 +304,11 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
 
         self.assertEqual(response.status_code, 200)
 
-        actual_mappings = response.json()
-        self.assertEqual(len(actual_mappings), len(expected_mappings))
-        self.assertTrue(all(expected in actual_mappings for expected in expected_mappings))
+        payload = response.json()
+        self.assertEqual(payload["count"], len(expected_mappings))
+        self.assertIsNone(payload["next"])
+        self.assertIsNone(payload["previous"])
+        self.assertTrue(all(expected in payload["results"] for expected in expected_mappings))
 
     def test_list_group_tag_mappings_by_group_email_no_result(self):
         self.set_permissions("google_workspace.view_grouptagmapping")
@@ -312,7 +316,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
             reverse("google_workspace_api:group_tag_mappings") + f"?group_email={get_random_string(12)}")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_list_group_tag_mappings_by_group_email(self):
         self.set_permissions("google_workspace.view_grouptagmapping")
@@ -327,7 +331,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
             reverse("google_workspace_api:group_tag_mappings") + f"?group_email={group_tag_mapping.group_email}")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), self._group_tag_mapping_to_list(group_tag_mapping))
+        self.assertEqual(response.json(), self._group_tag_mapping_to_page(group_tag_mapping))
 
     def test_list_group_tag_mappings_by_connection_no_result(self):
         self.set_permissions("google_workspace.view_grouptagmapping")
@@ -335,7 +339,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("google_workspace_api:group_tag_mappings") + f"?connection_id={connection.id}")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_list_group_tag_mappings_by_connection(self):
         self.set_permissions("google_workspace.view_grouptagmapping")
@@ -350,7 +354,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
 
         self.assertEqual(response.status_code, 200)
 
-        self.assertEqual(response.json(), self._group_tag_mapping_to_list(group_tag_mapping))
+        self.assertEqual(response.json(), self._group_tag_mapping_to_page(group_tag_mapping))
 
     def test_list_group_tag_mappings__method_not_allowed(self):
         self.set_permissions("google_workspace.delete_grouptagmapping")

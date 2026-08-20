@@ -80,6 +80,10 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("wsone.view_instance")
         response = self.get(reverse("wsone_api:instances"))
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertIsNone(payload["next"])
+        self.assertIsNone(payload["previous"])
         self.assertIn(
             {'id': instance.pk,
              'business_unit': instance.business_unit.pk,
@@ -89,7 +93,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              "excluded_groups": [instance.excluded_groups[0]],
              'created_at': instance.created_at.isoformat(),
              'updated_at': instance.updated_at.isoformat()},
-            response.json()
+            payload["results"]
         )
 
     # get instance

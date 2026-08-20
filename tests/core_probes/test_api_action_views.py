@@ -60,7 +60,7 @@ class ProbeActionAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("probes.view_action")
         response = self.get(reverse("probes_api:actions") + f"?name={action.name}")
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["results"]
         self.assertEqual(
             data,
             [{'id': str(action.pk),

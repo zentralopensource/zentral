@@ -57,7 +57,7 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("realms_api:realms"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(),
+            response.json()["results"],
             [{'uuid': str(realm.pk),
               'name': realm.name,
               'backend': 'ldap',
@@ -91,7 +91,7 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("realms_api:realms"), data={"name": realm.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(),
+            response.json()["results"],
             [{'uuid': str(realm.pk),
               'name': realm.name,
               'backend': 'saml',

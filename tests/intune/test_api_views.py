@@ -70,6 +70,10 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("intune.view_tenant")
         response = self.get(reverse("intune_api:tenants"))
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertIsNone(payload["next"])
+        self.assertIsNone(payload["previous"])
         self.assertIn(
             {'id': tenant.pk,
              'business_unit': tenant.business_unit.pk,
@@ -81,7 +85,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'version': tenant.version,
              'created_at': tenant.created_at.isoformat(),
              'updated_at': tenant.updated_at.isoformat()},
-            response.json()
+            payload["results"]
         )
 
     # get tenant

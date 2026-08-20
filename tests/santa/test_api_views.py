@@ -779,7 +779,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.client.get(reverse("santa_api:rules"),
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        rules = response.json()
+        rules = response.json()["results"]
         rules.sort(key=lambda r: r["id"])
         self.assertEqual(len(rules), 2)
         self.assertEqual(rules[0]["target_type"], "BINARY")
@@ -795,7 +795,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                                    data={"target_type": "CERTIFICATE"},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        rules = response.json()
+        rules = response.json()["results"]
         self.assertEqual(len(rules), 1)
         self.assertEqual(rules[0]["id"], rule2.pk)
 
@@ -820,7 +820,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                                    data={"target_identifier": rule2.target.identifier},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        rules = response.json()
+        rules = response.json()["results"]
         self.assertEqual(len(rules), 1)
         self.assertEqual(rules[0]["id"], rule2.pk)
 
@@ -832,7 +832,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                                    data={"configuration_id": self.configuration2.pk},
                                    HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        rules = response.json()
+        rules = response.json()["results"]
         self.assertEqual(len(rules), 1)
         self.assertEqual(rules[0]["id"], rule2.pk)
 
@@ -1871,7 +1871,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("santa.view_configuration")
         response = self.get(reverse('santa_api:configurations'), data={"name": config.name})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data,
+        self.assertEqual(response.data["results"],
                          [{"id": config.pk,
                            "name": config.name,
                            'client_mode': 1,
@@ -2216,7 +2216,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                                    f'{reverse("santa_api:enrollment_plist", args=(enrollment.pk,))}',
              'created_at': enrollment.created_at.isoformat(),
              'updated_at': enrollment.updated_at.isoformat()},
-            response.json()
+            response.json()["results"]
         )
 
     # filter enrollments
@@ -2228,7 +2228,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("santa.view_enrollment")
         response = self.get(reverse('santa_api:enrollments'), {'configuration_id': enrollment2.configuration.pk})
         self.assertEqual(response.status_code, 200)
-        for enrollment in response.json():
+        for enrollment in response.json()["results"]:
             self.assertNotEqual(enrollment['configuration'], enrollment1.configuration.pk)
             self.assertEqual(enrollment['configuration'], enrollment2.configuration.pk)
             self.assertNotEqual(enrollment['configuration'], enrollment3.configuration.pk)

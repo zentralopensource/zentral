@@ -110,7 +110,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'principal_user_detection_sources': [],
              'updated_at': configuration.updated_at.isoformat(),
              'version': 0},
-            response.json()
+            response.json()["results"]
         )
 
     def test_get_configurations_by_name(self):
@@ -120,7 +120,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("munki_api:configurations"), {"name": configuration.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(),
+            response.json()["results"],
             [{'auto_failed_install_incidents': False,
               'auto_reinstall_incidents': False,
               'collected_condition_keys': [],
@@ -495,7 +495,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         fqdn = settings["api"]["fqdn"]
         self.assertEqual(
-            response.json(),
+            response.json()["results"],
             [{'id': enrollment.pk,
               'configuration': enrollment.configuration.pk,
               'enrolled_machines_count': 0,
@@ -513,7 +513,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
               'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/',
               'created_at': enrollment.created_at.isoformat(),
               'updated_at': enrollment.updated_at.isoformat()}],
-            response.json()
+            response.json()["results"]
         )
 
     def test_get_enrollments(self):
@@ -540,7 +540,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'package_download_url': f'https://{fqdn}/api/munki/enrollments/{enrollment.pk}/package/',
              'created_at': enrollment.created_at.isoformat(),
              'updated_at': enrollment.updated_at.isoformat()},
-            response.json()
+            response.json()["results"]
         )
 
     # create enrollment
@@ -834,7 +834,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse('munki_api:script_checks'), {"name": sc.compliance_check.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(),
+            response.json()["results"],
             [{'id': sc.pk,
               'compliance_check_id': sc.compliance_check.pk,
               'description': sc.compliance_check.description,
@@ -862,7 +862,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse('munki_api:script_checks'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            sorted(response.json(), key=lambda d: d["id"]),
+            sorted(response.json()["results"], key=lambda d: d["id"]),
             [{'id': sc.pk,
               'compliance_check_id': sc.compliance_check.pk,
               'description': sc.compliance_check.description,

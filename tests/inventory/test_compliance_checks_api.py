@@ -342,7 +342,7 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         response = self.get(reverse('inventory_api:jmespath_checks'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(),
+            response.json()["results"],
             [{"id": jpcc.pk,
               "name": jpcc.compliance_check.name,
               "description": jpcc.compliance_check.description,
@@ -364,7 +364,7 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         response = self.get(reverse('inventory_api:jmespath_checks'), data={"name": jpcc.compliance_check.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            response.json(),
+            response.json()["results"],
             [{"id": jpcc.pk,
               "name": jpcc.compliance_check.name,
               "description": jpcc.compliance_check.description,

@@ -59,7 +59,7 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("stores.view_store")
         response = self.get(reverse("stores_api:stores") + f"?name={store.name}")
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["results"]
         self.assertEqual(
             data,
             [{'admin_console': False,
@@ -86,7 +86,7 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("stores.view_store")
         response = self.get(reverse("stores_api:stores"))
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["results"]
         self.assertEqual(
             data,
             [{'admin_console': False,
