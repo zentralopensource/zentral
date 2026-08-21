@@ -202,6 +202,8 @@ Zentral answers the preflight with the type of sync Santa has to perform:
 
 Zentral asks for a clean sync when the machine has just enrolled or re-enrolled, when the machine asks for one itself (`santactl sync --clean`), when the machine reports no rule at all although some were synced with it, when a clean sync session was lost before the machine could confirm it, and when an operator queued one.
 
+To queue one, open the machine in the inventory and pick *Force clean sync* or *Force clean all sync* in the Action menu. The Santa section of the machine reports the queued sync until the machine preflights, and *Cancel queued clean sync* takes it back. The same is available on the [API](#apisantaenrolled_machinesintpkforce_clean_sync).
+
 A few properties of the protocol are worth knowing:
 
 * Zentral cannot downgrade a clean sync. A machine that ran `santactl sync --clean-all` performs a `CLEAN_ALL` whatever Zentral answers, and the preflight request only carries a boolean, so Zentral cannot tell it apart from `santactl sync --clean`.

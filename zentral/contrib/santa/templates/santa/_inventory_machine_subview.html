@@ -29,6 +29,13 @@
     <span class="text-secondary">Unknown</span>
     {% endif %}
   </dd>
+  {% if enrolled_machine.forced_sync_type %}
+  <dt class="col-sm-3 text-md-end">Clean sync</dt>
+  <dd class="col-sm-9">
+    <span class="text-warning">{{ enrolled_machine.get_forced_sync_type_display }} queued</span>
+    <span class="text-secondary">since {{ enrolled_machine.forced_sync_type_at }}, applied at the next preflight</span>
+  </dd>
+  {% endif %}
   <dt class="col-sm-3 text-md-end">Last preflight</dt>
   <dd class="col-sm-9">{{ enrolled_machine.last_preflight_at|default:"-" }}</dd>
   <dt class="col-sm-3 text-md-end">Last postflight</dt>

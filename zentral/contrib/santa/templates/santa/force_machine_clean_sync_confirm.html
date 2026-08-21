@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item active">Machines</li>
+  <li class="breadcrumb-item active">{{ machine.serial_number|privacywrapper }}</li>
+  <li class="breadcrumb-item active">{{ sync_type.label }} sync</li>
+</ol>
+
+<h3>Force a {{ sync_type.label|lower }} sync</h3>
+
+<p>
+  Do you really want Santa to rebuild the rule database of this machine during its next preflight?
+  {% if sync_type == "CLEAN_ALL" %}
+  Every rule is dropped first, <b>including the transitive rules the client created on its own</b>.
+  {% else %}
+  The rules Zentral synced with the machine are dropped first. The transitive rules the client
+  created on its own are kept.
+  {% endif %}
+</p>
+
+<form method="POST">{% csrf_token %}
+  <a href="{{ machine.get_absolute_url }}" class="btn btn-outline-secondary">No</a>
+  <button type="submit" class="btn btn-danger">Yes</button>
+</form>
+{% endblock %}

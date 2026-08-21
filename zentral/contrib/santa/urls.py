@@ -128,6 +128,14 @@ urlpatterns = [
     path('targets/signingid/<str:identifier>/events/store_redirect/',
          views.SigningIDEventsStoreRedirectView.as_view(), name="signingid_events_store_redirect"),
 
+    # machine actions
+    path('machine/<str:urlsafe_serial_number>/force_clean_sync/<str:sync_type>/',
+         views.ForceMachineCleanSyncView.as_view(),
+         name='force_machine_clean_sync'),
+    path('machine/<str:urlsafe_serial_number>/cancel_clean_sync/',
+         views.CancelMachineCleanSyncView.as_view(),
+         name='cancel_machine_clean_sync'),
+
     # ballots
     path('ballots/', views.BallotsView.as_view(), name="ballots"),
     path('ballots/cast/', views.CastBallotView.as_view(), name="cast_ballot"),

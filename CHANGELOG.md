@@ -1,6 +1,16 @@
 ## 2026.6
 
 
+### Features
+
+
+#### Santa
+
+A clean sync — `CLEAN` or `CLEAN_ALL` — can be queued for an enrolled machine from the Action menu of its machine page or from the API, and taken back until the machine preflights. The new `Santa::Action::"forceCleanSync"` PBAC action grants it, and can be restricted to a meta business unit and to a sync type.
+
+The enrolled machines are exposed on the new `/api/santa/enrolled_machines/` endpoint.
+
+
 ### Bug fixes
 
 
