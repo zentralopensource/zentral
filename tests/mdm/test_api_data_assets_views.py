@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import io
 import os
@@ -151,9 +152,7 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'file_sha256': ['This field is required.'],
-             'file_uri': ['This field is required.'],
-             'type': ['This field is required.']}
+            {'type': ['This field is required.']}
         )
 
     def test_create_data_asset_plist_type_sha_error(self):
@@ -232,24 +231,32 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
     @patch("zentral.utils.external_resources.boto3.client")
     def test_create_data_asset_s3_error(self, boto3_client):
         boom = Mock()
-        boom.download_fileobj.side_effect = ValueError("Boom!!!")
+        boom.download_fileobj.side_effect = Exception(
+            "An error occurred (403) when calling the HeadObject operation: Forbidden"
+        )
         boto3_client.return_value = boom
         _, artifact, _ = force_blueprint_artifact(
             artifact_type=Artifact.Type.DATA_ASSET
         )
         self.set_permissions("mdm.add_dataasset")
         with patch.dict(os.environ, {"AWS_REGION": "eu-central-17"}):
-            response = self.post(reverse("mdm_api:data_assets"),
-                                 data={"artifact": str(artifact.pk),
-                                       "type": "ZIP",
-                                       "file_uri": "s3://yolo/fomo.zip",
-                                       "file_sha256": 64 * "0",
-                                       "macos": True,
-                                       "version": 2})
+            with self.assertLogs("zentral.contrib.mdm.serializers", level="ERROR") as captured:
+                response = self.post(reverse("mdm_api:data_assets"),
+                                     data={"artifact": str(artifact.pk),
+                                           "type": "ZIP",
+                                           "file_uri": "s3://yolo/fomo.zip",
+                                           "file_sha256": 64 * "0",
+                                           "macos": True,
+                                           "version": 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'file_uri': ['Boom!!!']}
+            {'file_uri': ['Could not download the data asset.']}
+        )
+        # the message from S3 stays on the server
+        self.assertNotIn("HeadObject", response.content.decode())
+        self.assertTrue(
+            any("Could not download data asset from s3://yolo/fomo.zip" in r for r in captured.output)
         )
         boto3_client.assert_called_once_with("s3", region_name="eu-central-17")
         boom.download_fileobj.assert_called_once()
@@ -516,6 +523,176 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
         blueprint.refresh_from_db()
         self.assertEqual(len(blueprint.serialized_artifacts[str(artifact.pk)]["versions"]), 2)
 
+    # create data asset from an inline source
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_data_asset_source_plist(self, post_event):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        content = build_plistfile(random=True).getvalue()
+        self.set_permissions("mdm.add_dataasset")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("mdm_api:data_assets"),
+                                 data={"artifact": str(artifact.pk),
+                                       "type": "PLIST",
+                                       "source": base64.b64encode(content).decode("ascii"),
+                                       "macos": True,
+                                       "version": 2})
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["filename"], "")
+        self.assertEqual(data["file_sha256"], hashlib.sha256(content).hexdigest())
+        self.assertEqual(data["file_size"], len(content))
+        data_asset = ArtifactVersion.objects.get(pk=data["id"]).data_asset
+        # the extension of the stored file is what sets the content type of the object
+        self.assertTrue(data_asset.file.name.endswith(".plist"))
+        data_asset.file.open("rb")
+        self.assertEqual(data_asset.file.read(), content)
+        data_asset.file.close()
+
+    def test_create_data_asset_source_zip(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        content = build_zipfile(random=True).getvalue()
+        self.set_permissions("mdm.add_dataasset")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("mdm_api:data_assets"),
+                                 data={"artifact": str(artifact.pk),
+                                       "type": "ZIP",
+                                       "source": base64.b64encode(content).decode("ascii"),
+                                       "macos": True,
+                                       "version": 2})
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["filename"], "")
+        data_asset = ArtifactVersion.objects.get(pk=data["id"]).data_asset
+        self.assertTrue(data_asset.file.name.endswith(".zip"))
+
+    def test_create_data_asset_source_matching_file_sha256(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        content = build_plistfile(random=True).getvalue()
+        self.set_permissions("mdm.add_dataasset")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("mdm_api:data_assets"),
+                                 data={"artifact": str(artifact.pk),
+                                       "type": "PLIST",
+                                       "source": base64.b64encode(content).decode("ascii"),
+                                       "file_sha256": hashlib.sha256(content).hexdigest(),
+                                       "macos": True,
+                                       "version": 2})
+        self.assertEqual(response.status_code, 201)
+
+    def test_create_data_asset_source_hash_mismatch(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        content = build_plistfile(random=True).getvalue()
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "PLIST",
+                                   "source": base64.b64encode(content).decode("ascii"),
+                                   "file_sha256": 64 * "0",
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"file_sha256": ["Hash mismatch"]})
+
+    def test_create_data_asset_source_invalid_plist(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "PLIST",
+                                   "source": base64.b64encode(b"\x00").decode("ascii"),
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"source": ["Invalid PLIST file"]})
+
+    def test_create_data_asset_source_invalid_zip(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "ZIP",
+                                   "source": base64.b64encode(b"\x00").decode("ascii"),
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"source": ["Invalid ZIP file"]})
+
+    def test_create_data_asset_source_not_different_from_latest_one(self):
+        artifact, (ea_av,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        data_asset = ea_av.data_asset
+        data_asset.file.open("rb")
+        content = data_asset.file.read()
+        data_asset.file.close()
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "ZIP",
+                                   "source": base64.b64encode(content).decode("ascii"),
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"source": ["This file is not different from the latest one"]})
+
+    def test_create_data_asset_source_and_file_uri_error(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        content = build_plistfile(random=True).getvalue()
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "PLIST",
+                                   "file_uri": "s3://yolo/fomo.plist",
+                                   "file_sha256": hashlib.sha256(content).hexdigest(),
+                                   "source": base64.b64encode(content).decode("ascii"),
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"non_field_errors": ["file_uri and source are mutually exclusive"]}
+        )
+
+    def test_create_data_asset_no_source_no_file_uri_error(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "PLIST",
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"non_field_errors": ["file_uri or source is required"]}
+        )
+
+    def test_create_data_asset_file_uri_without_file_sha256_error(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "PLIST",
+                                   "file_uri": "s3://yolo/fomo.plist",
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"file_sha256": ["This field is required with file_uri"]}
+        )
+
+    def test_create_data_asset_source_invalid_base64_error(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "PLIST",
+                                   "source": "YQ",  # length not a multiple of four
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"source": ["Invalid base64-encoded value"]})
+
     # get data asset
 
     def test_get_data_asset_unauthorized(self):
@@ -733,6 +910,24 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
         ea_av.refresh_from_db()
         self.assertEqual(ea_av.macos_min_version, "14.0")
         self.assertEqual(ea_av.data_asset.file_sha256, data_asset.file_sha256)
+
+    def test_update_data_asset_source(self):
+        artifact, (ea_av,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        content = build_zipfile(random=True).getvalue()
+        self.set_permissions("mdm.change_dataasset")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse("mdm_api:data_asset", args=(ea_av.pk,)),
+                                data={"artifact": str(artifact.pk),
+                                      "type": "ZIP",
+                                      "source": base64.b64encode(content).decode("ascii"),
+                                      "macos": True,
+                                      "version": ea_av.version})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["filename"], "")
+        self.assertEqual(data["file_sha256"], hashlib.sha256(content).hexdigest())
+        ea_av.refresh_from_db()
+        self.assertTrue(ea_av.data_asset.file.name.endswith(".zip"))
 
     # delete data asset
 

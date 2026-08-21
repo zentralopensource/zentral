@@ -1,8 +1,10 @@
 import base64
+import hashlib
 import logging
 import os
 import plistlib
 import re
+import tempfile
 import uuid
 import zipfile
 
@@ -716,6 +718,17 @@ class BlueprintArtifactSerializer(serializers.ModelSerializer):
         return instance
 
 
+class B64EncodedBinaryField(serializers.Field):
+    def to_representation(self, value):
+        return base64.b64encode(value).decode("ascii")
+
+    def to_internal_value(self, data):
+        try:
+            return base64.b64decode(data)
+        except Exception:
+            raise serializers.ValidationError("Invalid base64-encoded value")
+
+
 class ArtifactVersionSerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True, source="artifact_version.pk")
     artifact = serializers.PrimaryKeyRelatedField(queryset=Artifact.objects.all(),
@@ -886,8 +899,9 @@ class CertAssetSerializer(ArtifactVersionSerializer):
 
 class DataAssetSerializer(ArtifactVersionSerializer):
     type = serializers.ChoiceField(required=True, choices=DataAsset.Type.choices)
-    file_uri = serializers.CharField(required=True, write_only=True)
-    file_sha256 = serializers.RegexField(r"^[0-9a-f]{64}$", required=True)
+    file_uri = serializers.CharField(required=False, write_only=True)
+    source = B64EncodedBinaryField(required=False, write_only=True)
+    file_sha256 = serializers.RegexField(r"^[0-9a-f]{64}$", required=False)
     file_size = serializers.IntegerField(read_only=True)
     filename = serializers.CharField(read_only=True)
 
@@ -895,20 +909,47 @@ class DataAssetSerializer(ArtifactVersionSerializer):
         data = super().validate(data)
         # type
         data_asset_type = DataAsset.Type(data["type"])
-        if data_asset_type == DataAsset.Type.PLIST:
-            supported_file_extensions = (".plist",)
-        elif data_asset_type == DataAsset.Type.ZIP:
-            supported_file_extensions = (".zip",)
-        else:
+        file_extension = DataAsset.get_type_file_extension(data_asset_type)
+        if file_extension is None:
             raise RuntimeError("Unknown data asset type")
-        # download external resource
-        try:
-            filename, tmp_file = download_external_resource(
-                data["file_uri"], data["file_sha256"],
-                supported_file_extensions
-            )
-        except Exception as e:
-            raise serializers.ValidationError({"file_uri": str(e)})
+        # the file, either inline or from an external resource
+        file_uri = data.get("file_uri")
+        source = data.get("source")
+        if file_uri and source is not None:
+            raise serializers.ValidationError("file_uri and source are mutually exclusive")
+        if not file_uri and source is None:
+            raise serializers.ValidationError("file_uri or source is required")
+        if source is not None:
+            # no file to name it after
+            filename = ""
+            file_sha256 = hashlib.sha256(source).hexdigest()
+            if data.get("file_sha256") and data["file_sha256"] != file_sha256:
+                raise serializers.ValidationError({"file_sha256": "Hash mismatch"})
+            error_field = "source"
+            tmp_file = tempfile.NamedTemporaryFile(suffix=file_extension, delete=False)
+            tmp_file.write(source)
+            tmp_file.flush()
+            tmp_file.seek(0)
+        else:
+            if not data.get("file_sha256"):
+                raise serializers.ValidationError({"file_sha256": "This field is required with file_uri"})
+            file_sha256 = data["file_sha256"]
+            error_field = "file_uri"
+            try:
+                filename, tmp_file = download_external_resource(file_uri, file_sha256, (file_extension,))
+            except ValueError as e:
+                # ValueError carries operator-facing validation messages
+                # (unknown URI scheme, unsupported extension, hash mismatch).
+                raise serializers.ValidationError({"file_uri": str(e)})
+            except Exception:
+                # Surface a generic message; the actual exception may carry
+                # internal state (boto3 traceback, file paths, …). The full
+                # exception is logged server-side for diagnosis.
+                logger.exception("Could not download data asset from %s", file_uri)
+                raise serializers.ValidationError(
+                    {"file_uri": "Could not download the data asset."}
+                )
+        data["file_sha256"] = file_sha256
         # verify file type
         if data_asset_type == DataAsset.Type.PLIST:
             try:
@@ -916,12 +957,12 @@ class DataAssetSerializer(ArtifactVersionSerializer):
             except Exception:
                 tmp_file.close()
                 os.unlink(tmp_file.name)
-                raise serializers.ValidationError({"file_uri": "Invalid PLIST file"})
+                raise serializers.ValidationError({error_field: "Invalid PLIST file"})
         elif data_asset_type == DataAsset.Type.ZIP:
             if not zipfile.is_zipfile(tmp_file):
                 tmp_file.close()
                 os.unlink(tmp_file.name)
-                raise serializers.ValidationError({"file_uri": "Invalid ZIP file"})
+                raise serializers.ValidationError({error_field: "Invalid ZIP file"})
         # verify last version
         latest_data_asset_qs = DataAsset.objects.filter(
             artifact_version__artifact=data["artifact_version"]["artifact"]
@@ -930,7 +971,7 @@ class DataAssetSerializer(ArtifactVersionSerializer):
             latest_data_asset_qs = latest_data_asset_qs.exclude(artifact_version=self.instance.artifact_version)
         latest_data_asset = latest_data_asset_qs.order_by("-artifact_version__version").first()
         if latest_data_asset and latest_data_asset.file_sha256 == data["file_sha256"]:
-            raise serializers.ValidationError({"file_uri": "This file is not different from the latest one"})
+            raise serializers.ValidationError({error_field: "This file is not different from the latest one"})
         # add data asset info
         tmp_file.seek(0)
         file = File(tmp_file)
@@ -1046,17 +1087,6 @@ class DeclarationSerializer(ArtifactVersionSerializer):
             for blueprint in instance.artifact_version.artifact.blueprints():
                 update_blueprint_serialized_artifacts(blueprint)
         return instance
-
-
-class B64EncodedBinaryField(serializers.Field):
-    def to_representation(self, value):
-        return base64.b64encode(value).decode("ascii")
-
-    def to_internal_value(self, data):
-        try:
-            return base64.b64decode(data)
-        except Exception:
-            raise serializers.ValidationError("Invalid base64-encoded value")
 
 
 class ProfileSerializer(ArtifactVersionSerializer):

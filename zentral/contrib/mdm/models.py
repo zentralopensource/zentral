@@ -3085,6 +3085,14 @@ class DataAsset(models.Model):
             return "application/zip"
         logger.error("Unknown content type for type %s", data_type)
 
+    @classmethod
+    def get_type_file_extension(cls, data_type):
+        if data_type == cls.Type.PLIST:
+            return ".plist"
+        elif data_type == cls.Type.ZIP:
+            return ".zip"
+        logger.error("Unknown file extension for type %s", data_type)
+
     def get_export_filename(self):
         slug = slugify(self.artifact_version.artifact.name)
         _, ext = os.path.splitext(self.filename)

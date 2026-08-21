@@ -74,6 +74,11 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
             f"{slug}_{data_asset.pk}_v{artifact_version.version}.zip"
         )
 
+    def test_model_get_type_file_extension_unknown_type(self):
+        with self.assertLogs("zentral.contrib.mdm.models", level="ERROR") as captured:
+            self.assertIsNone(DataAsset.get_type_file_extension("YOLO"))
+        self.assertTrue(any("Unknown file extension for type YOLO" in r for r in captured.output))
+
     def test_post_delete_data_asset_deletes_file(self):
         _, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
         data_asset = artifact_version.data_asset

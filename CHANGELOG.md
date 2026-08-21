@@ -4,6 +4,13 @@
 ### Features
 
 
+#### MDM
+
+A data asset can be created and updated with its content in the request now, base 64 encoded in the new `source` attribute, and not only with a `file_uri` that points to an object in an S3 bucket. `file_uri` and `source` are mutually exclusive, and one of them is required. Zentral computes `file_sha256` from a `source`, and requires it only with a `file_uri`. A `file_sha256` given with a `source` is verified against the content. A data asset created from a `source` has no filename.
+
+The `file_uri` and `file_sha256` attributes of the data asset endpoints are not required fields anymore. A request without `file_uri` and without `source` gives one error for the two of them, and not one "This field is required." for each attribute.
+
+
 #### Santa
 
 A clean sync — `CLEAN` or `CLEAN_ALL` — can be queued for an enrolled machine from its machine page or from the API, and cancelled before its next preflight. The new `Santa::Action::"forceCleanSync"` PBAC action gives the permission, and accepts a meta business unit and a sync type.
@@ -49,6 +56,8 @@ Fixed an MDM data asset update that was rejected when it kept the same file: the
 The MDM data asset API accepts only XML property lists now, like the upload form. A binary property list was accepted, then stored and given to the devices as `text/xml`. An upload that used this is rejected now.
 
 A malformed base 64 source on the MDM profile and provisioning profile API endpoints gives a 400 now, and not a 500.
+
+The MDM data asset API gives a generic message when it cannot download the file now, like the package API already did. The message of an error from S3 can contain the bucket, the key, the region or the state of the credentials. Zentral writes it to its logs instead. The messages about the file extension, the URI scheme and the hash are unchanged.
 
 Fixed an MDM software update enforcement in latest mode that took a device out of management when it had no update to enforce. The `tokens` and `declaration-items` check-ins and `/connect` gave a 500, and the device stopped receiving all of its declarations. A device above the *Maximum target OS version* was enough to cause it, and so was a deployment that never synchronized the Apple software lookup service. Zentral leaves the configuration out of the declarations it serves now, and writes a log message.
 
