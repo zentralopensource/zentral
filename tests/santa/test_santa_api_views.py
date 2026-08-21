@@ -467,6 +467,7 @@ class SantaAPIViewsTestCase(TestCase):
             {"id": enrolled_machine.sync_session,
              "clean": True,
              "clean_reason": "enrollment",
+             "forced_sync_type": None,
              # a machine that just enrolled has no synced rule to be compared with
              "sync_ok": None,
              "previous_session": None}

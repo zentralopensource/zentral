@@ -844,6 +844,27 @@ class EnrolledMachineManager(models.Manager):
 
 
 class EnrolledMachine(models.Model):
+    class SyncType(models.TextChoices):
+        NORMAL = "NORMAL", _("Normal")
+        CLEAN = "CLEAN", _("Clean")
+        CLEAN_ALL = "CLEAN_ALL", _("Clean all")
+
+        @property
+        def is_clean(self):
+            # CLEAN_STANDALONE, CLEAN_RULES and CLEAN_FILE_ACCESS_RULES are left out on purpose:
+            # santa declares them in the sync protocol, but its preflight response handler only
+            # ever maps CLEAN and CLEAN_ALL, and answering any of the others is a normal sync
+            return self.value != self.NORMAL
+
+        @classmethod
+        def forced_choices(cls):
+            # a queued NORMAL would mean nothing, a null forced_sync_type already says that
+            return [(member.value, member.label) for member in cls if member.is_clean]
+
+        @classmethod
+        def clean_values(cls):
+            return frozenset(member.value for member in cls if member.is_clean)
+
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)
 
     hardware_uuid = models.UUIDField()  # DB index?
@@ -874,6 +895,11 @@ class EnrolledMachine(models.Model):
     sync_session = models.CharField(max_length=8, null=True)
     sync_session_clean = models.BooleanField(default=False)
 
+    # the clean sync an operator queued for the next preflight. Null means that none is queued.
+    # It is consumed by the first clean sync the machine is answered, whatever asked for it
+    forced_sync_type = models.CharField(max_length=9, choices=SyncType.forced_choices(), null=True)
+    forced_sync_type_at = models.DateTimeField(null=True)
+
     # one timestamp per sync stage. updated_at is auto_now, it moves on any save and cannot say
     # how recently a machine reported. A machine that preflights forever without ever sending a
     # postflight is not visible at the inventory source grain either: the preflight is what commits
@@ -892,6 +918,38 @@ class EnrolledMachine(models.Model):
             models.Index(fields=["last_preflight_at"]),
             models.Index(fields=["last_postflight_at"]),
         ]
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk,
+             "hardware_uuid": str(self.hardware_uuid),
+             "serial_number": self.serial_number}
+        if keys_only:
+            return d
+        d.update({
+            "configuration": self.enrollment.configuration.serialize_for_event(keys_only=True),
+            "primary_user": self.primary_user,
+            "client_mode": self.get_client_mode_display(),
+            "santa_version": self.santa_version,
+            "binary_rule_count": self.binary_rule_count,
+            "cdhash_rule_count": self.cdhash_rule_count,
+            "certificate_rule_count": self.certificate_rule_count,
+            "compiler_rule_count": self.compiler_rule_count,
+            "signingid_rule_count": self.signingid_rule_count,
+            "transitive_rule_count": self.transitive_rule_count,
+            "teamid_rule_count": self.teamid_rule_count,
+            "last_sync_ok": self.last_sync_ok,
+            "forced_sync_type": self.forced_sync_type,
+            "forced_sync_type_at": (self.forced_sync_type_at.isoformat()
+                                    if self.forced_sync_type_at else None),
+            "last_preflight_at": self.last_preflight_at.isoformat() if self.last_preflight_at else None,
+            "last_postflight_at": self.last_postflight_at.isoformat() if self.last_postflight_at else None,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return {"santa_configuration": ((self.enrollment.configuration.pk,),)}
 
     def get_comparable_santa_version(self):
         try:
@@ -961,10 +1019,38 @@ class EnrolledMachine(models.Model):
         """
         return EnrolledMachine.objects.select_for_update().get(pk=self.pk)
 
+    def force_sync_type(self, sync_type, forced_at):
+        """Queue a clean sync for the next preflight. Returns whether anything changed."""
+        if self.forced_sync_type == sync_type:
+            return False
+        self.forced_sync_type = sync_type
+        self.forced_sync_type_at = forced_at
+        EnrolledMachine.objects.filter(pk=self.pk).update(forced_sync_type=sync_type,
+                                                          forced_sync_type_at=forced_at)
+        return True
+
+    def clear_forced_sync_type(self):
+        """Cancel the queued clean sync. Returns whether anything changed."""
+        if self.forced_sync_type is None:
+            return False
+        self.forced_sync_type = None
+        self.forced_sync_type_at = None
+        EnrolledMachine.objects.filter(pk=self.pk).update(forced_sync_type=None,
+                                                          forced_sync_type_at=None)
+        return True
+
     def start_sync_session(self, clean, preflight_at=None, sync_ok=None):
         self.sync_session = get_random_string(8)
         self.sync_session_clean = clean
         updates = {"sync_session": self.sync_session, "sync_session_clean": clean}
+        if clean:
+            # the queued clean sync is consumed by the one we are about to answer, whatever
+            # asked for it. A session the client never confirms is picked up again by
+            # reconcile_sync_session, which forces another clean of its own
+            self.forced_sync_type = None
+            self.forced_sync_type_at = None
+            updates["forced_sync_type"] = None
+            updates["forced_sync_type_at"] = None
         if preflight_at is not None:
             # a rule download can start a session without a preflight. Only the preflight stamps
             # the timestamp, and only the preflight compares the rules, so sync_ok rides in the

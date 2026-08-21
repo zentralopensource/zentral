@@ -1,8 +1,9 @@
+import datetime
 from unittest.mock import patch
 from django.db.models import F
 from django.test import TestCase
 from zentral.contrib.santa.events import SantaPostflightEvent, SantaPreflightEvent
-from zentral.contrib.santa.models import MachineRule, Rule, Target
+from zentral.contrib.santa.models import EnrolledMachine, MachineRule, Rule, Target
 from zentral.core.incidents.models import Severity
 from .utils import SantaSyncClient, force_configuration, force_enrolled_machine, force_rule, new_sha256
 
@@ -665,6 +666,7 @@ class SantaSyncSessionTestCase(TestCase):
             {"id": client.enrolled_machine.sync_session,
              "clean": False,
              "clean_reason": None,
+             "forced_sync_type": None,
              # the client reports no rule, and no rule was ever synced with it
              "sync_ok": True,
              "previous_session": None}
@@ -768,3 +770,120 @@ class SantaSyncSessionTestCase(TestCase):
         self.assertEqual(sync_session["previous_session"]["outcome"], "discarded")
         self.assertEqual(sync_session["previous_session"]["removals_restored"], 1)
         self.assertEqual(sync_session["previous_session"]["rules_discarded"], 0)
+
+    # a clean sync queued by an operator
+
+    def force_clean_sync(self, enrolled_machine, sync_type=EnrolledMachine.SyncType.CLEAN):
+        enrolled_machine.force_sync_type(sync_type, datetime.datetime(2026, 8, 20, 12, tzinfo=datetime.UTC))
+
+    def test_queued_clean_sync_is_answered_and_consumed(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine)
+        response = client.preflight()
+        self.assertEqual(response.json()["sync_type"], "CLEAN")
+        client.enrolled_machine.refresh_from_db()
+        self.assertIsNone(client.enrolled_machine.forced_sync_type)
+        self.assertIsNone(client.enrolled_machine.forced_sync_type_at)
+        self.assertTrue(client.enrolled_machine.sync_session_clean)
+
+    def test_queued_clean_all_sync_is_answered(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine, EnrolledMachine.SyncType.CLEAN_ALL)
+        response = client.preflight()
+        self.assertEqual(response.json()["sync_type"], "CLEAN_ALL")
+
+    def test_queued_clean_all_sync_drops_the_transitive_rules(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        client.add_transitive_rule()
+        client.preflight()
+        client.rule_download()
+        # a normal sync leaves the client created rule alone
+        self.assertEqual(len(client.transitive_rules), 1)
+        self.force_clean_sync(client.enrolled_machine, EnrolledMachine.SyncType.CLEAN_ALL)
+        response = client.sync()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(client.transitive_rules), 0)
+        self.assertEqual(len(client.rules), 2)
+
+    def test_queued_clean_sync_keeps_the_transitive_rules(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        client.add_transitive_rule()
+        self.force_clean_sync(client.enrolled_machine)
+        client.sync()
+        self.assertEqual(len(client.transitive_rules), 1)
+
+    def test_queued_clean_sync_rebuilds_the_ledger(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine)
+        response = client.sync()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(client.rules), 2)
+        self.assertEqual(self.synced_rule_count(client.enrolled_machine), 2)
+        client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        self.assertTrue(client.enrolled_machine.last_sync_ok)
+
+    def test_queued_clean_all_sync_degraded_on_an_old_client(self):
+        client, _, _ = self.force_client(rule_count=2, santa_version="2023.9")
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine, EnrolledMachine.SyncType.CLEAN_ALL)
+        response = client.preflight()
+        json_response = response.json()
+        # the deprecated key cannot ask for a CLEAN_ALL, the client performs a CLEAN
+        self.assertNotIn("sync_type", json_response)
+        self.assertTrue(json_response["clean_sync"])
+        self.assertEqual(client.sync_type, "CLEAN")
+
+    def test_queued_clean_sync_survives_a_lost_session(self):
+        client, _, _ = self.force_client(batch_size=1, rule_count=3)
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine)
+        client.preflight()
+        # the clean download dies, the client rule database is untouched and the ledger
+        # cannot be worked out anymore
+        self.assertIsNone(client.rule_download(max_batches=1))
+        response = client.preflight()
+        # the queue was consumed by the lost session, the reconciliation asks for another clean
+        self.assertEqual(response.json()["sync_type"], "CLEAN")
+        response = client.sync()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(client.rules), 3)
+
+    def test_queued_clean_all_sync_upgrades_another_clean_reason(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine, EnrolledMachine.SyncType.CLEAN_ALL)
+        # the client asks for a clean sync of its own, the queued one still wins
+        response = client.preflight(request_clean_sync=True)
+        self.assertEqual(response.json()["sync_type"], "CLEAN_ALL")
+
+    def test_no_queued_clean_sync_answers_normal(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        response = client.preflight()
+        self.assertEqual(response.json()["sync_type"], "NORMAL")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_event_reports_the_queued_clean_sync(self, post_event):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine, EnrolledMachine.SyncType.CLEAN_ALL)
+        client.preflight()
+        sync_session = self.last_preflight_sync_session(post_event)
+        self.assertTrue(sync_session["clean"])
+        self.assertEqual(sync_session["clean_reason"], "forced")
+        self.assertEqual(sync_session["forced_sync_type"], "CLEAN_ALL")
+
+    def test_rule_download_without_preflight_keeps_the_queued_clean_sync(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        self.force_clean_sync(client.enrolled_machine)
+        # a rule download starts a normal session of its own, it must not consume the queue
+        client.rule_download()
+        client.enrolled_machine.refresh_from_db()
+        self.assertEqual(client.enrolled_machine.forced_sync_type, "CLEAN")

@@ -1,3 +1,4 @@
+import datetime
 import json
 import uuid
 
@@ -153,6 +154,7 @@ def force_enrolled_machine(
     last_seen=None,
     last_sync_ok=None,
     last_postflight_at=None,
+    forced_sync_type=None,
 ):
     if mbu is None:
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
@@ -171,6 +173,9 @@ def force_enrolled_machine(
         primary_user=primary_user,
         last_sync_ok=last_sync_ok,
         last_postflight_at=last_postflight_at,
+        forced_sync_type=forced_sync_type,
+        forced_sync_type_at=(datetime.datetime(2026, 8, 20, 12, tzinfo=datetime.UTC)
+                             if forced_sync_type else None),
     )
     if last_seen is not None:
         tree = {
@@ -398,13 +403,15 @@ class SantaSyncClient:
         (Target.Type.TEAM_ID, "teamid"),
     )
 
-    def __init__(self, enrolled_machine, santa_version="2024.5"):
+    def __init__(self, enrolled_machine, santa_version=None):
         self.enrolled_machine = enrolled_machine
         self.secret = enrolled_machine.enrollment.secret.secret
         self.machine_id = str(enrolled_machine.hardware_uuid)
         self.serial_number = enrolled_machine.serial_number
         self.primary_user = enrolled_machine.primary_user
-        self.santa_version = santa_version
+        # the reported version is what the preflight records and answers on, so it defaults to
+        # the one of the machine the client drives
+        self.santa_version = santa_version or enrolled_machine.santa_version
         self.client = Client()
         # rule database: (rule_type, identifier) -> policy
         self.rules = {}

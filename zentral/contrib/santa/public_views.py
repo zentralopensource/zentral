@@ -352,9 +352,13 @@ class PreflightView(BaseSyncView):
         sync_ok = reconciliation["sync_ok"]
 
         # clean sync? the reason is reported, the arms are tested in order and the last one
-        # costs a query
+        # costs a query. The sync type an operator queued is read before the session starts,
+        # which is what consumes it
+        forced_sync_type = self.enrolled_machine.forced_sync_type
         clean_reason = None
-        if self.request_data.get("request_clean_sync"):
+        if forced_sync_type:
+            clean_reason = "forced"
+        elif self.request_data.get("request_clean_sync"):
             clean_reason = "requested"
         elif self.enrollment_action is not None:
             clean_reason = self.enrollment_action
@@ -371,14 +375,20 @@ class PreflightView(BaseSyncView):
         self.enrolled_machine.start_sync_session(clean_sync, preflight_at=timezone.now(), sync_ok=sync_ok)
         if clean_sync:
             if comparable_santa_version < (2024, 1):
+                # the deprecated key can only ask for a CLEAN, unless the client itself asked
+                # for a CLEAN_ALL. A queued CLEAN_ALL is degraded to a CLEAN on those clients
                 response_dict["clean_sync"] = True
+            elif forced_sync_type == EnrolledMachine.SyncType.CLEAN_ALL:
+                # an operator asked for every rule to be dropped, including the transitive
+                # ones the client created on its own
+                response_dict["sync_type"] = EnrolledMachine.SyncType.CLEAN_ALL.value
             else:
-                response_dict["sync_type"] = "CLEAN"
+                response_dict["sync_type"] = EnrolledMachine.SyncType.CLEAN.value
         else:
             if comparable_santa_version < (2024, 1):
                 response_dict["clean_sync"] = False
             else:
-                response_dict["sync_type"] = "NORMAL"
+                response_dict["sync_type"] = EnrolledMachine.SyncType.NORMAL.value
 
         # sync incident update?
         incident_update = None
@@ -403,6 +413,7 @@ class PreflightView(BaseSyncView):
         payload["sync_session"] = {"id": self.enrolled_machine.sync_session,
                                    "clean": clean_sync,
                                    "clean_reason": clean_reason,
+                                   "forced_sync_type": forced_sync_type,
                                    "sync_ok": sync_ok,
                                    "previous_session": reconciliation["previous_session"]}
         payload["configuration"] = configuration.serialize_for_event(keys_only=True)
@@ -476,7 +487,7 @@ class PostflightView(BaseSyncView):
         # santa only reports the sync type it performed from 2025.1 on. An older client leaves the
         # session unconfirmed, and it is committed as a normal one: the rules it dropped are kept
         # in the ledger, and sent again as removals during the next session.
-        clean_confirmed = sync_type in ("CLEAN", "CLEAN_ALL") if sync_type else None
+        clean_confirmed = sync_type in EnrolledMachine.SyncType.clean_values() if sync_type else None
         if clean_confirmed is not None and clean != clean_confirmed:
             # the client only ever performs the sync type the preflight answered, and it is the
             # sync type it reports here that says which rules it wrote
