@@ -35,6 +35,9 @@ Fixed the MDM devices list moving devices between its pages: it sorted on the la
 Fixed nine MDM API list endpoints ignoring the `ordering` query parameter — the enrolled devices one and the eight artifact ones. They declared the orderings they accept, but not the filter backend that reads them, so the parameter was dropped without a word. Worse, that left the queries with no `ORDER BY` at all, and the `limit`/`offset` pages came back in whatever order PostgreSQL found convenient: a client walking the pages could miss rows and see others twice. The seven endpoints hanging off an artifact version — cert assets, data assets, declarations, profiles, provisioning profiles, enterprise apps and store apps — have no timestamps of their own and were ordering on a column that does not exist; they order on the artifact version timestamps they expose now. Every one of them breaks ties on the primary key, so a page boundary falling inside a group of rows created in the same instant stays put.
 
 
+The inventory history cleanup deletes in bounded batches now. Each table was purged with a single unbounded statement, so one transaction could delete millions of rows — most of them through the cascades of the archived machine snapshots — and hand the whole backlog of dead tuples to autovacuum at once. The nightly job could keep the database at its capacity ceiling for as long as it ran. Every batch is a transaction of its own now, the cutoffs used to trim the machine snapshot commit history are computed once for the whole run instead of once per statement, and a batch that hits an integrity error is retried on its own instead of restarting the table. A table that could not be purged reports the rows it did delete.
+
+
 ## 2026.5
 
 

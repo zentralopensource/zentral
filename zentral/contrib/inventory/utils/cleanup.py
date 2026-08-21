@@ -16,18 +16,48 @@ __all__ = [
 logger = logging.getLogger("zentral.contrib.inventory.utils.cleanup")
 
 
-DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY = """
-DELETE FROM inventory_machinesnapshotcommit AS msc
-USING (
-    SELECT serial_number, source_id,
-           LEAST(MAX(created_at), timestamp with time zone %s) as max_created_at
-    FROM inventory_machinesnapshotcommit
-    GROUP BY serial_number, source_id
-) AS msc_agg
-WHERE
-    msc.serial_number = msc_agg.serial_number
-    AND msc.source_id = msc_agg.source_id
-    AND msc.created_at < msc_agg.max_created_at;
+DELETE_BATCH_SIZE = 1000
+MAX_ATTEMPTS = 3
+
+
+MSC_CUTOFFS_TABLE = "msc_cleanup_cutoffs"
+
+DROP_MSC_CUTOFFS_QUERY = f"DROP TABLE IF EXISTS {MSC_CUTOFFS_TABLE}"
+
+# the cutoffs are computed once and reused by every batch. A snapshot commit
+# added while the batches are running only makes the frozen cutoff older than
+# the one a fresh aggregate would give, so the newest commit of a machine is
+# still never deleted.
+CREATE_MSC_CUTOFFS_QUERY = f"""
+CREATE TEMPORARY TABLE {MSC_CUTOFFS_TABLE} AS
+SELECT serial_number, source_id,
+       LEAST(MAX(created_at), timestamp with time zone %s) AS max_created_at
+FROM inventory_machinesnapshotcommit
+GROUP BY serial_number, source_id
+"""
+
+INDEX_MSC_CUTOFFS_QUERY = f"CREATE INDEX ON {MSC_CUTOFFS_TABLE} (serial_number, source_id)"
+
+ANALYZE_MSC_CUTOFFS_QUERY = f"ANALYZE {MSC_CUTOFFS_TABLE}"
+
+# the batches go from the highest id down. A commit is always more recent than its parent,
+# so deleting the children first spares the ON DELETE SET NULL updates that the parents
+# would otherwise trigger on rows deleted by a later batch anyway.
+DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY = f"""
+WITH batch AS (
+    SELECT msc.id
+    FROM inventory_machinesnapshotcommit msc
+    JOIN {MSC_CUTOFFS_TABLE} cutoffs
+      ON msc.serial_number = cutoffs.serial_number
+     AND msc.source_id = cutoffs.source_id
+    WHERE msc.id < %s
+      AND msc.created_at < cutoffs.max_created_at
+    ORDER BY msc.id DESC
+    LIMIT %s
+)
+DELETE FROM inventory_machinesnapshotcommit
+WHERE id IN (SELECT id FROM batch)
+RETURNING id
 """
 
 
@@ -133,44 +163,77 @@ def get_cleanup_max_date(days=None):
     return timezone.now() - timedelta(days=days)
 
 
-def cleanup_inventory(cursor, result_callback, max_date):
-    # delete older machine snapshot commits
+def build_orphans_query(table, attr, links):
+    wheres = []
+    for idx, (fk_attr, fk_table) in enumerate(links):
+        # we use an alias for the fk_table to avoid collision with the table
+        # inventory_certificate references inventory_certificate for example
+        wheres.append(
+            f"NOT EXISTS (SELECT 1 FROM {fk_table} fkt{idx} WHERE {table}.{attr} = fkt{idx}.{fk_attr})"
+        )
+    wheres = " AND ".join(wheres)
+    return (
+        f"WITH batch AS ("
+        f" SELECT id FROM {table} WHERE id > %s AND {wheres} ORDER BY id LIMIT %s"
+        f") DELETE FROM {table} WHERE id IN (SELECT id FROM batch) RETURNING id"
+    )
+
+
+def run_batched_delete(cursor, query, batch_size, descending=False):
+    rowcount = attempts = 0
+    # bigger than any id, whatever the width of the column
+    last_id = 2 ** 63 - 1 if descending else 0
+    next_id = min if descending else max
+    while True:
+        batch = None
+        for attempt in range(MAX_ATTEMPTS):
+            if attempt:
+                time.sleep(attempt)
+            try:
+                cursor.execute(query, [last_id, batch_size])
+            except IntegrityError:
+                # rows can be linked again while we are deleting
+                logger.warning("Integrity error on delete batch, attempt %s/%s", attempt + 1, MAX_ATTEMPTS)
+            else:
+                batch = cursor.fetchall()
+                break
+        attempts = max(attempts, attempt + 1)
+        if batch is None:
+            return rowcount, attempts, False
+        rowcount += len(batch)
+        if len(batch) < batch_size:
+            return rowcount, attempts, True
+        # the deleted rows are not returned in any particular order
+        last_id = next_id(row[0] for row in batch)
+
+
+def cleanup_table(cursor, result_callback, key, query, batch_size, descending=False):
     start_t = time.time()
-    cursor.execute(DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY, [max_date])
-    result_callback("machine_snapshot_commit", {"rowcount": cursor.rowcount,
-                                                "duration": time.time() - start_t,
-                                                "status": 0})
+    rowcount, attempts, ok = run_batched_delete(cursor, query, batch_size, descending)
+    if not ok:
+        logger.error("Could not purge table %s because of an integrity error", key)
+    result_callback(key, {"attempts": attempts,
+                          "rowcount": rowcount,
+                          "duration": time.time() - start_t,
+                          "status": 0 if ok else 1})
+
+
+def cleanup_inventory(cursor, result_callback, max_date, batch_size=DELETE_BATCH_SIZE):
+    start_t = time.time()
+
+    # delete older machine snapshot commits
+    cursor.execute(DROP_MSC_CUTOFFS_QUERY)
+    cursor.execute(CREATE_MSC_CUTOFFS_QUERY, [max_date])
+    cursor.execute(INDEX_MSC_CUTOFFS_QUERY)
+    cursor.execute(ANALYZE_MSC_CUTOFFS_QUERY)
+    try:
+        cleanup_table(cursor, result_callback, "machine_snapshot_commit",
+                      DELETE_MACHINE_SNAPSHOT_COMMIT_QUERY, batch_size, descending=True)
+    finally:
+        cursor.execute(DROP_MSC_CUTOFFS_QUERY)
 
     # orphans
     for table, attr, links in ORPHANS:
-        wheres = []
-        for idx, (fk_attr, fk_table) in enumerate(links):
-            # we use an alias for the fk_table to avoid collision with the table
-            # inventory_certificate references inventory_certificate for example
-            wheres.append(
-                f"NOT EXISTS (SELECT 1 FROM {fk_table} fkt{idx} WHERE {table}.{attr} = fkt{idx}.{fk_attr})"
-            )
-        wheres = " AND ".join(wheres)
-        query = f"DELETE FROM {table} WHERE {wheres}"
+        cleanup_table(cursor, result_callback, table, build_orphans_query(table, attr, links), batch_size)
 
-        # 3 attempts. Things could be added in the linked table while we are deleting.
-        # TODO: better?
-        for i in range(3):
-            if i:
-                print(f"Retry in {i}s…")
-                time.sleep(i)
-            orphan_start_t = time.time()
-            try:
-                cursor.execute(query)
-            except IntegrityError:
-                print(f"Could not purge table {table} because of an integrity error")
-            else:
-                result_callback(table, {"attempts": i + 1,
-                                        "rowcount": cursor.rowcount,
-                                        "duration": time.time() - orphan_start_t,
-                                        "status": 0})
-                break
-        else:
-            result_callback(table, {"attempts": i + 1,
-                                    "status": 1})
     return time.time() - start_t
