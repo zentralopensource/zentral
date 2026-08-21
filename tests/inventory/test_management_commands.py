@@ -26,6 +26,17 @@ class InventoryManagementCommandsTest(TestCase):
         call_command('cleanup_inventory_history', '-v', '0', stdout=out)
         self.assertEqual("", out.getvalue())
 
+    def test_cleanup_inventory_history_table_error(self):
+        def cleanup_inventory(cursor, result_callback, max_date):
+            result_callback("inventory_link", {"attempts": 3, "rowcount": 17, "duration": 0.1, "status": 1})
+
+        out, err = StringIO(), StringIO()
+        with patch("zentral.contrib.inventory.management.commands.cleanup_inventory_history.cleanup_inventory",
+                   cleanup_inventory):
+            call_command('cleanup_inventory_history', stdout=out, stderr=err)
+        self.assertNotIn("inventory_link", out.getvalue())
+        self.assertIn("Could not cleanup table inventory_link", err.getvalue())
+
     # full export
 
     def test_export_full_inventory(self):

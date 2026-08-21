@@ -1,10 +1,13 @@
+from contextlib import contextmanager
 from datetime import timedelta
 from unittest.mock import patch
 from django.db import IntegrityError, connection
 from django.test import TestCase
 from django.utils import timezone
+from zentral.conf import ConfigDict
 from zentral.contrib.inventory.models import MachineSnapshot, MachineSnapshotCommit, OSXAppInstance
-from zentral.contrib.inventory.utils.cleanup import MAX_ATTEMPTS, cleanup_inventory
+from zentral.contrib.inventory.utils.cleanup import (MAX_ATTEMPTS, cleanup_inventory, get_cleanup_max_date,
+                                                    get_default_snapshot_retention_days)
 from .utils import create_ms
 
 
@@ -81,6 +84,53 @@ class InventoryCleanupTest(TestCase):
                 created_at=timezone.now() - timedelta(days=days, hours=len(commits) - idx)
             )
         return [c.pk for c in commits[:-1]], commits[-1].pk
+
+    @contextmanager
+    def inventory_conf(self, **conf):
+        # the retention is read from the zentral configuration, not from the django settings
+        with patch("zentral.contrib.inventory.utils.cleanup.settings") as settings:
+            settings.__getitem__.return_value = ConfigDict({"zentral.contrib.inventory": conf})
+            yield
+
+    def assertDaysAgo(self, max_date, days, not_before):
+        self.assertTrue(not_before - timedelta(days=days) <= max_date <= timezone.now() - timedelta(days=days))
+
+    # retention
+
+    def test_default_snapshot_retention_days(self):
+        with self.inventory_conf(snapshot_retention_days="7"):
+            self.assertEqual(get_default_snapshot_retention_days(), 7)
+
+    def test_default_snapshot_retention_days_absent(self):
+        with self.inventory_conf():
+            self.assertEqual(get_default_snapshot_retention_days(), 30)
+
+    def test_default_snapshot_retention_days_bad_value(self):
+        with self.inventory_conf(snapshot_retention_days="yolo"):
+            with self.assertLogs("zentral.contrib.inventory.utils.cleanup", level="ERROR") as cm:
+                self.assertEqual(get_default_snapshot_retention_days(), 30)
+        self.assertEqual(cm.records[0].getMessage(),
+                         "Wrong value set snapshot_retention_days, default of 30 used")
+
+    def test_default_snapshot_retention_days_minimum(self):
+        with self.inventory_conf(snapshot_retention_days="0"):
+            self.assertEqual(get_default_snapshot_retention_days(), 1)
+
+    # max date
+
+    def test_cleanup_max_date_defaults_to_the_configured_retention(self):
+        not_before = timezone.now()
+        with self.inventory_conf(snapshot_retention_days="7"):
+            max_date = get_cleanup_max_date()
+        self.assertDaysAgo(max_date, 7, not_before)
+
+    def test_cleanup_max_date_days(self):
+        not_before = timezone.now()
+        self.assertDaysAgo(get_cleanup_max_date(3), 3, not_before)
+
+    def test_cleanup_max_date_minimum_one_day(self):
+        not_before = timezone.now()
+        self.assertDaysAgo(get_cleanup_max_date(-5), 1, not_before)
 
     # results
 
