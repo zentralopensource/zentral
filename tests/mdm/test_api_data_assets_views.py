@@ -115,6 +115,45 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
         self.set_permissions("mdm.view_dataasset")
         self.assert_list_pages_every_row_once(reverse("mdm_api:data_assets"), ascending_ids)
 
+    # data asset endpoint metadata
+    #
+    # The terraform provider reads the OPTIONS of the list endpoint to tell a Zentral that has
+    # never heard of an attribute apart from one rejecting its value, so the shape of this answer
+    # is a contract and not a DRF implementation detail. Note that Zentral asks for the view
+    # permission on OPTIONS, where DRF asks for nothing.
+
+    def test_options_data_assets_unauthorized(self):
+        response = self.client.options(reverse("mdm_api:data_assets"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_options_data_assets_permission_denied(self):
+        response = self.client.options(reverse("mdm_api:data_assets"),
+                                       HTTP_AUTHORIZATION=f"Token {self._get_api_key()}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_options_data_assets_without_add_permission_has_no_actions(self):
+        self.set_permissions("mdm.view_dataasset")
+        response = self.client.options(reverse("mdm_api:data_assets"),
+                                       HTTP_AUTHORIZATION=f"Token {self._get_api_key()}")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("actions", response.json())
+
+    def test_options_data_assets(self):
+        self.set_permissions("mdm.view_dataasset", "mdm.add_dataasset")
+        response = self.client.options(reverse("mdm_api:data_assets"),
+                                       HTTP_AUTHORIZATION=f"Token {self._get_api_key()}")
+        self.assertEqual(response.status_code, 200)
+        post_fields = response.json()["actions"]["POST"]
+        self.assertIn("source", post_fields)
+        self.assertFalse(post_fields["source"]["read_only"])
+        self.assertFalse(post_fields["source"]["required"])
+        self.assertFalse(post_fields["file_uri"]["required"])
+        self.assertFalse(post_fields["file_uri"]["read_only"])
+        self.assertFalse(post_fields["file_sha256"]["required"])
+        self.assertTrue(post_fields["type"]["required"])
+        self.assertTrue(post_fields["filename"]["read_only"])
+        self.assertTrue(post_fields["file_size"]["read_only"])
+
     # create data asset
 
     def test_create_data_asset_unauthorized(self):
