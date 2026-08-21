@@ -67,8 +67,8 @@ class SantaMetricsViewsTestCase(TestCase):
         mocked_fetchall = connection.cursor.return_value.__enter__.return_value.fetchall
         mocked_fetchall.side_effect = [
             [(1, "yolo", 42)],  # 1st call with bad mode
-            [],  # 2nd call for the enrolled machines gauge
-            [],  # 3rd call for the sync states gauge
+            [],  # 2nd call for the enrolled machines buckets
+            [],  # 3rd call for the sync states buckets
             [],  # 4th call for the active machines buckets
             [],  # 5th call for the rules gauge
             [],  # 6th call for the target states gauge
@@ -87,23 +87,27 @@ class SantaMetricsViewsTestCase(TestCase):
         warning.assert_called_once_with("Unknown santa configuration mode: %s", 42)
         self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(7)])
 
-    def test_enrolled_machines(self):
-        em_m = force_enrolled_machine(lockdown=False, santa_version="2024.5")
-        em_l = force_enrolled_machine(lockdown=True, santa_version="2024.6")
+    def test_enrolled_machines_buckets(self):
+        em_m = force_enrolled_machine(lockdown=False, santa_version="2024.5",
+                                      last_postflight_at=naive_utcnow() - timedelta(days=2))
+        em_l = force_enrolled_machine(lockdown=True, santa_version="2024.6",
+                                      last_postflight_at=naive_utcnow() - timedelta(days=20))
         response = self._make_authenticated_request()
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
-            if family.name != "zentral_santa_enrolled_machines_total":
+            if family.name != "zentral_santa_enrolled_machines_bucket":
                 continue
-            self.assertEqual(len(family.samples), 2)
+            self.assertEqual(len(family.samples), 14)
             for sample in family.samples:
-                self.assertEqual(sample.value, 1)
+                le = sample.labels["le"]
                 cfg_pk = int(sample.labels["cfg_pk"])
                 if cfg_pk == em_m.enrollment.configuration.pk:
                     self.assertEqual(sample.labels["mode"], "MONITOR")
                     self.assertEqual(sample.labels["santa_version"], "2024.5")
+                    self.assertEqual(sample.value, 0 if le == "1" else 1)
                 elif cfg_pk == em_l.enrollment.configuration.pk:
                     self.assertEqual(sample.labels["mode"], "LOCKDOWN")
                     self.assertEqual(sample.labels["santa_version"], "2024.6")
+                    self.assertEqual(sample.value, 1 if le in ("30", "45", "90", "+Inf") else 0)
                 else:
                     raise AssertionError("Unknown enrolled machine")
             break
@@ -114,11 +118,16 @@ class SantaMetricsViewsTestCase(TestCase):
     @patch("zentral.contrib.santa.metrics_views.connection")
     @patch("zentral.contrib.santa.metrics_views.logger.warning")
     def test_enrolled_machines_unknown_mode(self, warning, connection):
-        mocked_fetchall = connection.cursor.return_value.__enter__.return_value.fetchall
-        mocked_fetchall.side_effect = [
+        mocked_cursor = connection.cursor.return_value.__enter__.return_value
+        mocked_cursor.description = []
+        for name in ("cfg_pk", "client_mode", "santa_version", "1", "7", "14", "30", "45", "90", "+Inf"):
+            col = Mock()
+            col.name = name
+            mocked_cursor.description.append(col)
+        mocked_cursor.fetchall.side_effect = [
             [],  # 1st call for the configurations info gauge
-            [(1, 42, "2024.5", 1)],  # 2nd call for the enrolled machines gauge
-            [],  # 3rd call for the sync states gauge
+            [(1, 42, "2024.5", 1, 1, 1, 1, 1, 1, 1)],  # 2nd call with an unknown mode
+            [],  # 3rd call for the sync states buckets
             [],  # 4th call for the active machines buckets
             [],  # 5th call for the rules gauge
             [],  # 6th call for the target states gauge
@@ -128,28 +137,35 @@ class SantaMetricsViewsTestCase(TestCase):
         family_count = 0
         sample_count = 0
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
-            if family.name != "zentral_santa_enrolled_machines_total":
+            if family.name != "zentral_santa_enrolled_machines_bucket":
                 continue
             family_count += 1
             sample_count += len(family.samples)
         self.assertEqual(family_count, 1)
         self.assertEqual(sample_count, 0)
         warning.assert_called_once_with("Unknown santa configuration mode: %s", 42)
-        self.assertEqual(mocked_fetchall.mock_calls, [call() for _ in range(7)])
+        self.assertEqual(mocked_cursor.fetchall.mock_calls, [call() for _ in range(7)])
 
-    def test_enrolled_machines_sync_states(self):
+    def test_enrolled_machines_sync_buckets(self):
         configuration = force_configuration()
-        for last_sync_ok in (True, False, None):
-            force_enrolled_machine(configuration=configuration, last_sync_ok=last_sync_ok)
+        for last_sync_ok in (True, False):
+            force_enrolled_machine(configuration=configuration, last_sync_ok=last_sync_ok,
+                                   last_postflight_at=naive_utcnow() - timedelta(days=2))
+        force_enrolled_machine(configuration=configuration, last_sync_ok=None)
         response = self._make_authenticated_request()
         for family in text_string_to_metric_families(response.content.decode("utf-8")):
-            if family.name != "zentral_santa_enrolled_machines_sync_total":
+            if family.name != "zentral_santa_enrolled_machines_sync_bucket":
                 continue
             samples = [s for s in family.samples if int(s.labels["cfg_pk"]) == configuration.pk]
-            self.assertEqual(len(samples), 3)
+            self.assertEqual(len(samples), 21)
             self.assertEqual({s.labels["state"] for s in samples}, {"ok", "mismatch", "unknown"})
             for sample in samples:
-                self.assertEqual(sample.value, 1)
+                le = sample.labels["le"]
+                if sample.labels["state"] == "unknown":
+                    # the machine that never confirmed a sync is only counted in the total
+                    self.assertEqual(sample.value, 1 if le == "+Inf" else 0)
+                else:
+                    self.assertEqual(sample.value, 0 if le == "1" else 1)
             break
         else:
             raise AssertionError("could not find expected metric family")
@@ -242,8 +258,8 @@ class SantaMetricsViewsTestCase(TestCase):
             mocked_cursor.description.append(col)
         mocked_cursor.fetchall.side_effect = [
             [],  # 1st call for the configurations info
-            [],  # 2nd call for the enrolled machines gauge
-            [],  # 3rd call for the sync states gauge
+            [],  # 2nd call for the enrolled machines buckets
+            [],  # 3rd call for the sync states buckets
             [],  # 4th call for the active machines buckets
             [(1, None, "BUNDLE", 42, False, True, False, False, False, 1)],  # 5th call with unknown policy
             [],  # 6th call for the target states gauge

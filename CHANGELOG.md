@@ -10,6 +10,16 @@ A clean sync — `CLEAN` or `CLEAN_ALL` — can be queued for an enrolled machin
 
 The enrolled machines are exposed on the new `/api/santa/enrolled_machines/` endpoint.
 
+The enrolled machines and sync state metrics are bucketed by the age of the last postflight now, the way the active machines metric already was. Nothing ever removes the row of a machine that does not come back, so a decommissioned machine kept its Santa version and its last rule comparison in the totals forever. The `le` label selects the machines that reported within 1, 7, 14, 30, 45 or 90 days, and `+Inf` counts all of them.
+
+
+### Backward incompatibilities
+
+
+#### 🧨 Santa enrolled machines metrics
+
+`zentral_santa_enrolled_machines_total` and `zentral_santa_enrolled_machines_sync_total` are gone, replaced by `zentral_santa_enrolled_machines_bucket` and `zentral_santa_enrolled_machines_sync_bucket`, which carry an `le` label. The `le="+Inf"` bucket holds what the two removed gauges published, so a dashboard or an alert is moved over by renaming the metric and selecting that bucket. A query that sums the buckets without selecting one counts every machine seven times.
+
 
 ### Bug fixes
 

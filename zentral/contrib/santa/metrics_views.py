@@ -37,36 +37,67 @@ class MetricsView(BasePrometheusMetricsView):
                     continue
                 g.labels(**labels).set(1)
 
-    def add_enrolled_machines_gauge(self):
-        g = Gauge('zentral_santa_enrolled_machines_total', 'Zentral Santa Enrolled Machines',
-                  ['cfg_pk', 'mode', 'santa_version'], registry=self.registry)
+    def add_enrolled_machines_buckets(self):
+        g = Gauge('zentral_santa_enrolled_machines_bucket', 'Zentral Santa Enrolled Machines',
+                  ['cfg_pk', 'mode', 'santa_version', 'le'], registry=self.registry)
         query = (
-            "select e.configuration_id, m.client_mode, m.santa_version, count(*) "
-            "from santa_enrolledmachine as m "
-            "join santa_enrollment as e on (m.enrollment_id = e.id) "
-            "group by e.configuration_id, m.client_mode, m.santa_version"
+            # last_postflight_at, not updated_at: the latter is auto_now, so a machine that
+            # preflights forever without ever confirming a sync would stay in the youngest bucket.
+            # Such a machine has a null age and lands in +Inf alone, which is correct - it has
+            # never completed a sync.
+            "with enrolled_machines as ("
+            "  select e.configuration_id as cfg_pk, m.client_mode, m.santa_version,"
+            "  date_part('days', now() - m.last_postflight_at) as age"
+            "  from santa_enrolledmachine as m"
+            "  join santa_enrollment as e on (m.enrollment_id = e.id)"
+            ") select cfg_pk, client_mode, santa_version,"
+            'count(*) filter (where age < 1) as "1",'
+            'count(*) filter (where age < 7) as "7",'
+            'count(*) filter (where age < 14) as "14",'
+            'count(*) filter (where age < 30) as "30",'
+            'count(*) filter (where age < 45) as "45",'
+            'count(*) filter (where age < 90) as "90",'
+            'count(*) as "+Inf" '
+            "from enrolled_machines group by cfg_pk, client_mode, santa_version"
         )
         with connection.cursor() as cursor:
             cursor.execute(query)
-            for cfg_pk, mode, santa_version, count in cursor.fetchall():
-                labels = {"cfg_pk": cfg_pk,
-                          "santa_version": santa_version}
-                if not self._add_mode_to_labels(mode, labels):
+            columns = [c.name for c in cursor.description]
+            for row in cursor.fetchall():
+                row_d = dict(zip(columns, row))
+                labels = {"cfg_pk": row_d.pop("cfg_pk"),
+                          "santa_version": row_d.pop("santa_version")}
+                if not self._add_mode_to_labels(row_d.pop("client_mode"), labels):
                     continue
-                g.labels(**labels).set(count)
+                for le, count in row_d.items():
+                    g.labels(le=le, **labels).set(count)
 
-    def add_sync_states_gauge(self):
-        g = Gauge('zentral_santa_enrolled_machines_sync_total', 'Zentral Santa Enrolled Machines Sync States',
-                  ['cfg_pk', 'state'], registry=self.registry)
+    def add_sync_states_buckets(self):
+        g = Gauge('zentral_santa_enrolled_machines_sync_bucket', 'Zentral Santa Enrolled Machines Sync States',
+                  ['cfg_pk', 'state', 'le'], registry=self.registry)
         query = (
-            "select e.configuration_id, m.last_sync_ok, count(*) "
-            "from santa_enrolledmachine as m "
-            "join santa_enrollment as e on (m.enrollment_id = e.id) "
-            "group by e.configuration_id, m.last_sync_ok"
+            "with enrolled_machines as ("
+            "  select e.configuration_id as cfg_pk, m.last_sync_ok,"
+            "  date_part('days', now() - m.last_postflight_at) as age"
+            "  from santa_enrolledmachine as m"
+            "  join santa_enrollment as e on (m.enrollment_id = e.id)"
+            ") select cfg_pk, last_sync_ok,"
+            'count(*) filter (where age < 1) as "1",'
+            'count(*) filter (where age < 7) as "7",'
+            'count(*) filter (where age < 14) as "14",'
+            'count(*) filter (where age < 30) as "30",'
+            'count(*) filter (where age < 45) as "45",'
+            'count(*) filter (where age < 90) as "90",'
+            'count(*) as "+Inf" '
+            "from enrolled_machines group by cfg_pk, last_sync_ok"
         )
         with connection.cursor() as cursor:
             cursor.execute(query)
-            for cfg_pk, last_sync_ok, count in cursor.fetchall():
+            columns = [c.name for c in cursor.description]
+            for row in cursor.fetchall():
+                row_d = dict(zip(columns, row))
+                cfg_pk = row_d.pop("cfg_pk")
+                last_sync_ok = row_d.pop("last_sync_ok")
                 if last_sync_ok is None:
                     # no preflight since the machine enrolled, or a clean session was lost
                     state = "unknown"
@@ -74,14 +105,11 @@ class MetricsView(BasePrometheusMetricsView):
                     state = "ok"
                 else:
                     state = "mismatch"
-                g.labels(cfg_pk=cfg_pk, state=state).set(count)
+                for le, count in row_d.items():
+                    g.labels(cfg_pk=cfg_pk, state=state, le=le).set(count)
 
     def add_active_machines_buckets(self):
         query = (
-            # last_postflight_at, not updated_at: the latter is auto_now, so a machine that
-            # preflights forever without ever confirming a sync would stay in the youngest bucket.
-            # Such a machine has a null age and lands in +Inf alone, which is correct - it has
-            # never completed a sync.
             "with active_machines as ("
             "  select e.configuration_id as cfg_pk,"
             "  date_part('days', now() - m.last_postflight_at) as age"
@@ -203,8 +231,8 @@ class MetricsView(BasePrometheusMetricsView):
 
     def populate_registry(self):
         self.add_configurations_info()
-        self.add_enrolled_machines_gauge()
-        self.add_sync_states_gauge()
+        self.add_enrolled_machines_buckets()
+        self.add_sync_states_buckets()
         self.add_active_machines_buckets()
         self.add_rules_gauge()
         self.add_target_states_gauge()
