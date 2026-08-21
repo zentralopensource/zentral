@@ -63,6 +63,15 @@ The data asset API only accepts XML property lists now, the way the upload form 
 A malformed base 64 source on the MDM profile and provisioning profile API endpoints is answered with a 400 now. Decoding it raised, nothing caught it, and the request ended in a 500.
 
 
+Fixed an MDM software update enforcement in latest mode taking a device out of management when it had no update to enforce on it. Finding none raised, and nothing caught that on the paths building the declaration manifest: the `tokens` and `declaration-items` check-ins and `/connect` all answered with a 500, and since the declarative management sync is scheduled before them, the device also stopped receiving its artifacts, its FileVault configuration, its recovery password and its extra inventory. A device whose OS was above the *Maximum target OS version* — because it was updated past it, or shipped above it — was enough to trigger it, and so was a deployment that had never synchronized the Apple software lookup service, which took out every device in scope at once. The configuration is left out of the declarations the device is served now, and Zentral logs an error, or an information for the devices that are simply already up to date or not inventoried yet. The device kept getting a no-op enforcement targeting the version it already ran, and it still does; only a target below what the device runs is dropped.
+
+
+Malformed MDM client capabilities no longer take a device out of management. They are stored exactly as the device reported them, so the lookup of the status items it supports could fail on a type rather than on a missing key, and that was not caught: the `tokens` and `declaration-items` check-ins and `/connect` answered with a 500, and the device stopped receiving anything at all. The status subscriptions fall back to the items supported by every client now, and Zentral logs a warning.
+
+
+An explicit null delay in days or local time is rejected on the MDM software update enforcement API when a maximum target OS version is set. Both fields are nullable for the one time enforcements, which have no use for them, and a latest enforcement without them has no target date to build a declaration with. Omitting them is unchanged and still falls back to 14 days and 09:30.
+
+
 ## 2026.5
 
 
