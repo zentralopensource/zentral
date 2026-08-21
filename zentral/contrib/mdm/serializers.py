@@ -906,7 +906,7 @@ class DataAssetSerializer(ArtifactVersionSerializer):
         # verify file type
         if data_asset_type == DataAsset.Type.PLIST:
             try:
-                plistlib.load(tmp_file)
+                plistlib.load(tmp_file, fmt=plistlib.FMT_XML)
             except Exception:
                 tmp_file.close()
                 os.unlink(tmp_file.name)

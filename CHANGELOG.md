@@ -57,6 +57,9 @@ The file of a deleted data asset is removed from the storage now. The enterprise
 Fixed a data asset update being rejected when it kept the same file: the check that the new file differs from the latest version of the artifact counted the version being updated, so an update that changed only a platform, a shard or a tag compared the asset with itself and came back with "This file is not different from the latest one".
 
 
+The data asset API only accepts XML property lists now, the way the upload form already did. `plistlib` reads either format, so a binary property list was accepted, and then stored and advertised to the devices as `text/xml`. An upload that was relying on this is rejected now.
+
+
 ## 2026.5
 
 

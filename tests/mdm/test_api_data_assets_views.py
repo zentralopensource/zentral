@@ -1,6 +1,7 @@
 import hashlib
 import io
 import os
+import plistlib
 import tempfile
 from unittest.mock import Mock, patch
 from django.contrib.auth.models import Group
@@ -342,6 +343,36 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
             tmp_data_asset_file.write(plistfile_content)
             tmp_data_asset_file.close()
         self.assertTrue(os.path.exists(tmp_data_asset_file.name))
+        file_sha256 = hashlib.sha256(plistfile_content).hexdigest()
+        download_s3_external_resource.return_value = plistfile
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "PLIST",
+                                   "file_uri": "s3://yolo/fomo.plist",
+                                   "file_sha256": file_sha256,
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'file_uri': ['Invalid PLIST file']}
+        )
+        self.assertFalse(os.path.exists(tmp_data_asset_file.name))
+
+    @patch("zentral.utils.external_resources.download_s3_external_resource")
+    def test_create_data_asset_binary_plist_error(self, download_s3_external_resource):
+        _, artifact, (av,) = force_blueprint_artifact(
+            artifact_type=Artifact.Type.DATA_ASSET
+        )
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_data_asset_file:
+            plistfile = io.BytesIO()
+            plistlib.dump({"un": 2}, plistfile, fmt=plistlib.FMT_BINARY)
+            plistfile.name = tmp_data_asset_file.name
+            plistfile.seek(0)
+            plistfile_content = plistfile.getvalue()
+            tmp_data_asset_file.write(plistfile_content)
+            tmp_data_asset_file.close()
         file_sha256 = hashlib.sha256(plistfile_content).hexdigest()
         download_s3_external_resource.return_value = plistfile
         self.set_permissions("mdm.add_dataasset")
