@@ -917,11 +917,12 @@ class DataAssetSerializer(ArtifactVersionSerializer):
                 os.unlink(tmp_file.name)
                 raise serializers.ValidationError({"file_uri": "Invalid ZIP file"})
         # verify last version
-        latest_data_asset = (
-            DataAsset.objects.filter(artifact_version__artifact=data["artifact_version"]["artifact"])
-                             .order_by("-artifact_version__version")
-                             .first()
+        latest_data_asset_qs = DataAsset.objects.filter(
+            artifact_version__artifact=data["artifact_version"]["artifact"]
         )
+        if self.instance is not None:
+            latest_data_asset_qs = latest_data_asset_qs.exclude(artifact_version=self.instance.artifact_version)
+        latest_data_asset = latest_data_asset_qs.order_by("-artifact_version__version").first()
         if latest_data_asset and latest_data_asset.file_sha256 == data["file_sha256"]:
             raise serializers.ValidationError({"file_uri": "This file is not different from the latest one"})
         # add data asset info

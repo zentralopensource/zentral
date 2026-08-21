@@ -659,6 +659,34 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
         self.assertEqual(blueprint.serialized_artifacts[str(artifact.pk)]["versions"][0]["excluded_tags"],
                          [excluded_tag.pk])
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.utils.external_resources.download_s3_external_resource")
+    def test_update_data_asset_same_file(self, download_s3_external_resource, post_event):
+        artifact, (ea_av,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        data_asset = ea_av.data_asset
+        data_asset.file.open("rb")
+        content = data_asset.file.read()
+        data_asset.file.close()
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_data_asset_file:
+            tmp_data_asset_file.write(content)
+            tmp_data_asset_file.close()
+        zipfile_buffer = io.BytesIO(content)
+        zipfile_buffer.name = tmp_data_asset_file.name
+        download_s3_external_resource.return_value = zipfile_buffer
+        self.set_permissions("mdm.change_dataasset")
+        response = self.put(reverse("mdm_api:data_asset", args=(ea_av.pk,)),
+                            data={"artifact": str(artifact.pk),
+                                  "type": "ZIP",
+                                  "file_uri": "s3://yolo/fomo.zip",
+                                  "file_sha256": data_asset.file_sha256,
+                                  "macos": True,
+                                  "macos_min_version": "14.0",
+                                  "version": ea_av.version})
+        self.assertEqual(response.status_code, 200)
+        ea_av.refresh_from_db()
+        self.assertEqual(ea_av.macos_min_version, "14.0")
+        self.assertEqual(ea_av.data_asset.file_sha256, data_asset.file_sha256)
+
     # delete data asset
 
     def test_delete_data_asset_unauthorized(self):

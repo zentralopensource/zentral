@@ -54,6 +54,9 @@ Fixed a blueprint serializing its artifacts differently from one update to the n
 The file of a deleted data asset is removed from the storage now. The enterprise apps and the packages have always deleted theirs, but the data assets never did, so every version that was deleted — or deleted along with its artifact — left its file in the storage for good.
 
 
+Fixed a data asset update being rejected when it kept the same file: the check that the new file differs from the latest version of the artifact counted the version being updated, so an update that changed only a platform, a shard or a tag compared the asset with itself and came back with "This file is not different from the latest one".
+
+
 ## 2026.5
 
 
