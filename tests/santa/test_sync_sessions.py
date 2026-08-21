@@ -4,6 +4,7 @@ from django.db.models import F
 from django.test import TestCase
 from zentral.contrib.santa.events import SantaPostflightEvent, SantaPreflightEvent
 from zentral.contrib.santa.models import EnrolledMachine, MachineRule, Rule, Target
+from zentral.contrib.santa.public_views import PreflightView
 from zentral.core.incidents.models import Severity
 from .utils import SantaSyncClient, force_configuration, force_enrolled_machine, force_rule, new_sha256
 
@@ -887,3 +888,30 @@ class SantaSyncSessionTestCase(TestCase):
         client.rule_download()
         client.enrolled_machine.refresh_from_db()
         self.assertEqual(client.enrolled_machine.forced_sync_type, "CLEAN")
+
+    def test_preflight_does_not_clobber_a_concurrently_queued_clean_sync(self):
+        client, _, _ = self.force_client(rule_count=2)
+        client.sync()
+        pk = client.enrolled_machine.pk
+        original = PreflightView._get_enrolled_machine_defaults
+
+        def patched(view):
+            defaults = original(view)
+            # a reported change, so that the preflight writes the enrolled machine row it
+            # read at the beginning of the request
+            defaults["primary_user"] = "yolo@example.com"
+            # another request queues a clean sync in the meantime
+            EnrolledMachine.objects.filter(pk=pk).update(
+                forced_sync_type=EnrolledMachine.SyncType.CLEAN_ALL
+            )
+            return defaults
+
+        with patch.object(PreflightView, "_get_enrolled_machine_defaults", patched):
+            client.preflight()
+        client.enrolled_machine.refresh_from_db()
+        # the preflight answered a normal sync, it never saw the queued clean sync. It must
+        # not have written it away either: the next preflight is the one that answers it
+        self.assertEqual(client.enrolled_machine.forced_sync_type, "CLEAN_ALL")
+        self.assertEqual(client.enrolled_machine.primary_user, "yolo@example.com")
+        response = client.preflight()
+        self.assertEqual(response.json()["sync_type"], "CLEAN_ALL")

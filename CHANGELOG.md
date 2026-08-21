@@ -16,6 +16,9 @@ Fixed a Santa rule that was added and removed during the same sync session being
 The Santa sync operations of a machine are serialized on its enrolled machine row lock now. Santa retries a rule download after 30 seconds with the same cursor, and the retry could overlap the transaction of the original request, miss the batch it was staging, and skip it for good: the ledger counted rules the client never received. The rule downloads also pick up the sync session started by a concurrent preflight, instead of staging rules under a stale one.
 
 
+Fixed the Santa preflight writing away what another request committed on the same enrolled machine: it saved every column of a row read before the request did anything. Only the attributes the client reported are written now.
+
+
 ## 2026.5
 
 

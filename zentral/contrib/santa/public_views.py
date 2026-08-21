@@ -274,13 +274,17 @@ class PreflightView(BaseSyncView):
         if not enrolled_machine:
             enrolled_machine = self._enroll_machine()
         else:
-            enrolled_machine_changed = False
+            changed_attrs = []
             for attr, val in self._get_enrolled_machine_defaults().items():
                 if getattr(enrolled_machine, attr) != val:
                     setattr(enrolled_machine, attr, val)
-                    enrolled_machine_changed = True
-            if enrolled_machine_changed:
-                enrolled_machine.save()
+                    changed_attrs.append(attr)
+            if changed_attrs:
+                # only the reported attributes are written. A full save would write every
+                # column from a row read at the beginning of the request, and clobber what
+                # another request committed in the meantime - a clean sync queued by an
+                # operator, for instance
+                enrolled_machine.save(update_fields=changed_attrs + ["updated_at"])
         return enrolled_machine
 
     def _commit_machine_snapshot(self):
