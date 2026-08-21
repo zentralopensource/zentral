@@ -272,6 +272,44 @@ class TestMDMArtifacts(TestCase):
         )
         self.assertEqual(set(artifact.platforms), set(Platform.values))
 
+    # blueprint serialized artifacts
+
+    def test_serialized_artifacts_requires_sorted(self):
+        required_artifact_1, _ = self._force_artifact()
+        required_artifact_2, _ = self._force_artifact()
+        _, artifact, _ = self._force_blueprint_artifact(requires=[required_artifact_1, required_artifact_2])
+        self.assertEqual(
+            self.blueprint1.serialized_artifacts[str(artifact.pk)]["requires"],
+            [str(ra.pk) for ra in sorted((required_artifact_1, required_artifact_2), key=lambda ra: ra.name)]
+        )
+
+    def test_serialized_artifacts_references_sorted(self):
+        referenced_artifact_1, _ = force_artifact(artifact_type=Artifact.Type.MANUAL_CONFIGURATION)
+        referenced_artifact_2, _ = force_artifact(artifact_type=Artifact.Type.MANUAL_CONFIGURATION)
+        _, artifact, _ = force_blueprint_artifact(
+            blueprint=self.blueprint1,
+            artifact_type=Artifact.Type.ACTIVATION,
+            decl_type="com.apple.activation.simple",
+            decl_payload={
+                "StandardConfigurations": [f"ztl:{referenced_artifact_1.pk}",
+                                           f"ztl:{referenced_artifact_2.pk}"],
+            }
+        )
+        self.assertEqual(
+            self.blueprint1.serialized_artifacts[str(artifact.pk)]["references"],
+            [str(ra.pk) for ra in sorted((referenced_artifact_1, referenced_artifact_2), key=lambda ra: ra.name)]
+        )
+
+    def test_serialized_artifacts_required_artifact_min_depth(self):
+        required_artifact, _ = self._force_artifact()
+        _, artifact, _ = self._force_blueprint_artifact(requires=required_artifact)
+        self.assertEqual(self.blueprint1.serialized_artifacts[str(required_artifact.pk)]["_depth"], 1)
+        # added to the blueprint after the artifact requiring it, it is reached again at a lower depth
+        BlueprintArtifact.objects.create(blueprint=self.blueprint1, artifact=required_artifact, macos=True)
+        update_blueprint_serialized_artifacts(self.blueprint1)
+        self.assertEqual(self.blueprint1.serialized_artifacts[str(artifact.pk)]["_depth"], 0)
+        self.assertEqual(self.blueprint1.serialized_artifacts[str(required_artifact.pk)]["_depth"], 0)
+
     # next_to_install
 
     def test_no_blueprint_nothing_to_install(self):

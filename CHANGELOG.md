@@ -48,6 +48,9 @@ Fixed nine MDM API list endpoints ignoring the `ordering` query parameter — th
 The inventory history cleanup deletes in bounded batches now. Each table was purged with a single unbounded statement, so one transaction could delete millions of rows — most of them through the cascades of the archived machine snapshots — and hand the whole backlog of dead tuples to autovacuum at once. The nightly job could keep the database at its capacity ceiling for as long as it ran. Every batch is a transaction of its own now, the cutoffs used to trim the machine snapshot commit history are computed once for the whole run instead of once per statement, and a batch that hits an integrity error is retried on its own instead of restarting the table. A table that could not be purged reports the rows it did delete.
 
 
+Fixed a blueprint serializing its artifacts differently from one update to the next, over the very same data: the artifacts a blueprint holds, the artifacts an artifact requires and the artifacts a declaration references were all read without an order, and PostgreSQL is free to return them in whichever order suits it. That order was the order the devices saw — the sequence in which they installed artifacts that do not depend on each other, and the order of the declaration items they were handed. The required and referenced artifacts are sorted by name now, and the artifacts of a blueprint keep the order in which they were added to it.
+
+
 ## 2026.5
 
 

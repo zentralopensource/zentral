@@ -86,7 +86,8 @@ def _add_artifact_to_serialization(artifact, artifacts, depth):
         if depth < present_artifact["_depth"]:
             present_artifact["_depth"] = depth
         return
-    required_artifacts = list(artifact.requires.all())
+    # sorted in python, to keep the prefetched requires cache
+    required_artifacts = sorted(artifact.requires.all(), key=lambda ra: (ra.name, ra.pk))
     referenced_artifacts = []
     artifact_type = artifact.get_type()
     if artifact_type.is_raw_declaration:
@@ -98,6 +99,7 @@ def _add_artifact_to_serialization(artifact, artifacts, depth):
         ):
             if ref.artifact not in referenced_artifacts:
                 referenced_artifacts.append(ref.artifact)
+        referenced_artifacts.sort(key=lambda ra: (ra.name, ra.pk))
     artifacts[artifact_pk] = {
         "_depth": depth,
         "pk": artifact_pk,
@@ -157,7 +159,8 @@ def update_blueprint_serialized_artifacts(blueprint, commit=True):
                                                            "excluded_tags",
                                                            "artifact__requires")
                                          .select_related("artifact")
-                                         .filter(blueprint=blueprint)):
+                                         .filter(blueprint=blueprint)
+                                         .order_by("pk")):
         artifact = bpa.artifact
         depth = 0
         _add_artifact_to_serialization(artifact, artifacts, depth)
