@@ -881,7 +881,7 @@ class CertAssetSerializer(ArtifactVersionSerializer):
 class DataAssetSerializer(ArtifactVersionSerializer):
     type = serializers.ChoiceField(required=True, choices=DataAsset.Type.choices)
     file_uri = serializers.CharField(required=True, write_only=True)
-    file_sha256 = serializers.RegexField(r"[0-9a-f]{64}", required=True)
+    file_sha256 = serializers.RegexField(r"^[0-9a-f]{64}$", required=True)
     file_size = serializers.IntegerField(read_only=True)
     filename = serializers.CharField(read_only=True)
 

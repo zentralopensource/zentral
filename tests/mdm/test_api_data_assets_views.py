@@ -360,6 +360,22 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderi
         )
         self.assertFalse(os.path.exists(tmp_data_asset_file.name))
 
+    def test_create_data_asset_file_sha256_extra_characters_error(self):
+        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        self.set_permissions("mdm.add_dataasset")
+        response = self.post(reverse("mdm_api:data_assets"),
+                             data={"artifact": str(artifact.pk),
+                                   "type": "ZIP",
+                                   "file_uri": "s3://yolo/fomo.zip",
+                                   "file_sha256": 64 * "0" + "yolo",
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'file_sha256': ['This value does not match the required pattern.']}
+        )
+
     @patch("zentral.utils.external_resources.download_s3_external_resource")
     def test_create_data_asset_binary_plist_error(self, download_s3_external_resource):
         _, artifact, (av,) = force_blueprint_artifact(
