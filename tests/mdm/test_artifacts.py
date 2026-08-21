@@ -9,7 +9,8 @@ from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
-from zentral.contrib.mdm.declarations import get_artifact_version_server_token
+from zentral.contrib.mdm.declarations import (build_target_management_status_subscriptions,
+                                             get_artifact_version_server_token)
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -1211,6 +1212,60 @@ class TestMDMArtifacts(TestCase):
         self.assertIn(
             identifier,
             [c["Identifier"] for c in target.declaration_items["Declarations"]["Configurations"]],
+        )
+
+    # management status subscriptions with malformed client capabilities
+
+    DEFAULT_STATUS_ITEMS_SERVER_TOKEN = "0ed215547af3061ce18ea6cf7a69dac4a3d52f3f"
+
+    def test_management_status_subscriptions_client_capabilities_not_a_dict(self):
+        # stored as the device reported them, so anything can be in there
+        for client_capabilities in (["supported-payloads"], "supported-payloads", 42, True):
+            with self.subTest(client_capabilities=client_capabilities):
+                self.enrolled_device.client_capabilities = client_capabilities
+                target = Target(self.enrolled_device)
+                with self.assertLogs("zentral.contrib.mdm.declarations.management", level="WARNING") as cm:
+                    declaration = build_target_management_status_subscriptions(target)
+                self.assertEqual(
+                    cm.output,
+                    [f"WARNING:zentral.contrib.mdm.declarations.management:"
+                     f"Target {target}: client capabilities are not an object"],
+                )
+                self.assertEqual(declaration["ServerToken"], self.DEFAULT_STATUS_ITEMS_SERVER_TOKEN)
+
+    def test_management_status_subscriptions_supported_payloads_not_a_dict(self):
+        for supported_payloads in (["status-items"], "status-items", 42):
+            with self.subTest(supported_payloads=supported_payloads):
+                self.enrolled_device.client_capabilities = {"supported-payloads": supported_payloads}
+                target = Target(self.enrolled_device)
+                with self.assertLogs("zentral.contrib.mdm.declarations.management", level="WARNING"):
+                    declaration = build_target_management_status_subscriptions(target)
+                self.assertEqual(declaration["ServerToken"], self.DEFAULT_STATUS_ITEMS_SERVER_TOKEN)
+
+    def test_management_status_subscriptions_status_items_not_iterable(self):
+        self.enrolled_device.client_capabilities = {"supported-payloads": {"status-items": 42}}
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.management", level="WARNING"):
+            declaration = build_target_management_status_subscriptions(target)
+        self.assertEqual(declaration["ServerToken"], self.DEFAULT_STATUS_ITEMS_SERVER_TOKEN)
+
+    def test_management_status_subscriptions_status_item_not_a_string(self):
+        self.enrolled_device.client_capabilities = {
+            "supported-payloads": {"status-items": ["device.model.family", 42]}
+        }
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.management", level="WARNING"):
+            declaration = build_target_management_status_subscriptions(target)
+        self.assertEqual(declaration["ServerToken"], self.DEFAULT_STATUS_ITEMS_SERVER_TOKEN)
+
+    def test_declaration_items_client_capabilities_not_a_dict(self):
+        self.enrolled_device.client_capabilities = ["supported-payloads"]
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.management", level="WARNING"):
+            declarations = target.declaration_items["Declarations"]
+        self.assertEqual(
+            [c["ServerToken"] for c in declarations["Configurations"]],
+            [self.DEFAULT_STATUS_ITEMS_SERVER_TOKEN],
         )
 
     def test_device_declaration_items_config_and_dep_included(self):
