@@ -283,7 +283,6 @@ class MDMStoreAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderin
                      'tvos_max_version': '',
                      'tvos_min_version': '',
                      'version': 17,
-                     'remove_on_unenroll': True,
                      'location_asset': {
                          'asset': {
                              'adam_id': location_asset.asset.adam_id,
