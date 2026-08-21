@@ -1,10 +1,16 @@
+import logging
+
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django_filters import rest_framework as filters
+from pbac.engine import engine
 from rest_framework import generics
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, DjangoModelPermissions
 from zentral.core.events.base import AuditEvent
+
+
+logger = logging.getLogger("zentral.utils.drf")
 
 
 # pagination
@@ -28,6 +34,25 @@ class DjangoPermissionRequired(BasePermission):
         if not isinstance(permissions, (list, tuple)):
             permissions = [permissions]
         return request.user.has_perms(permissions)
+
+
+class PBACPermission(BasePermission):
+    """Authorize the PBAC request the view builds, the DRF counterpart of PBACViewMixin.
+
+    The view is asked for the request instead of declaring an action, so it can carry the
+    resource and the context the policies are written against.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            # an anonymous user has no principal to build a request with. DRF turns the
+            # refusal into a 401 when no authenticator succeeded
+            return False
+        pbac_request = view.get_pbac_request(request)
+        engine.authorize_request(pbac_request)
+        if not pbac_request.is_authorized:
+            logger.error("Permission denied %s", pbac_request, extra={"request": request})
+        return pbac_request.is_authorized
 
 
 class DefaultDjangoModelPermissions(DjangoModelPermissions):
