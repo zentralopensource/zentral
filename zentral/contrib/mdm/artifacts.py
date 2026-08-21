@@ -25,7 +25,6 @@ from .declarations import (
     get_artifact_identifier,
     get_artifact_version_server_token,
     get_blueprint_declaration_identifier,
-    get_software_update_enforcement_specific_identifier,
     get_status_report_target_artifacts_info,
 )
 from .events import post_device_lock_pin_clear_event, post_target_artifact_update_events
@@ -857,6 +856,10 @@ class Target:
 
         return selected_sue
 
+    @cached_property
+    def software_update_enforcement_declaration(self):
+        return build_specific_software_update_enforcement(self)
+
     def iter_configuration_artifacts(self):
         """Iterate over the configuration artifacts to include in the managed activation"""
         for artifact, artifact_version, _ in self.all_installed_or_to_install_serialized(
@@ -882,7 +885,9 @@ class Target:
             ]
         }
         if self.software_update_enforcement:
-            payload["StandardConfigurations"].append(get_software_update_enforcement_specific_identifier(self))
+            sue_declaration = self.software_update_enforcement_declaration
+            if sue_declaration:
+                payload["StandardConfigurations"].append(sue_declaration["Identifier"])
         for artifact in self.iter_configuration_artifacts():
             payload["StandardConfigurations"].append(get_artifact_identifier(artifact))
         payload["StandardConfigurations"].sort()
@@ -922,11 +927,11 @@ class Target:
             ],
             "Management": []
         }
-        software_update_enforcement_specific = build_specific_software_update_enforcement(self, missing_ok=True)
-        if software_update_enforcement_specific:
+        sue_declaration = self.software_update_enforcement_declaration
+        if sue_declaration:
             declarations["Configurations"].append(
-                {"Identifier": software_update_enforcement_specific["Identifier"],
-                 "ServerToken": software_update_enforcement_specific["ServerToken"]}
+                {"Identifier": sue_declaration["Identifier"],
+                 "ServerToken": sue_declaration["ServerToken"]}
             )
         # snapshot of the artifact-backed declarations, keyed by identifier, so that a later fetch of one of
         # them resolves to the same artifact version and server token we advertised here — even when the live

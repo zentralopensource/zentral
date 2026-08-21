@@ -2011,6 +2011,81 @@ class MDMViewsTestCase(TestCase):
             serial_number=serial_number,
         )
 
+    def _force_device_above_software_update_enforcement_ceiling(self, session):
+        """A steady state device whose OS is above the ceiling of its scoped enforcement: there is a software
+        update in the feed, but none of them applies to the device anymore."""
+        device_id = get_random_string(8)
+        now = naive_utcnow()
+        enrolled_device = session.enrolled_device
+        enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+        enrolled_device.os_version = "15.6"
+        enrolled_device.build_version = "24G84"
+        # inventory up to date and certificate valid, so that the next command is the DDM sync
+        enrolled_device.device_information_updated_at = now
+        enrolled_device.security_info_updated_at = now
+        enrolled_device.cert_not_valid_after = now + timedelta(days=365)
+        enrolled_device.save()
+        force_software_update(
+            device_id=device_id, version="14.1.0", build="23B74", posting_date=date(2023, 10, 25)
+        )
+        sue = force_software_update_enforcement(
+            max_os_version="15", local_time=time(9, 30), delay_days=15
+        )
+        blueprint = self._add_blueprint(session)
+        blueprint.software_update_enforcements.add(sue)
+        return blueprint
+
+    def test_declarative_management_tokens_software_update_enforcement_above_ceiling(
+        self, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        self._force_device_above_software_update_enforcement_ceiling(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "tokens",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("DeclarationsToken", response.json()["SyncTokens"])
+
+    def test_declarative_management_declaration_items_software_update_enforcement_above_ceiling(
+        self, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        blueprint = self._force_device_above_software_update_enforcement_ceiling(session)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"un": 2}),
+            "Endpoint": "declaration-items",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        declarations = response.json()["Declarations"]
+        identifier = f"zentral.blueprint.{blueprint.pk}.softwareupdate-enforcement-specific"
+        self.assertNotIn(identifier, [c["Identifier"] for c in declarations["Configurations"]])
+        self.assertEqual(len(declarations["Activations"]), 1)
+
+    def test_device_channel_connect_software_update_enforcement_above_ceiling(
+        self, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        self._force_device_above_software_update_enforcement_ceiling(session)
+        payload = {"UDID": udid, "Status": "Idle"}
+        response = self._put(reverse("mdm_public:connect"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        data = plistlib.loads(response.content)
+        self.assertEqual(data["Command"]["RequestType"], "DeclarativeManagement")
+
     def test_declarative_management_softwareupdate_enforcement_specific_one_time(
         self, post_event
     ):

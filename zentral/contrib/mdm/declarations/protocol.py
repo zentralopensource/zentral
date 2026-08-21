@@ -4,7 +4,7 @@ from .declaration import build_declaration
 from .exceptions import DeclarationError
 from .legacy_profile import build_legacy_profile
 from .management import build_target_management_status_subscriptions
-from .software_update import build_specific_software_update_enforcement
+from .software_update import get_specific_software_update_enforcement
 
 
 __all__ = ["build_declaration_response"]
@@ -19,7 +19,7 @@ def build_declaration_response(endpoint, event_payload, enrollment_session, targ
     elif declaration_identifier.endswith("activation"):
         return target.activation
     elif declaration_identifier.endswith("softwareupdate-enforcement-specific"):
-        return build_specific_software_update_enforcement(target)
+        return get_specific_software_update_enforcement(target)
     elif ".declaration." in declaration_identifier:
         return build_declaration(enrollment_session, target, declaration_identifier)
     elif ".cert-asset." in declaration_identifier:

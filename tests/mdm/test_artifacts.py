@@ -1067,6 +1067,152 @@ class TestMDMArtifacts(TestCase):
                          f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific")
         self.assertEqual(configurations[1]["ServerToken"], "724edaf760e7d7282084dcf3eaef6467447accd1")
 
+    # software update enforcement not advertised
+
+    def _force_latest_software_update_enforcement(self, **kwargs):
+        kwargs.setdefault("max_os_version", "15")
+        kwargs.setdefault("local_time", time(9, 30))
+        kwargs.setdefault("delay_days", 15)
+        sue = force_software_update_enforcement(**kwargs)
+        self.blueprint1.software_update_enforcements.add(sue)
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        return sue
+
+    def _assert_software_update_enforcement_not_advertised(self, target):
+        """The activation and the declaration items must agree: a StandardConfigurations entry without a
+        matching declaration item makes the device reject the whole activation."""
+        identifier = f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific"
+        self.assertNotIn(identifier, target.activation["Payload"]["StandardConfigurations"])
+        self.assertNotIn(
+            identifier,
+            [c["Identifier"] for c in target.declaration_items["Declarations"]["Configurations"]],
+        )
+
+    def test_device_software_update_enforcement_latest_empty_feed_not_advertised(self):
+        self._force_latest_software_update_enforcement()
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="ERROR") as cm:
+            self._assert_software_update_enforcement_not_advertised(target)
+        self.assertEqual(
+            cm.output,
+            [f"ERROR:zentral.contrib.mdm.declarations.software_update:"
+             f"Enrolled device {self.enrolled_device.udid}: empty software update feed"],
+        )
+
+    def test_device_software_update_enforcement_latest_no_update_for_device_not_advertised(self):
+        force_software_update(device_id=get_random_string(8),
+                              version="14.1.0",
+                              build="23B74",
+                              posting_date=date(2023, 10, 25))
+        self._force_latest_software_update_enforcement()
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="ERROR") as cm:
+            self._assert_software_update_enforcement_not_advertised(target)
+        self.assertEqual(
+            cm.output,
+            [f"ERROR:zentral.contrib.mdm.declarations.software_update:"
+             f"Enrolled device {self.enrolled_device.udid}: no software update available"],
+        )
+
+    def test_device_software_update_enforcement_latest_missing_delay_days_not_advertised(self):
+        sue = self._force_latest_software_update_enforcement()
+        sue.delay_days = None
+        sue.save()
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="ERROR") as cm:
+            self._assert_software_update_enforcement_not_advertised(target)
+        self.assertEqual(
+            cm.output,
+            [f"ERROR:zentral.contrib.mdm.declarations.software_update:"
+             f"Software update enforcement {sue.pk}: missing local time or delay in days"],
+        )
+
+    def test_device_software_update_enforcement_latest_missing_local_time_not_advertised(self):
+        sue = self._force_latest_software_update_enforcement()
+        sue.local_time = None
+        sue.save()
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="ERROR") as cm:
+            self._assert_software_update_enforcement_not_advertised(target)
+        self.assertEqual(
+            cm.output,
+            [f"ERROR:zentral.contrib.mdm.declarations.software_update:"
+             f"Software update enforcement {sue.pk}: missing local time or delay in days"],
+        )
+
+    def test_device_software_update_enforcement_latest_no_device_id_not_advertised(self):
+        self.enrolled_device.device_information = None
+        self._force_latest_software_update_enforcement()
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="INFO") as cm:
+            self._assert_software_update_enforcement_not_advertised(target)
+        self.assertEqual(
+            cm.output,
+            [f"INFO:zentral.contrib.mdm.declarations.software_update:"
+             f"Enrolled device {self.enrolled_device.udid}: no software update device ID"],
+        )
+
+    def test_device_software_update_enforcement_latest_device_information_not_a_dict(self):
+        self.enrolled_device.device_information = ["SoftwareUpdateDeviceID"]
+        self._force_latest_software_update_enforcement()
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="INFO") as cm:
+            self._assert_software_update_enforcement_not_advertised(target)
+        self.assertEqual(
+            cm.output,
+            [f"INFO:zentral.contrib.mdm.declarations.software_update:"
+             f"Enrolled device {self.enrolled_device.udid}: no software update device ID"],
+        )
+
+    def test_device_software_update_enforcement_latest_below_device_os_version_not_advertised(self):
+        device_id = self.enrolled_device.device_information["SoftwareUpdateDeviceID"]
+        su = force_software_update(device_id=device_id,
+                                   version="14.1.0",
+                                   build="23B74",
+                                   posting_date=date(2023, 10, 25))
+        self.enrolled_device.os_version = "15.6"
+        self.enrolled_device.build_version = "24G84"
+        self._force_latest_software_update_enforcement()
+        target = Target(self.enrolled_device)
+        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="INFO") as cm:
+            self._assert_software_update_enforcement_not_advertised(target)
+        self.assertEqual(
+            cm.output,
+            [f"INFO:zentral.contrib.mdm.declarations.software_update:"
+             f"Enrolled device {self.enrolled_device.udid}: software update {su} below the device OS version"],
+        )
+
+    def test_device_software_update_enforcement_latest_equal_to_device_os_version_advertised(self):
+        device_id = self.enrolled_device.device_information["SoftwareUpdateDeviceID"]
+        force_software_update(device_id=device_id,
+                              version="14.1.0",
+                              build="23B74",
+                              posting_date=date(2023, 10, 25))
+        self.enrolled_device.os_version = "14.1"
+        self.enrolled_device.build_version = "23B74"
+        self._force_latest_software_update_enforcement()
+        target = Target(self.enrolled_device)
+        identifier = f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific"
+        self.assertIn(identifier, target.activation["Payload"]["StandardConfigurations"])
+        self.assertIn(
+            identifier,
+            [c["Identifier"] for c in target.declaration_items["Declarations"]["Configurations"]],
+        )
+
+    def test_device_software_update_enforcement_one_time_missing_delay_days_advertised(self):
+        sue = force_software_update_enforcement(os_version="15.1", local_datetime=naive_utcnow())
+        self.assertIsNone(sue.delay_days)
+        self.assertIsNone(sue.local_time)
+        self.blueprint1.software_update_enforcements.add(sue)
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        target = Target(self.enrolled_device)
+        identifier = f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific"
+        self.assertIn(identifier, target.activation["Payload"]["StandardConfigurations"])
+        self.assertIn(
+            identifier,
+            [c["Identifier"] for c in target.declaration_items["Declarations"]["Configurations"]],
+        )
+
     def test_device_declaration_items_config_and_dep_included(self):
         artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
         _, parent_artifact, _ = force_blueprint_artifact(
