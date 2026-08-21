@@ -294,6 +294,8 @@ Zentral offers two variants for setting up a Software Update Enforcement configu
 
   This type automatically enforces the latest available OS version up to a **Maximum target OS version**. Zentral will use the *device identifier* and match information from the *Apple Software Lookup Service* to return the latest OS version (e.g., `16` to install all macOS 15 updates on your fleet, but to stop before installing 16). Set the **Delay in days** following the software release and a **Target local time** to configure the enforcement time (e.g.`7` for 7 days and `09:30:00` for 9:30 a.m.).
 
+    A device only receives the enforcement when Zentral finds an update for it. A device already running a version *newer* than the one Zentral picked - because it is past the *Maximum target OS version*, or because it shipped above it - is left out, and is enforced again as soon as a newer update below the maximum is published. This mode depends on the software updates being synchronized from the *Apple Software Lookup Service*: while none are known, no device can be enforced, and Zentral logs an error for each of them.
+
 In both types, if a user does not install the update by the specified deadline, it is automatically enforced. Enforcement times are based on the device's local time zone, allowing a single configuration to work seamlessly across different regions.
 
 To read more about Apple's logic for enforcing software updates, refer to the [Apple Platform Deployment Guide](https://support.apple.com/en-gb/guide/deployment/depd30715cbb/1/web/1.0).
