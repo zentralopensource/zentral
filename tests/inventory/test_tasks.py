@@ -65,6 +65,11 @@ class InventoryTasksTest(TestCase):
         result = export_inventory(query, "yolo_inv_tag.xlsx")
         self.assertEqual(result["filepath"], "exports/yolo_inv_tag.xlsx")
 
+    def test_export_inventory_unknown_file_ext(self):
+        with self.assertRaises(ValueError) as cm:
+            export_inventory("", "yolo_inv.fomo")
+        self.assertEqual(cm.exception.args[0], "Unknown file extension '.fomo'")
+
     def test_export_full_inventory(self):
         result = export_full_inventory()
         self.assertTrue(result["filepath"].startswith("exports/full_inventory_export-2"))
