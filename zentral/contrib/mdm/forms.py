@@ -271,7 +271,9 @@ class EnrolledDeviceSearchForm(forms.Form):
             artifact_choices.append((f"av_{artifact_version.pk}", str(artifact_version)))
 
     def get_queryset(self):
-        qs = EnrolledDevice.objects.all().order_by(F("last_seen_at").desc(nulls_last=True))
+        # the primary key breaks the ties: last_seen_at is null until a device checks in, so the
+        # devices that never did are all equal for the sort and would shuffle between the pages
+        qs = EnrolledDevice.objects.all().order_by(F("last_seen_at").desc(nulls_last=True), "-pk")
         # q
         q = self.cleaned_data.get("q")
         if q:
