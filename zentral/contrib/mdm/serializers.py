@@ -1047,7 +1047,10 @@ class B64EncodedBinaryField(serializers.Field):
         return base64.b64encode(value).decode("ascii")
 
     def to_internal_value(self, data):
-        return base64.b64decode(data)
+        try:
+            return base64.b64decode(data)
+        except Exception:
+            raise serializers.ValidationError("Invalid base64-encoded value")
 
 
 class ProfileSerializer(ArtifactVersionSerializer):

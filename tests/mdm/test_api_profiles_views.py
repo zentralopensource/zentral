@@ -126,6 +126,17 @@ class MDMProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrdering
                                    "macos": True})
         self.assertEqual(response.status_code, 403)
 
+    def test_create_profile_invalid_base64_source(self):
+        artifact, _ = force_artifact()
+        self.set_permissions("mdm.add_profile")
+        response = self.post(reverse("mdm_api:profiles"),
+                             data={"artifact": str(artifact.pk),
+                                   "source": "YQ",  # length not a multiple of four
+                                   "macos": True,
+                                   "version": 2})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"source": ["Invalid base64-encoded value"]})
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_profile(self, post_event):
         blueprint_artifact, artifact, (profile_av,) = force_blueprint_artifact()

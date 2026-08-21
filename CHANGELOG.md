@@ -60,6 +60,9 @@ Fixed a data asset update being rejected when it kept the same file: the check t
 The data asset API only accepts XML property lists now, the way the upload form already did. `plistlib` reads either format, so a binary property list was accepted, and then stored and advertised to the devices as `text/xml`. An upload that was relying on this is rejected now.
 
 
+A malformed base 64 source on the MDM profile and provisioning profile API endpoints is answered with a 400 now. Decoding it raised, nothing caught it, and the request ended in a 500.
+
+
 ## 2026.5
 
 
