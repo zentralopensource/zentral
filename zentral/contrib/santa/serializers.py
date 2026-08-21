@@ -14,7 +14,7 @@ from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 
 from .events import post_santa_rule_update_event
 from .forms import cleanup_target_identifier
-from .models import Configuration, Enrollment, Rule, Target
+from .models import Configuration, EnrolledMachine, Enrollment, Rule, Target
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
 
@@ -62,6 +62,24 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         secret_data = validated_data.pop('secret')
         secret_serializer.update(instance.secret, secret_data)
         return super().update(instance, validated_data)
+
+
+class EnrolledMachineSerializer(serializers.ModelSerializer):
+    configuration = serializers.PrimaryKeyRelatedField(source="enrollment.configuration",
+                                                       read_only=True)
+
+    class Meta:
+        model = EnrolledMachine
+        # the sync session is an implementation detail of the sync protocol, and the
+        # incident severity is only meaningful to the preflight that wrote it
+        exclude = ("sync_session", "sync_session_clean", "reported_sync_incident_severity")
+
+
+class ForceCleanSyncSerializer(serializers.Serializer):
+    sync_type = serializers.ChoiceField(
+        choices=EnrolledMachine.SyncType.forced_choices(),
+        default=EnrolledMachine.SyncType.CLEAN,
+    )
 
 
 class RuleSerializer(serializers.ModelSerializer):

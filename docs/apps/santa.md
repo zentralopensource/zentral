@@ -190,6 +190,24 @@ The Santa agent sends some information about the system (os version, identifiers
 
 Zentral will also request a clean sync if the machine is new – never seen before or previonsly enrolled on a different configuration. Santa will delete all the existing rule in the local database during a clean sync.
 
+#### Clean syncs
+
+Zentral answers the preflight with the type of sync Santa has to perform:
+
+|Sync type|What Santa deletes before applying the received rules|
+|---|---|
+|`NORMAL`|Nothing. The received rules are applied on top of the existing ones, and a rule with the `REMOVE` policy deletes its target.|
+|`CLEAN`|Every rule Zentral synced with the machine, and every file access rule. The transitive rules the client created on its own are kept.|
+|`CLEAN_ALL`|Every rule, including the transitive ones.|
+
+Zentral asks for a clean sync when the machine has just enrolled or re-enrolled, when the machine asks for one itself (`santactl sync --clean`), when the machine reports no rule at all although some were synced with it, when a clean sync session was lost before the machine could confirm it, and when an operator queued one.
+
+A few properties of the protocol are worth knowing:
+
+* Zentral cannot downgrade a clean sync. A machine that ran `santactl sync --clean-all` performs a `CLEAN_ALL` whatever Zentral answers, and the preflight request only carries a boolean, so Zentral cannot tell it apart from `santactl sync --clean`.
+* Zentral answers agents older than `2024.1` with the deprecated `clean_sync` boolean instead of the `sync_type` key. That boolean can only ask for a `CLEAN` – it is read as a `CLEAN_ALL` only when the agent itself asked for one – so a queued `CLEAN_ALL` is degraded to a `CLEAN` on those machines.
+* Santa skips the deletion altogether when it receives no rule at all, so a clean sync never leaves a machine without rules.
+
 ### Events upload
 
 The Santa agent will then proceed to upload the events it has gathered. These are for example `ALLOW UNKNOWN` execution events for binaries not targeted by any rule in Monitor mode. These events contain useful information about the binaries and their signatures, that Zentral stores to help you build the necessary rules for your deployment. You can change the number of events sent in one request using the `Batch size` attribute of the Zentral Santa configurations. This attribute is part of the dynamic sync server configuration and is applied during each preflight phase – no need to distribute a new santa payload.
@@ -206,7 +224,7 @@ Santa finally makes an extra request to indicate the end of the full synchroniza
 
 ## HTTP API
 
-There are five HTTP API endpoints available.
+The HTTP API endpoints are documented below.
 
 ### Requests
 
@@ -226,6 +244,138 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * `Content-Type: application/json`
 * `Content-Type: application/yaml`
+
+### /api/santa/enrolled_machines/
+
+#### List the enrolled machines
+
+* method: GET
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"viewEnrolledMachine"`
+* Optional search parameters:
+  * `serial_number`: the serial number of the machine.
+  * `hardware_uuid`: the hardware UUID of the machine – the `machine_id` of the sync protocol.
+  * `configuration_id`: the ID of the Zentral Santa configuration the machine is enrolled on.
+  * `enrollment_id`: the ID of the enrollment the machine is enrolled with.
+  * `primary_user`: the primary user reported by the agent.
+  * `last_sync_ok`: `true` for the machines whose reported rules matched the ledger during their last preflight, `false` for the ones that did not.
+  * `forced_sync_type`: `CLEAN` or `CLEAN_ALL`, to find the machines with a clean sync of that type queued.
+  * `forced_sync_type__isnull`: `false` to find every machine with a clean sync queued.
+* Optional ordering parameter, prefix with `-` to reverse it:
+  * `ordering`: `created_at` (the default, reversed), `updated_at`, `last_preflight_at` or `last_postflight_at`.
+
+The results are paginated, use the `limit` and `offset` parameters to page through them.
+
+> **_NOTE:_** Unlike [`forceCleanSync`](#queue-a-clean-sync), this action cannot be restricted to a meta business unit. The PBAC engine takes one decision per request, and narrowing a list would require one decision per machine – which cannot be done once the page has been cut. Granting `viewEnrolledMachine` therefore exposes every enrolled machine.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/santa/enrolled_machines/?last_sync_ok=false" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "configuration": 1,
+            "enrollment": 1,
+            "hardware_uuid": "8791c9dd-0a26-4d63-a1e9-9ef1d4e5b3d1",
+            "serial_number": "C02ZZZZZZZZZ",
+            "primary_user": "yolo@example.com",
+            "client_mode": 1,
+            "santa_version": "2026.4",
+            "binary_rule_count": 12,
+            "cdhash_rule_count": 0,
+            "certificate_rule_count": 1,
+            "compiler_rule_count": 0,
+            "signingid_rule_count": 3,
+            "transitive_rule_count": 0,
+            "teamid_rule_count": 7,
+            "last_sync_ok": false,
+            "forced_sync_type": null,
+            "forced_sync_type_at": null,
+            "last_preflight_at": "2026-08-20T09:12:03.418211",
+            "last_postflight_at": "2026-08-20T09:12:04.007122",
+            "created_at": "2026-05-02T11:41:52.114203",
+            "updated_at": "2026-08-20T09:12:03.418299"
+        }
+    ]
+}
+```
+
+### /api/santa/enrolled_machines/`<int:pk>`/force_clean_sync/
+
+#### Queue a clean sync
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"forceCleanSync"`
+* Optional attribute:
+  * `sync_type`: `CLEAN` (the default) or `CLEAN_ALL`. See [Clean syncs](#clean-syncs) for what Santa deletes in each case.
+
+Use this endpoint to make an enrolled machine rebuild its rule database during its next preflight. Nothing is pushed to the machine – Santa syncs on its own schedule, so the clean sync happens within the `Full sync interval` of its configuration, 10 min by default.
+
+The queued clean sync is consumed by the first clean sync the machine is answered, whatever asked for it. If the machine never confirms that session with a postflight, Zentral asks for another clean sync during the next preflight.
+
+Queueing a clean sync posts an audit event on the machine. Posting the same sync type twice is accepted and changes nothing, so no second event is posted.
+
+The `forceCleanSync` action takes the machine as its resource and the sync type as its context, so a policy can be restricted to a meta business unit, to a sync type, or to a configuration:
+
+```
+permit (
+  principal in Role::"6",
+  action == Santa::Action::"forceCleanSync",
+  resource in Inventory::MetaBusinessUnit::"3"
+) when { context.syncType == "CLEAN" };
+```
+
+Example:
+
+```bash
+curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sync_type": "CLEAN_ALL"}' \
+  "https://$ZTL_FQDN/api/santa/enrolled_machines/1/force_clean_sync/" \
+  |python3 -m json.tool
+```
+
+Response: the enrolled machine, with the same attributes as in the list above. The two that just changed:
+
+```json
+{
+    "…": "…",
+    "forced_sync_type": "CLEAN_ALL",
+    "forced_sync_type_at": "2026-08-20T14:22:57.183920"
+}
+```
+
+#### Cancel a queued clean sync
+
+* method: DELETE
+* PBAC action: `Santa::Action::"forceCleanSync"`
+
+Use this endpoint to take back a queued clean sync, as long as the machine has not preflighted yet.
+
+The cancellation is authorized against the sync type it takes back, so a policy allowing only a `CLEAN` cannot cancel a queued `CLEAN_ALL`. Cancelling when nothing is queued is accepted and changes nothing.
+
+Example:
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/santa/enrolled_machines/1/force_clean_sync/" \
+  |python3 -m json.tool
+```
 
 ### /api/santa/rules/
 

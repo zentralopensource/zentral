@@ -8,18 +8,23 @@ from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
+from rest_framework.filters import OrderingFilter
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
-from zentral.contrib.inventory.models import File, Tag
+from zentral.contrib.inventory.models import File, MetaMachine, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
+from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               PBACPermission, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
-from .models import Configuration, Rule, RuleSet, Target, Enrollment
-from .serializers import (RuleSerializer, RuleSetUpdateSerializer, ConfigurationSerializer,
+from .models import Configuration, EnrolledMachine, Rule, RuleSet, Target, Enrollment
+from .pbac import ForceCleanSyncRequest, ViewEnrolledMachineRequest
+from .serializers import (EnrolledMachineSerializer, ForceCleanSyncSerializer, RuleSerializer,
+                          RuleSetUpdateSerializer, ConfigurationSerializer,
                           EnrollmentSerializer, build_file_tree_from_santa_fileinfo)
 from .tasks import export_targets
 
@@ -111,6 +116,98 @@ class EnrollmentConfigurationProfile(EnrollmentConfiguration):
     def get_content(self, enrollment):
         filename, content = build_configuration_profile(enrollment)
         return filename, "application/octet-stream", content
+
+
+class EnrolledMachineFilter(filters.FilterSet):
+    configuration_id = filters.NumberFilter(field_name="enrollment__configuration_id")
+
+    class Meta:
+        model = EnrolledMachine
+        fields = {
+            "enrollment_id": ["exact"],
+            "serial_number": ["exact"],
+            "hardware_uuid": ["exact"],
+            "primary_user": ["exact"],
+            "last_sync_ok": ["exact"],
+            "forced_sync_type": ["exact", "isnull"],
+        }
+
+
+class EnrolledMachineList(generics.ListAPIView):
+    """
+    List the enrolled machines
+    """
+    # no session authentication: the machine action menu goes through the santa views, the
+    # API is only ever called with a token
+    permission_classes = [PBACPermission]
+    # ordered on the queryset too, not only through the ordering filter: an unordered page
+    # is silently the wrong page. The primary key breaks the ties, none of the timestamps
+    # is unique
+    queryset = (EnrolledMachine.objects.select_related("enrollment__configuration")
+                                       .order_by("-created_at", "pk"))
+    serializer_class = EnrolledMachineSerializer
+    filter_backends = (filters.DjangoFilterBackend, OrderingFilter)
+    filterset_class = EnrolledMachineFilter
+    ordering_fields = ("created_at", "updated_at", "last_preflight_at", "last_postflight_at")
+    ordering = ("-created_at", "pk")
+    pagination_class = MaxLimitOffsetPagination
+
+    def get_pbac_request(self, request):
+        return ViewEnrolledMachineRequest(request.user)
+
+
+class ForceEnrolledMachineCleanSync(generics.GenericAPIView):
+    """
+    Queue a clean sync for the next preflight of an enrolled machine, or cancel it
+    """
+    permission_classes = [PBACPermission]
+    queryset = EnrolledMachine.objects.select_related("enrollment__configuration")
+    # the body of the POST. Both methods answer with an EnrolledMachineSerializer, which a
+    # schema generator reading one serializer per view cannot infer from here
+    serializer_class = ForceCleanSyncSerializer
+
+    def get_pbac_request(self, request):
+        self.enrolled_machine = self.get_object()
+        self.machine = MetaMachine(self.enrolled_machine.serial_number)
+        if request.method == "DELETE":
+            # a cancellation is authorized against the sync type it takes back, so a policy
+            # that only allows a CLEAN cannot cancel a queued CLEAN_ALL. There is nothing to
+            # take back when none is queued
+            self.sync_type = (self.enrolled_machine.forced_sync_type
+                              or EnrolledMachine.SyncType.CLEAN)
+        else:
+            # the sync type is part of the context the policies are evaluated against, so it
+            # has to be validated before the decision is made: an unknown one is a 400
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.sync_type = serializer.validated_data["sync_type"]
+        return ForceCleanSyncRequest(request.user, self.machine, self.enrolled_machine,
+                                     self.sync_type)
+
+    def _respond(self, request, prev_value, changed):
+        if changed:
+            def on_commit_callback():
+                AuditEvent.build_from_request_and_instance(
+                    request, self.enrolled_machine,
+                    action=AuditEvent.Action.UPDATED,
+                    prev_value=prev_value,
+                    machine_serial_number=self.enrolled_machine.serial_number,
+                ).post()
+
+            transaction.on_commit(on_commit_callback)
+        # nothing changed when the queued sync type was already the requested one, and an
+        # audit event whose diff is empty is not worth posting
+        return Response(EnrolledMachineSerializer(self.enrolled_machine).data)
+
+    def post(self, request, *args, **kwargs):
+        prev_value = self.enrolled_machine.serialize_for_event()
+        changed = self.enrolled_machine.force_sync_type(self.sync_type, timezone.now())
+        return self._respond(request, prev_value, changed)
+
+    def delete(self, request, *args, **kwargs):
+        prev_value = self.enrolled_machine.serialize_for_event()
+        changed = self.enrolled_machine.clear_forced_sync_type()
+        return self._respond(request, prev_value, changed)
 
 
 class IngestFileInfo(APIView):

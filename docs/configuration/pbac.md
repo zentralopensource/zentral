@@ -92,6 +92,23 @@ Three features worth pointing out:
 * **Action groups.** `Inventory::Action::"ViewerActions"` is the per-namespace aggregator covering every view-type action the inventory app declares — granting one action group is shorter and more future-proof than enumerating every individual action.
 * **Context conditions.** The `when { ... }` clause restricts the second block to requests whose context carries `tagName == "YOLO"`. The `has` guard is mandatory here: `tagName` is declared optional in the inventory action's schema, so writing `context.tagName == "YOLO"` without first checking `context has tagName` makes the Policy form reject the save with *"unable to guarantee safety of access to optional attribute"*.
 
+Whether the `has` guard is needed depends on the action: an attribute an action always sets is declared required, and can be read directly. The Schema browser lists the principals and resources of each action but not its context, so the way to tell the two apart is the human-readable schema, where an optional attribute carries a `?` after its name:
+
+```bash
+python server/manage.py pbac_dump_schema --format=human
+```
+
+```
+// Santa::Action::"forceCleanSync" always sets syncType, so no guard is needed.
+permit (
+  principal in Role::"6",
+  action == Santa::Action::"forceCleanSync",
+  resource in Inventory::MetaBusinessUnit::"3"
+) when { context.syncType == "CLEAN" };
+```
+
+Note what the two halves do here: the `resource in` clause restricts *which machines* the role may act on, and the `when` clause restricts *what it may do to them* — this role can rebuild the rule database of the machines in one meta business unit, but never drop the transitive rules a machine created on its own.
+
 ## Finding the action you need
 
 Three options, in order of usefulness:

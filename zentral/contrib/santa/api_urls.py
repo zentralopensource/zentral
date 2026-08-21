@@ -1,5 +1,6 @@
 from django.urls import path
-from .api_views import (IngestFileInfo, RuleList, RuleSetUpdate, TargetsExport, ConfigurationList,
+from .api_views import (EnrolledMachineList, ForceEnrolledMachineCleanSync, IngestFileInfo,
+                        RuleList, RuleSetUpdate, TargetsExport, ConfigurationList,
                         ConfigurationDetail, EnrollmentList, EnrollmentDetail,
                         EnrollmentPlist, EnrollmentConfigurationProfile, RuleDetail)
 
@@ -8,6 +9,9 @@ app_name = "santa_api"
 urlpatterns = [
     path('configurations/', ConfigurationList.as_view(), name="configurations"),
     path('configurations/<int:pk>/', ConfigurationDetail.as_view(), name="configuration"),
+    path('enrolled_machines/', EnrolledMachineList.as_view(), name="enrolled_machines"),
+    path('enrolled_machines/<int:pk>/force_clean_sync/', ForceEnrolledMachineCleanSync.as_view(),
+         name="force_enrolled_machine_clean_sync"),
     path('enrollments/', EnrollmentList.as_view(), name="enrollments"),
     path('enrollments/<int:pk>/', EnrollmentDetail.as_view(), name="enrollment"),
     path('enrollments/<int:pk>/plist/', EnrollmentPlist.as_view(), name="enrollment_plist"),

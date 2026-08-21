@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.test import TestCase
@@ -10,10 +11,12 @@ from accounts.models import User, APIToken, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
-from zentral.contrib.inventory.models import Certificate, File, EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.inventory.models import (Certificate, File, EnrollmentSecret, MachineSnapshotCommit,
+                                              MetaBusinessUnit, Tag)
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.santa.events import SantaRuleUpdateEvent
-from zentral.contrib.santa.models import Configuration, Rule, RuleSet, Target, Enrollment
+from zentral.contrib.santa.models import (Configuration, EnrolledMachine, Rule, RuleSet, Target,
+                                          Enrollment)
 from zentral.core.events.base import AuditEvent
 from zentral.utils.payloads import get_payload_identifier
 from .utils import force_rule, new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
@@ -108,6 +111,311 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def post_yaml_data(self, url, data, include_token=True):
         data = yaml.dump(data)
         return self.make_request(url, data, include_token, method="POST", content_type="application/yaml")
+
+    def force_enrolled_machine(self, configuration=None, in_mbu=True, **kwargs):
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
+        enrollment = Enrollment.objects.create(configuration=configuration or self.configuration,
+                                               secret=enrollment_secret)
+        enrolled_machine = EnrolledMachine.objects.create(
+            enrollment=enrollment,
+            hardware_uuid=uuid.uuid4(),
+            serial_number=get_random_string(12),
+            client_mode=Configuration.MONITOR_MODE,
+            santa_version="2024.5",
+            **kwargs
+        )
+        if in_mbu:
+            # the machine resource carries its meta business units as parents, and they come
+            # from the inventory snapshots, not from the enrollment secret. This is the tree
+            # the preflight commits
+            MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
+                "source": {"module": "zentral.contrib.santa", "name": "Santa"},
+                "business_unit": enrollment_secret.get_api_enrollment_business_unit().serialize(),
+                "reference": str(enrolled_machine.hardware_uuid),
+                "serial_number": enrolled_machine.serial_number,
+            })
+        return enrolled_machine
+
+    def force_clean_sync_policy(self, sync_type=None, mbu=None):
+        """A policy granting forceCleanSync, optionally narrowed to a sync type or an MBU."""
+        resource = f'resource in Inventory::MetaBusinessUnit::"{mbu.pk}"' if mbu else "resource"
+        source = ("permit ("
+                  f' principal in Role::"{self.group.pk}",'
+                  f' action == Santa::Action::"forceCleanSync",'
+                  f" {resource}"
+                  ")")
+        if sync_type:
+            source += f' when {{ context.syncType == "{sync_type}" }}'
+        return source + ";\n"
+
+    def view_enrolled_machine_policy(self):
+        return ("permit ("
+                f' principal in Role::"{self.group.pk}",'
+                f' action == Santa::Action::"viewEnrolledMachine",'
+                "  resource"
+                ");\n")
+
+    # enrolled machines
+
+    def test_enrolled_machines_unauthorized(self):
+        url = reverse("santa_api:enrolled_machines")
+        response = self.get(url, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_enrolled_machines_permission_denied(self):
+        url = reverse("santa_api:enrolled_machines")
+        response = self.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_enrolled_machines(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.view_enrolled_machine_policy())
+        response = self.get(reverse("santa_api:enrolled_machines"))
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["count"], 1)
+        result = json_response["results"][0]
+        self.assertEqual(result["id"], enrolled_machine.pk)
+        self.assertEqual(result["serial_number"], enrolled_machine.serial_number)
+        self.assertEqual(result["configuration"], self.configuration.pk)
+        self.assertIsNone(result["forced_sync_type"])
+        # the sync session is an implementation detail of the sync protocol
+        self.assertNotIn("sync_session", result)
+        self.assertNotIn("sync_session_clean", result)
+
+    def test_enrolled_machines_no_session_auth(self):
+        self.force_enrolled_machine()
+        # a logged in browser session is not enough, the endpoint only takes a token, and the
+        # token authentication sets a WWW-Authenticate header so DRF answers 401 and not 403.
+        # The GUI goes through the machine actions, not through the API
+        self.login_with_policy(self.view_enrolled_machine_policy())
+        response = self.client.get(reverse("santa_api:enrolled_machines"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_enrolled_machines_filter_by_serial_number(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.force_enrolled_machine()
+        self.set_policy(self.view_enrolled_machine_policy())
+        url = reverse("santa_api:enrolled_machines")
+        response = self.get(f"{url}?serial_number={enrolled_machine.serial_number}")
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["count"], 1)
+        self.assertEqual(json_response["results"][0]["id"], enrolled_machine.pk)
+
+    def test_enrolled_machines_filter_by_configuration_id(self):
+        enrolled_machine = self.force_enrolled_machine(configuration=self.configuration2)
+        self.force_enrolled_machine()
+        self.set_policy(self.view_enrolled_machine_policy())
+        url = reverse("santa_api:enrolled_machines")
+        response = self.get(f"{url}?configuration_id={self.configuration2.pk}")
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["count"], 1)
+        self.assertEqual(json_response["results"][0]["id"], enrolled_machine.pk)
+
+    def test_enrolled_machines_filter_by_queued_clean_sync(self):
+        enrolled_machine = self.force_enrolled_machine(forced_sync_type=EnrolledMachine.SyncType.CLEAN_ALL)
+        self.force_enrolled_machine()
+        self.set_policy(self.view_enrolled_machine_policy())
+        url = reverse("santa_api:enrolled_machines")
+        response = self.get(f"{url}?forced_sync_type__isnull=false")
+        self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response["count"], 1)
+        self.assertEqual(json_response["results"][0]["id"], enrolled_machine.pk)
+        response = self.get(f"{url}?forced_sync_type=CLEAN")
+        self.assertEqual(response.json()["count"], 0)
+
+    def test_enrolled_machines_pagination_pages_every_machine_once(self):
+        expected_pks = {self.force_enrolled_machine(in_mbu=False).pk for _ in range(5)}
+        self.set_policy(self.view_enrolled_machine_policy())
+        url = reverse("santa_api:enrolled_machines")
+        paged_pks = []
+        for offset in (0, 2, 4):
+            response = self.get(f"{url}?limit=2&offset={offset}")
+            self.assertEqual(response.status_code, 200)
+            json_response = response.json()
+            self.assertEqual(json_response["count"], 5)
+            paged_pks.extend(r["id"] for r in json_response["results"])
+        # an unordered queryset would repeat or skip machines across the pages
+        self.assertEqual(len(paged_pks), 5)
+        self.assertEqual(set(paged_pks), expected_pks)
+
+    def test_enrolled_machines_ordering(self):
+        pks = [self.force_enrolled_machine(in_mbu=False).pk for _ in range(3)]
+        self.set_policy(self.view_enrolled_machine_policy())
+        url = reverse("santa_api:enrolled_machines")
+        response = self.get(f"{url}?ordering=created_at")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([r["id"] for r in response.json()["results"]], pks)
+        response = self.get(f"{url}?ordering=-created_at")
+        self.assertEqual([r["id"] for r in response.json()["results"]], list(reversed(pks)))
+
+    # force clean sync
+
+    def test_force_clean_sync_unauthorized(self):
+        enrolled_machine = self.force_enrolled_machine()
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.post(url, {}, include_token=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_force_clean_sync_permission_denied(self):
+        enrolled_machine = self.force_enrolled_machine()
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.post(url, {})
+        self.assertEqual(response.status_code, 403)
+
+    def test_force_clean_sync_unknown_enrolled_machine(self):
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(1234567,))
+        response = self.post(url, {})
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_force_clean_sync(self, post_event):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(url, {"sync_type": "CLEAN_ALL"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["forced_sync_type"], "CLEAN_ALL")
+        enrolled_machine.refresh_from_db()
+        self.assertEqual(enrolled_machine.forced_sync_type, "CLEAN_ALL")
+        self.assertIsNotNone(enrolled_machine.forced_sync_type_at)
+        event = post_event.call_args_list[-1].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.metadata.machine_serial_number, enrolled_machine.serial_number)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["model"], "santa.enrolledmachine")
+        self.assertIsNone(event.payload["object"]["prev_value"]["forced_sync_type"])
+        self.assertEqual(event.payload["object"]["new_value"]["forced_sync_type"], "CLEAN_ALL")
+        self.assertEqual(event.metadata.objects,
+                         {"santa_configuration": [(self.configuration.pk,)]})
+
+    def test_force_clean_sync_defaults_to_clean(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.post(url, {})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["forced_sync_type"], "CLEAN")
+
+    def test_force_clean_sync_unknown_sync_type(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.post(url, {"sync_type": "CLEAN_RULES"})
+        self.assertEqual(response.status_code, 400)
+        enrolled_machine.refresh_from_db()
+        self.assertIsNone(enrolled_machine.forced_sync_type)
+
+    def test_force_clean_sync_normal_sync_type(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        # a queued NORMAL would mean nothing, a null forced sync type already says that
+        response = self.post(url, {"sync_type": "NORMAL"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_force_clean_sync_no_session_auth(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.login_with_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.client.post(url, {"sync_type": "CLEAN"}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+        enrolled_machine.refresh_from_db()
+        self.assertIsNone(enrolled_machine.forced_sync_type)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_force_clean_sync_twice_posts_one_event(self, post_event):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        with self.captureOnCommitCallbacks(execute=True):
+            self.post(url, {"sync_type": "CLEAN"})
+        audit_event_count = len([c for c in post_event.call_args_list if isinstance(c.args[0], AuditEvent)])
+        self.assertEqual(audit_event_count, 1)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(url, {"sync_type": "CLEAN"})
+        self.assertEqual(response.status_code, 200)
+        # nothing changed, the audit event diff would be empty
+        audit_event_count = len([c for c in post_event.call_args_list if isinstance(c.args[0], AuditEvent)])
+        self.assertEqual(audit_event_count, 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_force_clean_sync_upgrade_posts_an_event(self, post_event):
+        enrolled_machine = self.force_enrolled_machine(forced_sync_type=EnrolledMachine.SyncType.CLEAN)
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(url, {"sync_type": "CLEAN_ALL"})
+        self.assertEqual(response.status_code, 200)
+        event = post_event.call_args_list[-1].args[0]
+        self.assertEqual(event.payload["object"]["prev_value"]["forced_sync_type"], "CLEAN")
+        self.assertEqual(event.payload["object"]["new_value"]["forced_sync_type"], "CLEAN_ALL")
+
+    def test_force_clean_all_sync_denied_by_a_clean_only_policy(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy(sync_type="CLEAN"))
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.post(url, {"sync_type": "CLEAN_ALL"})
+        self.assertEqual(response.status_code, 403)
+        response = self.post(url, {"sync_type": "CLEAN"})
+        self.assertEqual(response.status_code, 200)
+
+    def test_force_clean_sync_scoped_to_a_meta_business_unit(self):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy(mbu=self.mbu))
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.post(url, {})
+        self.assertEqual(response.status_code, 200)
+
+    def test_force_clean_sync_denied_outside_the_scoped_meta_business_unit(self):
+        other_mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy(mbu=other_mbu))
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        response = self.post(url, {})
+        self.assertEqual(response.status_code, 403)
+
+    # cancel a queued clean sync
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_cancel_clean_sync(self, post_event):
+        enrolled_machine = self.force_enrolled_machine(forced_sync_type=EnrolledMachine.SyncType.CLEAN)
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["forced_sync_type"])
+        enrolled_machine.refresh_from_db()
+        self.assertIsNone(enrolled_machine.forced_sync_type)
+        self.assertIsNone(enrolled_machine.forced_sync_type_at)
+        event = post_event.call_args_list[-1].args[0]
+        self.assertEqual(event.payload["object"]["prev_value"]["forced_sync_type"], "CLEAN")
+        self.assertIsNone(event.payload["object"]["new_value"]["forced_sync_type"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_cancel_clean_sync_when_none_is_queued_posts_no_event(self, post_event):
+        enrolled_machine = self.force_enrolled_machine()
+        self.set_policy(self.force_clean_sync_policy())
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(url)
+        self.assertEqual(response.status_code, 200)
+        audit_event_count = len([c for c in post_event.call_args_list if isinstance(c.args[0], AuditEvent)])
+        self.assertEqual(audit_event_count, 0)
+
+    def test_cancel_clean_all_sync_denied_by_a_clean_only_policy(self):
+        enrolled_machine = self.force_enrolled_machine(forced_sync_type=EnrolledMachine.SyncType.CLEAN_ALL)
+        self.set_policy(self.force_clean_sync_policy(sync_type="CLEAN"))
+        url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
+        # the cancellation is authorized against the sync type it takes back
+        response = self.delete(url)
+        self.assertEqual(response.status_code, 403)
 
     # ingest file info
 

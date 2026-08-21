@@ -540,6 +540,8 @@ class PBACEngineTestCase(TestCase):
             ("viewFileVaultPRK", "MDM"),
             ("viewRecoveryPassword", "MDM"),
             ("syncRepository", "Monolith"),
+            ("forceCleanSync", "Santa"),
+            ("viewEnrolledMachine", "Santa"),
         )
         found_user_actions = 0
         global_user_action_group = engine.get_action_group(ActionGroupBasename.USER)
