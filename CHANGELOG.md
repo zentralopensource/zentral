@@ -6,11 +6,11 @@
 
 #### Santa
 
-A clean sync — `CLEAN` or `CLEAN_ALL` — can be queued for an enrolled machine from the Action menu of its machine page or from the API, and taken back until the machine preflights. The new `Santa::Action::"forceCleanSync"` PBAC action grants it, and can be restricted to a meta business unit and to a sync type.
+A clean sync — `CLEAN` or `CLEAN_ALL` — can be queued for an enrolled machine from its machine page or from the API, and cancelled before its next preflight. The new `Santa::Action::"forceCleanSync"` PBAC action gives the permission, and accepts a meta business unit and a sync type.
 
-The enrolled machines are exposed on the new `/api/santa/enrolled_machines/` endpoint.
+New `/api/santa/enrolled_machines/` endpoint.
 
-The enrolled machines and sync state metrics are bucketed by the age of the last postflight now, the way the active machines metric already was. Nothing ever removes the row of a machine that does not come back, so a decommissioned machine kept its Santa version and its last rule comparison in the totals forever. The `le` label selects the machines that reported within 1, 7, 14, 30, 45 or 90 days, and `+Inf` counts all of them.
+The enrolled machine and sync state metrics are bucketed by the age of the last postflight now, like the active machine metric. A machine that stopped reporting kept its Santa version in the totals forever. The `le` label selects the machines that reported in the last 1, 7, 14, 30, 45 or 90 days, and `+Inf` counts all of them.
 
 
 ### Backward incompatibilities
@@ -18,58 +18,43 @@ The enrolled machines and sync state metrics are bucketed by the age of the last
 
 #### 🧨 Santa enrolled machines metrics
 
-`zentral_santa_enrolled_machines_total` and `zentral_santa_enrolled_machines_sync_total` are gone, replaced by `zentral_santa_enrolled_machines_bucket` and `zentral_santa_enrolled_machines_sync_bucket`, which carry an `le` label. The `le="+Inf"` bucket holds what the two removed gauges published, so a dashboard or an alert is moved over by renaming the metric and selecting that bucket. A query that sums the buckets without selecting one counts every machine seven times.
+`zentral_santa_enrolled_machines_total` and `zentral_santa_enrolled_machines_sync_total` are replaced by `zentral_santa_enrolled_machines_bucket` and `zentral_santa_enrolled_machines_sync_bucket`, which have an `le` label. The `le="+Inf"` bucket gives the value of the two removed gauges: in a dashboard or an alert, change the metric name and select that bucket. A query that sums the buckets counts each machine seven times.
 
 
 ### Bug fixes
 
 
-Fixed the version of a Munki script check being bumped by every API update, including the ones that changed nothing: the excluded tags were compared with the included tags. A version change discards the results still in flight and makes every machine in scope run the check again.
+Fixed the version of a Munki script check that increased on every API update: the excluded tags were compared with the included tags. A new version makes every machine in scope run the check again.
 
+Fixed the Santa machines reported out of sync when a rule of the current sync session replaced a rule they already had. The ledger keeps the rule the client confirmed until it confirms the replacement, and a lost session returns to it.
 
-Fixed Santa machines being reported out of sync when a rule sent during the current sync session replaced one they already had: the rule ledger did not count the version the client still holds, so a machine with a session open when it checked in was one rule short of what it reported. The ledger now keeps the rule the client confirmed until it confirms its replacement, and a session the client never confirmed goes back to that version instead of forgetting about it — a rule the ledger forgot about could not be removed from the client anymore.
+Fixed a Santa rule added and removed during the same sync session: a lost session recorded it as held by the machine. The machine then stayed out of sync until a clean sync.
 
+The Santa sync operations of a machine are serialized on its enrolled machine row lock now. A rule download that Santa retried could overlap the initial request and skip a batch of rules. A rule download also uses the sync session of a concurrent preflight.
 
-Fixed a Santa rule that was added and removed during the same sync session being recorded as held by the machine when the session was lost: the discarded session turned the staged removal into a rule the client never received. If the rule was then created again, it matched the phantom ledger entry and was never sent, and the machine stayed out of sync until a clean sync. The removal of a rule staged during the same session is now dropped with the session it belongs to.
+Fixed the Santa preflight that overwrote what another request committed on the same enrolled machine: it saved every column of the row it read. Only the attributes the client reports are written now.
 
+The inventory history cleanup deletes in bounded batches now. One unbounded statement for each table could delete millions of rows in one transaction, and keep the database at its maximum capacity for the full run. Each batch is a transaction, and a batch that gives an integrity error is retried alone.
 
-The Santa sync operations of a machine are serialized on its enrolled machine row lock now. Santa retries a rule download after 30 seconds with the same cursor, and the retry could overlap the transaction of the original request, miss the batch it was staging, and skip it for good: the ledger counted rules the client never received. The rule downloads also pick up the sync session started by a concurrent preflight, instead of staging rules under a stale one.
+Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.
 
+Fixed nine MDM API list endpoints that ignored the `ordering` query parameter: the enrolled devices one and the eight artifact ones. The queries had no `ORDER BY`, so a client that read the pages could miss rows and get others two times. The seven endpoints of an artifact version order on the artifact version timestamps now. Each endpoint also orders on the primary key.
 
-Fixed the Santa preflight writing away what another request committed on the same enrolled machine: it saved every column of a row read before the request did anything. Only the attributes the client reported are written now.
+Fixed an MDM blueprint that serialized its artifacts in a different order on each update of the same data. The artifacts of a blueprint, the artifacts an artifact requires and the artifacts a declaration references were read without an order. That order was the installation sequence of the devices, and the order of their declaration items. The required and the referenced artifacts are sorted by name now, and a blueprint keeps the order in which its artifacts were added.
 
+The file of a deleted MDM data asset is removed from the storage now. Every version that was deleted, alone or with its artifact, kept its file in the storage.
 
-Fixed the MDM devices list moving devices between its pages: it sorted on the last seen timestamp alone, and that timestamp is null until a device checks in, so every device that never did sorted equal and landed on whichever page the database felt like. The primary key breaks the ties now.
+Fixed an MDM data asset update that was rejected when it kept the same file: the check against the latest version of the artifact included the version to update. An update of only a platform, a shard or a tag compared the asset with itself.
 
+The MDM data asset API accepts only XML property lists now, like the upload form. A binary property list was accepted, then stored and given to the devices as `text/xml`. An upload that used this is rejected now.
 
-Fixed nine MDM API list endpoints ignoring the `ordering` query parameter — the enrolled devices one and the eight artifact ones. They declared the orderings they accept, but not the filter backend that reads them, so the parameter was dropped without a word. Worse, that left the queries with no `ORDER BY` at all, and the `limit`/`offset` pages came back in whatever order PostgreSQL found convenient: a client walking the pages could miss rows and see others twice. The seven endpoints hanging off an artifact version — cert assets, data assets, declarations, profiles, provisioning profiles, enterprise apps and store apps — have no timestamps of their own and were ordering on a column that does not exist; they order on the artifact version timestamps they expose now. Every one of them breaks ties on the primary key, so a page boundary falling inside a group of rows created in the same instant stays put.
+A malformed base 64 source on the MDM profile and provisioning profile API endpoints gives a 400 now, and not a 500.
 
+Fixed an MDM software update enforcement in latest mode that took a device out of management when it had no update to enforce. The `tokens` and `declaration-items` check-ins and `/connect` gave a 500, and the device stopped receiving all of its declarations. A device above the *Maximum target OS version* was enough to cause it, and so was a deployment that never synchronized the Apple software lookup service. Zentral leaves the configuration out of the declarations it serves now, and writes a log message.
 
-The inventory history cleanup deletes in bounded batches now. Each table was purged with a single unbounded statement, so one transaction could delete millions of rows — most of them through the cascades of the archived machine snapshots — and hand the whole backlog of dead tuples to autovacuum at once. The nightly job could keep the database at its capacity ceiling for as long as it ran. Every batch is a transaction of its own now, the cutoffs used to trim the machine snapshot commit history are computed once for the whole run instead of once per statement, and a batch that hits an integrity error is retried on its own instead of restarting the table. A table that could not be purged reports the rows it did delete.
+Malformed MDM client capabilities do not take a device out of management anymore. The lookup of the supported status items failed on a type, and the `tokens` and `declaration-items` check-ins and `/connect` gave a 500. The status subscriptions use the items that all the clients support now, and Zentral writes a warning.
 
-
-Fixed a blueprint serializing its artifacts differently from one update to the next, over the very same data: the artifacts a blueprint holds, the artifacts an artifact requires and the artifacts a declaration references were all read without an order, and PostgreSQL is free to return them in whichever order suits it. That order was the order the devices saw — the sequence in which they installed artifacts that do not depend on each other, and the order of the declaration items they were handed. The required and referenced artifacts are sorted by name now, and the artifacts of a blueprint keep the order in which they were added to it.
-
-
-The file of a deleted data asset is removed from the storage now. The enterprise apps and the packages have always deleted theirs, but the data assets never did, so every version that was deleted — or deleted along with its artifact — left its file in the storage for good.
-
-
-Fixed a data asset update being rejected when it kept the same file: the check that the new file differs from the latest version of the artifact counted the version being updated, so an update that changed only a platform, a shard or a tag compared the asset with itself and came back with "This file is not different from the latest one".
-
-
-The data asset API only accepts XML property lists now, the way the upload form already did. `plistlib` reads either format, so a binary property list was accepted, and then stored and advertised to the devices as `text/xml`. An upload that was relying on this is rejected now.
-
-
-A malformed base 64 source on the MDM profile and provisioning profile API endpoints is answered with a 400 now. Decoding it raised, nothing caught it, and the request ended in a 500.
-
-
-Fixed an MDM software update enforcement in latest mode taking a device out of management when it had no update to enforce on it. Finding none raised, and nothing caught that on the paths building the declaration manifest: the `tokens` and `declaration-items` check-ins and `/connect` all answered with a 500, and since the declarative management sync is scheduled before them, the device also stopped receiving its artifacts, its FileVault configuration, its recovery password and its extra inventory. A device whose OS was above the *Maximum target OS version* — because it was updated past it, or shipped above it — was enough to trigger it, and so was a deployment that had never synchronized the Apple software lookup service, which took out every device in scope at once. The configuration is left out of the declarations the device is served now, and Zentral logs an error, or an information for the devices that are simply already up to date or not inventoried yet. The device kept getting a no-op enforcement targeting the version it already ran, and it still does; only a target below what the device runs is dropped.
-
-
-Malformed MDM client capabilities no longer take a device out of management. They are stored exactly as the device reported them, so the lookup of the status items it supports could fail on a type rather than on a missing key, and that was not caught: the `tokens` and `declaration-items` check-ins and `/connect` answered with a 500, and the device stopped receiving anything at all. The status subscriptions fall back to the items supported by every client now, and Zentral logs a warning.
-
-
-An explicit null delay in days or local time is rejected on the MDM software update enforcement API when a maximum target OS version is set. Both fields are nullable for the one time enforcements, which have no use for them, and a latest enforcement without them has no target date to build a declaration with. Omitting them is unchanged and still falls back to 14 days and 09:30.
+The MDM software update enforcement API rejects a null delay in days or local time when a maximum target OS version is set. A latest enforcement needs both fields to calculate the target date of its declaration. If you omit them, the defaults of 14 days and 09:30 apply, as before.
 
 
 ## 2026.5
