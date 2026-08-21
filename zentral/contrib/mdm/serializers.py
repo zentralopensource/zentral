@@ -607,10 +607,13 @@ class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):
         if max_os_version:
             mode = "max_os_version"
             required_fields = (f for f in self.latest_fields if f not in ("delay_days", "local_time"))
+            # not required, the model defaults apply when they are omitted, but a null cannot be enforced
+            not_null_fields = ("delay_days", "local_time")
             other_fields = self.one_time_fields
         elif os_version:
             mode = "os_version"
             required_fields = (f for f in self.one_time_fields if f != "build_version")
+            not_null_fields = ()
             other_fields = self.latest_fields
         else:
             raise serializers.ValidationError("os_version or max_os_version are required")
@@ -619,6 +622,9 @@ class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):
             value = data.get(field)
             if value is None or value == "":
                 errors[field] = f"This field is required if {mode} is used"
+        for field in not_null_fields:
+            if field in data and data[field] is None:
+                errors[field] = f"This field cannot be null if {mode} is used"
         for field in other_fields:
             if data.get(field):
                 errors[field] = f"This field cannot be set if {mode} is used"

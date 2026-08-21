@@ -213,6 +213,32 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
             {'non_field_errors': ['os_version or max_os_version are required']}
         )
 
+    def test_create_software_update_enforcement_latest_delay_days_null_error(self):
+        self.set_permissions("mdm.add_softwareupdateenforcement")
+        response = self.post(reverse("mdm_api:software_update_enforcements"),
+                             {"name": get_random_string(12),
+                              "platforms": ["macOS"],
+                              "max_os_version": "15",
+                              "delay_days": None})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'delay_days': ['This field cannot be null if max_os_version is used']}
+        )
+
+    def test_create_software_update_enforcement_latest_local_time_null_error(self):
+        self.set_permissions("mdm.add_softwareupdateenforcement")
+        response = self.post(reverse("mdm_api:software_update_enforcements"),
+                             {"name": get_random_string(12),
+                              "platforms": ["macOS"],
+                              "max_os_version": "15",
+                              "local_time": None})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'local_time': ['This field cannot be null if max_os_version is used']}
+        )
+
     def test_create_software_update_enforcement_one_time_required_fields(self):
         self.set_permissions("mdm.add_softwareupdateenforcement")
         name = get_random_string(12)
