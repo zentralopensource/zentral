@@ -13,6 +13,7 @@ from django.utils.crypto import get_random_string
 from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from tests.zentral_test_utils.list_ordering_case import ListOrderingCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import Artifact, ArtifactVersion, ArtifactVersionTag, DeviceArtifact, TargetArtifact
 from zentral.core.events.base import AuditEvent
@@ -20,7 +21,7 @@ from zentral.core.events.base import AuditEvent
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
-class MDMEnterpriseAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
+class MDMEnterpriseAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     maxDiff = None
 
     @classmethod
@@ -123,6 +124,18 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'updated_at': ea_av.updated_at.isoformat()}
               ]}
         )
+
+    def test_list_enterprise_apps_ordering(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.ENTERPRISE_APP)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_enterpriseapp")
+        self.assert_list_ordering(reverse("mdm_api:enterprise_apps"), ascending_ids)
+
+    def test_list_enterprise_apps_pagination_pages_every_enterprise_app_once(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.ENTERPRISE_APP)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_enterpriseapp")
+        self.assert_list_pages_every_row_once(reverse("mdm_api:enterprise_apps"), ascending_ids)
 
     # create enterprise app
 

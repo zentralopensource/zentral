@@ -11,6 +11,7 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from tests.zentral_test_utils.list_ordering_case import ListOrderingCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import Artifact, ArtifactVersion, ArtifactVersionTag, DeviceArtifact, TargetArtifact
 from zentral.core.events.base import AuditEvent
@@ -18,7 +19,7 @@ from .utils import (build_plistfile, build_zipfile,
                     force_artifact, force_blueprint_artifact, force_dep_enrollment_session)
 
 
-class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
+class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     maxDiff = None
 
     @classmethod
@@ -99,6 +100,18 @@ class MDMDataAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'updated_at': ea_av.updated_at.isoformat()}
               ]}
         )
+
+    def test_list_data_assets_ordering(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.DATA_ASSET)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_dataasset")
+        self.assert_list_ordering(reverse("mdm_api:data_assets"), ascending_ids)
+
+    def test_list_data_assets_pagination_pages_every_data_asset_once(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.DATA_ASSET)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_dataasset")
+        self.assert_list_pages_every_row_once(reverse("mdm_api:data_assets"), ascending_ids)
 
     # create data asset
 

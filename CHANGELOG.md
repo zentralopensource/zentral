@@ -29,6 +29,9 @@ The Santa sync operations of a machine are serialized on its enrolled machine ro
 Fixed the Santa preflight writing away what another request committed on the same enrolled machine: it saved every column of a row read before the request did anything. Only the attributes the client reported are written now.
 
 
+Fixed nine MDM API list endpoints ignoring the `ordering` query parameter — the enrolled devices one and the eight artifact ones. They declared the orderings they accept, but not the filter backend that reads them, so the parameter was dropped without a word. Worse, that left the queries with no `ORDER BY` at all, and the `limit`/`offset` pages came back in whatever order PostgreSQL found convenient: a client walking the pages could miss rows and see others twice. The seven endpoints hanging off an artifact version — cert assets, data assets, declarations, profiles, provisioning profiles, enterprise apps and store apps — have no timestamps of their own and were ordering on a column that does not exist; they order on the artifact version timestamps they expose now. Every one of them breaks ties on the primary key, so a page boundary falling inside a group of rows created in the same instant stays put.
+
+
 ## 2026.5
 
 

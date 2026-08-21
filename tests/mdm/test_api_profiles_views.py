@@ -9,13 +9,14 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from tests.zentral_test_utils.list_ordering_case import ListOrderingCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import ArtifactVersion, ArtifactVersionTag, DeviceArtifact, TargetArtifact
 from zentral.core.events.base import AuditEvent
 from .utils import build_mobileconfig_data, force_artifact, force_blueprint_artifact, force_dep_enrollment_session
 
 
-class MDMProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
+class MDMProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     maxDiff = None
 
     @classmethod
@@ -93,6 +94,18 @@ class MDMProfilesAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'updated_at': profile_av.updated_at.isoformat()}
               ]}
         )
+
+    def test_list_profiles_ordering(self):
+        _, artifact_versions = force_artifact(version_count=3)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_profile")
+        self.assert_list_ordering(reverse("mdm_api:profiles"), ascending_ids)
+
+    def test_list_profiles_pagination_pages_every_profile_once(self):
+        _, artifact_versions = force_artifact(version_count=3)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_profile")
+        self.assert_list_pages_every_row_once(reverse("mdm_api:profiles"), ascending_ids)
 
     # create profile
 

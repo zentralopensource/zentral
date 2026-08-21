@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
+from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -140,13 +141,16 @@ class EnrolledDeviceList(ListAPIView):
                 output_field=JSONField(),
             )
         )
+        # LIMIT/OFFSET pagination is only stable on a total order, and created_at is not unique:
+        # without the pk tiebreaker a tie straddling a page boundary can skip rows and repeat others.
+        .order_by("-created_at", "-pk")
     )
     serializer_class = EnrolledDeviceSerializer
     permission_classes = [DefaultDjangoModelPermissions]
-    filter_backends = (filters.DjangoFilterBackend,)
+    filter_backends = (filters.DjangoFilterBackend, OrderingFilter)
     filterset_class = EnrolledDeviceFilter
     ordering_fields = ('created_at', 'last_seen_at', 'updated_at')
-    ordering = ['-created_at']
+    ordering = ['-created_at', '-pk']
     pagination_class = MaxLimitOffsetPagination
 
 

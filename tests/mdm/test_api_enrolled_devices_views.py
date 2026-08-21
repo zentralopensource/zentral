@@ -12,6 +12,7 @@ from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from tests.zentral_test_utils.list_ordering_case import ListOrderingCase
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.commands import (
     RotateFileVaultKey,
@@ -38,7 +39,7 @@ from .utils import (
 )
 
 
-class APIViewsTestCase(TestCase, LoginCase, RequestCase):
+class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     maxDiff = None
 
     @classmethod
@@ -458,6 +459,24 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
+
+    def test_enrolled_devices_ordering(self):
+        enrolled_devices = [self.enrolled_device] + [
+            force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)[0].enrolled_device
+            for _ in range(2)
+        ]
+        ascending_ids = self.given_ordered_rows([(d, d.id) for d in enrolled_devices])
+        self.set_permissions("mdm.view_enrolleddevice")
+        self.assert_list_ordering(reverse("mdm_api:enrolled_devices"), ascending_ids)
+
+    def test_enrolled_devices_pagination_pages_every_device_once(self):
+        enrolled_devices = [self.enrolled_device] + [
+            force_dep_enrollment_session(self.mbu, authenticated=True, completed=True)[0].enrolled_device
+            for _ in range(2)
+        ]
+        ascending_ids = self.given_ordered_rows([(d, d.id) for d in enrolled_devices])
+        self.set_permissions("mdm.view_enrolleddevice")
+        self.assert_list_pages_every_row_once(reverse("mdm_api:enrolled_devices"), ascending_ids)
 
     # block enrolled device
 

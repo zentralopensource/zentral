@@ -1,5 +1,8 @@
 from django.db import transaction
+from django.db.models import F
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import ValidationError
+from rest_framework.filters import OrderingFilter
 from zentral.utils.drf import (ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination,
                                RetrieveUpdateDestroyAPIViewWithAudit)
@@ -13,6 +16,25 @@ from zentral.contrib.mdm.serializers import (ArtifactSerializer, CertAssetSerial
                                              ProvisioningProfileSerializer, StoreAppSerializer)
 
 
+# artifact version satellites
+
+# CertAsset, DataAsset, Declaration, Profile, ProvisioningProfile, EnterpriseApp and StoreApp are
+# one-to-one satellites of ArtifactVersion and have no timestamps of their own. The ordering keys are
+# annotated from the artifact version, so that ?ordering= takes the names the serializers expose.
+class ArtifactVersionOrderingMixin:
+    filter_backends = (DjangoFilterBackend, OrderingFilter)
+    ordering_fields = ("created_at", "updated_at")
+    # LIMIT/OFFSET pagination is only stable on a total order, and created_at is not unique: without
+    # the pk tiebreaker a tie straddling a page boundary can skip rows and repeat others.
+    ordering = ["-created_at", "-pk"]
+
+    def get_queryset(self):
+        return super().get_queryset().annotate(
+            created_at=F("artifact_version__created_at"),
+            updated_at=F("artifact_version__updated_at"),
+        ).order_by(*self.ordering)
+
+
 # artifacts
 
 
@@ -20,10 +42,12 @@ class ArtifactList(ListCreateAPIViewWithAudit):
     """
     List all Artifacts, search Artifact by name, or create a new Artifact.
     """
-    queryset = Artifact.objects.all()
+    queryset = Artifact.objects.all().order_by("-created_at", "-pk")
     serializer_class = ArtifactSerializer
+    filter_backends = (DjangoFilterBackend, OrderingFilter)
     filterset_fields = ('name',)
-    ordering = ['-created_at']
+    ordering_fields = ('created_at', 'updated_at')
+    ordering = ['-created_at', '-pk']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
@@ -53,7 +77,7 @@ class ArtifactDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # cert assets
 
 
-class CertAssetList(ListCreateAPIViewWithAudit):
+class CertAssetList(ArtifactVersionOrderingMixin, ListCreateAPIViewWithAudit):
     """
     List all CertAssets or create a new CertAsset
     """
@@ -64,7 +88,6 @@ class CertAssetList(ListCreateAPIViewWithAudit):
                                            "artifact_version__item_tags__tag__meta_business_unit",
                                            "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = CertAssetSerializer
-    ordering = ['-created_at']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
@@ -104,7 +127,7 @@ class CertAssetDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # data assets
 
 
-class DataAssetList(ListCreateAPIViewWithAudit):
+class DataAssetList(ArtifactVersionOrderingMixin, ListCreateAPIViewWithAudit):
     """
     List all DataAssets or create a new DataAsset
     """
@@ -114,7 +137,6 @@ class DataAssetList(ListCreateAPIViewWithAudit):
                                            "artifact_version__item_tags__tag__meta_business_unit",
                                            "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = DataAssetSerializer
-    ordering = ['-created_at']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
@@ -153,7 +175,7 @@ class DataAssetDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # declarations
 
 
-class DeclarationList(ListCreateAPIViewWithAudit):
+class DeclarationList(ArtifactVersionOrderingMixin, ListCreateAPIViewWithAudit):
     """
     List all Declarations or create a new Declaration.
     """
@@ -163,7 +185,6 @@ class DeclarationList(ListCreateAPIViewWithAudit):
                                              "artifact_version__item_tags__tag__meta_business_unit",
                                              "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = DeclarationSerializer
-    ordering = ['-created_at']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
@@ -202,7 +223,7 @@ class DeclarationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # profiles
 
 
-class ProfileList(ListCreateAPIViewWithAudit):
+class ProfileList(ArtifactVersionOrderingMixin, ListCreateAPIViewWithAudit):
     """
     List all Profiles or create a new Profile
     """
@@ -212,7 +233,6 @@ class ProfileList(ListCreateAPIViewWithAudit):
                                          "artifact_version__item_tags__tag__meta_business_unit",
                                          "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = ProfileSerializer
-    ordering = ['-created_at']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
@@ -251,7 +271,7 @@ class ProfileDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # provisioning profiles
 
 
-class ProvisioningProfileList(ListCreateAPIViewWithAudit):
+class ProvisioningProfileList(ArtifactVersionOrderingMixin, ListCreateAPIViewWithAudit):
     """
     List all Provisioning Profiles or create a new Provisioning Profile
     """
@@ -261,7 +281,6 @@ class ProvisioningProfileList(ListCreateAPIViewWithAudit):
                                                      "artifact_version__item_tags__tag__meta_business_unit",
                                                      "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = ProvisioningProfileSerializer
-    ordering = ['-created_at']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
@@ -300,7 +319,7 @@ class ProvisioningProfileDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # enterprise apps
 
 
-class EnterpriseAppList(ListCreateAPIViewWithAudit):
+class EnterpriseAppList(ArtifactVersionOrderingMixin, ListCreateAPIViewWithAudit):
     """
     List all EnterpriseApps or create a new EnterpriseApp
     """
@@ -310,7 +329,6 @@ class EnterpriseAppList(ListCreateAPIViewWithAudit):
                                                "artifact_version__item_tags__tag__meta_business_unit",
                                                "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = EnterpriseAppSerializer
-    ordering = ['-created_at']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests
@@ -348,7 +366,7 @@ class EnterpriseAppDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # store apps
 
 
-class StoreAppList(ListCreateAPIViewWithAudit):
+class StoreAppList(ArtifactVersionOrderingMixin, ListCreateAPIViewWithAudit):
     """
     List all StoreApps or create a new StoreApp
     """
@@ -358,7 +376,6 @@ class StoreAppList(ListCreateAPIViewWithAudit):
                                           "artifact_version__item_tags__tag__meta_business_unit",
                                           "artifact_version__item_tags__tag__taxonomy"))
     serializer_class = StoreAppSerializer
-    ordering = ['-created_at']
     pagination_class = MaxLimitOffsetPagination
 
     @transaction.non_atomic_requests

@@ -7,12 +7,13 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from tests.zentral_test_utils.list_ordering_case import ListOrderingCase
 from zentral.contrib.mdm.models import Artifact
 from zentral.core.events.base import AuditEvent
 from .utils import force_artifact, force_blueprint_artifact
 
 
-class MDMArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
+class MDMArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     maxDiff = None
 
     @classmethod
@@ -106,6 +107,18 @@ class MDMArtifactsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'updated_at': artifact.updated_at.isoformat()}
              ]}
         )
+
+    def test_list_artifacts_ordering(self):
+        artifacts = [force_artifact()[0] for _ in range(3)]
+        ascending_ids = self.given_ordered_rows([(a, str(a.pk)) for a in artifacts])
+        self.set_permissions("mdm.view_artifact")
+        self.assert_list_ordering(reverse("mdm_api:artifacts"), ascending_ids)
+
+    def test_list_artifacts_pagination_pages_every_artifact_once(self):
+        artifacts = [force_artifact()[0] for _ in range(3)]
+        ascending_ids = self.given_ordered_rows([(a, str(a.pk)) for a in artifacts])
+        self.set_permissions("mdm.view_artifact")
+        self.assert_list_pages_every_row_once(reverse("mdm_api:artifacts"), ascending_ids)
 
     # get artifact
 

@@ -7,13 +7,14 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from tests.zentral_test_utils.list_ordering_case import ListOrderingCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import Artifact, ArtifactVersion, ArtifactVersionTag, DeviceArtifact, TargetArtifact
 from zentral.core.events.base import AuditEvent
 from .utils import force_artifact, force_blueprint_artifact, force_dep_enrollment_session, force_location_asset
 
 
-class MDMStoreAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
+class MDMStoreAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     maxDiff = None
 
     @classmethod
@@ -100,6 +101,18 @@ class MDMStoreAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'updated_at': sa_av.updated_at.isoformat()}
               ]}
         )
+
+    def test_list_store_apps_ordering(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.STORE_APP)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_storeapp")
+        self.assert_list_ordering(reverse("mdm_api:store_apps"), ascending_ids)
+
+    def test_list_store_apps_pagination_pages_every_store_app_once(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.STORE_APP)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_storeapp")
+        self.assert_list_pages_every_row_once(reverse("mdm_api:store_apps"), ascending_ids)
 
     # create store app
 

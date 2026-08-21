@@ -882,6 +882,13 @@ Response:
      * `excluded_tags`
      * `short_name`
      * `email`
+ * available orderings:
+     * `created_at`
+     * `last_seen_at`
+     * `updated_at`
+ * pagination:
+     * `limit` (max `500`, `50` by default)
+     * `offset`
 
 Use this endpoint to list the MDM enrolled devices.
 

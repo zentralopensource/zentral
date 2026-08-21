@@ -7,6 +7,7 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from tests.zentral_test_utils.list_ordering_case import ListOrderingCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.mdm.models import (
     Artifact,
@@ -25,7 +26,7 @@ from .utils import (
 )
 
 
-class MDMCertAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
+class MDMCertAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     maxDiff = None
 
     @classmethod
@@ -114,6 +115,18 @@ class MDMCertAssetsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                   "version": 1}
               ]}
         )
+
+    def test_list_cert_assets_ordering(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.CERT_ASSET)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_certasset")
+        self.assert_list_ordering(reverse("mdm_api:cert_assets"), ascending_ids)
+
+    def test_list_cert_assets_pagination_pages_every_cert_asset_once(self):
+        _, artifact_versions = force_artifact(version_count=3, artifact_type=Artifact.Type.CERT_ASSET)
+        ascending_ids = self.given_ordered_rows([(av, str(av.pk)) for av in artifact_versions])
+        self.set_permissions("mdm.view_certasset")
+        self.assert_list_pages_every_row_once(reverse("mdm_api:cert_assets"), ascending_ids)
 
     # create cert asset
 
