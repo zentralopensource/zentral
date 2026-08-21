@@ -952,7 +952,9 @@ class DownloadDataAssetView(PermissionRequiredMixin, View):
         else:
             return FileResponse(
                 self._file_storage.open(data_asset.file.name),
-                filename=data_asset.filename or f"data_asset_{data_asset.artifact_version.pk}.zip",
+                filename=(data_asset.filename
+                          or f"data_asset_{data_asset.artifact_version.pk}"
+                             f"{data_asset.get_type_file_extension(data_asset.get_type())}"),
                 as_attachment=True
             )
 

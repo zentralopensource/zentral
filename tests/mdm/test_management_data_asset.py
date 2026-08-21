@@ -95,6 +95,31 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
                 data_asset.delete()
         self.assertTrue(any("Could not delete data asset file" in r for r in captured.output))
 
+    def test_download_data_asset_without_filename(self):
+        _, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        data_asset = artifact_version.data_asset
+        data_asset.type = DataAsset.Type.PLIST
+        data_asset.filename = ""
+        data_asset.save()
+        self.login("mdm.view_artifactversion")
+        response = self.client.get(reverse("mdm:download_data_asset", args=(artifact_version.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            f'attachment; filename="data_asset_{artifact_version.pk}.plist"'
+        )
+
+    def test_data_asset_detail_without_filename(self):
+        artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        data_asset = artifact_version.data_asset
+        data_asset.filename = ""
+        data_asset.save()
+        self.login("mdm.view_artifact", "mdm.view_artifactversion")
+        response = self.client.get(reverse("mdm:artifact_version", args=(artifact.pk, artifact_version.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<th>Filename</th>")
+        self.assertContains(response, "<td>-</td>")
+
     # upload data asset GET
 
     def test_upload_data_asset_get_redirect(self):

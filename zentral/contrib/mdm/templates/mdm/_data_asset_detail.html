@@ -7,7 +7,7 @@
 </tr>
 <tr>
   <th>Filename</th>
-  <td>{{ data_asset.filename }}</td>
+  <td>{{ data_asset.filename|default:"-" }}</td>
 </tr>
 <tr>
   <th>File size</th>
