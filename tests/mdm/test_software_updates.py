@@ -237,6 +237,47 @@ class MDMSoftwareUpdateTestCase(TestCase):
             event_count += 1
         self.assertEqual(event_count, 2)
 
+    # comparable OS versions
+
+    def test_comparable_os_version_drops_an_empty_extra(self):
+        su = force_software_update(
+            device_id="J413AP",
+            version="14.1.0",
+            posting_date=datetime.date(2023, 10, 25)
+        )
+        self.assertEqual(su.comparable_os_version, (14, 1, 0))
+
+    def test_comparable_os_version_keeps_the_extra(self):
+        su = force_software_update(
+            device_id="J413AP",
+            version="14.1.0",
+            version_extra="(a)",
+            posting_date=datetime.date(2023, 10, 25)
+        )
+        self.assertEqual(su.comparable_os_version, (14, 1, 0, "(a)"))
+
+    def test_full_comparable_os_version_always_has_four_elements(self):
+        for version_extra in ("", "(a)"):
+            with self.subTest(version_extra=version_extra):
+                su = force_software_update(
+                    device_id="J413AP",
+                    version="14.1.0",
+                    version_extra=version_extra,
+                    posting_date=datetime.date(2023, 10, 25)
+                )
+                self.assertEqual(su.full_comparable_os_version, (14, 1, 0, version_extra))
+
+    def test_full_comparable_os_version_compares_equal_to_the_enrolled_device(self):
+        enrolled_device = self._force_enrolled_device(device_id="J413AP", os_version="14.1")
+        su = force_software_update(
+            device_id="J413AP",
+            version="14.1.0",
+            posting_date=datetime.date(2023, 10, 25)
+        )
+        self.assertEqual(su.full_comparable_os_version, enrolled_device.comparable_os_version)
+        # comparable_os_version cannot be used for this: the update the device already runs compares lower
+        self.assertLess(su.comparable_os_version, enrolled_device.comparable_os_version)
+
     # best_available_software_updates
 
     def test_available_software_updates_no_updates_today_no_updates(self):

@@ -3614,6 +3614,15 @@ class SoftwareUpdate(models.Model):
     def comparable_os_version(self):
         return tuple(e for e in (self.major, self.minor, self.patch, self.extra) if e != "")
 
+    @property
+    def full_comparable_os_version(self):
+        """Always four elements, to compare with EnrolledDevice.comparable_os_version.
+
+        comparable_os_version drops an empty extra, and a three element tuple compares lower than the four
+        element tuple of an equal version, which would make an update the device already runs look older.
+        """
+        return (self.major, self.minor, self.patch, self.extra)
+
     def target_os_version(self):
         return ".".join(
             str(i)
