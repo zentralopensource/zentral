@@ -1,4 +1,5 @@
 from io import BytesIO
+from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
@@ -72,6 +73,22 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
             data_asset.get_export_filename(),
             f"{slug}_{data_asset.pk}_v{artifact_version.version}.zip"
         )
+
+    def test_post_delete_data_asset_deletes_file(self):
+        _, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        data_asset = artifact_version.data_asset
+        storage, name = data_asset.file.storage, data_asset.file.name
+        self.assertTrue(storage.exists(name))
+        data_asset.delete()
+        self.assertFalse(storage.exists(name))
+
+    def test_post_delete_data_asset_swallows_storage_failure(self):
+        _, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
+        data_asset = artifact_version.data_asset
+        with patch("django.db.models.fields.files.FieldFile.delete", side_effect=OSError("storage gone")):
+            with self.assertLogs("zentral.contrib.mdm.models", level="ERROR") as captured:
+                data_asset.delete()
+        self.assertTrue(any("Could not delete data asset file" in r for r in captured.output))
 
     # upload data asset GET
 

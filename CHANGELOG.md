@@ -51,6 +51,9 @@ The inventory history cleanup deletes in bounded batches now. Each table was pur
 Fixed a blueprint serializing its artifacts differently from one update to the next, over the very same data: the artifacts a blueprint holds, the artifacts an artifact requires and the artifacts a declaration references were all read without an order, and PostgreSQL is free to return them in whichever order suits it. That order was the order the devices saw — the sequence in which they installed artifacts that do not depend on each other, and the order of the declaration items they were handed. The required and referenced artifacts are sorted by name now, and the artifacts of a blueprint keep the order in which they were added to it.
 
 
+The file of a deleted data asset is removed from the storage now. The enterprise apps and the packages have always deleted theirs, but the data assets never did, so every version that was deleted — or deleted along with its artifact — left its file in the storage for good.
+
+
 ## 2026.5
 
 

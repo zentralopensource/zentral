@@ -3091,6 +3091,14 @@ class DataAsset(models.Model):
         return f"{slug}_{self.pk}_v{self.artifact_version.version}{ext}"
 
 
+@receiver(post_delete, sender=DataAsset)
+def post_delete_data_asset(sender, instance, *args, **kwargs):
+    try:
+        instance.file.delete(save=False)
+    except Exception:
+        logger.exception("Could not delete data asset file")
+
+
 class Profile(models.Model):
     artifact_version = models.OneToOneField(ArtifactVersion, related_name="profile", on_delete=models.CASCADE)
     source = models.BinaryField()
