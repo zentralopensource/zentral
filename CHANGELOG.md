@@ -57,7 +57,7 @@ The MDM data asset API accepts only XML property lists now, like the upload form
 
 A malformed base 64 source on the MDM profile and provisioning profile API endpoints gives a 400 now, and not a 500.
 
-The MDM data asset API gives a generic message when it cannot download the file now, like the package API already did. The message of an error from S3 can contain the bucket, the key, the region or the state of the credentials. Zentral writes it to its logs instead. The messages about the file extension, the URI scheme and the hash are unchanged.
+The MDM data asset and enterprise app APIs give a generic message when they cannot download the file now, like the package API already did. The message of an error from S3 can contain the bucket, the key, the region or the state of the credentials. Zentral writes it to its logs instead. The messages about the file extension, the URI scheme and the hash are unchanged.
 
 Fixed an MDM software update enforcement in latest mode that took a device out of management when it had no update to enforce. The `tokens` and `declaration-items` check-ins and `/connect` gave a 500, and the device stopped receiving all of its declarations. A device above the *Maximum target OS version* was enough to cause it, and so was a deployment that never synchronized the Apple software lookup service. Zentral leaves the configuration out of the declarations it serves now, and writes a log message.
 

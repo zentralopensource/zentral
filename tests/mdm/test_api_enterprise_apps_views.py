@@ -240,23 +240,32 @@ class MDMEnterpriseAppsAPIViewsTestCase(TestCase, LoginCase, RequestCase, ListOr
     @patch("zentral.utils.external_resources.boto3.client")
     def test_create_enterprise_app_s3_error(self, boto3_client):
         boom = Mock()
-        boom.download_fileobj.side_effect = ValueError("Boom!!!")
+        boom.download_fileobj.side_effect = Exception(
+            "An error occurred (403) when calling the HeadObject operation: Forbidden"
+        )
         boto3_client.return_value = boom
         _, artifact, _ = force_blueprint_artifact(
             artifact_type=Artifact.Type.ENTERPRISE_APP
         )
         self.set_permissions("mdm.add_enterpriseapp")
         with patch.dict(os.environ, {"AWS_REGION": "eu-central-17"}):
-            response = self.post(reverse("mdm_api:enterprise_apps"),
-                                 data={"artifact": str(artifact.pk),
-                                       "package_uri": "s3://yolo/fomo.pkg",
-                                       "package_sha256": 64 * "0",
-                                       "macos": True,
-                                       "version": 2})
+            with self.assertLogs("zentral.contrib.mdm.serializers", level="ERROR") as captured:
+                response = self.post(reverse("mdm_api:enterprise_apps"),
+                                     data={"artifact": str(artifact.pk),
+                                           "package_uri": "s3://yolo/fomo.pkg",
+                                           "package_sha256": 64 * "0",
+                                           "macos": True,
+                                           "version": 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {'package_uri': ['Boom!!!']}
+            {'package_uri': ['Could not download or validate the enterprise app.']}
+        )
+        # the message from S3 stays on the server
+        self.assertNotIn("HeadObject", response.content.decode())
+        self.assertTrue(
+            any("Could not download or validate enterprise app from s3://yolo/fomo.pkg" in r
+                for r in captured.output)
         )
         boto3_client.assert_called_once_with("s3", region_name="eu-central-17")
         boom.download_fileobj.assert_called_once()

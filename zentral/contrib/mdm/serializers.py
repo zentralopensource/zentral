@@ -1205,8 +1205,18 @@ class EnterpriseAppSerializer(ArtifactVersionSerializer):
         try:
             filename, tmp_file = download_external_resource(package_uri, package_sha256, (".pkg", ".ipa"))
             _, _, ea_data = read_package_info(tmp_file)
-        except Exception as e:
+        except ValueError as e:
+            # ValueError carries operator-facing validation messages
+            # (unknown URI scheme, unsupported extension, hash mismatch).
             raise serializers.ValidationError({"package_uri": str(e)})
+        except Exception:
+            # Surface a generic message; the actual exception may carry
+            # internal state (boto3 traceback, file paths, …). The full
+            # exception is logged server-side for diagnosis.
+            logger.exception("Could not download or validate enterprise app from %s", package_uri)
+            raise serializers.ValidationError(
+                {"package_uri": "Could not download or validate the enterprise app."}
+            )
         # same product ID?
         artifact = data["artifact_version"]["artifact"]
         if (
