@@ -23,6 +23,11 @@ The enrolled machine and sync state metrics are bucketed by the age of the last 
 ### Backward incompatibilities
 
 
+#### 🧨 Osquery query payload in events
+
+The `version` attribute of an Osquery query in an event payload is the version of the query again. It was the minimum Osquery version of the query, which replaced the query version when the query had one. The minimum Osquery version has its own `minimum_osquery_version` attribute now. The query payload also has the `pk`, `name` and `tag` attributes, and the compliance check of the query. This payload is a part of the `osquery_pack_query_update` events.
+
+
 #### 🧨 Santa enrolled machines metrics
 
 `zentral_santa_enrolled_machines_total` and `zentral_santa_enrolled_machines_sync_total` are replaced by `zentral_santa_enrolled_machines_bucket` and `zentral_santa_enrolled_machines_sync_bucket`, which have an `le` label. The `le="+Inf"` bucket gives the value of the two removed gauges: in a dashboard or an alert, change the metric name and select that bucket. A query that sums the buckets counts each machine seven times.

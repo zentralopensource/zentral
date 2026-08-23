@@ -190,5 +190,5 @@ def update_or_create_pack(request, data, slug=None, pack=None, delete_extra_quer
         lambda: post_osquery_pack_update_events(request, full_pack_update_event, pack_query_update_events)
     )
 
-    pack_update_event["pack"] = pack.serialize_for_event(short=True)
+    pack_update_event["pack"] = pack.serialize_for_event(keys_only=True)
     return pack_update_event

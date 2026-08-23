@@ -133,17 +133,27 @@ class Query(models.Model):
             d["version"] = self.minimum_osquery_version
         return d
 
-    def serialize_for_event(self):
-        d = {"sql": self.sql,
-             "version": self.version}
-        if self.platforms:
-            d["platform"] = ",".join(self.platforms)
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "sql": self.sql,
+            "version": self.version,
+            "platforms": sorted(self.platforms),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
         if self.minimum_osquery_version:
-            d["version"] = self.minimum_osquery_version
+            d["minimum_osquery_version"] = self.minimum_osquery_version
         if self.description:
             d["description"] = self.description
         if self.value:
             d["value"] = self.value
+        if self.tag:
+            d["tag"] = self.tag.serialize_for_event(keys_only=True)
+        if self.compliance_check:
+            d["compliance_check"] = self.compliance_check.serialize_for_event()
         return d
 
     def delete(self, *args, **kwargs):
@@ -205,16 +215,25 @@ class Pack(models.Model):
             d["shard"] = self.shard
         return d
 
-    def serialize_for_event(self, short=False):
+    def serialize_for_event(self, keys_only=False):
+        # slug, not name: this is also the "pack" key of the standard pack endpoint response
         d = {"pk": self.pk,
              "slug": self.slug}
-        if short:
+        if keys_only:
             return d
-        d["name"] = self.name
+        d.update({
+            "name": self.name,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        if self.description:
+            d["description"] = self.description
         if self.discovery_queries:
             d["discovery_queries"] = self.discovery_queries
         if self.shard:
             d["shard"] = self.shard
+        if self.event_routing_key:
+            d["event_routing_key"] = self.event_routing_key
         return d
 
 
@@ -312,7 +331,7 @@ class PackQuery(models.Model):
     def serialize_for_event(self):
         d = {"pk": self.pk,
              "slug": self.slug,
-             "pack": self.pack.serialize_for_event(short=True),
+             "pack": self.pack.serialize_for_event(keys_only=True),
              "query": self.query.serialize_for_event(),
              "interval": self.interval,
              "log_removed_actions": self.log_removed_actions,

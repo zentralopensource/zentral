@@ -222,7 +222,7 @@ class PackView(APIView):
         )
 
         # prepare the response
-        pack_update_event["pack"] = pack.serialize_for_event(short=True)
+        pack_update_event["pack"] = pack.serialize_for_event(keys_only=True)
 
         # finally, delete the pack
         pack.delete()
