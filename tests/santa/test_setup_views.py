@@ -756,6 +756,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                  "pk": str(enrollment_pk),
                  'prev_value': {'configuration': {'name': configuration.name, 'pk': configuration.pk},
                                 'created_at': enrollment.created_at.isoformat(),
+                                'updated_at': enrollment.updated_at.isoformat(),
                                 'enrollment_secret': {'created_at': enrollment_secret.created_at.isoformat(),
                                                       'is_expired': False,
                                                       'is_revoked': False,
@@ -764,7 +765,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                                                                              'pk': mbu.pk},
                                                       'pk': enrollment_secret.pk,
                                                       'request_count': 0},
-                                'pk': enrollment.pk}
+                                'pk': enrollment.pk,
+                                'version': enrollment.version}
               }}
         )
         metadata = event.metadata.serialize()

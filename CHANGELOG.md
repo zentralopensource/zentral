@@ -31,6 +31,8 @@ The enrolled machine and sync state metrics are bucketed by the age of the last 
 ### Bug fixes
 
 
+Fixed the `zentral_audit` event published when a user increases the version of an enrollment. The enrollment payload had no version, so the event showed the same value before and after the change. The payload has the `version` and `updated_at` attributes now, for the Monolith, Munki, Osquery, Santa and Turbo enrollments.
+
 Fixed the version of a Munki script check that increased on every API update: the excluded tags were compared with the included tags. A new version makes every machine in scope run the check again.
 
 Fixed the Santa machines reported out of sync when a rule of the current sync session replaced a rule they already had. The ledger keeps the rule the client confirmed until it confirms the replacement, and a lost session returns to it.

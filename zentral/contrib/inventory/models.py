@@ -1551,7 +1551,9 @@ class BaseEnrollment(models.Model):
 
     def serialize_for_event(self):
         enrollment_dict = {"pk": self.pk,
-                           "created_at": self.created_at.isoformat()}
+                           "version": self.version,
+                           "created_at": self.created_at.isoformat(),
+                           "updated_at": self.updated_at.isoformat()}
         enrollment_dict.update(self.secret.serialize_for_event())
         distributor = self.distributor
         if distributor and hasattr(distributor, "serialize_for_event"):

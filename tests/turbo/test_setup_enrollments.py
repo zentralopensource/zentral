@@ -108,6 +108,8 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         config_keys_only = {"pk": str(enrollment.configuration.pk), "name": enrollment.configuration.name}
         self.assertEqual(event.payload["object"]["prev_value"]["configuration"], config_keys_only)
         self.assertEqual(event.payload["object"]["new_value"]["configuration"], config_keys_only)
+        self.assertEqual(event.payload["object"]["prev_value"]["version"], version)
+        self.assertEqual(event.payload["object"]["new_value"]["version"], version + 1)
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {
             "turbo_enrollment": [str(enrollment.pk)],
