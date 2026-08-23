@@ -6,11 +6,13 @@ from django.utils.text import slugify
 from django.test import TestCase
 
 from accounts.models import User
+from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 from zentral.core.compliance_checks.models import ComplianceCheck
+from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 
@@ -87,14 +89,17 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/query_form.html")
         self.assertFormError(response.context["form"], "name", "Query with this Name already exists.")
 
-    def test_create_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_query_post(self, post_event):
         self.login("osquery.add_query", "osquery.view_query")
         query_name = get_random_string(12)
-        response = self.client.post(reverse("osquery:create_query"),
-                                    {"name": query_name,
-                                     "sql": "select 1 from users;",
-                                     "description": "YOLO"}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:create_query"),
+                                        {"name": query_name,
+                                         "sql": "select 1 from users;",
+                                         "description": "YOLO"}, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/query_detail.html")
         self.assertContains(response, query_name)
         query = response.context["object"]
@@ -103,6 +108,30 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(query.description, "YOLO")
         self.assertIsNone(query.compliance_check)
         self.assertEqual(query.version, 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "osquery.query",
+                 "pk": str(query.pk),
+                 "new_value": {
+                     "pk": query.pk,
+                     "name": query_name,
+                     "sql": "select 1 from users;",
+                     # the row version, not the minimum osquery version
+                     "version": 1,
+                     "platforms": [],
+                     "description": "YOLO",
+                     "created_at": query.created_at.isoformat(),
+                     "updated_at": query.updated_at.isoformat(),
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"osquery_query": [str(query.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
     def test_create_query_with_compliance_check_and_tag_error(self):
         self.login("osquery.add_query", "osquery.view_query")
@@ -153,15 +182,17 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(query.compliance_check.model, "OsqueryCheck")
         self.assertEqual(query.compliance_check.query, query)
 
-    def test_create_query_with_tag(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_query_with_tag(self, post_event):
         self.login("osquery.add_query", "osquery.view_query")
         query_name = get_random_string(12)
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self.client.post(reverse("osquery:create_query"),
-                                    {"name": query_name,
-                                     "sql": "select 'OK' as ztl_status;",
-                                     "tag": tag.pk,
-                                     "description": "YOLO"}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("osquery:create_query"),
+                                        {"name": query_name,
+                                         "sql": "select 'OK' as ztl_status;",
+                                         "tag": tag.pk,
+                                         "description": "YOLO"}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_detail.html")
         self.assertContains(response, query_name)
@@ -170,6 +201,8 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertIsNone(query.compliance_check)
         self.assertEqual(query.version, 1)
         self.assertEqual(query.tag, tag)
+        payload, _ = assert_audit_event(self, post_event, "created", query)
+        self.assertEqual(payload["object"]["new_value"]["tag"], {"pk": tag.pk, "name": tag.name})
 
     # update query
 
@@ -203,17 +236,21 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/query_form.html")
         self.assertFormError(response.context["form"], "name", "Query with this Name already exists.")
 
-    def test_update_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_query_post(self, post_event):
         query = self._force_query()
+        prev_value = query.serialize_for_event()
         self.login("osquery.change_query", "osquery.view_query")
         new_name = get_random_string(12)
         version = query.version
-        response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
-                                    {"name": new_name,
-                                     "sql": "select 2 from users;",
-                                     "description": "YOLO2"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
+                                        {"name": new_name,
+                                         "sql": "select 2 from users;",
+                                         "description": "YOLO2"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/query_detail.html")
         self.assertContains(response, new_name)
         query = response.context["object"]
@@ -221,6 +258,10 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(query.sql, "select 2 from users;")
         self.assertEqual(query.description, "YOLO2")
         self.assertEqual(query.version, version + 1)  # sql changed
+        payload, metadata = assert_audit_event(self, post_event, "updated", query, prev_value=prev_value)
+        self.assertEqual(payload["object"]["prev_value"]["version"], version)
+        self.assertEqual(payload["object"]["new_value"]["version"], version + 1)
+        self.assertEqual(metadata["objects"], {"osquery_query": [str(query.pk)]})
 
     def test_update_query_set_compliance_check_sql_error(self):
         query = self._force_query()
@@ -311,14 +352,20 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/query_confirm_delete.html")
         self.assertContains(response, query.name)
 
-    def test_delete_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_query_post(self, post_event):
         query = self._force_query()
+        prev_value = query.serialize_for_event()
         self.login("osquery.delete_query", "osquery.view_query")
-        response = self.client.post(reverse("osquery:delete_query", args=(query.pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:delete_query", args=(query.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/query_list.html")
         self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
         self.assertNotContains(response, query.name)
+        _, metadata = assert_audit_event(self, post_event, "deleted", query, prev_value=prev_value)
+        self.assertEqual(metadata["objects"], {"osquery_query": [str(query.pk)]})
 
     def test_delete_query_with_compliance_check(self):
         query = self._force_query(force_compliance_check=True)

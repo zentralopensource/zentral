@@ -2,7 +2,8 @@ import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import DetailView, ListView
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from zentral.contrib.osquery.forms import ConfigurationForm, ConfigurationPackForm
 from zentral.contrib.osquery.models import Configuration, ConfigurationPack, Pack
 
@@ -20,7 +21,7 @@ class ConfigurationListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateConfigurationView(PermissionRequiredMixin, CreateView):
+class CreateConfigurationView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.add_configuration"
     model = Configuration
     form_class = ConfigurationForm
@@ -54,13 +55,13 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateConfigurationView(PermissionRequiredMixin, UpdateView):
+class UpdateConfigurationView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_configuration"
     model = Configuration
     form_class = ConfigurationForm
 
 
-class AddConfigurationPackView(PermissionRequiredMixin, CreateView):
+class AddConfigurationPackView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.change_configuration"
     model = ConfigurationPack
     form_class = ConfigurationPackForm
@@ -80,7 +81,7 @@ class AddConfigurationPackView(PermissionRequiredMixin, CreateView):
         return ctx
 
 
-class UpdateConfigurationPackView(PermissionRequiredMixin, UpdateView):
+class UpdateConfigurationPackView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_configuration"
     model = ConfigurationPack
     form_class = ConfigurationPackForm
@@ -97,7 +98,7 @@ class UpdateConfigurationPackView(PermissionRequiredMixin, UpdateView):
         return ctx
 
 
-class RemoveConfigurationPackView(PermissionRequiredMixin, DeleteView):
+class RemoveConfigurationPackView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.change_configuration"
     model = ConfigurationPack
 

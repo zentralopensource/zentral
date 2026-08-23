@@ -6,11 +6,12 @@ from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import DetailView, ListView, UpdateView
 
 from zentral.contrib.osquery.forms import PackForm, PackQueryForm, UploadPackForm
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 from zentral.utils.time import naive_utcnow
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 
 logger = logging.getLogger('zentral.contrib.osquery.views.packs')
 
@@ -29,7 +30,7 @@ class PackListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreatePackView(PermissionRequiredMixin, CreateView):
+class CreatePackView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.add_pack"
     model = Pack
     form_class = PackForm
@@ -61,7 +62,7 @@ class PackView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdatePackView(PermissionRequiredMixin, UpdateView):
+class UpdatePackView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_pack"
     model = Pack
     form_class = PackForm
@@ -93,13 +94,13 @@ class UploadPackView(PermissionRequiredMixin, UpdateView):
             return HttpResponseRedirect(self.get_success_url())
 
 
-class DeletePackView(PermissionRequiredMixin, DeleteView):
+class DeletePackView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.delete_pack"
     model = Pack
     success_url = reverse_lazy("osquery:packs")
 
 
-class AddPackQueryView(PermissionRequiredMixin, CreateView):
+class AddPackQueryView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.add_packquery"
     model = PackQuery
     form_class = PackQueryForm
@@ -125,7 +126,7 @@ class AddPackQueryView(PermissionRequiredMixin, CreateView):
         return response
 
 
-class UpdatePackQueryView(PermissionRequiredMixin, UpdateView):
+class UpdatePackQueryView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_packquery"
     model = PackQuery
     form_class = PackQueryForm
@@ -148,7 +149,7 @@ class UpdatePackQueryView(PermissionRequiredMixin, UpdateView):
         return response
 
 
-class DeletePackQueryView(PermissionRequiredMixin, DeleteView):
+class DeletePackQueryView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.delete_packquery"
     model = PackQuery
 

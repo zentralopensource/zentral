@@ -5,13 +5,13 @@ from django.db import models
 from django.db.models import Case, Q, Sum, Value, When
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
+from django.views.generic import DetailView
 from zentral.contrib.osquery.forms import QueryForm, QuerySearchForm
 from zentral.contrib.osquery.models import PackQuery, Query
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
-from zentral.utils.views import UserPaginationListView
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.queries')
@@ -40,7 +40,7 @@ class QueryListView(PermissionRequiredMixin, UserPaginationListView):
         return ctx
 
 
-class CreateQueryView(PermissionRequiredMixin, CreateView):
+class CreateQueryView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.add_query"
     model = Query
     form_class = QueryForm
@@ -94,13 +94,13 @@ class QueryView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateQueryView(PermissionRequiredMixin, UpdateView):
+class UpdateQueryView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_query"
     model = Query
     form_class = QueryForm
 
 
-class DeleteQueryView(PermissionRequiredMixin, DeleteView):
+class DeleteQueryView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.delete_query"
     model = Query
     success_url = reverse_lazy("osquery:queries")

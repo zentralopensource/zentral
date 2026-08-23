@@ -6,7 +6,9 @@ from django.utils.text import slugify
 from rest_framework.parsers import JSONParser
 from rest_framework_yaml.parsers import YAMLParser
 
+from zentral.core.events.base import AuditEvent
 from zentral.utils.time import naive_utcnow
+from zentral.utils.views import post_audit_event
 
 from .compliance_checks import sync_query_compliance_check
 from .models import (
@@ -107,6 +109,7 @@ class DistributedQueryForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.query = kwargs.pop("query", None)
+        self.request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
         self.fields["valid_from"].initial = naive_utcnow()
         if not self.instance.pk:
@@ -139,7 +142,9 @@ class DistributedQueryForm(forms.ModelForm):
 
     def save(self, *args, **kwargs):
         if not self.instance.pk and self.cleaned_data.get("halt_current_runs"):
-            self.query.distributedquery_set.active().update(valid_until=naive_utcnow())
+            for distributed_query, prev_value in DistributedQuery.objects.halt_for_query(self.query):
+                post_audit_event(self.request, distributed_query, AuditEvent.Action.UPDATED,
+                                 prev_value=prev_value)
         return super().save(*args, **kwargs)
 
 
@@ -401,6 +406,9 @@ class QueryForm(forms.ModelForm):
 
     def save(self, *args, **kwargs):
         query = super().save(*args, **kwargs)
+        if not isinstance(query.version, int):
+            # clean_sql() bumped the version with an F() expression, which the caller cannot serialize
+            query.refresh_from_db()
         sync_query_compliance_check(query, self.cleaned_data.get("compliance_check"))
         return query
 

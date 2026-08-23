@@ -1,11 +1,14 @@
+from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from accounts.models import User
+from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.osquery.models import FileCategory
+from zentral.core.events.base import AuditEvent
 
 
 class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
@@ -51,20 +54,48 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/filecategory_form.html")
         self.assertContains(response, "Create File category")
 
-    def test_create_file_category_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_file_category_post(self, post_event):
         self.login("osquery.add_filecategory", "osquery.view_filecategory")
         file_category_name = get_random_string(64)
-        response = self.client.post(reverse("osquery:create_file_category"),
-                                    {"name": file_category_name,
-                                     "file_paths": "yolo, fomo"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:create_file_category"),
+                                        {"name": file_category_name,
+                                         "file_paths": "yolo, fomo"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/filecategory_detail.html")
         self.assertContains(response, file_category_name)
         file_category = response.context["object"]
         self.assertEqual(file_category.name, file_category_name)
         self.assertEqual(file_category.file_paths, ["yolo", "fomo"])
         self.assertEqual(file_category.access_monitoring, False)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "osquery.filecategory",
+                 "pk": str(file_category.pk),
+                 "new_value": {
+                     "pk": file_category.pk,
+                     "name": file_category_name,
+                     "slug": file_category.slug,
+                     "description": "",
+                     "file_paths": ["fomo", "yolo"],
+                     "exclude_paths": [],
+                     "file_paths_queries": [],
+                     "access_monitoring": False,
+                     "created_at": file_category.created_at.isoformat(),
+                     "updated_at": file_category.updated_at.isoformat(),
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"osquery_file_category": [str(file_category.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
     # update file category
 
@@ -87,22 +118,30 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Update File category")
         self.assertContains(response, file_category.name)
 
-    def test_update_file_category_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_file_category_post(self, post_event):
         file_category = self._force_file_category()
+        prev_value = file_category.serialize_for_event()
         self.login("osquery.change_filecategory", "osquery.view_filecategory")
         new_name = get_random_string(12)
-        response = self.client.post(reverse("osquery:update_file_category", args=(file_category.pk,)),
-                                    {"name": new_name,
-                                     "file_paths": "yolo, 2020forever",
-                                     "access_monitoring": "on"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:update_file_category", args=(file_category.pk,)),
+                                        {"name": new_name,
+                                         "file_paths": "yolo, 2020forever",
+                                         "access_monitoring": "on"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/filecategory_detail.html")
         self.assertContains(response, new_name)
         file_category = response.context["object"]
         self.assertEqual(file_category.name, new_name)
         self.assertEqual(file_category.file_paths, ["yolo", "2020forever"])
         self.assertEqual(file_category.access_monitoring, True)
+        payload, metadata = assert_audit_event(self, post_event, "updated", file_category, prev_value=prev_value)
+        self.assertFalse(payload["object"]["prev_value"]["access_monitoring"])
+        self.assertTrue(payload["object"]["new_value"]["access_monitoring"])
+        self.assertEqual(metadata["objects"], {"osquery_file_category": [str(file_category.pk)]})
 
     # delete file category
 
@@ -124,14 +163,21 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/filecategory_confirm_delete.html")
         self.assertContains(response, file_category.name)
 
-    def test_delete_file_category_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_file_category_post(self, post_event):
         file_category = self._force_file_category()
+        prev_value = file_category.serialize_for_event()
         self.login("osquery.delete_filecategory", "osquery.view_filecategory")
-        response = self.client.post(reverse("osquery:delete_file_category", args=(file_category.pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:delete_file_category", args=(file_category.pk,)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/filecategory_list.html")
         self.assertEqual(FileCategory.objects.filter(pk=file_category.pk).count(), 0)
         self.assertNotContains(response, file_category.name)
+        _, metadata = assert_audit_event(self, post_event, "deleted", file_category, prev_value=prev_value)
+        self.assertEqual(metadata["objects"], {"osquery_file_category": [str(file_category.pk)]})
 
     # file category list
 

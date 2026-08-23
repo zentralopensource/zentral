@@ -6,6 +6,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase
 
 from accounts.models import User
+from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.osquery.models import Configuration, Enrollment
@@ -65,16 +66,19 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, configuration.name)
         get_osquery_versions.assert_called_once_with()
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.osquery.forms.get_osquery_versions")
-    def test_create_enrollment_view_post(self, get_osquery_versions):
+    def test_create_enrollment_view_post(self, get_osquery_versions, post_event):
         get_osquery_versions.returns = []
         self.login("osquery.add_enrollment", "osquery.view_configuration", "osquery.view_enrollment")
         configuration = self._force_configuration()
-        response = self.client.post(reverse("osquery:create_enrollment", args=(configuration.pk,)),
-                                    {"secret-meta_business_unit": self.mbu.pk,
-                                     "configuration": configuration.pk,
-                                     "osquery_release": ""}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:create_enrollment", args=(configuration.pk,)),
+                                        {"secret-meta_business_unit": self.mbu.pk,
+                                         "configuration": configuration.pk,
+                                         "osquery_release": ""}, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/configuration_detail.html")
         self.assertEqual(response.context["object"], configuration)
         enrollment = response.context["enrollments"][0]
@@ -83,6 +87,12 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
         for view_name in ("enrollment_package", "enrollment_script", "enrollment_powershell_script"):
             self.assertContains(response, reverse(f"osquery_api:{view_name}", args=(enrollment.pk,)))
         get_osquery_versions.assert_called_once_with()
+        payload, metadata = assert_audit_event(self, post_event, "created", enrollment)
+        self.assertEqual(payload["object"]["new_value"]["configuration"],
+                         {"pk": configuration.pk, "name": configuration.name})
+        self.assertEqual(metadata["objects"],
+                         {"osquery_enrollment": [str(enrollment.pk)],
+                          "osquery_configuration": [str(configuration.pk)]})
 
     @patch("zentral.contrib.osquery.releases.requests.get")
     def test_create_enrollment_view_get_osquery_versions_error_post(self, requests_get):
@@ -124,17 +134,27 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/enrollment_confirm_version_bump.html")
 
-    def test_bump_enrollment_version_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_bump_enrollment_version_post(self, post_event):
         enrollment = self._force_enrollment()
         version = enrollment.version
+        prev_value = enrollment.serialize_for_event()
         self.login("osquery.change_enrollment", "osquery.view_configuration")
-        response = self.client.post(reverse("osquery:bump_enrollment_version",
-                                            args=(enrollment.configuration.pk, enrollment.pk)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:bump_enrollment_version",
+                                                args=(enrollment.configuration.pk, enrollment.pk)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/configuration_detail.html")
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.version, version + 1)
+        payload, metadata = assert_audit_event(self, post_event, "updated", enrollment, prev_value=prev_value)
+        self.assertEqual(payload["object"]["prev_value"]["version"], version)
+        self.assertEqual(payload["object"]["new_value"]["version"], version + 1)
+        self.assertEqual(metadata["objects"],
+                         {"osquery_enrollment": [str(enrollment.pk)],
+                          "osquery_configuration": [str(enrollment.configuration.pk)]})
 
     # delete enrollment
 
@@ -158,18 +178,26 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/enrollment_confirm_delete.html")
         self.assertContains(response, enrollment.configuration.name)
 
-    def test_delete_enrollment_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_enrollment_post(self, post_event):
         enrollment = self._force_enrollment()
+        prev_value = enrollment.serialize_for_event()
         self.login("osquery.delete_enrollment", "osquery.view_configuration")
-        response = self.client.post(reverse("osquery:delete_enrollment", args=(enrollment.configuration.pk,
-                                                                               enrollment.pk)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:delete_enrollment", args=(enrollment.configuration.pk,
+                                                                                   enrollment.pk)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/configuration_detail.html")
         self.assertContains(response, enrollment.configuration.name)
         ctx_configuration = response.context["configuration"]
         self.assertEqual(ctx_configuration, enrollment.configuration)
         self.assertEqual(ctx_configuration.enrollment_set.filter(pk=enrollment.pk).count(), 0)
+        _, metadata = assert_audit_event(self, post_event, "deleted", enrollment, prev_value=prev_value)
+        self.assertEqual(metadata["objects"],
+                         {"osquery_enrollment": [str(enrollment.pk)],
+                          "osquery_configuration": [str(enrollment.configuration.pk)]})
 
     def test_delete_enrollment_distributor_404(self):
         enrollment = self._force_enrollment()

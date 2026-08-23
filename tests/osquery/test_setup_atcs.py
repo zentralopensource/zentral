@@ -1,9 +1,12 @@
+from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from accounts.models import User
+from tests.osquery.utils import assert_audit_event
+from zentral.core.events.base import AuditEvent
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.osquery.models import AutomaticTableConstruction
 
@@ -62,18 +65,46 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/automatictableconstruction_form.html")
         self.assertContains(response, "Create Automatic table construction")
 
-    def test_create_atc_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_atc_post(self, post_event):
         self.login("osquery.add_automatictableconstruction", "osquery.view_automatictableconstruction")
         atc_name = get_random_string(12)
         atc_description = get_random_string(12)
         atc_dict = self._get_atc_dict(name=atc_name, description=atc_description)
-        response = self.client.post(reverse("osquery:create_atc"), atc_dict, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:create_atc"), atc_dict, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/automatictableconstruction_detail.html")
         self.assertContains(response, atc_name)
         atc = response.context["object"]
         self.assertEqual(atc.name, atc_name)
         self.assertEqual(atc.description, atc_description)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "osquery.automatictableconstruction",
+                 "pk": str(atc.pk),
+                 "new_value": {
+                     "pk": atc.pk,
+                     "name": atc_name,
+                     "description": atc_description,
+                     "table_name": atc_dict["table_name"],
+                     "query": atc_dict["query"],
+                     "path": atc_dict["path"],
+                     "columns": atc.columns,
+                     "platforms": atc.platforms,
+                     "created_at": atc.created_at.isoformat(),
+                     "updated_at": atc.updated_at.isoformat(),
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"osquery_automatic_table_construction": [str(atc.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
     # update atc
 
@@ -94,17 +125,24 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/automatictableconstruction_form.html")
 
-    def test_update_atc_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_atc_post(self, post_event):
         atc, atc_dict = self._force_atc()
+        prev_value = atc.serialize_for_event()
         self.login("osquery.change_automatictableconstruction", "osquery.view_automatictableconstruction")
         atc_dict["name"] = get_random_string(12)
-        response = self.client.post(reverse("osquery:update_atc", args=(atc.pk,)),
-                                    atc_dict, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:update_atc", args=(atc.pk,)),
+                                        atc_dict, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/automatictableconstruction_detail.html")
         self.assertContains(response, atc_dict["name"])
         atc = response.context["object"]
         self.assertEqual(atc.name, atc_dict["name"])
+        payload, metadata = assert_audit_event(self, post_event, "updated", atc, prev_value=prev_value)
+        self.assertNotEqual(payload["object"]["prev_value"]["name"], payload["object"]["new_value"]["name"])
+        self.assertEqual(metadata["objects"], {"osquery_automatic_table_construction": [str(atc.pk)]})
 
     # delete atc
 
@@ -126,14 +164,20 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/automatictableconstruction_confirm_delete.html")
         self.assertContains(response, atc.name)
 
-    def test_delete_atc_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_atc_post(self, post_event):
         atc, _ = self._force_atc()
+        prev_value = atc.serialize_for_event()
         self.login("osquery.delete_automatictableconstruction", "osquery.view_automatictableconstruction")
-        response = self.client.post(reverse("osquery:delete_atc", args=(atc.pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:delete_atc", args=(atc.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/automatictableconstruction_list.html")
         self.assertEqual(AutomaticTableConstruction.objects.filter(pk=atc.pk).count(), 0)
         self.assertNotContains(response, atc.name)
+        _, metadata = assert_audit_event(self, post_event, "deleted", atc, prev_value=prev_value)
+        self.assertEqual(metadata["objects"], {"osquery_automatic_table_construction": [str(atc.pk)]})
 
     # atc list
 

@@ -1,7 +1,8 @@
 import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import DetailView, ListView
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from zentral.contrib.osquery.forms import ATCForm
 from zentral.contrib.osquery.models import AutomaticTableConstruction
 
@@ -19,7 +20,7 @@ class ATCListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateATCView(PermissionRequiredMixin, CreateView):
+class CreateATCView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.add_automatictableconstruction"
     model = AutomaticTableConstruction
     form_class = ATCForm
@@ -36,13 +37,13 @@ class ATCView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateATCView(PermissionRequiredMixin, UpdateView):
+class UpdateATCView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_automatictableconstruction"
     model = AutomaticTableConstruction
     form_class = ATCForm
 
 
-class DeleteATCView(PermissionRequiredMixin, DeleteView):
+class DeleteATCView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.delete_automatictableconstruction"
     model = AutomaticTableConstruction
     success_url = reverse_lazy("osquery:atcs")

@@ -1,10 +1,12 @@
 import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
-from django.views.generic import DeleteView, TemplateView
+from django.views.generic import TemplateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.osquery.forms import EnrollmentForm
 from zentral.contrib.osquery.models import Configuration, Enrollment
+from zentral.core.events.base import AuditEvent
+from zentral.utils.views import DeleteViewWithAudit, post_audit_event
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.enrollments')
@@ -47,6 +49,7 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
         if self.configuration:
             enrollment.configuration = self.configuration
         enrollment.save()
+        post_audit_event(self.request, enrollment, AuditEvent.Action.CREATED)
         return redirect(enrollment)
 
     def post(self, request, *args, **kwargs):
@@ -57,7 +60,7 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class DeleteEnrollmentView(PermissionRequiredMixin, DeleteView):
+class DeleteEnrollmentView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.delete_enrollment"
 
     def get_queryset(self):
@@ -96,5 +99,7 @@ class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
+        prev_value = self.enrollment.serialize_for_event()
         self.enrollment.save()  # will bump the version
+        post_audit_event(request, self.enrollment, AuditEvent.Action.UPDATED, prev_value=prev_value)
         return redirect(self.enrollment)

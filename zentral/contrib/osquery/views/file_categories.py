@@ -1,7 +1,8 @@
 import logging
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import DetailView, ListView
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from zentral.contrib.osquery.forms import FileCategoryForm
 from zentral.contrib.osquery.models import FileCategory
 
@@ -19,7 +20,7 @@ class FileCategoryListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateFileCategoryView(PermissionRequiredMixin, CreateView):
+class CreateFileCategoryView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.add_filecategory"
     model = FileCategory
     form_class = FileCategoryForm
@@ -36,13 +37,13 @@ class FileCategoryView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateFileCategoryView(PermissionRequiredMixin, UpdateView):
+class UpdateFileCategoryView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_filecategory"
     model = FileCategory
     form_class = FileCategoryForm
 
 
-class DeleteFileCategoryView(PermissionRequiredMixin, DeleteView):
+class DeleteFileCategoryView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.delete_filecategory"
     model = FileCategory
     success_url = reverse_lazy("osquery:file_categories")

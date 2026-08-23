@@ -6,6 +6,21 @@
 
 To activate the osquery module, you need to add a `zentral.contrib.osquery` section to the `apps` section in `base.json`.
 
+## Audit events
+
+Zentral publishes a `zentral_audit` event when a user creates, updates or deletes an Osquery object from the web console: automatic table constructions, configurations, configuration packs, enrollments, file categories, packs, pack queries, queries, and distributed query runs. Each event carries the value of the object before and after the change, with the user, the source IP and the request that made it.
+
+Most of these objects are managed with the Zentral Terraform provider: the automatic table constructions, the configurations, the configuration packs, the enrollments, the file categories, the packs and the queries. For these objects, the event records a change that did not come from the Terraform configuration.
+
+Distributed query runs are not managed with Terraform. A run executes SQL on the machines, and the event records that action.
+
+Two effects of a change have no event of their own:
+
+* A change to a configuration increases the version of each of its enrollments. The event of the configuration records the change.
+* A change to a pack query sets the update time of its pack. The event of the pack query records the change.
+
+The "Halt current runs" option of a new run stops the other runs of the same query. Each stopped run has its own event.
+
 ## HTTP API
 
 ### Requests

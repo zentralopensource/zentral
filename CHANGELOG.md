@@ -11,6 +11,13 @@ A data asset can be created and updated with its content in the request now, bas
 The `file_uri` and `file_sha256` attributes of the data asset endpoints are not required fields anymore. A request without `file_uri` and without `source` gives one error for the two of them, and not one "This field is required." for each attribute.
 
 
+#### Osquery
+
+Zentral publishes a `zentral_audit` event when a user creates, updates or deletes an Osquery object from the web console: automatic table constructions, configurations, configuration packs, enrollments, file categories, packs, pack queries, queries and distributed query runs. Each event carries the full value of the object before and after the change, and the user, the source IP and the request that made it.
+
+A run that stops other runs of the same query — the "Halt current runs" option — now publishes one event for each stopped run. Before, the other runs ended with no record of it.
+
+
 #### Santa
 
 A clean sync — `CLEAN` or `CLEAN_ALL` — can be queued for an enrolled machine from its machine page or from the API, and cancelled before its next preflight. The new `Santa::Action::"forceCleanSync"` PBAC action gives the permission, and accepts a meta business unit and a sync type.
@@ -35,6 +42,8 @@ The `version` attribute of an Osquery query in an event payload is the version o
 
 ### Bug fixes
 
+
+Fixed the version of an Osquery query in the events published when a user changed the query from the web console. The version was a database expression, and not a number.
 
 Fixed the `zentral_audit` event published when a user increases the version of an enrollment. The enrollment payload had no version, so the event showed the same value before and after the change. The payload has the `version` and `updated_at` attributes now, for the Monolith, Munki, Osquery, Santa and Turbo enrollments.
 

@@ -7,7 +7,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
+from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.core.events.base import AuditEvent
 from zentral.contrib.osquery.models import (
     DistributedQuery,
     DistributedQueryMachine,
@@ -72,22 +74,57 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, query.name)
         self.assertNotContains(response, "Halt current")
 
-    def test_create_distributed_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_distributed_query_post(self, post_event):
         query = self._force_query()
+        query.minimum_osquery_version = "5.10.2"
+        query.save()
         self.login("osquery.add_distributedquery", "osquery.view_distributedquery")
-        response = self.client.post(
-            "{}?q={}".format(reverse("osquery:create_distributed_query"), query.pk),
-            {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-             "shard": "100"},
-            follow=True
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                "{}?q={}".format(reverse("osquery:create_distributed_query"), query.pk),
+                {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                 "shard": "100"},
+                follow=True
+            )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/distributedquery_detail.html")
         self.assertEqual(response.context["query"], query)
         distributed_query = response.context["object"]
         self.assertEqual(distributed_query.query, query)
         self.assertEqual(distributed_query.sql, query.sql)
         self.assertEqual(distributed_query.query_version, query.version)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "osquery.distributedquery",
+                 "pk": str(distributed_query.pk),
+                 "new_value": {
+                     "pk": distributed_query.pk,
+                     "query": {"pk": query.pk, "name": query.name},
+                     "query_version": query.version,
+                     "sql": query.sql,
+                     "platforms": [],
+                     "valid_from": distributed_query.valid_from.isoformat(),
+                     "valid_until": None,
+                     "serial_numbers": [],
+                     "tags": [],
+                     "shard": 100,
+                     "minimum_osquery_version": "5.10.2",
+                     "created_at": distributed_query.created_at.isoformat(),
+                     "updated_at": distributed_query.updated_at.isoformat(),
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"],
+                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                          "osquery_query": [str(query.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
     def test_create_distributed_query_valid_until_less_than_valid_from(self):
         query = self._force_query()
@@ -128,35 +165,46 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, distributed_query.query.name)
         self.assertContains(response, "Halt current")
 
-    def test_create_distributed_no_halt_current_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_distributed_no_halt_current_post(self, post_event):
         distributed_query = self._force_distributed_query()
         self.login("osquery.add_distributedquery", "osquery.view_distributedquery")
-        response = self.client.post(
-            "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
-            {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-             "shard": "100"},
-            follow=True
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
+                {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                 "shard": "100"},
+                follow=True
+            )
         self.assertEqual(response.status_code, 200)
+        # only the new run is audited, the untouched one is not
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/distributedquery_detail.html")
         self.assertEqual(response.context["query"], distributed_query.query)
         distributed_query2 = response.context["object"]
         self.assertEqual(distributed_query.query, distributed_query2.query)
         distributed_query.refresh_from_db()
         self.assertEqual(distributed_query.valid_until, None)
+        self.assertEqual(post_event.call_count, 1)
+        assert_audit_event(self, post_event, "created", distributed_query2)
 
-    def test_create_distributed_halt_current_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_distributed_halt_current_post(self, post_event):
         distributed_query = self._force_distributed_query()
+        prev_value = distributed_query.serialize_for_event()
         self.login("osquery.add_distributedquery", "osquery.view_distributedquery")
         pre_post_dt = naive_utcnow()
-        response = self.client.post(
-            "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
-            {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-             "shard": "100",
-             "halt_current_runs": "on"},
-            follow=True
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                "{}?q={}".format(reverse("osquery:create_distributed_query"), distributed_query.query.pk),
+                {"valid_from": naive_utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                 "shard": "100",
+                 "halt_current_runs": "on"},
+                follow=True
+            )
         self.assertEqual(response.status_code, 200)
+        # the halted run is audited too, not just the new one
+        self.assertEqual(len(callbacks), 2)
         self.assertTemplateUsed(response, "osquery/distributedquery_detail.html")
         self.assertEqual(response.context["query"], distributed_query.query)
         distributed_query2 = response.context["object"]
@@ -165,6 +213,16 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertFalse(distributed_query.is_active())
         self.assertTrue(distributed_query.valid_until > pre_post_dt)
         self.assertTrue(distributed_query.valid_until < naive_utcnow())
+        self.assertEqual(post_event.call_count, 2)
+        halt_payload, halt_metadata = assert_audit_event(self, post_event, "updated", distributed_query,
+                                                         prev_value=prev_value)
+        self.assertIsNone(halt_payload["object"]["prev_value"]["valid_until"])
+        self.assertEqual(halt_payload["object"]["new_value"]["valid_until"],
+                         distributed_query.valid_until.isoformat())
+        self.assertEqual(halt_metadata["objects"],
+                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                          "osquery_query": [str(distributed_query.query.pk)]})
+        assert_audit_event(self, post_event, "created", distributed_query2, call_index=1)
 
     # update distributed query
 
@@ -187,21 +245,32 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["object"], distributed_query)
         self.assertNotContains(response, "Halt current")
 
-    def test_update_distributed_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_distributed_query_post(self, post_event):
         distributed_query = self._force_distributed_query()
+        prev_value = distributed_query.serialize_for_event()
         self.login("osquery.change_distributedquery", "osquery.view_distributedquery")
-        response = self.client.post(
-            reverse("osquery:update_distributed_query", args=(distributed_query.pk,)),
-            {"valid_from": "2020-07-30 11:50:00",
-             "valid_until": "2021-02-18 20:55:00",
-             "shard": "99"},
-            follow=True
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("osquery:update_distributed_query", args=(distributed_query.pk,)),
+                {"valid_from": "2020-07-30 11:50:00",
+                 "valid_until": "2021-02-18 20:55:00",
+                 "shard": "99"},
+                follow=True
+            )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/distributedquery_detail.html")
         self.assertEqual(response.context["object"], distributed_query)
         distributed_query.refresh_from_db()
         self.assertEqual(distributed_query.shard, 99)
+        payload, metadata = assert_audit_event(self, post_event, "updated", distributed_query,
+                                               prev_value=prev_value)
+        self.assertIsNone(payload["object"]["prev_value"]["valid_until"])
+        self.assertEqual(payload["object"]["new_value"]["valid_until"], "2021-02-18T20:55:00")
+        self.assertEqual(metadata["objects"],
+                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                          "osquery_query": [str(distributed_query.query.pk)]})
 
     def test_update_distributed_query_valid_until_less_than_valid_from(self):
         distributed_query = self._force_distributed_query()
@@ -281,14 +350,22 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/distributedquery_confirm_delete.html")
         self.assertEqual(response.context["object"], distributed_query)
 
-    def test_delete_distributed_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_distributed_query_post(self, post_event):
         distributed_query = self._force_distributed_query()
+        prev_value = distributed_query.serialize_for_event()
         self.login("osquery.delete_distributedquery", "osquery.view_distributedquery")
-        response = self.client.post(reverse("osquery:delete_distributed_query", args=(distributed_query.pk,)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:delete_distributed_query", args=(distributed_query.pk,)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/distributedquery_list.html")
         self.assertNotIn(distributed_query, response.context["distributed_queries"])
+        _, metadata = assert_audit_event(self, post_event, "deleted", distributed_query, prev_value=prev_value)
+        self.assertEqual(metadata["objects"],
+                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                          "osquery_query": [str(distributed_query.query.pk)]})
 
     # distributed query machines
 

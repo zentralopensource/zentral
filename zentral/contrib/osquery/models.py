@@ -12,6 +12,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import BaseEnrollment, Tag
 from zentral.utils.sql import tables_in_query, format_sql
 from zentral.utils.text import shard
+from zentral.utils.time import naive_utcnow
 from .specs import cli_only_flags
 
 
@@ -361,6 +362,22 @@ class FileCategory(models.Model):
     def get_absolute_url(self):
         return reverse("osquery:file_category", args=(self.pk,))
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "slug": self.slug,
+            "description": self.description,
+            "file_paths": sorted(self.file_paths),
+            "exclude_paths": sorted(self.exclude_paths),
+            "file_paths_queries": sorted(self.file_paths_queries),
+            "access_monitoring": self.access_monitoring,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
+
 
 class AutomaticTableConstruction(models.Model):
     name = models.CharField(max_length=256, unique=True)
@@ -391,6 +408,22 @@ class AutomaticTableConstruction(models.Model):
 
     def get_query_html(self):
         return format_sql(self.query)
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "description": self.description,
+            "table_name": self.table_name,
+            "query": self.query,
+            "path": self.path,
+            "columns": self.columns,
+            "platforms": sorted(self.platforms),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
 
 
 class Configuration(models.Model):
@@ -430,6 +463,26 @@ class Configuration(models.Model):
 
     def get_absolute_url(self):
         return reverse("osquery:configuration", args=(self.pk,))
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "description": self.description,
+            "inventory": self.inventory,
+            "inventory_apps": self.inventory_apps,
+            "inventory_ec2": self.inventory_ec2,
+            "inventory_interval": self.inventory_interval,
+            "options": self.options,
+            "file_categories": [fc.serialize_for_event(keys_only=True)
+                                for fc in self.file_categories.all().order_by("pk")],
+            "automatic_table_constructions": [atc.serialize_for_event(keys_only=True)
+                                              for atc in self.automatic_table_constructions.all().order_by("pk")],
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
 
     def get_all_flags(self):
         flags = {
@@ -516,6 +569,21 @@ class ConfigurationPack(models.Model):
     def get_absolute_url(self):
         return "{}#cp{}".format(self.configuration.get_absolute_url(), self.pk)
 
+    def serialize_for_event(self):
+        return {
+            "pk": self.pk,
+            "configuration": self.configuration.serialize_for_event(keys_only=True),
+            "pack": self.pack.serialize_for_event(keys_only=True),
+            "tags": [t.serialize_for_event(keys_only=True) for t in self.tags.all().order_by("pk")],
+            "excluded_tags": [t.serialize_for_event(keys_only=True)
+                              for t in self.excluded_tags.all().order_by("pk")],
+        }
+
+    def linked_objects_keys_for_event(self):
+        return {"osquery_configuration_pack": ((self.pk,),),
+                "osquery_configuration": ((self.configuration_id,),),
+                "osquery_pack": ((self.pack_id,),)}
+
 
 # Enrollment
 
@@ -529,11 +597,14 @@ class Enrollment(BaseEnrollment):
 
     def serialize_for_event(self):
         enrollment_dict = super().serialize_for_event()
-        enrollment_dict["configuration"] = {"pk": self.configuration.pk,
-                                            "name": self.configuration.name}
+        enrollment_dict["configuration"] = self.configuration.serialize_for_event(keys_only=True)
         if self.osquery_release:
             enrollment_dict["osquery_release"] = self.osquery_release
         return enrollment_dict
+
+    def linked_objects_keys_for_event(self):
+        return {"osquery_enrollment": ((self.pk,),),
+                "osquery_configuration": ((self.configuration_id,),)}
 
     def get_absolute_url(self):
         return "{}#enrollment_{}".format(reverse("osquery:configuration", args=(self.configuration.pk,)), self.pk)
@@ -606,6 +677,22 @@ class DistributedQueryManager(models.Manager):
             if dq.shard == 100 or shard(serial_number, dq.pk) <= dq.shard:
                 yield dq
 
+    def halt_for_query(self, query):
+        """End every active run of the query, and report what was ended.
+
+        Returns (instance, prev_value) per halted run, so that the caller can post the audit
+        events. The rows are read before the update, because the previous valid_until is gone
+        once it is written.
+        """
+        now = naive_utcnow()
+        halted = []
+        for dq in self.active().filter(query=query).order_by("pk"):
+            halted.append((dq, dq.serialize_for_event()))
+            dq.valid_until = now
+        if halted:
+            self.filter(pk__in=[dq.pk for dq, _ in halted]).update(valid_until=now)
+        return halted
+
 
 class DistributedQuery(models.Model):
     query = models.ForeignKey(Query, on_delete=models.SET_NULL, null=True, editable=False)
@@ -676,6 +763,32 @@ class DistributedQuery(models.Model):
         cursor = connection.cursor()
         cursor.execute(query, [self.pk])
         return [t[0] for t in cursor.fetchall()]
+
+    def serialize_for_event(self):
+        # a run has no name of its own, and outlives the query it was launched from
+        d = {"pk": self.pk,
+             "query": self.query.serialize_for_event(keys_only=True) if self.query else None}
+        d.update({
+            "query_version": self.query_version,
+            "sql": self.sql,
+            "platforms": sorted(self.platforms),
+            "valid_from": self.valid_from.isoformat(),
+            "valid_until": self.valid_until.isoformat() if self.valid_until else None,
+            "serial_numbers": sorted(self.serial_numbers),
+            "tags": [t.serialize_for_event(keys_only=True) for t in self.tags.all().order_by("pk")],
+            "shard": self.shard,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        if self.minimum_osquery_version:
+            d["minimum_osquery_version"] = self.minimum_osquery_version
+        return d
+
+    def linked_objects_keys_for_event(self):
+        keys = {"osquery_distributed_query": ((self.pk,),)}
+        if self.query_id:
+            keys["osquery_query"] = ((self.query_id,),)
+        return keys
 
 
 class DistributedQueryMachine(models.Model):

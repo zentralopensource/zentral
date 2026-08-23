@@ -8,11 +8,12 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from zentral.utils.sql import tables_in_query
-from django.views.generic import CreateView, DeleteView, DetailView, UpdateView, TemplateView
+from django.views.generic import DetailView, TemplateView
 from zentral.contrib.osquery.forms import DistributedQueryForm, DistributedQueryMachineSearchForm
 from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             FileCarvingSession, Query)
-from zentral.utils.views import UserPaginationListView, UserPaginationMixin
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
+                                 UserPaginationListView, UserPaginationMixin)
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.distributed_queries')
@@ -78,7 +79,7 @@ class DistributedQueryListView(PermissionRequiredMixin, UserPaginationMixin, Tem
         return ctx
 
 
-class CreateDistributedQueryView(PermissionRequiredMixin, CreateView):
+class CreateDistributedQueryView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "osquery.add_distributedquery"
     model = DistributedQuery
     form_class = DistributedQueryForm
@@ -90,6 +91,7 @@ class CreateDistributedQueryView(PermissionRequiredMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["query"] = self.query
+        kwargs["request"] = self.request
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -114,7 +116,7 @@ class DistributedQueryView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateDistributedQueryView(PermissionRequiredMixin, UpdateView):
+class UpdateDistributedQueryView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_distributedquery"
     model = DistributedQuery
     form_class = DistributedQueryForm
@@ -125,7 +127,7 @@ class UpdateDistributedQueryView(PermissionRequiredMixin, UpdateView):
         return ctx
 
 
-class DeleteDistributedQueryView(PermissionRequiredMixin, DeleteView):
+class DeleteDistributedQueryView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "osquery.delete_distributedquery"
     model = DistributedQuery
     success_url = reverse_lazy("osquery:distributed_queries")

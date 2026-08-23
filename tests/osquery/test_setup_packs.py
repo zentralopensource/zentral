@@ -1,14 +1,17 @@
 from io import BytesIO
+from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from accounts.models import User
+from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
 from django.utils.text import slugify
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
+from zentral.core.events.base import AuditEvent
 
 
 class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
@@ -70,15 +73,42 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/pack_form.html")
         self.assertContains(response, "Create Pack")
 
-    def test_create_pack_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_pack_post(self, post_event):
         self.login("osquery.add_pack", "osquery.view_pack")
         pack_name = get_random_string(64)
-        response = self.client.post(reverse("osquery:create_pack"), {"name": pack_name}, follow=True)
+        pack_description = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:create_pack"),
+                                        {"name": pack_name, "description": pack_description},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/pack_detail.html")
         self.assertContains(response, pack_name)
         pack = response.context["object"]
         self.assertEqual(pack.name, pack_name)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload,
+            {"action": "created",
+             "object": {
+                 "model": "osquery.pack",
+                 "pk": str(pack.pk),
+                 "new_value": {
+                     "pk": pack.pk,
+                     "slug": pack.slug,
+                     "name": pack_name,
+                     "description": pack_description,
+                     "created_at": pack.created_at.isoformat(),
+                     "updated_at": pack.updated_at.isoformat(),
+                 }
+              }}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"osquery_pack": [str(pack.pk)]})
+        self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
     # update pack
 
@@ -99,20 +129,28 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/pack_form.html")
 
-    def test_update_pack_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_pack_post(self, post_event):
         pack = self._force_pack()
+        prev_value = pack.serialize_for_event()
         self.login("osquery.change_pack", "osquery.view_pack")
         new_name = get_random_string(12)
-        response = self.client.post(reverse("osquery:update_pack", args=(pack.pk,)),
-                                    {"name": new_name,
-                                     "shard": 97},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:update_pack", args=(pack.pk,)),
+                                        {"name": new_name,
+                                         "shard": 97},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/pack_detail.html")
         self.assertContains(response, new_name)
         pack = response.context["object"]
         self.assertEqual(pack.name, new_name)
         self.assertEqual(pack.shard, 97)
+        payload, metadata = assert_audit_event(self, post_event, "updated", pack, prev_value=prev_value)
+        self.assertNotIn("shard", payload["object"]["prev_value"])
+        self.assertEqual(payload["object"]["new_value"]["shard"], 97)
+        self.assertEqual(metadata["objects"], {"osquery_pack": [str(pack.pk)]})
 
     # upload pack
 
@@ -216,14 +254,20 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/pack_confirm_delete.html")
         self.assertContains(response, pack.name)
 
-    def test_delete_pack_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_pack_post(self, post_event):
         pack = self._force_pack()
+        prev_value = pack.serialize_for_event()
         self.login("osquery.delete_pack", "osquery.view_pack")
-        response = self.client.post(reverse("osquery:delete_pack", args=(pack.pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:delete_pack", args=(pack.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/pack_list.html")
         self.assertEqual(Pack.objects.filter(pk=pack.pk).count(), 0)
         self.assertNotContains(response, pack.name)
+        _, metadata = assert_audit_event(self, post_event, "deleted", pack, prev_value=prev_value)
+        self.assertEqual(metadata["objects"], {"osquery_pack": [str(pack.pk)]})
 
     # pack list
 
@@ -311,18 +355,26 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["form"], "snapshot_mode",
                              "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
 
-    def test_add_pack_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_add_pack_query_post(self, post_event):
         pack = self._force_pack()
         query = self._force_query()
         self.login("osquery.add_packquery", "osquery.view_pack", "osquery.view_packquery")
-        response = self.client.post(reverse("osquery:add_pack_query", args=(pack.pk,)),
-                                    {"query": query.pk, "interval": 3456}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:add_pack_query", args=(pack.pk,)),
+                                        {"query": query.pk, "interval": 3456}, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/pack_detail.html")
         self.assertEqual(response.context["object"], pack)
         self.assertContains(response, query.name)
         self.assertContains(response, "3456s")
         self.assertNotContains(response, "Compliance check")
+        pack_query = query.packquery
+        payload, metadata = assert_audit_event(self, post_event, "created", pack_query)
+        self.assertEqual(payload["object"]["new_value"]["interval"], 3456)
+        self.assertEqual(payload["object"]["new_value"]["pack"], {"pk": pack.pk, "slug": pack.slug})
+        self.assertEqual(metadata["objects"], {"osquery_pack_query": [str(pack_query.pk)]})
 
     def test_add_pack_query_with_slug_conflict(self):
         query_name = get_random_string(16)
@@ -404,17 +456,26 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["form"], "snapshot_mode",
                              "'Log removed actions' and 'Snapshot mode' are mutually exclusive")
 
-    def test_update_pack_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_pack_query_post(self, post_event):
         query = self._force_query(force_pack=True)
         pack_query = query.packquery
+        prev_value = pack_query.serialize_for_event()
         self.login("osquery.change_packquery", "osquery.view_pack", "osquery.view_packquery")
-        response = self.client.post(reverse("osquery:update_pack_query", args=(pack_query.pack.pk, pack_query.pk)),
-                                    {"query": query.pk, "interval": 12345}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:update_pack_query",
+                                                args=(pack_query.pack.pk, pack_query.pk)),
+                                        {"query": query.pk, "interval": 12345}, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/pack_detail.html")
         self.assertEqual(response.context["object"], pack_query.pack)
         self.assertContains(response, query.name)
         self.assertContains(response, "12345s")
+        pack_query.refresh_from_db()
+        payload, metadata = assert_audit_event(self, post_event, "updated", pack_query, prev_value=prev_value)
+        self.assertEqual(payload["object"]["new_value"]["interval"], 12345)
+        self.assertEqual(metadata["objects"], {"osquery_pack_query": [str(pack_query.pk)]})
 
     def test_update_pack_query_with_compliance_check(self):
         query = self._force_query(force_pack=True, force_compliance_check=True)
@@ -453,14 +514,21 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["object"], pack_query)
         self.assertContains(response, query.name)
 
-    def test_delete_pack_query_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_pack_query_post(self, post_event):
         query = self._force_query(force_pack=True)
         pack_query = query.packquery
+        prev_value = pack_query.serialize_for_event()
         self.login("osquery.delete_packquery", "osquery.view_pack")
-        response = self.client.post(reverse("osquery:delete_pack_query", args=(pack_query.pack.pk, pack_query.pk)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("osquery:delete_pack_query",
+                                                args=(pack_query.pack.pk, pack_query.pk)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
         self.assertTemplateUsed(response, "osquery/pack_detail.html")
         self.assertEqual(response.context["object"], pack_query.pack)
         self.assertNotContains(response, query.name)
         self.assertNotContains(response, f"{pack_query.interval}s")
+        _, metadata = assert_audit_event(self, post_event, "deleted", pack_query, prev_value=prev_value)
+        self.assertEqual(metadata["objects"], {"osquery_pack_query": [str(pack_query.pk)]})
