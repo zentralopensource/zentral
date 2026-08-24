@@ -1,47 +1,68 @@
 import logging
 from urllib.parse import urlencode
+
+from base.notifier import notifier
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.urls import reverse_lazy
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import DeleteView, FormView
-from base.notifier import notifier
+
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine, Tag
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
-from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
+from zentral.core.stores.views import EventsStoreRedirectView, EventsView, FetchEventsView
 from zentral.utils.terraform import build_config_response
-from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
+from zentral.utils.text import encode_args, get_version_sort_key
+from zentral.utils.text import shard as compute_shard
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+
 from .conf import monolith_conf
-from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
-                    AddManifestEnrollmentPackageForm,
-                    AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
-                    CatalogForm,
-                    EnrollmentForm,
-                    ManifestForm, ManifestSearchForm,
-                    PackageForm, PkgInfoSearchForm,
-                    RepositoryForm,
-                    SubManifestForm, SubManifestSearchForm,
-                    SubManifestPkgInfoForm)
-from .models import (Catalog, CacheServer,
-                     EnrolledMachine,
-                     Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
-                     Condition, ManifestCatalog, ManifestSubManifest,
-                     Repository,
-                     SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestPkgInfo)
+from .forms import (
+    AddManifestCatalogForm,
+    AddManifestEnrollmentPackageForm,
+    AddManifestSubManifestForm,
+    CatalogForm,
+    DeleteManifestCatalogForm,
+    DeleteManifestSubManifestForm,
+    EditManifestCatalogForm,
+    EditManifestSubManifestForm,
+    EnrollmentForm,
+    ManifestForm,
+    ManifestSearchForm,
+    PackageForm,
+    PkgInfoSearchForm,
+    RepositoryForm,
+    SubManifestForm,
+    SubManifestPkgInfoForm,
+    SubManifestSearchForm,
+)
+from .models import (
+    SUB_MANIFEST_PKG_INFO_KEY_CHOICES,
+    CacheServer,
+    Catalog,
+    Condition,
+    EnrolledMachine,
+    Manifest,
+    ManifestCatalog,
+    ManifestEnrollmentPackage,
+    ManifestSubManifest,
+    PkgInfo,
+    PkgInfoName,
+    Repository,
+    SubManifest,
+    SubManifestPkgInfo,
+)
 from .repository_backends import RepositoryBackend
 from .repository_backends.azure import AzureRepositoryForm
 from .repository_backends.s3 import S3RepositoryForm
 from .terraform import iter_resources
 from .utils import test_monolith_object_inclusion, test_pkginfo_catalog_inclusion
-
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
 
@@ -303,6 +324,31 @@ class PkgInfosView(PermissionRequiredMixin, TemplateView):
         else:
             bc = [(None, "PkgInfos")]
         ctx["breadcrumbs"] = bc
+        return ctx
+
+
+class PkgInfoDataView(PermissionRequiredMixin, DetailView):
+    permission_required = "monolith.view_pkginfo"
+    template_name = "monolith/pkginfo_data.html"
+    context_object_name = "pkg_info"
+
+    def get_queryset(self):
+        return PkgInfo.objects.select_related("name", "repository")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # the pkginfo as served in the catalogs, to make the monolith rewrites visible
+        served_pkg_info = self.object.get_pkg_info()
+        ctx["served_pkg_info"] = served_pkg_info
+        # compared key by key, because get_pkg_info() re-adds the keys it rewrites, which moves them
+        # to the end of the dict and would show up as differences in a line by line comparison
+        ctx["rewrites"] = [
+            {"key": key,
+             "stored": self.object.data.get(key),
+             "served": served_pkg_info.get(key)}
+            for key in sorted(set(self.object.data) | set(served_pkg_info))
+            if self.object.data.get(key) != served_pkg_info.get(key)
+        ]
         return ctx
 
 

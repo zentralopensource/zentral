@@ -1368,6 +1368,67 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         )
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
+    # pkg info data
+
+    def test_pkg_info_data_login_redirect(self):
+        pkg_info = force_pkg_info()
+        self.login_redirect("pkg_info_data", pkg_info.pk)
+
+    def test_pkg_info_data_permission_denied(self):
+        pkg_info = force_pkg_info()
+        self.login()
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_pkg_info_data(self):
+        pkg_info = force_pkg_info()
+        pkg_info.data["unattended_install"] = True
+        pkg_info.data["installer_item_location"] = "yolo/fomo-1.0.pkg"
+        pkg_info.save()
+        self.login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/pkginfo_data.html")
+        self.assertEqual(response.context["pkg_info"], pkg_info)
+        self.assertContains(response, "unattended_install")
+        # the original location is displayed, and so is the rewritten one
+        self.assertContains(response, "yolo/fomo-1.0.pkg")
+        self.assertContains(response, response.context["served_pkg_info"]["installer_item_location"])
+
+    def test_pkg_info_data_rewrites(self):
+        pkg_info = force_pkg_info()
+        pkg_info.data["unattended_install"] = True
+        pkg_info.data["installer_item_location"] = "yolo/fomo-1.0.pkg"
+        pkg_info.save()
+        self.login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 200)
+        served_pkg_info = response.context["served_pkg_info"]
+        rewrites = {r["key"]: r for r in response.context["rewrites"]}
+        # the rewritten keys are reported with both values
+        self.assertEqual(rewrites["installer_item_location"]["stored"], "yolo/fomo-1.0.pkg")
+        self.assertEqual(rewrites["installer_item_location"]["served"],
+                         served_pkg_info["installer_item_location"])
+        self.assertEqual(rewrites["icon_name"]["served"], served_pkg_info["icon_name"])
+        # the catalogs are dropped from the served pkginfo
+        self.assertIsNone(rewrites["catalogs"]["served"])
+        # a key monolith does not touch is not reported
+        self.assertNotIn("unattended_install", rewrites)
+
+    def test_pkg_info_data_archived(self):
+        pkg_info = force_pkg_info(archived=True)
+        self.login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Archived at")
+
+    def test_pkg_info_name_links_to_pkg_info_data(self):
+        pkg_info = force_pkg_info()
+        self.login("monolith.view_pkginfoname", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_name", args=(pkg_info.name.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+
     # delete pkg info
 
     def test_delete_pkg_info_login_redirect(self):
