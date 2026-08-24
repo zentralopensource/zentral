@@ -591,8 +591,7 @@ class ConfigurationPack(models.Model):
         }
 
     def linked_objects_keys_for_event(self):
-        return {"osquery_configuration_pack": ((self.pk,),),
-                "osquery_configuration": ((self.configuration_id,),),
+        return {"osquery_configuration": ((self.configuration_id,),),
                 "osquery_pack": ((self.pack_id,),)}
 
 
@@ -614,8 +613,7 @@ class Enrollment(BaseEnrollment):
         return enrollment_dict
 
     def linked_objects_keys_for_event(self):
-        return {"osquery_enrollment": ((self.pk,),),
-                "osquery_configuration": ((self.configuration_id,),)}
+        return {"osquery_configuration": ((self.configuration_id,),)}
 
     def get_absolute_url(self):
         return "{}#enrollment_{}".format(reverse("osquery:configuration", args=(self.configuration.pk,)), self.pk)

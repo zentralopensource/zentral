@@ -1,4 +1,7 @@
-from django.test import TestCase
+import inspect
+import re
+from django.apps import apps
+from django.test import SimpleTestCase, TestCase
 from zentral.core.events.base import AuditEvent, linked_objects_key
 
 
@@ -64,3 +67,34 @@ class AuditEventObjectsTestCase(TestCase):
 
     def test_a_renamed_key_is_used_for_the_object(self):
         self.assertEqual(self._objects(RenamedKeyInstance(4)), {"accounts_oidc_api_token_issuer": [(4,)]})
+
+
+# a model writes its own key with its own pk in one of these two spellings
+OWN_PK = r"(\[\(self\.pk,\)\]|\(\(self\.pk,\),\))"
+
+
+class RedundantSelfKeysTestCase(SimpleTestCase):
+    """AuditEvent.build() links the object of the event on its own.
+
+    A model that writes its own key with its own pk in linked_objects_keys_for_event() does the
+    same work a second time. A model that writes its own key with something else keeps control of
+    it — the MDM device commands link themselves by uuid — so only the pk spelling is a defect.
+    """
+
+    def iter_hooks(self):
+        for model in apps.get_models():
+            hook = getattr(model, "linked_objects_keys_for_event", None)
+            if hook is not None:
+                yield model, hook
+
+    def test_the_traversal_finds_the_hooks(self):
+        """A guard that stops traversing passes for the wrong reason."""
+        self.assertGreater(len(list(self.iter_hooks())), 10)
+
+    def test_no_model_writes_its_own_key_with_its_own_pk(self):
+        offenders = []
+        for model, hook in self.iter_hooks():
+            own_key = linked_objects_key(model)
+            if re.search(rf'"{re.escape(own_key)}":\s*{OWN_PK}', inspect.getsource(hook)):
+                offenders.append(f"{model._meta.label} {own_key}")
+        self.assertEqual(sorted(offenders), [])

@@ -139,11 +139,8 @@ class Enrollment(BaseEnrollment):
         return enrollment_dict
 
     def linked_objects_keys_for_event(self):
-        # link both the enrollment and its configuration, so enrollment audit events surface under the config too
-        return {
-            "turbo_enrollment": [(self.pk,)],
-            "turbo_configuration": [(self.configuration_id,)],
-        }
+        # the events of an enrollment are also on the page of its configuration
+        return {"turbo_configuration": [(self.configuration_id,)]}
 
     def can_be_updated(self):
         return Enrollment.objects.can_be_updated().filter(pk=self.pk).exists()
@@ -572,10 +569,7 @@ class RecurringJob(JobScope):
         return d
 
     def linked_objects_keys_for_event(self):
-        keys = {
-            "turbo_recurring_job": [(self.pk,)],
-            "turbo_configuration": [(self.configuration_id,)],
-        }
+        keys = {"turbo_configuration": [(self.configuration_id,)]}
         keys.update(self.job.definition_linked_objects_keys())
         return keys
 
@@ -622,10 +616,7 @@ class OneTimeJob(JobScope):
         return d
 
     def linked_objects_keys_for_event(self):
-        keys = {
-            "turbo_one_time_job": [(self.pk,)],
-            "turbo_configuration": [(self.configuration_id,)],
-        }
+        keys = {"turbo_configuration": [(self.configuration_id,)]}
         keys.update(self.job.definition_linked_objects_keys())
         return keys
 

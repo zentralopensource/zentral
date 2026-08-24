@@ -312,7 +312,7 @@ class PkgInfoName(models.Model):
 
     # TODO: reevaluate for backward compatibility
     def linked_objects_keys_for_event(self):
-        return {"monolith_pkg_info_name": ((self.pk,),), "munki_pkginfo_name": ((self.name,),)}
+        return {"munki_pkginfo_name": ((self.name,),)}
 
 
 class PkgInfoManager(models.Manager):
@@ -577,7 +577,6 @@ class PkgInfo(models.Model):
     def linked_objects_keys_for_event(self):
         return {"munki_pkginfo_name": ((self.name.name,),),
                 "munki_pkginfo": ((self.name.name, self.version),),
-                "monolith_pkg_info": [(self.pk,)],
                 "monolith_pkg_info_name": [(self.name.pk,)],
                 "monolith_repository": [(self.repository.pk,)]}
 
@@ -876,8 +875,7 @@ class SubManifestPkgInfo(models.Model):
         return d
 
     def linked_objects_keys_for_event(self):
-        return {"monolith_sub_manifest_pkg_info": [(self.pk,)],
-                "monolith_sub_manifest": [(self.sub_manifest.pk,)],
+        return {"monolith_sub_manifest": [(self.sub_manifest.pk,)],
                 "monolith_pkg_info_name": [(self.pkg_info_name.pk,)]}
 
 
