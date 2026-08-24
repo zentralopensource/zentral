@@ -2903,14 +2903,16 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "updated_at": query.updated_at.isoformat()
                           })
 
-    def test_create_compliance_check_query(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_compliance_check_query(self, post_event):
         data = {
             "name": "test_query01",
             "sql": "select 'OK' ztl_status;",
             "compliance_check_enabled": True
         }
         self.set_permissions("osquery.add_query")
-        response = self.post(reverse("osquery_api:queries"), data)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
         query = Query.objects.get(name='test_query01')
@@ -2930,6 +2932,11 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "created_at": query.created_at.isoformat(),
                           "updated_at": query.updated_at.isoformat()
                           })
+        # a query that is a compliance check links it, so the events of the check are complete
+        event = post_event.call_args_list[0].args[0]
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"osquery_query": [str(query.pk)],
+                                               "compliance_check": [str(query.compliance_check.pk)]})
 
     def test_create_tag_update_query(self):
         tag = Tag.objects.create(name=get_random_string(12))

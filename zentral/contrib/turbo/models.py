@@ -321,9 +321,12 @@ class Script(models.Model):
         return d
 
     def linked_objects_keys_for_event(self):
-        keys = {"turbo_script": [(self.pk,)]}
+        keys = {}
         if self.tag_id:
             keys["tag"] = [(self.tag_id,)]
+        # a script is a compliance check only when the user asks for one
+        if self.compliance_check_id:
+            keys["compliance_check"] = [(self.compliance_check_id,)]
         return keys
 
     def delete(self, *args, **kwargs):
@@ -387,6 +390,9 @@ class MSCPCheck(models.Model):
 
     def get_absolute_url(self):
         return reverse("turbo:mscp_check", args=(self.pk,))
+
+    def linked_objects_keys_for_event(self):
+        return {"compliance_check": [(self.compliance_check_id,)]}
 
     @property
     def version(self):

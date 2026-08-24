@@ -1093,7 +1093,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
               }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)]})
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)],
+                                               "compliance_check": [str(script_check.compliance_check.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
         self.assertEqual(len(callbacks), 1)
 
@@ -1251,7 +1252,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
               }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)]})
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)],
+                                               "compliance_check": [str(script_check.compliance_check.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
         self.assertEqual(len(callbacks), 1)
 
@@ -1342,6 +1344,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_delete_script_check(self, post_event):
         script_check = force_script_check()
         prev_pk = script_check.pk
+        prev_cc_pk = script_check.compliance_check.pk
         prev_name = script_check.compliance_check.name
         prev_value = script_check.serialize_for_event()
         self.set_permissions("munki.delete_scriptcheck")
@@ -1362,6 +1365,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
               }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"munki_script_check": [str(prev_pk)]})
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(prev_pk)],
+                                               "compliance_check": [str(prev_cc_pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
         self.assertEqual(len(callbacks), 1)

@@ -162,6 +162,13 @@ class Query(models.Model):
             self.compliance_check.delete()
         return super().delete(*args, **kwargs)
 
+    def linked_objects_keys_for_event(self):
+        keys = {}
+        # a query is a compliance check only when the user asks for one
+        if self.compliance_check_id:
+            keys["compliance_check"] = [(self.compliance_check_id,)]
+        return keys
+
     def compliance_check_enabled(self):
         return True if self.compliance_check else False
 

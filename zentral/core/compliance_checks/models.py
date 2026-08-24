@@ -10,6 +10,10 @@ logger = logging.getLogger('zentral.core.compliance_checks.models')
 
 
 class ComplianceCheck(models.Model):
+    # the verbose name gives compliance_checks_compliance_check, which reads badly and does not
+    # match the key the events of the checks already use
+    linked_objects_key = "compliance_check"
+
     model = models.CharField(max_length=256, editable=False)
     name = models.TextField()
     description = models.TextField(blank=True)

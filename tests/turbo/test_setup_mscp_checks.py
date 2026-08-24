@@ -143,7 +143,8 @@ class TurboSetupMSCPChecksTestCase(TurboSetupTestCase):
         self.assertEqual(event.payload["object"]["pk"], str(mscp_check.pk))
         self.assertEqual(event.payload["object"]["new_value"]["version"], 1)
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"turbo_mscp_check": [str(mscp_check.pk)]})
+        self.assertEqual(metadata["objects"], {"turbo_mscp_check": [str(mscp_check.pk)],
+                                               "compliance_check": [str(mscp_check.compliance_check.pk)]})
 
     def test_create_mscp_check_baseline_post(self):
         self.login("turbo.add_mscpcheck", "turbo.view_mscpcheck")

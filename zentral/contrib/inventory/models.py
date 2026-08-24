@@ -1621,6 +1621,9 @@ class File(AbstractMTObject):
 
 
 class JMESPathCheck(models.Model):
+    # the verbose name gives jmes_path_check, and the events page asks for inventory_jmespath_check
+    linked_objects_key = "inventory_jmespath_check"
+
     compliance_check = models.OneToOneField(
         "compliance_checks.ComplianceCheck",
         on_delete=models.CASCADE,
@@ -1642,6 +1645,9 @@ class JMESPathCheck(models.Model):
 
     def get_absolute_url(self):
         return reverse("inventory:compliance_check", args=(self.pk,))
+
+    def linked_objects_keys_for_event(self):
+        return {"compliance_check": [(self.compliance_check_id,)]}
 
     def get_platforms_display(self):
         return ", ".join(sorted(PLATFORM_CHOICES_DICT.get(p) for p in self.platforms))

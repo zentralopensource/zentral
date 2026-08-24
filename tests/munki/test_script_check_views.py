@@ -335,7 +335,8 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
               }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)]})
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)],
+                                               "compliance_check": [str(script_check.compliance_check.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # view
@@ -554,7 +555,8 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
               }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)]})
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(script_check.pk)],
+                                               "compliance_check": [str(script_check.compliance_check.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # delete
@@ -606,7 +608,8 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
               }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"munki_script_check": [str(prev_pk)]})
+        self.assertEqual(metadata["objects"], {"munki_script_check": [str(prev_pk)],
+                                               "compliance_check": [str(prev_cc_pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # events

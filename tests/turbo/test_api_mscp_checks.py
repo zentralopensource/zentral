@@ -41,7 +41,8 @@ class TurboMSCPCheckAPITestCase(TurboAPITestCase):
         self.assertEqual(audit_events[0].payload["action"], "created")
         self.assertEqual(audit_events[0].payload["object"]["model"], "turbo.mscpcheck")
         metadata = audit_events[0].metadata.serialize()
-        self.assertEqual(metadata["objects"], {"turbo_mscp_check": [str(mscp_check.pk)]})
+        self.assertEqual(metadata["objects"], {"turbo_mscp_check": [str(mscp_check.pk)],
+                                               "compliance_check": [str(mscp_check.compliance_check.pk)]})
 
     def test_create_mscp_check_baseline(self):
         self.set_permissions("turbo.add_mscpcheck")

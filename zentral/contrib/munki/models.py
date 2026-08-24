@@ -242,6 +242,9 @@ class ScriptCheck(models.Model):
     def get_absolute_url(self):
         return reverse("munki:script_check", args=(self.pk,))
 
+    def linked_objects_keys_for_event(self):
+        return {"compliance_check": [(self.compliance_check_id,)]}
+
     def serialize_for_event(self):
         d = {
             "pk": self.pk,

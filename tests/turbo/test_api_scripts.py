@@ -55,7 +55,7 @@ class TurboScriptAPITestCase(TurboAPITestCase):
         script = Script.objects.get(pk=response.json()["id"])
         self.assertIsNotNone(script.compliance_check)
         self.assertEqual(script.tag, tag)
-        # the audit event links the script + the tagging tag, deliberately NOT the compliance check
+        # the audit event links the script, the tagging tag and the compliance check
         audit_events = self._audit_events(post_event)
         self.assertEqual(len(audit_events), 1)
         self.assertEqual(audit_events[0].payload["object"]["model"], "turbo.script")
@@ -63,6 +63,7 @@ class TurboScriptAPITestCase(TurboAPITestCase):
         self.assertEqual(metadata["objects"], {
             "turbo_script": [str(script.pk)],
             "tag": [str(tag.pk)],
+            "compliance_check": [str(script.compliance_check.pk)],
         })
 
     def test_list_scripts(self):
