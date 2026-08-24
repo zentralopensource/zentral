@@ -40,6 +40,8 @@ The Osquery API publishes the same `zentral_audit` events as the web console now
 
 #### Santa
 
+The Santa API publishes the same `zentral_audit` events as the web console now, for the enrollments.
+
 A clean sync — `CLEAN` or `CLEAN_ALL` — can be queued for an enrolled machine from its machine page or from the API, and cancelled before its next preflight. The new `Santa::Action::"forceCleanSync"` PBAC action gives the permission, and accepts a meta business unit and a sync type.
 
 New `/api/santa/enrolled_machines/` endpoint.

@@ -52,23 +52,20 @@ class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
             return super().perform_destroy(instance)
 
 
-class EnrollmentList(generics.ListCreateAPIView):
+class EnrollmentList(ListCreateAPIViewWithAudit):
     """
     List all Enrollments or create a new Enrollment
     """
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('configuration_id',)
 
 
-class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
+class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete an Enrollment instance.
     """
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
     def perform_destroy(self, instance):

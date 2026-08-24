@@ -19,7 +19,8 @@ from zentral.contrib.santa.models import (Configuration, EnrolledMachine, Rule, 
                                           Enrollment)
 from zentral.core.events.base import AuditEvent
 from zentral.utils.payloads import get_payload_identifier
-from .utils import force_rule, new_cdhash, new_sha256, new_signing_id_identifier, new_team_id
+from .utils import (assert_audit_event, force_rule, new_cdhash, new_sha256,
+                    new_signing_id_identifier, new_team_id)
 
 
 class APIViewsTestCase(TestCase, LoginCase, RequestCase):
@@ -2702,16 +2703,18 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     # create enrollment
 
-    def test_create_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_enrollment(self, post_event):
         config = self.force_configuration()
         self.set_permissions("santa.add_enrollment")
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
-        response = self.post(
-            reverse('santa_api:enrollments'),
-            {'configuration': config.pk,
-             'secret': {"meta_business_unit": self.mbu.pk,
-                        "tags": [t.id for t in tags]}}
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(
+                reverse('santa_api:enrollments'),
+                {'configuration': config.pk,
+                 'secret': {"meta_business_unit": self.mbu.pk,
+                            "tags": [t.id for t in tags]}}
+            )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Enrollment.objects.filter(configuration__name=config.name).count(), 1)
         enrollment = Enrollment.objects.get(configuration__name=config.name)
@@ -2720,6 +2723,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             set(enrollment.secret.tags.all()),
             set(tags)
         )
+        assert_audit_event(self, post_event, "created", enrollment)
 
     def test_create_enrollment_unauthorized(self):
         data = {'name': 'Configuration0'}
@@ -2734,8 +2738,10 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     # update enrollment
 
-    def test_update_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_enrollment(self, post_event):
         enrollment, _ = self.force_enrollment(tag_count=2)
+        prev_value = enrollment.serialize_for_event()
         enrollment_secret = enrollment.secret
         self.assertEqual(enrollment.secret.quota, None)
         self.assertEqual(enrollment.secret.serial_numbers, None)
@@ -2751,7 +2757,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
         self.set_permissions("santa.change_enrollment")
-        response = self.put(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
         self.assertEqual(response.status_code, 200)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.secret, enrollment_secret)
@@ -2762,6 +2769,10 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             set(enrollment.secret.tags.all()),
             set(tags)
         )
+        payload, _ = assert_audit_event(self, post_event, "updated", enrollment, prev_value=prev_value)
+        # the version is in the payload of the base enrollment, so the event shows the bump
+        self.assertEqual(payload["object"]["prev_value"]["version"], 1)
+        self.assertEqual(payload["object"]["new_value"]["version"], 2)
 
     def test_update_enrollment_unauthorized(self):
         enrollment, _ = self.force_enrollment()
@@ -2815,11 +2826,15 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     # delete enrollment
 
-    def test_delete_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_enrollment(self, post_event):
         enrollment, _ = self.force_enrollment()
+        prev_value = enrollment.serialize_for_event()
         self.set_permissions("santa.delete_enrollment")
-        response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse('santa_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
+        assert_audit_event(self, post_event, "deleted", enrollment, prev_value=prev_value)
 
     def test_delete_enrollment_unauthorized(self):
         enrollment, _ = self.force_enrollment()
