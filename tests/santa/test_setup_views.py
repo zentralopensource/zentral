@@ -21,6 +21,8 @@ from zentral.utils.provisioning import provision
 from zentral.utils.time import naive_utcnow
 
 from .utils import (
+    assert_audit_event,
+    assert_no_enrollment_secret,
     force_configuration,
     force_realm,
     force_realm_group,
@@ -630,13 +632,15 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         # no view enrollment perm!
         self.assertNotIn("enrollments", response.context)
 
-    def test_post_create_enrollment_view(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_create_enrollment_view(self, post_event):
         configuration = force_configuration()
         self.mbu.create_enrollment_business_unit()
         self.login("santa.add_enrollment", "santa.view_enrollment", "santa.view_configuration")
-        response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
-                                    {"secret-meta_business_unit": self.mbu.pk,
-                                     "configuration": configuration.pk}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
+                                        {"secret-meta_business_unit": self.mbu.pk,
+                                         "configuration": configuration.pk}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/configuration_detail.html")
         self.assertEqual(response.context["object"], configuration)
@@ -646,6 +650,15 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, enrollment.secret.meta_business_unit.name)
         self.assertContains(response, reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertContains(response, reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)))
+        self.assertEqual(len(callbacks), 1)
+        payload, metadata = assert_audit_event(self, post_event, "created", enrollment)
+        self.assertEqual(metadata["objects"],
+                         {"santa_enrollment": [str(enrollment.pk)],
+                          "santa_configuration": [str(configuration.pk)]})
+        self.assertEqual(payload["object"]["new_value"]["version"], 1)
+        self.assertEqual(payload["object"]["new_value"]["configuration"],
+                         {"pk": configuration.pk, "name": configuration.name})
+        assert_no_enrollment_secret(self, payload, enrollment)
 
     def test_enrollment_plist_permission_denied(self):
         _, enrollment = self._force_enrollment()

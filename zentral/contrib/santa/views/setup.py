@@ -18,11 +18,13 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          RuleForm, RuleSearchForm, UpdateRuleForm)
 from zentral.contrib.santa.models import Configuration, Enrollment, Rule, Target, VotingGroup
 from zentral.contrib.santa.terraform import iter_resources
+from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
+                                 UpdateViewWithAudit, UserPaginationListView)
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.setup')
@@ -238,6 +240,7 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
         if self.configuration:
             enrollment.configuration = self.configuration
         enrollment.save()
+        post_audit_event(self.request, enrollment, AuditEvent.Action.CREATED)
         return HttpResponseRedirect(enrollment.get_absolute_url())
 
     def post(self, request, *args, **kwargs):
