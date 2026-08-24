@@ -1,3 +1,4 @@
+import json
 from django.utils.crypto import get_random_string
 
 from zentral.core.events.base import AuditEvent
@@ -104,3 +105,12 @@ def assert_audit_event(test_case, post_event, action, instance, prev_value=None,
     metadata = event.metadata.serialize()
     test_case.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
     return event.payload, metadata
+
+
+def assert_no_enrollment_secret(test_case, payload, enrollment):
+    """EnrollmentSecret.serialize_for_event() leaves the secret out on purpose.
+
+    The secret is the credential that enrolls a machine, so a regression there puts a live
+    credential in every event store.
+    """
+    test_case.assertNotIn(enrollment.secret.secret, json.dumps(payload))

@@ -130,6 +130,10 @@ class Enrollment(BaseEnrollment):
         enrollment_dict["configuration"] = self.configuration.serialize_for_event(keys_only=True)
         return enrollment_dict
 
+    def linked_objects_keys_for_event(self):
+        # the events of an enrollment are also on the page of its configuration
+        return {"munki_configuration": ((self.configuration_id,),)}
+
 
 class EnrolledMachine(models.Model):
     enrollment = models.ForeignKey(Enrollment, on_delete=models.CASCADE)

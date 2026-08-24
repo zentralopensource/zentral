@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import F, Count
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DeleteView, DetailView, ListView, TemplateView, View
+from django.views.generic import DetailView, ListView, TemplateView, View
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
@@ -16,7 +16,8 @@ from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
+                                 UpdateViewWithAudit, UserPaginationListView)
 from .compliance_checks import MunkiScriptCheck
 from .forms import ConfigurationForm, EnrollmentForm, ScriptCheckForm, ScriptCheckSearchForm
 from .models import Configuration, Enrollment, MunkiState, PrincipalUserDetectionSource, ScriptCheck
@@ -194,6 +195,7 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
         enrollment.secret = secret
         enrollment.configuration = self.configuration
         enrollment.save()
+        post_audit_event(self.request, enrollment, AuditEvent.Action.CREATED)
         return redirect(enrollment)
 
     def post(self, request, *args, **kwargs):
@@ -204,7 +206,7 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
             return self.forms_invalid(secret_form, enrollment_form)
 
 
-class DeleteEnrollmentView(PermissionRequiredMixin, DeleteView):
+class DeleteEnrollmentView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "munki.delete_enrollment"
 
     def get_queryset(self):
@@ -243,7 +245,9 @@ class EnrollmentBumpVersionView(PermissionRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
+        prev_value = self.enrollment.serialize_for_event()
         self.enrollment.save()  # will bump the version
+        post_audit_event(request, self.enrollment, AuditEvent.Action.UPDATED, prev_value=prev_value)
         return redirect(self.enrollment)
 
 

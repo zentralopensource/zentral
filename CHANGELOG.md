@@ -31,6 +31,10 @@ The Monolith API publishes the same `zentral_audit` events as the web console no
 
 The Munki API publishes the same `zentral_audit` events as the web console now, for the enrollments.
 
+The Munki web console publishes a `zentral_audit` event when a user creates an enrollment, deletes an enrollment, or increases the version of an enrollment. These three changes had no record.
+
+The audit events of a Munki enrollment are also on the page of its configuration now, like the Osquery, Santa and Turbo enrollments. The Munki enrollment gave no link to its configuration, so its events were only on the enrollment.
+
 
 #### Osquery
 

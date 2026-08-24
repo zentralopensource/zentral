@@ -14,7 +14,8 @@ from zentral.contrib.munki.models import Enrollment
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
-from .utils import force_configuration, force_enrollment, force_script_check, make_enrolled_machine
+from .utils import (assert_audit_event, assert_no_enrollment_secret, force_configuration,
+                    force_enrollment, force_script_check, make_enrolled_machine)
 
 
 class MunkiSetupViewsTestCase(TestCase, LoginCase):
@@ -374,18 +375,29 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["enrollment_form"], "configuration",
                              "Select a valid choice. That choice is not one of the available choices.")
 
-    def test_create_enrollment_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_enrollment_post(self, post_event):
         configuration = force_configuration()
         self.login("munki.add_enrollment", "munki.view_configuration", "munki.view_enrollment")
-        response = self.client.post(reverse("munki:create_enrollment", args=(configuration.pk,)),
-                                    {"configuration": configuration.pk,
-                                     "secret-meta_business_unit": self.mbu.pk}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("munki:create_enrollment", args=(configuration.pk,)),
+                                        {"configuration": configuration.pk,
+                                         "secret-meta_business_unit": self.mbu.pk}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         enrollment = response.context["enrollments"][0][0]
         self.assertEqual(enrollment.configuration, configuration)
         self.assertEqual(enrollment.secret.meta_business_unit, self.mbu)
         self.assertContains(response, enrollment.secret.meta_business_unit.name)
+        self.assertEqual(len(callbacks), 1)
+        payload, metadata = assert_audit_event(self, post_event, "created", enrollment)
+        self.assertEqual(metadata["objects"],
+                         {"munki_enrollment": [str(enrollment.pk)],
+                          "munki_configuration": [str(configuration.pk)]})
+        self.assertEqual(payload["object"]["new_value"]["version"], 1)
+        self.assertEqual(payload["object"]["new_value"]["configuration"],
+                         {"pk": configuration.pk, "name": configuration.name})
+        assert_no_enrollment_secret(self, payload, enrollment)
 
     # bump enrollment version
 
@@ -408,17 +420,28 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/enrollment_confirm_version_bump.html")
 
-    def test_bump_enrollment_version_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_bump_enrollment_version_post(self, post_event):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
         version = enrollment.version
+        prev_value = enrollment.serialize_for_event()
         self.login("munki.change_enrollment", "munki.view_configuration")
-        response = self.client.post(reverse("munki:bump_enrollment_version",
-                                            args=(enrollment.configuration.pk, enrollment.pk)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("munki:bump_enrollment_version",
+                                                args=(enrollment.configuration.pk, enrollment.pk)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.version, version + 1)
+        self.assertEqual(len(callbacks), 1)
+        payload, metadata = assert_audit_event(self, post_event, "updated", enrollment, prev_value=prev_value)
+        self.assertEqual(metadata["objects"],
+                         {"munki_enrollment": [str(enrollment.pk)],
+                          "munki_configuration": [str(enrollment.configuration.pk)]})
+        self.assertEqual(payload["object"]["prev_value"]["version"], version)
+        self.assertEqual(payload["object"]["new_value"]["version"], version + 1)
+        assert_no_enrollment_secret(self, payload, enrollment)
 
     # delete enrollment
 
@@ -441,17 +464,27 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/enrollment_confirm_delete.html")
 
-    def test_delete_enrollment_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_enrollment_post(self, post_event):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
+        prev_value = enrollment.serialize_for_event()
         self.login("munki.delete_enrollment", "munki.view_configuration")
-        response = self.client.post(reverse("munki:delete_enrollment",
-                                            args=(enrollment.configuration.pk, enrollment.pk)),
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("munki:delete_enrollment",
+                                                args=(enrollment.configuration.pk, enrollment.pk)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "munki/configuration_detail.html")
         ctx_configuration = response.context["configuration"]
         self.assertEqual(ctx_configuration, enrollment.configuration)
         self.assertEqual(ctx_configuration.enrollment_set.filter(pk=enrollment.pk).count(), 0)
+        self.assertEqual(len(callbacks), 1)
+        payload, metadata = assert_audit_event(self, post_event, "deleted", enrollment, prev_value=prev_value)
+        self.assertEqual(metadata["objects"],
+                         {"munki_enrollment": [str(enrollment.pk)],
+                          "munki_configuration": [str(enrollment.configuration.pk)]})
+        self.assertNotIn("new_value", payload["object"])
+        assert_no_enrollment_secret(self, payload, enrollment)
 
     def test_delete_enrollment_distributor_404(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
