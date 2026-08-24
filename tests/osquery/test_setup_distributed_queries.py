@@ -122,7 +122,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"],
-                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                         {"osquery_run": [str(distributed_query.pk)],
                           "osquery_query": [str(query.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
@@ -220,7 +220,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(halt_payload["object"]["new_value"]["valid_until"],
                          distributed_query.valid_until.isoformat())
         self.assertEqual(halt_metadata["objects"],
-                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                         {"osquery_run": [str(distributed_query.pk)],
                           "osquery_query": [str(distributed_query.query.pk)]})
         assert_audit_event(self, post_event, "created", distributed_query2, call_index=1)
 
@@ -269,7 +269,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertIsNone(payload["object"]["prev_value"]["valid_until"])
         self.assertEqual(payload["object"]["new_value"]["valid_until"], "2021-02-18T20:55:00")
         self.assertEqual(metadata["objects"],
-                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                         {"osquery_run": [str(distributed_query.pk)],
                           "osquery_query": [str(distributed_query.query.pk)]})
 
     def test_update_distributed_query_valid_until_less_than_valid_from(self):
@@ -364,7 +364,7 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertNotIn(distributed_query, response.context["distributed_queries"])
         _, metadata = assert_audit_event(self, post_event, "deleted", distributed_query, prev_value=prev_value)
         self.assertEqual(metadata["objects"],
-                         {"osquery_distributed_query": [str(distributed_query.pk)],
+                         {"osquery_run": [str(distributed_query.pk)],
                           "osquery_query": [str(distributed_query.query.pk)]})
 
     # distributed query machines

@@ -695,6 +695,9 @@ class DistributedQueryManager(models.Manager):
 
 
 class DistributedQuery(models.Model):
+    # the compliance check status events have always called a distributed query a run
+    linked_objects_key = "osquery_run"
+
     query = models.ForeignKey(Query, on_delete=models.SET_NULL, null=True, editable=False)
     query_version = models.IntegerField(editable=False)
     sql = models.TextField(editable=False)
@@ -785,10 +788,10 @@ class DistributedQuery(models.Model):
         return d
 
     def linked_objects_keys_for_event(self):
-        keys = {"osquery_distributed_query": ((self.pk,),)}
+        # the object itself is linked under linked_objects_key
         if self.query_id:
-            keys["osquery_query"] = ((self.query_id,),)
-        return keys
+            return {"osquery_query": ((self.query_id,),)}
+        return {}
 
 
 class DistributedQueryMachine(models.Model):
