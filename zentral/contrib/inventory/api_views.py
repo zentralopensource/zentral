@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               FULL_UPDATE_AND_DELETE_METHOD_NAMES,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
@@ -438,6 +439,7 @@ class JMESPathCheckDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = JMESPathCheck.objects.select_related("compliance_check").all()
     permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = JMESPathCheckSerializer
+    http_method_names = FULL_UPDATE_AND_DELETE_METHOD_NAMES
 
     def perform_update(self, serializer):
         serializer.save()

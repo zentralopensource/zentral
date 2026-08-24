@@ -80,6 +80,12 @@ The `version` attribute of an Osquery query in an event payload is the version o
 
 `PATCH` gives a `405 Method Not Allowed` on the Monolith catalog, condition, enrollment and manifest enrollment package endpoints. Use `PUT`, and send all the attributes of the object.
 
+
+#### 🧨 PATCH on the Santa rule and Inventory JMESPath check endpoints
+
+`PATCH` gives a `405 Method Not Allowed` on the Santa rule and the Inventory JMESPath check endpoints. Use `PUT`, and send all the attributes of the object. These were the last two endpoints that accepted the method. A `PATCH` on a Santa rule gave a 500, because the serializer reads a `target` attribute that the request did not contain.
+
+
 #### 🧨 Santa enrolled machines metrics
 
 `zentral_santa_enrolled_machines_total` and `zentral_santa_enrolled_machines_sync_total` are replaced by `zentral_santa_enrolled_machines_bucket` and `zentral_santa_enrolled_machines_sync_bucket`, which have an `le` label. The `le="+Inf"` bucket gives the value of the two removed gauges: in a dashboard or an alert, change the metric name and select that bucket. A query that sums the buckets counts each machine seven times.

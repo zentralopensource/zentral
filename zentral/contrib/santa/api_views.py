@@ -18,6 +18,7 @@ from zentral.contrib.inventory.models import File, MetaMachine, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+                               FULL_UPDATE_AND_DELETE_METHOD_NAMES,
                                ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
                                PBACPermission, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
@@ -281,6 +282,7 @@ class RuleDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Rule.objects.select_related("configuration", "ruleset", "target")
     permission_classes = (DefaultDjangoModelPermissions,)
     serializer_class = RuleSerializer
+    http_method_names = FULL_UPDATE_AND_DELETE_METHOD_NAMES
 
     def perform_destroy(self, instance):
         if instance.is_voting_rule:
