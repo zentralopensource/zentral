@@ -4,7 +4,8 @@ import uuid
 from zentral.contrib.osquery.compliance_checks import ComplianceCheckStatusAggregator
 from zentral.contrib.osquery.models import EnrolledMachine, PackQuery, QueryType, parse_result_name
 from zentral.contrib.osquery.tags import TagUpdateAggregator
-from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
+from zentral.core.events.base import (AuditEvent, BaseEvent, EventMetadata, EventRequest,
+                                      register_event_type)
 from zentral.utils.time import naive_utcfromtimestamp
 
 logger = logging.getLogger('zentral.contrib.osquery.events')
@@ -117,21 +118,27 @@ class OsqueryStatusEvent(OsqueryEvent):
 register_event_type(OsqueryStatusEvent)
 
 
-# Audit trail events
+# Pack import
 
 
 class OsqueryPackUpdateEvent(OsqueryEvent):
+    """The report of a pack import.
+
+    What each object became is in the zentral_audit events the import publishes beside this one.
+    This event answers the question they cannot: what the import as a whole did, including the
+    "present" result, which says that the import ran and changed nothing.
+    """
+
     event_type = "osquery_pack_update"
+
+    def get_linked_objects_keys(self):
+        pack_pk = self.payload.get("pack", {}).get("pk")
+        if pack_pk:
+            return {"osquery_pack": [(pack_pk,)]}
+        return {}
 
 
 register_event_type(OsqueryPackUpdateEvent)
-
-
-class OsqueryPackQueryUpdateEvent(OsqueryEvent):
-    event_type = "osquery_pack_query_update"
-
-
-register_event_type(OsqueryPackQueryUpdateEvent)
 
 
 class OsqueryCheckStatusUpdated(BaseEvent):
@@ -319,13 +326,18 @@ def post_results(msn, results, request):
 # Utility function for the audit trail
 
 
-def post_osquery_pack_update_events(request, pack_data, pack_queries_data):
+def post_osquery_pack_update_events(request, sync_report, audit_events):
+    """Publish the report of a pack import and the audit event of each object it changed.
+
+    They share one event UUID, and the report is the first of them, so that a reader can gather
+    the whole import from any one of its events.
+    """
     event_request = EventRequest.build_from_request(request)
-    pack_update_event_metadata = EventMetadata(request=event_request)
-    pack_update_event = OsqueryPackUpdateEvent(pack_update_event_metadata, pack_data)
-    pack_update_event.post()
-    for idx, pack_query_data in enumerate(pack_queries_data):
-        pack_query_update_event_metadata = EventMetadata(request=event_request,
-                                                         uuid=pack_update_event_metadata.uuid, index=idx + 1)
-        pack_query_update_event = OsqueryPackQueryUpdateEvent(pack_query_update_event_metadata, pack_query_data)
-        pack_query_update_event.post()
+    metadata = EventMetadata(request=event_request)
+    OsqueryPackUpdateEvent(metadata, sync_report).post()
+    for index, (instance, action, prev_value) in enumerate(audit_events, start=1):
+        AuditEvent.build(
+            instance, action, prev_value,
+            event_uuid=metadata.uuid, event_index=index,
+            event_request=event_request,
+        ).post()

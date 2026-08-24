@@ -351,6 +351,23 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["object"], distributed_query)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_distributed_query_without_query_post(self, post_event):
+        # a run outlives the query it was launched from
+        distributed_query = self._force_distributed_query()
+        distributed_query.query.delete()
+        distributed_query.refresh_from_db()
+        self.assertIsNone(distributed_query.query)
+        prev_value = distributed_query.serialize_for_event()
+        self.assertIsNone(prev_value["query"])
+        self.login("osquery.delete_distributedquery", "osquery.view_distributedquery")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("osquery:delete_distributed_query", args=(distributed_query.pk,)),
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        _, metadata = assert_audit_event(self, post_event, "deleted", distributed_query, prev_value=prev_value)
+        self.assertEqual(metadata["objects"], {"osquery_run": [str(distributed_query.pk)]})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_distributed_query_post(self, post_event):
         distributed_query = self._force_distributed_query()
         prev_value = distributed_query.serialize_for_event()

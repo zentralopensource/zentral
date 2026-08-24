@@ -27,7 +27,9 @@ from zentral.contrib.osquery.models import (
     PackQuery,
     Query,
 )
+from zentral.contrib.osquery.events import OsqueryPackUpdateEvent
 from zentral.core.compliance_checks.models import ComplianceCheck
+from zentral.core.events.base import AuditEvent
 from zentral.utils.time import naive_utcnow
 
 
@@ -2459,6 +2461,155 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             response.json(),
             {"pack": {"slug": slug}, "result": "absent"}
         )
+
+    # standard pack import events
+
+    def _import_pack(self, url, pack, post_event):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(url, pack)
+        self.assertEqual(response.status_code, 200)
+        events = [c.args[0] for c in post_event.call_args_list]
+        post_event.reset_mock()
+        return response.json(), events
+
+    def _minimal_pack(self):
+        return {
+            "queries": {
+                "Query1": {
+                    "query": "select 1 from users;",
+                    "interval": "3600",
+                }
+            }
+        }
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_import_pack_events(self, post_event):
+        self.set_pack_endpoint_put_permissions()
+        slug = get_random_string(12)
+        url = reverse("osquery_api:pack", args=(slug,))
+
+        # a first import creates the pack, the query and the pack query
+        body, events = self._import_pack(url, self._minimal_pack(), post_event)
+        self.assertEqual(body["result"], "created")
+        self.assertEqual(body["query_results"], {"created": 1, "deleted": 0, "present": 0, "updated": 0})
+        report, *audit_events = events
+        self.assertIsInstance(report, OsqueryPackUpdateEvent)
+        self.assertEqual(report.payload["result"], "created")
+        # the report does not carry the difference anymore, the audit events do
+        self.assertNotIn("updates", report.payload)
+        self.assertEqual([e.payload["object"]["model"] for e in audit_events],
+                         ["osquery.pack", "osquery.query", "osquery.packquery"])
+        self.assertTrue(all(isinstance(e, AuditEvent) for e in audit_events))
+        self.assertTrue(all(e.payload["action"] == "created" for e in audit_events))
+        # one import is one group of events, the report first
+        self.assertTrue(all(e.metadata.uuid == report.metadata.uuid for e in audit_events))
+        self.assertEqual([e.metadata.index for e in audit_events], [1, 2, 3])
+        self.assertEqual(report.metadata.index, 0)
+        pack = Pack.objects.get(slug=slug)
+        self.assertEqual(report.metadata.objects, {"osquery_pack": [(pack.pk,)]})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_import_pack_again_changes_nothing(self, post_event):
+        self.set_pack_endpoint_put_permissions()
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
+        self._import_pack(url, self._minimal_pack(), post_event)
+
+        # the same file again: the import runs and touches nothing
+        body, events = self._import_pack(url, self._minimal_pack(), post_event)
+        self.assertEqual(body["result"], "present")
+        self.assertEqual(body["query_results"], {"created": 0, "deleted": 0, "present": 1, "updated": 0})
+        # only the report. an audit event here would mean the import wrote something it did not
+        # have to: adopting a query used to save it whatever the file said.
+        self.assertEqual(len(events), 1)
+        self.assertIsInstance(events[0], OsqueryPackUpdateEvent)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_import_pack_updates_the_query(self, post_event):
+        self.set_pack_endpoint_put_permissions()
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
+        self._import_pack(url, self._minimal_pack(), post_event)
+
+        pack = self._minimal_pack()
+        pack["queries"]["Query1"]["query"] = "select 2 from users;"
+        body, events = self._import_pack(url, pack, post_event)
+        self.assertEqual(body["query_results"], {"created": 0, "deleted": 0, "present": 0, "updated": 1})
+        report, audit_event = events
+        self.assertIsInstance(report, OsqueryPackUpdateEvent)
+        self.assertEqual(audit_event.payload["object"]["model"], "osquery.query")
+        self.assertEqual(audit_event.payload["action"], "updated")
+        self.assertEqual(audit_event.payload["object"]["prev_value"]["sql"], "select 1 from users;")
+        self.assertEqual(audit_event.payload["object"]["new_value"]["sql"], "select 2 from users;")
+        # the version is a number, and not the database expression that increased it
+        self.assertEqual(audit_event.payload["object"]["new_value"]["version"],
+                         audit_event.payload["object"]["prev_value"]["version"] + 1)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_import_pack_removes_a_query(self, post_event):
+        self.set_pack_endpoint_put_permissions()
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
+        pack = self._minimal_pack()
+        pack["queries"]["Query2"] = {"query": "select 3 from users;", "interval": "3600"}
+        self._import_pack(url, pack, post_event)
+
+        body, events = self._import_pack(url, self._minimal_pack(), post_event)
+        self.assertEqual(body["query_results"], {"created": 0, "deleted": 1, "present": 1, "updated": 0})
+        report, audit_event = events
+        self.assertIsInstance(report, OsqueryPackUpdateEvent)
+        self.assertEqual(audit_event.payload["object"]["model"], "osquery.packquery")
+        self.assertEqual(audit_event.payload["action"], "deleted")
+        # the pack query is gone, the event still names it
+        self.assertEqual(audit_event.payload["object"]["pk"],
+                         str(audit_event.payload["object"]["prev_value"]["pk"]))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_import_pack_adopting_an_unchanged_query_does_not_report_a_change(self, post_event):
+        """A query can outlive the pack query that scheduled it.
+
+        The import then finds it by name instead of creating it. It used to save that query
+        whatever the file said, because the flag that recorded the change was set before the
+        comparison. That write is invisible on its own, but it makes an audit event whose value
+        before and after are the same.
+        """
+        self.set_pack_endpoint_put_permissions()
+        slug = get_random_string(12)
+        url = reverse("osquery_api:pack", args=(slug,))
+        self._import_pack(url, self._minimal_pack(), post_event)
+        query = Query.objects.get(name=f"{slug}{Pack.DELIMITER}Query1")
+        updated_at = query.updated_at
+        PackQuery.objects.get(query=query).delete()
+
+        # the same file again: the query is adopted, unchanged
+        body, events = self._import_pack(url, self._minimal_pack(), post_event)
+        self.assertEqual(body["query_results"], {"created": 1, "deleted": 0, "present": 0, "updated": 0})
+        report, audit_event = events
+        self.assertIsInstance(report, OsqueryPackUpdateEvent)
+        self.assertEqual(audit_event.payload["object"]["model"], "osquery.packquery")
+        self.assertEqual(audit_event.payload["action"], "created")
+        query.refresh_from_db()
+        self.assertEqual(query.updated_at, updated_at)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_pack_events(self, post_event):
+        self.set_pack_endpoint_put_permissions()
+        slug = get_random_string(12)
+        url = reverse("osquery_api:pack", args=(slug,))
+        self._import_pack(url, self._minimal_pack(), post_event)
+        pack = Pack.objects.get(slug=slug)
+        pack_query = pack.packquery_set.get()
+
+        self.set_pack_endpoint_delete_permissions()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["result"], "deleted")
+        report, *audit_events = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(report, OsqueryPackUpdateEvent)
+        self.assertEqual(report.payload["query_results"]["deleted"], 1)
+        self.assertEqual([e.payload["object"]["model"] for e in audit_events],
+                         ["osquery.packquery", "osquery.pack"])
+        self.assertTrue(all(e.payload["action"] == "deleted" for e in audit_events))
+        self.assertEqual([e.payload["object"]["pk"] for e in audit_events],
+                         [str(pack_query.pk), str(pack.pk)])
 
     def test_delete_pack(self):
         slug = get_random_string(12)

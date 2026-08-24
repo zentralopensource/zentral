@@ -2,10 +2,22 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.osquery.events import (_filter_status_logs, _iter_grouped_status_logs,
-                                            OsqueryRequestEvent,
+                                            OsqueryPackUpdateEvent, OsqueryRequestEvent,
                                             STATUS_LOG_TRUNCATION_FILENAME,
                                             STATUS_LOG_TRUNCATION_SEVERITY)
+from zentral.core.events.base import EventMetadata
 from zentral.contrib.osquery.models import Configuration, EnrolledMachine, Enrollment
+
+
+class OsqueryPackUpdateEventTestCase(TestCase):
+    def test_report_links_the_pack(self):
+        event = OsqueryPackUpdateEvent(EventMetadata(), {"pack": {"pk": 42, "slug": "yolo"}, "result": "created"})
+        self.assertEqual(event.get_linked_objects_keys(), {"osquery_pack": [(42,)]})
+
+    def test_report_without_a_pack_links_nothing(self):
+        # a stored event from before the pack was added to the report
+        event = OsqueryPackUpdateEvent(EventMetadata(), {"result": "created"})
+        self.assertEqual(event.get_linked_objects_keys(), {})
 
 
 class OsqueryEventsTestCase(TestCase):

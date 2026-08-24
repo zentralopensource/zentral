@@ -333,7 +333,7 @@ class PackQuery(models.Model):
         d = {"pk": self.pk,
              "slug": self.slug,
              "pack": self.pack.serialize_for_event(keys_only=True),
-             "query": self.query.serialize_for_event(),
+             "query": self.query.serialize_for_event(keys_only=True),
              "interval": self.interval,
              "log_removed_actions": self.log_removed_actions,
              "snapshot_mode": self.snapshot_mode,
@@ -341,6 +341,10 @@ class PackQuery(models.Model):
         if self.shard and self.shard != 100:
             d["shard"] = self.shard
         return d
+
+    def linked_objects_keys_for_event(self):
+        return {"osquery_pack": ((self.pack_id,),),
+                "osquery_query": ((self.query_id,),)}
 
 
 class FileCategory(models.Model):

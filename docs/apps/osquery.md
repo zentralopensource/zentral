@@ -21,6 +21,14 @@ Two effects of a change have no event of their own:
 
 The "Halt current runs" option of a new run stops the other runs of the same query. Each stopped run has its own event.
 
+### Standard pack imports
+
+An import of a standard pack — a `PUT` on `/api/osquery/packs/<slug>/`, or an upload in the web console — changes several objects at once. It publishes one `osquery_pack_update` event that reports the import, and one `zentral_audit` event for each object it changed. They share one event UUID, and the report is the first of them, so a reader can gather the whole import from any one of its events.
+
+The report answers what the audit events cannot: what the import did as a whole. Its `result` is `created`, `updated`, `present` or `deleted`, and `present` says that the import ran and changed nothing. Its `query_results` counts the pack queries the import created, updated, deleted, or left as they were.
+
+The report does not carry the difference between the two values of an object. The audit event of that object carries the whole value before and after the change.
+
 ## HTTP API
 
 ### Requests

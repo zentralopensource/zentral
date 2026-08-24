@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
+from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_osquery_pack_update_events
@@ -188,15 +189,13 @@ class PackView(APIView):
             return Response({"pack": {"slug": kwargs["slug"]}, "result": "absent"},
                             status=status.HTTP_404_NOT_FOUND)
 
-        # prepare the events
+        # the objects have to be read before they are deleted
+        audit_events = []
         pack_queries_deleted = 0
-        pack_query_update_events = []
         for pack_query in pack.packquery_set.select_related("pack", "query").all():
-            pack_query_update_events.append({
-                "pack_query": pack_query.serialize_for_event(),
-                "result": "deleted"
-            })
+            audit_events.append((pack_query, AuditEvent.Action.DELETED, pack_query.serialize_for_event()))
             pack_queries_deleted += 1
+        audit_events.append((pack, AuditEvent.Action.DELETED, pack.serialize_for_event()))
 
         pack_update_event = {
             "result": "deleted",
@@ -205,21 +204,19 @@ class PackView(APIView):
                 "deleted": pack_queries_deleted,
                 "present": 0,
                 "updated": 0
-            }
+            },
+            "pack": pack.serialize_for_event(keys_only=True),
         }
 
-        full_pack_update_event = pack_update_event.copy()
-        full_pack_update_event["pack"] = pack.serialize_for_event()
+        # the cascade only clears the primary key of the instance delete() is called on. the pack
+        # queries were read into their own instances, and keep theirs.
+        pack_pk = pack.pk
+        pack.delete()
+        pack.pk = pack_pk
 
         transaction.on_commit(
-            lambda: post_osquery_pack_update_events(request, full_pack_update_event, pack_query_update_events)
+            lambda: post_osquery_pack_update_events(request, pack_update_event, audit_events)
         )
-
-        # prepare the response
-        pack_update_event["pack"] = pack.serialize_for_event(keys_only=True)
-
-        # finally, delete the pack
-        pack.delete()
 
         return Response(pack_update_event)
 

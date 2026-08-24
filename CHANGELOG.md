@@ -17,6 +17,8 @@ Zentral publishes a `zentral_audit` event when a user creates, updates or delete
 
 A run that stops other runs of the same query — the "Halt current runs" option — now publishes one event for each stopped run. Before, the other runs ended with no record of it.
 
+An import of a standard Osquery pack publishes a `zentral_audit` event for each object it changes, next to the `osquery_pack_update` event that reports the import. The import changed packs, queries and pack queries with no audit trail, and it is the only way to change several of them at once.
+
 The Osquery API publishes the same `zentral_audit` events as the web console now. The nine endpoints of the automatic table constructions, the configurations, the configuration packs, the enrollments, the file categories, the packs and the queries were the last ones that changed an object with no record of it.
 
 
@@ -30,6 +32,15 @@ The enrolled machine and sync state metrics are bucketed by the age of the last 
 
 
 ### Backward incompatibilities
+
+
+#### 🧨 Osquery pack import events
+
+The `osquery_pack_query_update` events are removed. The import of a standard pack publishes a `zentral_audit` event for each pack query it changes, and one for each pack and each query as well. Read those instead: they carry the whole value of the object before and after the change, where the removed event carried a partial difference, and they reach the page of the object.
+
+The `osquery_pack_update` event does not carry the `updates` attribute anymore, for the same reason: the audit event of the pack carries the two values. The response of `PUT /api/osquery/packs/<slug>/` is unchanged and still carries `updates`.
+
+An `osquery_pack_query_update` event reported a change to a pack query and a change to the query it schedules together, with the SQL of the query under the `query` key. These are two audit events now, one for each object.
 
 
 #### 🧨 Osquery API list endpoints

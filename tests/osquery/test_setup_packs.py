@@ -11,6 +11,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from django.utils.text import slugify
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
+from zentral.contrib.osquery.events import OsqueryPackUpdateEvent
 from zentral.core.events.base import AuditEvent
 
 
@@ -171,7 +172,8 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/pack_upload.html")
 
-    def test_upload_yaml_pack_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_upload_yaml_pack_post(self, post_event):
         pack = self._force_pack()
         self.login("osquery.change_pack", "osquery.view_pack", "osquery.view_packquery")
         pack_file = BytesIO(
@@ -189,10 +191,11 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
             "    value: Artifact used by this malware - 🔥\n".encode("utf-8")
         )
         pack_file.name = get_random_string(12)
-        response = self.client.post(reverse("osquery:upload_pack", args=(pack.pk,)),
-                                    {"file": pack_file,
-                                     "update_and_create_only": "on"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("osquery:upload_pack", args=(pack.pk,)),
+                                        {"file": pack_file,
+                                         "update_and_create_only": "on"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/pack_detail.html")
         self.assertContains(response, "WireLurker")
@@ -201,6 +204,12 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(pack.packquery_set.count(), 1)
         query = pack.packquery_set.first().query
         self.assertEqual(query.name, f"{pack.slug}/WireLurker")
+        # an upload publishes the same events as the API import
+        report, *audit_events = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(report, OsqueryPackUpdateEvent)
+        self.assertEqual([e.payload["object"]["model"] for e in audit_events],
+                         ["osquery.query", "osquery.packquery"])
+        self.assertTrue(all(e.metadata.uuid == report.metadata.uuid for e in audit_events))
 
     def test_upload_bad_file(self):
         pack = self._force_pack()
@@ -374,7 +383,10 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         payload, metadata = assert_audit_event(self, post_event, "created", pack_query)
         self.assertEqual(payload["object"]["new_value"]["interval"], 3456)
         self.assertEqual(payload["object"]["new_value"]["pack"], {"pk": pack.pk, "slug": pack.slug})
-        self.assertEqual(metadata["objects"], {"osquery_pack_query": [str(pack_query.pk)]})
+        self.assertEqual(metadata["objects"],
+                         {"osquery_pack_query": [str(pack_query.pk)],
+                          "osquery_pack": [str(pack_query.pack_id)],
+                          "osquery_query": [str(pack_query.query_id)]})
 
     def test_add_pack_query_with_slug_conflict(self):
         query_name = get_random_string(16)
@@ -475,7 +487,10 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         pack_query.refresh_from_db()
         payload, metadata = assert_audit_event(self, post_event, "updated", pack_query, prev_value=prev_value)
         self.assertEqual(payload["object"]["new_value"]["interval"], 12345)
-        self.assertEqual(metadata["objects"], {"osquery_pack_query": [str(pack_query.pk)]})
+        self.assertEqual(metadata["objects"],
+                         {"osquery_pack_query": [str(pack_query.pk)],
+                          "osquery_pack": [str(pack_query.pack_id)],
+                          "osquery_query": [str(pack_query.query_id)]})
 
     def test_update_pack_query_with_compliance_check(self):
         query = self._force_query(force_pack=True, force_compliance_check=True)
@@ -531,4 +546,7 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, query.name)
         self.assertNotContains(response, f"{pack_query.interval}s")
         _, metadata = assert_audit_event(self, post_event, "deleted", pack_query, prev_value=prev_value)
-        self.assertEqual(metadata["objects"], {"osquery_pack_query": [str(pack_query.pk)]})
+        self.assertEqual(metadata["objects"],
+                         {"osquery_pack_query": [str(pack_query.pk)],
+                          "osquery_pack": [str(pack_query.pack_id)],
+                          "osquery_query": [str(pack_query.query_id)]})
