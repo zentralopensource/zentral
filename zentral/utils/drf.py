@@ -70,6 +70,14 @@ class DefaultDjangoModelPermissions(DjangoModelPermissions):
     }
 
 
+# http methods
+
+# Zentral only does full updates — PATCH is a 405 everywhere, so the serializers' update()
+# methods can rely on every declared field being present in validated_data
+FULL_UPDATE_METHOD_NAMES = ["get", "head", "options", "put"]
+FULL_UPDATE_AND_DELETE_METHOD_NAMES = FULL_UPDATE_METHOD_NAMES + ["delete"]
+
+
 # views with audit events
 
 
@@ -101,9 +109,7 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
 
 class RetrieveUpdateAPIViewWithAudit(generics.RetrieveUpdateAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
-    # Zentral only does full updates — PATCH is a 405 everywhere, so the serializers' update()
-    # methods can rely on every declared field being present in validated_data
-    http_method_names = ["get", "head", "options", "put"]
+    http_method_names = FULL_UPDATE_METHOD_NAMES
 
     def get_audit_machine_serial_number(self):
         return None
@@ -131,7 +137,7 @@ class RetrieveUpdateAPIViewWithAudit(generics.RetrieveUpdateAPIView):
 
 class RetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateAPIViewWithAudit,
                                             generics.RetrieveUpdateDestroyAPIView):
-    http_method_names = RetrieveUpdateAPIViewWithAudit.http_method_names + ["delete"]
+    http_method_names = FULL_UPDATE_AND_DELETE_METHOD_NAMES
 
     def get_perform_destroy_kwargs(self):
         """The keyword arguments for the delete() of the object.
