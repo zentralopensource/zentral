@@ -550,6 +550,49 @@ class MonolithAPIViewsTestCase(TestCase):
             {'managed_updates': ['deuxième nom']}
         )
 
+    def test_sub_manifest_managed_uninstalls_one_tag_shard_excluded(self):
+        _, catalog, sub_manifest = self._force_smpi(name="premier nom")
+        self._force_smpi(
+            name="deuxième nom",
+            catalog=catalog,
+            sub_manifest=sub_manifest,
+            sub_manifest_key="managed_uninstalls",
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 76}}}  # NAME + SN → 77
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        # the machine keeps the package, the removal is out of its shard
+        self.assertEqual(
+            sub_manifest,
+            {'managed_installs': ['premier nom'],
+             'managed_uninstalls': []}
+        )
+
+    def test_sub_manifest_managed_uninstalls_one_tag_shard_included(self):
+        _, _, sub_manifest = self._force_smpi(
+            name="deuxième nom",
+            sub_manifest_key="managed_uninstalls",
+            smo_options={"excluded_tags": ["EXCL1", "EXCL2"],
+                         "shards": {"default": 0, "tags": {"INCL1": 0, "INCL2": 78}}}  # NAME + SN → 77
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+            tags=["INCL2"]
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_uninstalls': ['deuxième nom']}
+        )
+
     def test_sub_manifest_default_installs_one_tag_shard_excluded(self):
         _, catalog, sub_manifest = self._force_smpi(name="premier nom")
         self._force_smpi(
