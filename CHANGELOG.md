@@ -19,6 +19,8 @@ A sub manifest package can use more than one key, one time for each key, and eac
 
 Zentral adds a `default_installs` package to the `optional_installs` of the sub manifest, because munki installs it only if it is an optional install too. If the sub manifest has its own `optional_installs` package with the same name and the same condition, Zentral keeps that one, with its own scope.
 
+The Monolith API publishes the same `zentral_audit` events as the web console now. The catalogs, the conditions, the enrollments and the manifest enrollment packages changed with no record of it.
+
 
 #### Osquery
 
@@ -66,6 +68,10 @@ The list endpoints of the Osquery API answer with a page and not with an array. 
 
 The `version` attribute of an Osquery query in an event payload is the version of the query again. It was the minimum Osquery version of the query, which replaced the query version when the query had one. The minimum Osquery version has its own `minimum_osquery_version` attribute now. The query payload also has the `pk`, `name` and `tag` attributes, and the compliance check of the query. This payload is a part of the `osquery_pack_query_update` events.
 
+
+#### 🧨 PATCH on the Monolith API
+
+`PATCH` gives a `405 Method Not Allowed` on the Monolith catalog, condition, enrollment and manifest enrollment package endpoints. Use `PUT`, and send all the attributes of the object.
 
 #### 🧨 Santa enrolled machines metrics
 

@@ -1,5 +1,7 @@
 from django.utils.crypto import get_random_string
 
+from zentral.core.events.base import AuditEvent
+
 from tests.munki.utils import force_enrollment as force_munki_enrollment
 from tests.osquery.utils import force_enrollment as force_osquery_enrollment
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
@@ -243,3 +245,21 @@ def force_manifest_enrollment_package(manifest=None, tags=None, module="munki", 
         for required_pkg_name in mep.get_requires():
             _force_pkg_info(name=required_pkg_name, catalog=catalog)
     return mep
+
+
+def assert_audit_event(test_case, post_event, action, instance, prev_value=None, call_index=0):
+    """Check the audit event at call_index, and give its payload back for more assertions."""
+    test_case.maxDiff = None
+    event = post_event.call_args_list[call_index].args[0]
+    test_case.assertIsInstance(event, AuditEvent)
+    expected = {"action": action,
+                "object": {"model": instance._meta.label_lower,
+                           "pk": str(instance.pk)}}
+    if action in ("created", "updated"):
+        expected["object"]["new_value"] = instance.serialize_for_event()
+    if prev_value is not None:
+        expected["object"]["prev_value"] = prev_value
+    test_case.assertEqual(event.payload, expected)
+    metadata = event.metadata.serialize()
+    test_case.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
+    return event.payload, metadata

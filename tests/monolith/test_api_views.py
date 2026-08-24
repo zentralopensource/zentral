@@ -32,10 +32,12 @@ from zentral.utils.time import naive_utcnow
 
 from .utils import (
     CLOUDFRONT_PRIVKEY_PEM,
+    assert_audit_event,
     force_catalog,
     force_condition,
     force_enrollment,
     force_manifest,
+    force_manifest_enrollment_package,
     force_name,
     force_pkg_info,
     force_repository,
@@ -1225,15 +1227,17 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             'repository': ['Not a virtual repository.'],
         })
 
-    def test_create_catalog(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_catalog(self, post_event):
         self.set_permissions("monolith.add_catalog")
         name = get_random_string(12)
         repository = force_repository(virtual=True)
-        response = self.post(reverse("monolith_api:catalogs"), data={
-            'repository': repository.pk,
-            'name': name,
-            'archived_at': naive_utcnow().isoformat(),
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("monolith_api:catalogs"), data={
+                'repository': repository.pk,
+                'name': name,
+                'archived_at': naive_utcnow().isoformat(),
+            })
         self.assertEqual(response.status_code, 201)
         catalog = Catalog.objects.get(name=name)
         self.assertEqual(response.json(), {
@@ -1246,6 +1250,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         })
         self.assertEqual(catalog.repository, repository)
         self.assertEqual(catalog.name, name)
+        assert_audit_event(self, post_event, "created", catalog)
 
     # update catalog
 
@@ -1308,15 +1313,18 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              ]}
         )
 
-    def test_update_catalog(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_catalog(self, post_event):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
+        prev_value = catalog.serialize_for_event()
         self.set_permissions("monolith.change_catalog")
         new_name = get_random_string(12)
-        response = self.put(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
-            'repository': catalog.repository.pk,
-            'name': new_name,
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse("monolith_api:catalog", args=(catalog.pk,)), data={
+                'repository': catalog.repository.pk,
+                'name': new_name,
+            })
         self.assertEqual(response.status_code, 200)
         catalog.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1328,6 +1336,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             'archived_at': None
         })
         self.assertEqual(catalog.name, new_name)
+        assert_audit_event(self, post_event, "updated", catalog, prev_value=prev_value)
 
     # delete catalog
 
@@ -1353,12 +1362,48 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ['This catalog cannot be deleted'])
 
-    def test_delete_catalog(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_catalog(self, post_event):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
+        prev_value = catalog.serialize_for_event()
         self.set_permissions("monolith.delete_catalog")
-        response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse("monolith_api:catalog", args=(catalog.pk,)))
         self.assertEqual(response.status_code, 204)
+        assert_audit_event(self, post_event, "deleted", catalog, prev_value=prev_value)
+
+    # http methods
+
+    def test_patch_is_not_allowed(self):
+        """Zentral only does full updates.
+
+        A partial update leaves a declared field out of validated_data, and the serializers read
+        those fields directly: the monolith EnrollmentSerializer reads data["manifest"] and
+        data["secret"] in validate().
+        """
+        self.set_permissions(
+            "monolith.change_catalog",
+            "monolith.change_condition",
+            "monolith.change_enrollment",
+            "monolith.change_manifestenrollmentpackage",
+        )
+        enrollment, _ = force_enrollment(mbu=self.mbu)
+        targets = (
+            ("catalog", force_catalog()),
+            ("condition", force_condition()),
+            ("enrollment", enrollment),
+            ("manifest_enrollment_package", force_manifest_enrollment_package()),
+        )
+        for url_name, obj in targets:
+            with self.subTest(url_name):
+                response = self.client.patch(
+                    reverse(f"monolith_api:{url_name}", args=(obj.pk,)),
+                    data="{}",
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Token {self._get_api_key()}",
+                )
+                self.assertEqual(response.status_code, 405)
 
     # list conditions
 
@@ -1450,14 +1495,16 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             'predicate': ['This field is required.'],
         })
 
-    def test_create_condition(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_condition(self, post_event):
         self.set_permissions("monolith.add_condition")
         name = get_random_string(12)
         predicate = get_random_string(12)
-        response = self.post(reverse("monolith_api:conditions"), data={
-            'name': name,
-            'predicate': predicate,
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("monolith_api:conditions"), data={
+                'name': name,
+                'predicate': predicate,
+            })
         self.assertEqual(response.status_code, 201)
         condition = Condition.objects.get(name=name)
         self.assertEqual(response.json(), {
@@ -1468,6 +1515,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             'updated_at': condition.updated_at.isoformat(),
         })
         self.assertEqual(condition.predicate, predicate)
+        assert_audit_event(self, post_event, "created", condition)
 
     def test_create_condition_name_conflict(self):
         condition = force_condition()
@@ -1507,8 +1555,10 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             'predicate': ['This field may not be blank.'],
         })
 
-    def test_update_condition(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_condition(self, post_event):
         condition = force_condition()
+        prev_value = condition.serialize_for_event()
         manifest = force_manifest()
         sub_manifest = force_sub_manifest(manifest=manifest)
         self.assertEqual(manifest.version, 1)
@@ -1520,10 +1570,11 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("monolith.change_condition")
         new_name = get_random_string(12)
         new_predicate = get_random_string(12)
-        response = self.put(reverse("monolith_api:condition", args=(condition.pk,)), data={
-            'name': new_name,
-            'predicate': new_predicate,
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse("monolith_api:condition", args=(condition.pk,)), data={
+                'name': new_name,
+                'predicate': new_predicate,
+            })
         self.assertEqual(response.status_code, 200)
         condition.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1537,6 +1588,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(condition.predicate, new_predicate)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        assert_audit_event(self, post_event, "updated", condition, prev_value=prev_value)
 
     def test_update_condition_name_conflict(self):
         condition1 = force_condition()
@@ -1576,11 +1628,15 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ['This condition cannot be deleted'])
 
-    def test_delete_condition(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_condition(self, post_event):
         condition = force_condition()
+        prev_value = condition.serialize_for_event()
         self.set_permissions("monolith.delete_condition")
-        response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse("monolith_api:condition", args=(condition.pk,)))
         self.assertEqual(response.status_code, 204)
+        assert_audit_event(self, post_event, "deleted", condition, prev_value=prev_value)
 
     # list enrollments
 
@@ -1738,18 +1794,20 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             'secret': ['This field is required.'],
         })
 
-    def test_create_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_enrollment(self, post_event):
         self.set_permissions("monolith.add_enrollment")
         manifest = force_manifest(mbu=self.mbu)
         self.assertEqual(manifest.version, 1)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
-        response = self.post(reverse("monolith_api:enrollments"), data={
-            'manifest': manifest.pk,
-            'secret': {
-                'meta_business_unit': self.mbu.pk,
-                'tags': [t.id for t in tags]
-            }
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("monolith_api:enrollments"), data={
+                'manifest': manifest.pk,
+                'secret': {
+                    'meta_business_unit': self.mbu.pk,
+                    'tags': [t.id for t in tags]
+                }
+            })
         self.assertEqual(response.status_code, 201)
         enrollment = Enrollment.objects.get(manifest=manifest)
         self.assertEqual(response.json(), {
@@ -1780,6 +1838,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         })
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        assert_audit_event(self, post_event, "created", enrollment)
 
     def test_create_enrollment_mbu_conflict(self):
         self.set_permissions("monolith.add_enrollment")
@@ -1810,8 +1869,10 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.put(reverse("monolith_api:enrollment", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
-    def test_update_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_enrollment(self, post_event):
         enrollment, _ = force_enrollment(mbu=self.mbu, tag_count=2)
+        prev_value = enrollment.serialize_for_event()
         enrollment_secret = enrollment.secret
         self.assertEqual(enrollment.secret.quota, None)
         self.assertEqual(enrollment.secret.serial_numbers, None)
@@ -1827,10 +1888,11 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         secret_data["tags"] = [t.id for t in tags]
         self.set_permissions("monolith.change_enrollment")
-        response = self.put(reverse("monolith_api:enrollment", args=(enrollment.pk,)), data={
-            'manifest': enrollment.manifest.pk,
-            'secret': secret_data
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(reverse("monolith_api:enrollment", args=(enrollment.pk,)), data={
+                'manifest': enrollment.manifest.pk,
+                'secret': secret_data
+            })
         self.assertEqual(response.status_code, 200)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.secret, enrollment_secret)
@@ -1843,6 +1905,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         )
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        assert_audit_event(self, post_event, "updated", enrollment, prev_value=prev_value)
 
     # delete enrollment
 
@@ -1859,15 +1922,19 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.delete(reverse("monolith_api:enrollment", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_enrollment(self, post_event):
         enrollment, _ = force_enrollment(mbu=self.mbu)
+        prev_value = enrollment.serialize_for_event()
         manifest = enrollment.manifest
         self.assertEqual(manifest.version, 1)
         self.set_permissions("monolith.delete_enrollment")
-        response = self.delete(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        assert_audit_event(self, post_event, "deleted", enrollment, prev_value=prev_value)
 
     # enrollment plist
 

@@ -139,19 +139,16 @@ class RepositoryDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # catalogs
 
 
-class CatalogList(generics.ListCreateAPIView):
+class CatalogList(ListCreateAPIViewWithAudit):
     queryset = Catalog.objects.all()
     serializer_class = CatalogSerializer
-    permission_classes = (DefaultDjangoModelPermissions,)
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name', 'repository')
     pagination_class = MaxLimitOffsetPagination
 
 
-class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
+class CatalogDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Catalog.objects.all()
     serializer_class = CatalogSerializer
-    permission_classes = (DefaultDjangoModelPermissions,)
 
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():
@@ -162,18 +159,15 @@ class CatalogDetail(generics.RetrieveUpdateDestroyAPIView):
 # conditions
 
 
-class ConditionList(generics.ListCreateAPIView):
+class ConditionList(ListCreateAPIViewWithAudit):
     queryset = Condition.objects.all()
     serializer_class = ConditionSerializer
-    permission_classes = (DefaultDjangoModelPermissions,)
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
 
 
-class ConditionDetail(generics.RetrieveUpdateDestroyAPIView):
+class ConditionDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Condition.objects.all()
     serializer_class = ConditionSerializer
-    permission_classes = (DefaultDjangoModelPermissions,)
 
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():
@@ -184,23 +178,20 @@ class ConditionDetail(generics.RetrieveUpdateDestroyAPIView):
 # enrollments
 
 
-class EnrollmentList(generics.ListCreateAPIView):
+class EnrollmentList(ListCreateAPIViewWithAudit):
     """
     List all Enrollments or create a new Enrollment
     """
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('manifest_id',)
 
 
-class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
+class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete an Enrollment
     """
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
     def perform_destroy(self, instance):
@@ -292,22 +283,23 @@ class ManifestCatalogDetail(RetrieveUpdateDestroyAPIViewWithAudit):
         return response
 
 
-class ManifestEnrollmentPackageList(generics.ListCreateAPIView):
+class ManifestEnrollmentPackageList(ListCreateAPIViewWithAudit):
     queryset = ManifestEnrollmentPackage.objects.all()
     serializer_class = ManifestEnrollmentPackageSerializer
-    permission_classes = [DefaultDjangoModelPermissions]
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("manifest_id", "builder")
 
 
-class ManifestEnrollmentPackageDetail(generics.RetrieveUpdateDestroyAPIView):
+class ManifestEnrollmentPackageDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = ManifestEnrollmentPackage.objects.all()
     serializer_class = ManifestEnrollmentPackageSerializer
-    permission_classes = [DefaultDjangoModelPermissions]
+
+    def get_perform_destroy_kwargs(self):
+        # the API takes an enrollment it did not create, so it releases it instead of deleting it
+        return {"delete_enrollment": False}
 
     def perform_destroy(self, instance):
         manifest = instance.manifest
-        instance.delete(delete_enrollment=False)
+        super().perform_destroy(instance)
         manifest.bump_version()
 
 

@@ -26,3 +26,20 @@ class AuditViewHookTestCase(SimpleTestCase):
                 return "0123456789"
 
         self.assertEqual(MachineScopedView().get_audit_machine_serial_number(), "0123456789")
+
+
+class PerformDestroyKwargsTestCase(SimpleTestCase):
+    """get_perform_destroy_kwargs() has to default to an empty dict, so that the views that delete
+    their object with no argument — every one of them but the Monolith manifest enrollment
+    packages — keep working untouched."""
+
+    def test_the_default_is_empty(self):
+        self.assertEqual(RetrieveUpdateDestroyAPIViewWithAudit().get_perform_destroy_kwargs(), {})
+
+    def test_an_override_is_picked_up(self):
+        class KeepTheEnrollmentView(RetrieveUpdateDestroyAPIViewWithAudit):
+            def get_perform_destroy_kwargs(self):
+                return {"delete_enrollment": False}
+
+        self.assertEqual(KeepTheEnrollmentView().get_perform_destroy_kwargs(),
+                         {"delete_enrollment": False})

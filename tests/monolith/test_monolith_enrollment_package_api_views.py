@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
@@ -10,7 +12,7 @@ from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.monolith.models import ManifestEnrollmentPackage
 from zentral.contrib.munki.models import Enrollment as MunkiEnrollment
-from .utils import force_manifest, force_manifest_enrollment_package
+from .utils import assert_audit_event, force_manifest, force_manifest_enrollment_package
 
 
 class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
@@ -240,18 +242,20 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'enrollment_pk': ['This enrollment already has a distributor']})
 
-    def test_create_manifest_enrollment_package(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_manifest_enrollment_package(self, post_event):
         self.set_permissions("monolith.add_manifestenrollmentpackage")
         manifest = force_manifest()
         self.assertEqual(manifest.version, 1)
         enrollment = force_munki_enrollment(meta_business_unit=manifest.meta_business_unit)
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self.post(reverse("monolith_api:manifest_enrollment_packages"), data={
-            'manifest': manifest.pk,
-            'builder': 'zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder',
-            'enrollment_pk': enrollment.pk,
-            'tags': [tag.pk],
-        })
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(reverse("monolith_api:manifest_enrollment_packages"), data={
+                'manifest': manifest.pk,
+                'builder': 'zentral.contrib.munki.osx_package.builder.MunkiZentralEnrollPkgBuilder',
+                'enrollment_pk': enrollment.pk,
+                'tags': [tag.pk],
+            })
         self.assertEqual(response.status_code, 201)
         mep = ManifestEnrollmentPackage.objects.get(
             manifest=manifest,
@@ -271,6 +275,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(list(t.pk for t in mep.tags.all()), [tag.pk])
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        assert_audit_event(self, post_event, "created", mep)
 
     # update manifest enrollment package
 
@@ -288,24 +293,27 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.put(reverse("monolith_api:manifest_enrollment_package", args=(9999,)), data={})
         self.assertEqual(response.status_code, 404)
 
-    def test_update_manifest_enrollment_package(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_manifest_enrollment_package(self, post_event):
         tags = [Tag.objects.create(name=get_random_string(12))]
         mep = force_manifest_enrollment_package(tags=tags)
+        prev_value = mep.serialize_for_event()
         self.assertEqual(mep.tags.count(), 1)
         self.assertEqual(mep.version, 1)
         manifest = mep.manifest
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
         self.set_permissions("monolith.change_manifestenrollmentpackage")
-        response = self.put(
-            reverse("monolith_api:manifest_enrollment_package", args=(mep.pk,)),
-            data={
-                'manifest': manifest.pk,
-                'builder': mep.builder,
-                'enrollment_pk': mep.enrollment_pk,
-                'tags': [],
-            }
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(
+                reverse("monolith_api:manifest_enrollment_package", args=(mep.pk,)),
+                data={
+                    'manifest': manifest.pk,
+                    'builder': mep.builder,
+                    'enrollment_pk': mep.enrollment_pk,
+                    'tags': [],
+                }
+            )
         self.assertEqual(response.status_code, 200)
         test_mep = ManifestEnrollmentPackage.objects.get(
             manifest=manifest,
@@ -326,6 +334,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(test_mep.tags.count(), 0)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 3)
+        assert_audit_event(self, post_event, "updated", test_mep, prev_value=prev_value)
 
     def test_update_manifest_enrollment_package_update_enrollment(self):
         mep = force_manifest_enrollment_package()
@@ -385,15 +394,20 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.delete(reverse("monolith_api:manifest_enrollment_package", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_manifest_enrollment_package(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_manifest_enrollment_package(self, post_event):
         mep = force_manifest_enrollment_package()
+        prev_value = mep.serialize_for_event()
         enrollment = mep.get_enrollment()
         manifest = mep.manifest
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
         self.set_permissions("monolith.delete_manifestenrollmentpackage")
-        response = self.delete(reverse("monolith_api:manifest_enrollment_package", args=(mep.pk,)))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse("monolith_api:manifest_enrollment_package", args=(mep.pk,)))
         self.assertEqual(response.status_code, 204)
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 3)
+        # the API takes an enrollment it did not create, so the delete releases it
         self.assertTrue(MunkiEnrollment.objects.filter(pk=enrollment.pk).exists())
+        assert_audit_event(self, post_event, "deleted", mep, prev_value=prev_value)

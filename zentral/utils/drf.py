@@ -133,10 +133,19 @@ class RetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateAPIViewWithAudit,
                                             generics.RetrieveUpdateDestroyAPIView):
     http_method_names = RetrieveUpdateAPIViewWithAudit.http_method_names + ["delete"]
 
+    def get_perform_destroy_kwargs(self):
+        """The keyword arguments for the delete() of the object.
+
+        DestroyModelMixin calls delete() with no argument. A model that accepts an argument to keep
+        an object it did not create — the Monolith manifest enrollment packages and their
+        enrollments — needs the audit event and that argument at the same time.
+        """
+        return {}
+
     def perform_destroy(self, instance):
         prev_pk = instance.pk
         prev_value = instance.serialize_for_event()
-        super().perform_destroy(instance)
+        instance.delete(**self.get_perform_destroy_kwargs())
 
         def on_commit_callback():
             instance.pk = prev_pk  # re-hydrate the primary key
