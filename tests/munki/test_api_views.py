@@ -15,7 +15,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit,
 from zentral.contrib.munki.models import Configuration, Enrollment, ScriptCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.core.events.base import AuditEvent
-from .utils import force_script_check
+from .utils import assert_audit_event, force_script_check
 
 
 class APIViewsTestCase(TestCase, LoginCase, RequestCase):
@@ -562,21 +562,23 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             {'configuration': ['This field is required.'], 'secret': ['This field is required.']}
         )
 
-    def test_create_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_enrollment(self, post_event):
         configuration = self.force_configuration()
         self.set_permissions("munki.add_enrollment")
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         serial_numbers = [get_random_string(12) for _ in range(1)]
         uuids = [str(uuid.uuid4()) for _ in range(1)]
-        response = self.post(
-            reverse("munki_api:enrollments"),
-            {'configuration': configuration.pk,
-             'secret': {'meta_business_unit': self.mbu.pk,
-                        'serial_numbers': serial_numbers,
-                        'tags': [t.id for t in tags],
-                        'udids': uuids,
-                        'quota': 19}}
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.post(
+                reverse("munki_api:enrollments"),
+                {'configuration': configuration.pk,
+                 'secret': {'meta_business_unit': self.mbu.pk,
+                            'serial_numbers': serial_numbers,
+                            'tags': [t.id for t in tags],
+                            'udids': uuids,
+                            'quota': 19}}
+            )
         self.assertEqual(response.status_code, 201)
         enrollment = configuration.enrollment_set.first()
         fqdn = settings["api"]["fqdn"]
@@ -601,6 +603,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'updated_at': enrollment.updated_at.isoformat()},
             {}
         )
+        assert_audit_event(self, post_event, "created", enrollment)
 
     # get enrollment
 
@@ -658,21 +661,24 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.put(reverse("munki_api:enrollment", args=(enrollment.pk,)), {})
         self.assertEqual(response.status_code, 403)
 
-    def test_update_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_enrollment(self, post_event):
         enrollment = self.force_enrollment()
+        prev_value = enrollment.serialize_for_event()
         self.set_permissions("munki.change_enrollment")
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         serial_numbers = [get_random_string(12) for _ in range(1)]
         uuids = [str(uuid.uuid4()) for _ in range(1)]
-        response = self.put(
-            reverse("munki_api:enrollment", args=(enrollment.pk,)),
-            {'configuration': enrollment.configuration.pk,
-             'secret': {'meta_business_unit': self.mbu.pk,
-                        'serial_numbers': serial_numbers,
-                        'tags': [t.id for t in tags],
-                        'udids': uuids,
-                        'quota': 19}}
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.put(
+                reverse("munki_api:enrollment", args=(enrollment.pk,)),
+                {'configuration': enrollment.configuration.pk,
+                 'secret': {'meta_business_unit': self.mbu.pk,
+                            'serial_numbers': serial_numbers,
+                            'tags': [t.id for t in tags],
+                            'udids': uuids,
+                            'quota': 19}}
+            )
         self.assertEqual(response.status_code, 200)
         enrollment.refresh_from_db()
         fqdn = settings["api"]["fqdn"]
@@ -697,6 +703,10 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'updated_at': enrollment.updated_at.isoformat()},
             {}
         )
+        payload, _ = assert_audit_event(self, post_event, "updated", enrollment, prev_value=prev_value)
+        # the version is in the payload of the base enrollment, so the event shows the bump
+        self.assertEqual(payload["object"]["prev_value"]["version"], 1)
+        self.assertEqual(payload["object"]["new_value"]["version"], 2)
 
     # delete enrollment
 
@@ -710,12 +720,16 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.delete(reverse("munki_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_enrollment(self, post_event):
         enrollment = self.force_enrollment()
+        prev_value = enrollment.serialize_for_event()
         self.set_permissions("munki.delete_enrollment")
-        response = self.delete(reverse("munki_api:enrollment", args=(enrollment.pk,)))
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete(reverse("munki_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(Enrollment.objects.filter(pk=enrollment.pk).count(), 0)
+        assert_audit_event(self, post_event, "deleted", enrollment, prev_value=prev_value)
 
     # get enrollment package
 

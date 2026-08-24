@@ -1,6 +1,5 @@
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
-from rest_framework import generics
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
@@ -31,17 +30,14 @@ class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # enrollments
 
 
-class EnrollmentList(generics.ListCreateAPIView):
+class EnrollmentList(ListCreateAPIViewWithAudit):
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ("configuration_id",)
 
 
-class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
+class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
 

@@ -1,4 +1,6 @@
 from django.utils.crypto import get_random_string
+
+from zentral.core.events.base import AuditEvent
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.munki.compliance_checks import MunkiScriptCheck
 from zentral.contrib.munki.models import Configuration, Enrollment, EnrolledMachine, MunkiState, ScriptCheck
@@ -84,3 +86,21 @@ def force_munki_state(serial_number=None):
         munki_version="6.5.1",
         user_agent="Zentral/munkipostflight 0.14",
     )
+
+
+def assert_audit_event(test_case, post_event, action, instance, prev_value=None, call_index=0):
+    """Check the audit event at call_index, and give its payload back for more assertions."""
+    test_case.maxDiff = None
+    event = post_event.call_args_list[call_index].args[0]
+    test_case.assertIsInstance(event, AuditEvent)
+    expected = {"action": action,
+                "object": {"model": instance._meta.label_lower,
+                           "pk": str(instance.pk)}}
+    if action in ("created", "updated"):
+        expected["object"]["new_value"] = instance.serialize_for_event()
+    if prev_value is not None:
+        expected["object"]["prev_value"] = prev_value
+    test_case.assertEqual(event.payload, expected)
+    metadata = event.metadata.serialize()
+    test_case.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
+    return event.payload, metadata

@@ -22,6 +22,11 @@ Zentral adds a `default_installs` package to the `optional_installs` of the sub 
 The Monolith API publishes the same `zentral_audit` events as the web console now. The catalogs, the conditions, the enrollments and the manifest enrollment packages changed with no record of it.
 
 
+#### Munki
+
+The Munki API publishes the same `zentral_audit` events as the web console now, for the enrollments.
+
+
 #### Osquery
 
 Zentral publishes a `zentral_audit` event when a user creates, updates or deletes an Osquery object from the web console: automatic table constructions, configurations, configuration packs, enrollments, file categories, packs, pack queries, queries and distributed query runs. Each event carries the full value of the object before and after the change, and the user, the source IP and the request that made it.
