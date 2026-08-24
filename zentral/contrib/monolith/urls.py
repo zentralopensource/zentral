@@ -22,6 +22,7 @@ urlpatterns = [
          views.UpdatePkgInfoCatalogView.as_view(),
          name='update_pkg_info_catalog'),
     path('pkginfos/<int:pk>/delete/', views.DeletePkgInfoView.as_view(), name='delete_pkg_info'),
+    path('pkginfos/<int:pk>/data/', views.PkgInfoDataView.as_view(), name='pkg_info_data'),
 
     # pkg info names
     path('pkginfo_names/create/', views.CreatePkgInfoNameView.as_view(), name='create_pkg_info_name'),

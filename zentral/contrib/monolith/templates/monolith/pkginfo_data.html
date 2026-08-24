@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load base_extras ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:index' %}">Monolith</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:pkg_infos' %}">PkgInfos</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'monolith:pkg_info_name' pkg_info.name.pk %}">{{ pkg_info.name }}</a></li>
+  <li class="breadcrumb-item active">{{ pkg_info.version }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-1">
+        <h2>{{ pkg_info.name }} {{ pkg_info.version }}</h2>
+    </div>
+    <div class="d-flex align-items-center mb-3">
+        <h3 class="m-0 fs-5 text-secondary">PkgInfo</h3>
+    </div>
+
+    <table class="table-object-properties">
+        <thead>
+        <tr>
+            <th scope="col">Attribute</th>
+            <th scope="col">Value</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>Repository</td>
+            <td>
+                {% if perms.monolith.view_repository %}
+                <a href="{{ pkg_info.repository.get_absolute_url }}">{{ pkg_info.repository }}</a>
+                {% else %}
+                {{ pkg_info.repository }}
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td>Local</td>
+            <td>{{ pkg_info.local|yesno }}</td>
+        </tr>
+        <tr>
+            <td>Catalogs</td>
+            <td>
+                {% for catalog in pkg_info.active_catalogs %}
+                {% if perms.monolith.view_catalog %}<a href="{{ catalog.get_absolute_url }}">{{ catalog }}</a>{% else %}{{ catalog }}{% endif %}{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                -
+                {% endfor %}
+            </td>
+        </tr>
+        {% if pkg_info.archived_at %}
+        <tr>
+            <td>Archived at</td>
+            <td>{{ pkg_info.archived_at }}</td>
+        </tr>
+        {% endif %}
+        </tbody>
+    </table>
+
+    {% created_updated_at pkg_info %}
+
+</div>
+
+<h3 class="mt-5 text-secondary">Data</h3>
+<table class="table-object-properties">
+    <thead>
+    <tr>
+        <th scope="col">Rewritten key</th>
+        <th scope="col">Stored</th>
+        <th scope="col">Served</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for rewrite in rewrites %}
+        <tr>
+            <td>{{ rewrite.key }}</td>
+            <td>{{ rewrite.stored|default_if_none:"-" }}</td>
+            <td>{{ rewrite.served|default_if_none:"-" }}</td>
+        </tr>
+    {% empty %}
+        <tr>
+            <td colspan="3">The served pkginfo is identical to the stored one.</td>
+        </tr>
+    {% endfor %}
+        <tr>
+            <td></td>
+            <td>{{ pkg_info.data|jsonprettyprint }}</td>
+            <td>{{ served_pkg_info|jsonprettyprint }}</td>
+        </tr>
+    </tbody>
+</table>
+{% endblock %}
