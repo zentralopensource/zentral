@@ -11,7 +11,7 @@ from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
-from zentral.contrib.monolith.models import (Enrollment,
+from zentral.contrib.monolith.models import (Condition, Enrollment,
                                              ManifestCatalog, ManifestSubManifest,
                                              PkgInfo, PkgInfoName,
                                              SubManifest, SubManifestPkgInfo)
@@ -609,6 +609,100 @@ class MonolithAPIViewsTestCase(TestCase):
             sub_manifest,
             {'default_installs': [],
              'optional_installs': []}
+        )
+
+    def test_sub_manifest_managed_updates_and_optional_installs(self):
+        _, _, sub_manifest = self._force_smpi(
+            name="deuxième nom",
+            sub_manifest_key="managed_updates",
+        )
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=sub_manifest,
+            pkg_info_name=PkgInfoName.objects.get(name="deuxième nom"),
+            key="optional_installs",
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'managed_updates': ['deuxième nom'],
+             'optional_installs': ['deuxième nom']}
+        )
+
+    def test_sub_manifest_default_installs_and_optional_installs_not_duplicated(self):
+        _, _, sub_manifest = self._force_smpi(
+            name="deuxième nom",
+            sub_manifest_key="default_installs",
+        )
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=sub_manifest,
+            pkg_info_name=PkgInfoName.objects.get(name="deuxième nom"),
+            key="optional_installs",
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'default_installs': ['deuxième nom'],
+             'optional_installs': ['deuxième nom']}
+        )
+
+    def test_sub_manifest_optional_installs_scope_wins_over_the_default_installs_one(self):
+        _, _, sub_manifest = self._force_smpi(
+            name="deuxième nom",
+            sub_manifest_key="default_installs",
+        )
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=sub_manifest,
+            pkg_info_name=PkgInfoName.objects.get(name="deuxième nom"),
+            key="optional_installs",
+            options={"shards": {"default": 0, "modulo": 100}},
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        self.assertEqual(
+            sub_manifest,
+            {'default_installs': ['deuxième nom'],
+             'optional_installs': []}
+        )
+
+    def test_sub_manifest_default_installs_and_optional_installs_other_condition(self):
+        _, _, sub_manifest = self._force_smpi(
+            name="deuxième nom",
+            sub_manifest_key="default_installs",
+        )
+        condition = Condition.objects.create(name=get_random_string(12), predicate="machine_type == 'LAPTOP'")
+        SubManifestPkgInfo.objects.create(
+            sub_manifest=sub_manifest,
+            pkg_info_name=PkgInfoName.objects.get(name="deuxième nom"),
+            key="optional_installs",
+            condition=condition,
+        )
+        response = self._make_munki_request(
+            reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),)),
+            serial_number="12345678",
+        )
+        self.assertEqual(response.status_code, 200)
+        sub_manifest = plistlib.loads(response.content)
+        # the default install keeps its own optional install, or munki would not install it
+        self.assertEqual(
+            sub_manifest,
+            {'default_installs': ['deuxième nom'],
+             'optional_installs': ['deuxième nom'],
+             'conditional_items': [{'condition': "machine_type == 'LAPTOP'",
+                                    'optional_installs': ['deuxième nom']}]}
         )
 
     # repository package

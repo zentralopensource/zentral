@@ -662,14 +662,24 @@ class SubManifest(models.Model):
     def pkg_info_dict(self):
         pkg_info_d = {'keys': {},
                       'total': {'pkginfo': 0}}
+        smpis = list(self.submanifestpkginfo_set.select_related('pkg_info_name', 'condition'))
+        optional_installs = set(
+            (smpi.pkg_info_name_id, smpi.condition_id) for smpi in smpis if smpi.key == "optional_installs"
+        )
 
-        def iter_keys(key):
-            yield key, SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT[key]
-            if key == "default_installs":
+        def iter_keys(smpi):
+            yield smpi.key, SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT[smpi.key]
+            # munki only installs a default install that is also an optional install. The sub manifest
+            # can carry its own optional install for the same name and condition, with its own scope,
+            # and it wins. A different condition would leave the default install without a match.
+            if (
+                smpi.key == "default_installs"
+                and (smpi.pkg_info_name_id, smpi.condition_id) not in optional_installs
+            ):
                 yield "optional_installs", SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT["optional_installs"]
 
-        for smpi in self.submanifestpkginfo_set.select_related('pkg_info_name', 'condition'):
-            for key, key_display in iter_keys(smpi.key):
+        for smpi in smpis:
+            for key, key_display in iter_keys(smpi):
                 key_dict = pkg_info_d['keys'].setdefault(key,
                                                          {'key_display': key_display,
                                                           'key_list': []})
@@ -806,7 +816,10 @@ class SubManifestPkgInfo(models.Model):
 
     class Meta:
         ordering = ('pkg_info_name',)
-        unique_together = (('sub_manifest', 'pkg_info_name'),)
+        constraints = [
+            models.UniqueConstraint(fields=["sub_manifest", "pkg_info_name", "key"],
+                                    name="monolith_submanifestpkginfo_unique_pkg_info_name_key"),
+        ]
 
     def get_absolute_url(self):
         return "{}#smp_{}".format(reverse('monolith:sub_manifest', args=(self.sub_manifest.pk,)), self.pk)

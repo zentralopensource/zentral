@@ -158,8 +158,6 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
         pin_qs = PkgInfoName.objects.distinct().filter(pkginfo__id__isnull=False,
                                                        pkginfo__archived_at__isnull=True,
                                                        pkginfo__update_for=None)
-        if not self.instance.pk:
-            pin_qs = pin_qs.exclude(submanifestpkginfo__sub_manifest=self.sub_manifest)
         self.fields['pkg_info_name'].queryset = pin_qs
 
         if self.instance.pk:
@@ -193,6 +191,18 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
 
     def clean(self):
         super().clean()
+        # a pkg info name can only be used once for each key. sub_manifest is not a form field,
+        # so the model validation excludes the constraint.
+        pkg_info_name = self.cleaned_data.get("pkg_info_name")
+        key = self.cleaned_data.get("key")
+        if pkg_info_name and key:
+            qs = SubManifestPkgInfo.objects.filter(sub_manifest=self.sub_manifest,
+                                                   pkg_info_name=pkg_info_name,
+                                                   key=key)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                self.add_error("key", "This pkg info name is already in the sub manifest with this key")
         # shards
         default_shard = self.cleaned_data.get("default_shard")
         shard_modulo = self.cleaned_data.get("shard_modulo")

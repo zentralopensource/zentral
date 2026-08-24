@@ -2416,6 +2416,83 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
         self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
 
+    def test_add_sub_manifest_pkg_info_second_key(self):
+        smpi = force_sub_manifest_pkg_info()
+        sub_manifest = smpi.sub_manifest
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
+            {"pkg_info_name": smpi.pkg_info_name.pk,
+             "key": "optional_installs"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        self.assertEqual(
+            sorted(sub_manifest.submanifestpkginfo_set.filter(pkg_info_name=smpi.pkg_info_name)
+                                                      .values_list("key", flat=True)),
+            ["managed_installs", "optional_installs"]
+        )
+
+    def test_add_sub_manifest_pkg_info_same_key_error(self):
+        smpi = force_sub_manifest_pkg_info()
+        sub_manifest = smpi.sub_manifest
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
+            {"pkg_info_name": smpi.pkg_info_name.pk,
+             "key": "managed_installs"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
+        self.assertFormError(
+            response.context["form"], "key",
+            "This pkg info name is already in the sub manifest with this key"
+        )
+        self.assertEqual(sub_manifest.submanifestpkginfo_set.count(), 1)
+
+    def test_update_sub_manifest_pkg_info_same_key_error(self):
+        smpi = force_sub_manifest_pkg_info()
+        sub_manifest = smpi.sub_manifest
+        other_smpi = SubManifestPkgInfo.objects.create(
+            sub_manifest=sub_manifest,
+            pkg_info_name=smpi.pkg_info_name,
+            key="optional_installs",
+        )
+        self.login("monolith.change_submanifestpkginfo", "monolith.view_submanifest")
+        response = self.client.post(
+            reverse("monolith:update_sub_manifest_pkg_info", args=(sub_manifest.pk, other_smpi.pk)),
+            {"pkg_info_name": smpi.pkg_info_name.pk,
+             "key": "managed_installs"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
+        self.assertFormError(
+            response.context["form"], "key",
+            "This pkg info name is already in the sub manifest with this key"
+        )
+        other_smpi.refresh_from_db()
+        self.assertEqual(other_smpi.key, "optional_installs")
+
+    def test_update_sub_manifest_pkg_info_same_key_same_object(self):
+        smpi = force_sub_manifest_pkg_info()
+        sub_manifest = smpi.sub_manifest
+        self.login("monolith.change_submanifestpkginfo", "monolith.view_submanifest")
+        response = self.client.post(
+            reverse("monolith:update_sub_manifest_pkg_info", args=(sub_manifest.pk, smpi.pk)),
+            {"pkg_info_name": smpi.pkg_info_name.pk,
+             "key": "managed_installs",
+             "default_shard": 40,
+             "shard_modulo": 100},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        smpi.refresh_from_db()
+        self.assertEqual(smpi.options, {"shards": {"default": 40, "modulo": 100}})
+
     # delete submanifest pkginfo
 
     def test_delete_sub_manifest_pkg_info_redirect(self):

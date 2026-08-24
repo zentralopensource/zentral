@@ -3027,6 +3027,41 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                          {"excluded_tags": [tag.name],
                           "shards": {"default": 5, "modulo": 10}})
 
+    def test_create_sub_manifest_pkg_info_second_key(self):
+        self.set_permissions("monolith.add_submanifestpkginfo")
+        sub_manifest_pkg_info = force_sub_manifest_pkg_info()
+        sub_manifest = sub_manifest_pkg_info.sub_manifest
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            'sub_manifest': sub_manifest.pk,
+            'pkg_info_name': sub_manifest_pkg_info.pkg_info_name.name,
+            'key': 'managed_updates',
+            'excluded_tags': [],
+            'tag_shards': []
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            sorted(sub_manifest.submanifestpkginfo_set.values_list("key", flat=True)),
+            ["managed_installs", "managed_updates"]
+        )
+
+    def test_create_sub_manifest_pkg_info_same_key_error(self):
+        self.set_permissions("monolith.add_submanifestpkginfo")
+        sub_manifest_pkg_info = force_sub_manifest_pkg_info()
+        sub_manifest = sub_manifest_pkg_info.sub_manifest
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            'sub_manifest': sub_manifest.pk,
+            'pkg_info_name': sub_manifest_pkg_info.pkg_info_name.name,
+            'key': 'managed_installs',
+            'excluded_tags': [],
+            'tag_shards': []
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {'non_field_errors': ['The fields sub_manifest, pkg_info_name, key must make a unique set.']}
+        )
+        self.assertEqual(sub_manifest.submanifestpkginfo_set.count(), 1)
+
     # update sub manifest pkg info
 
     def test_update_sub_manifest_pkg_info_unauthorized(self):

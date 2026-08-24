@@ -66,7 +66,11 @@ You can now add software to your manifest. With monolith, we have decided to onl
 
 Once you have a sub-manifest, add it to the manifest (from the manifest, click on `Add` in the sub-manifest section). If you pick one or many tags, only the machine carrying any of the tags applied will be offered it.
 
-Two important notes to remember is that you should not have the same package as a managed_install and managed_uninstall on the same 'product' key, just like you would see warnings if you add a product to a sub-manifest before it's available to all of the applicable catalogs. (You can use [Conditions](https://github.com/munki/munki/wiki/Conditional-Items) with the built-in-to-munki `catalog` NSPredicate logic to 'mute'/avoid those warnings.) Also, you cannot add a product as both a managed_update and optional_install in the same sub-manifest, it is recommended to use an additional, separate sub-manifest if that is required.
+A package can use more than one key in the same sub-manifest, one time for each key, and each key keeps its own condition, excluded tags and shards. For example, use `optional_installs` and `managed_updates` together. Managed Software Center then offers the package, and Zentral keeps it up to date after a user installs it. Munki updates a `managed_updates` package only if a version of it is already installed.
+
+Do not add the same package with the `managed_installs` and the `managed_uninstalls` keys. You also see warnings if you add a package to a sub-manifest before it is in all the applicable catalogs. Use [Conditions](https://github.com/munki/munki/wiki/Conditional-Items) with the munki `catalog` NSPredicate logic to prevent those warnings.
+
+Munki installs a `default_installs` package only if it is an `optional_installs` package too. Zentral adds a `default_installs` package to the two keys. If the sub-manifest has its own `optional_installs` package with the same name and the same condition, Zentral keeps that one, with its own scope.
 
 ## PkgInfo sharding
 

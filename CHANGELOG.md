@@ -15,6 +15,10 @@ The `file_uri` and `file_sha256` attributes of the data asset endpoints are not 
 
 Every key of a sub manifest package has the same scope: a condition, excluded tags and shards. You can remove a package from a part of your fleet first, then increase the shard. Excluded tags that you set for a *Managed Uninstalls* package through the API apply now. The machines that carry those tags keep the package.
 
+A sub manifest package can use more than one key, one time for each key, and each key keeps its own scope. Use `optional_installs` and `managed_updates` together to offer a package in Managed Software Center, and to keep it up to date after a user installs it. Munki updates a `managed_updates` package only if a version of it is already installed.
+
+Zentral adds a `default_installs` package to the `optional_installs` of the sub manifest, because munki installs it only if it is an optional install too. If the sub manifest has its own `optional_installs` package with the same name and the same condition, Zentral keeps that one, with its own scope.
+
 
 #### Osquery
 
