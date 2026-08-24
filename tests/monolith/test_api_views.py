@@ -2985,6 +2985,48 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                                "monolith_pkg_info_name": [str(pkg_info_name.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
+    def test_create_sub_manifest_pkg_info_managed_updates_options(self):
+        self.set_permissions("monolith.add_submanifestpkginfo")
+        sub_manifest = force_sub_manifest()
+        pkg_info_name = force_name()
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            'sub_manifest': sub_manifest.pk,
+            'pkg_info_name': pkg_info_name.name,
+            'key': 'managed_updates',
+            'default_shard': 5,
+            'shard_modulo': 10,
+            'excluded_tags': [tag.pk],
+            'tag_shards': []
+        })
+        self.assertEqual(response.status_code, 201)
+        sub_manifest_pkg_info = SubManifestPkgInfo.objects.get(sub_manifest=sub_manifest,
+                                                               pkg_info_name=pkg_info_name)
+        self.assertEqual(sub_manifest_pkg_info.options,
+                         {"excluded_tags": [tag.name],
+                          "shards": {"default": 5, "modulo": 10}})
+
+    def test_create_sub_manifest_pkg_info_managed_uninstalls_options(self):
+        self.set_permissions("monolith.add_submanifestpkginfo")
+        sub_manifest = force_sub_manifest()
+        pkg_info_name = force_name()
+        tag = Tag.objects.create(name=get_random_string(12))
+        response = self.post(reverse("monolith_api:sub_manifest_pkg_infos"), data={
+            'sub_manifest': sub_manifest.pk,
+            'pkg_info_name': pkg_info_name.name,
+            'key': 'managed_uninstalls',
+            'default_shard': 5,
+            'shard_modulo': 10,
+            'excluded_tags': [tag.pk],
+            'tag_shards': []
+        })
+        self.assertEqual(response.status_code, 201)
+        sub_manifest_pkg_info = SubManifestPkgInfo.objects.get(sub_manifest=sub_manifest,
+                                                               pkg_info_name=pkg_info_name)
+        self.assertEqual(sub_manifest_pkg_info.options,
+                         {"excluded_tags": [tag.name],
+                          "shards": {"default": 5, "modulo": 10}})
+
     # update sub manifest pkg info
 
     def test_update_sub_manifest_pkg_info_unauthorized(self):

@@ -28,7 +28,7 @@ from .repository_backends import (
     get_repository_backend,
     load_repository_backend,
 )
-from .utils import build_manifest_enrollment_package
+from .utils import build_manifest_enrollment_package, test_monolith_object_inclusion
 
 logger = logging.getLogger("zentral.contrib.monolith.models")
 
@@ -692,15 +692,7 @@ class SubManifest(models.Model):
                 else:
                     condition = None
                 name = smpi.get_name()
-                if isinstance(smpi, SubManifestPkgInfo):
-                    options = smpi.options
-                else:
-                    options = None
-                if key in ('managed_installs', 'managed_updates', 'optional_installs'):
-                    val = (name, options)
-                else:
-                    val = name
-                condition_d.setdefault(condition, {}).setdefault(key, []).append(val)
+                condition_d.setdefault(condition, {}).setdefault(key, []).append((name, smpi.options))
                 if key != "managed_uninstalls" and smpi.featured_item:
                     featured_items.add(name)
         data = {}
@@ -739,6 +731,25 @@ class SubManifest(models.Model):
             "updated_at": self.updated_at.isoformat()
         })
         return d
+
+
+def filter_sub_manifest_data_dict(smd, serial_number, tag_names):
+    # a built sub manifest also holds the featured items and the conditions, which carry no options
+    for key in SUB_MANIFEST_PKG_INFO_KEY_CHOICES_DICT:
+        if key not in smd:
+            continue
+        smd[key] = [
+            name
+            for name, options in smd.pop(key)
+            if test_monolith_object_inclusion(name, options, serial_number, tag_names)
+        ]
+
+
+def filter_sub_manifest_data(sub_manifest_data, serial_number, tag_names):
+    filter_sub_manifest_data_dict(sub_manifest_data, serial_number, tag_names)
+    for condition_d in sub_manifest_data.get("conditional_items", []):
+        filter_sub_manifest_data_dict(condition_d, serial_number, tag_names)
+    return sub_manifest_data
 
 
 class ConditionManager(models.Manager):

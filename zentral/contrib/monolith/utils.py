@@ -164,21 +164,3 @@ def filter_catalog_data(catalog_data, serial_number, tag_names):
                 pkginfo["force_install_after_date"] = naive_utc_fromisoformat(force_install_after_date)
             filtered_catalog_data.append(pkginfo)
     return filtered_catalog_data
-
-
-def filter_sub_manifest_data_dict(smd, serial_number, tag_names):
-    for key in ('managed_installs', 'managed_updates', 'optional_installs'):
-        if key not in smd:
-            continue
-        smd[key] = [
-            name
-            for name, options in smd.pop(key)
-            if test_monolith_object_inclusion(name, options, serial_number, tag_names)
-        ]
-
-
-def filter_sub_manifest_data(sub_manifest_data, serial_number, tag_names):
-    filter_sub_manifest_data_dict(sub_manifest_data, serial_number, tag_names)
-    for condition_d in sub_manifest_data.get("conditional_items", []):
-        filter_sub_manifest_data_dict(condition_d, serial_number, tag_names)
-    return sub_manifest_data

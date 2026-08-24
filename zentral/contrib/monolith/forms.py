@@ -144,12 +144,9 @@ class SubManifestItemFormMixin:
 
 
 class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
-    excluded_tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False,
-                                                   widget=forms.SelectMultiple(attrs={"class": "hide-if-not-install"}))
-    default_shard = forms.IntegerField(min_value=0, max_value=1000, required=False, initial=100,
-                                       widget=forms.TextInput(attrs={"class": "hide-if-not-install"}))
-    shard_modulo = forms.IntegerField(min_value=1, max_value=1000, required=False, initial=100,
-                                      widget=forms.TextInput(attrs={"class": "hide-if-not-install"}))
+    excluded_tags = forms.ModelMultipleChoiceField(queryset=Tag.objects.all(), required=False)
+    default_shard = forms.IntegerField(min_value=0, max_value=1000, required=False, initial=100)
+    shard_modulo = forms.IntegerField(min_value=1, max_value=1000, required=False, initial=100)
 
     def __init__(self, *args, **kwargs):
         self.sub_manifest = kwargs.pop('sub_manifest', None)
@@ -203,25 +200,24 @@ class SubManifestPkgInfoForm(SubManifestItemFormMixin, forms.ModelForm):
             self.add_error("default_shard", "Must be less than or equal to the shard modulo")
         # options
         options = {}
-        if self.cleaned_data.get("key") in ("default_installs", "managed_installs", "optional_installs"):
-            excluded_tags = self.cleaned_data.get("excluded_tags")
-            if excluded_tags:
-                options["excluded_tags"] = [tag.name for tag in excluded_tags]
-            if default_shard is not None:
-                options.setdefault("shards", {})["default"] = default_shard
-            if shard_modulo is not None:
-                options.setdefault("shards", {})["modulo"] = shard_modulo
-            tag_shards = {}
-            for tag, _, _ in self.tag_shards:
-                try:
-                    shard = int(self.data[f"tag-shard-{tag.pk}"])
-                except Exception:
-                    continue
-                if isinstance(shard_modulo, int):
-                    shard = min(shard, shard_modulo)
-                tag_shards[tag.name] = shard
-            if tag_shards:
-                options.setdefault("shards", {})["tags"] = tag_shards
+        excluded_tags = self.cleaned_data.get("excluded_tags")
+        if excluded_tags:
+            options["excluded_tags"] = [tag.name for tag in excluded_tags]
+        if default_shard is not None:
+            options.setdefault("shards", {})["default"] = default_shard
+        if shard_modulo is not None:
+            options.setdefault("shards", {})["modulo"] = shard_modulo
+        tag_shards = {}
+        for tag, _, _ in self.tag_shards:
+            try:
+                shard = int(self.data[f"tag-shard-{tag.pk}"])
+            except Exception:
+                continue
+            if isinstance(shard_modulo, int):
+                shard = min(shard, shard_modulo)
+            tag_shards[tag.name] = shard
+        if tag_shards:
+            options.setdefault("shards", {})["tags"] = tag_shards
         self.instance.options = options
 
     class Meta:

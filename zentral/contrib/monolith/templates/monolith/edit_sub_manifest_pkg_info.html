@@ -43,7 +43,7 @@
       <tr id="tag-shard-{{ tag.pk }}"{% if not active %} style="display:none;"{% endif %}>
         <td>{% inventory_tag tag %}</td>
         <td style="padding:5px">
-          <input type="number" class="form-control hide-if-not-install" name="tag-shard-{{ tag.pk }}" value="{{ shard }}" min="0", max="1000"{% if not active %} disabled{% endif %}>
+          <input type="number" class="form-control" name="tag-shard-{{ tag.pk }}" value="{{ shard }}" min="0", max="1000"{% if not active %} disabled{% endif %}>
         </td>
         <td>
           <button type="button" data-tag-pk="{{ tag.pk }}" class="btn btn-danger del-tag-shard">
@@ -61,11 +61,6 @@
 
 {% block extrajs %}
 <script nonce="{{ request.csp_nonce }}">
-  function toggleOptionalFields(val) {
-    var toggle = val === "managed_installs" || val === "default_installs" || val === "optional_installs";
-    $(".hide-if-not-install").parents(".form-group").toggle(toggle);
-  }
-
   $(document).ready(function () {
     $("#add-tag-shard").click(function(event){
       event.preventDefault();
@@ -87,10 +82,6 @@
       $('input[name="tag-shard-' + tagId + '"]').prop("disabled", true);
       $("#add-tag-shard-opt-" + tagId).prop("disabled", false);
     });
-    $('select[name="key"]').change(function(event){
-      toggleOptionalFields($(this).val());
-    });
-    toggleOptionalFields($('select[name="key"]').val());
   });
 </script>
 {% endblock %}

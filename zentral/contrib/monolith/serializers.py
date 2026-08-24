@@ -6,7 +6,7 @@ from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .conf import monolith_conf
 from .models import (Catalog, Condition, Enrollment, Manifest, ManifestCatalog, ManifestSubManifest,
                      ManifestEnrollmentPackage, PkgInfoName, Repository, RepositoryBackend,
-                     SubManifest, SubManifestPkgInfo, SUB_MANIFEST_PKG_INFO_KEY_CHOICES)
+                     SubManifest, SubManifestPkgInfo)
 from .repository_backends.azure import AzureRepositorySerializer
 from .repository_backends.s3 import S3RepositorySerializer
 
@@ -347,16 +347,15 @@ class SubManifestPkgInfoSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(errors)
 
         options = {}
-        if data["key"] in (key for key, _ in SUB_MANIFEST_PKG_INFO_KEY_CHOICES):
-            if excluded_tags:
-                options["excluded_tags"] = [t.name for t in excluded_tags]
-            options["shards"] = {
-                "default": default_shard,
-                "modulo": shard_modulo,
-            }
-            tag_shards = {ts["tag"].name: ts["shard"] for ts in tag_shards}
-            if tag_shards:
-                options["shards"]["tags"] = tag_shards
+        if excluded_tags:
+            options["excluded_tags"] = [t.name for t in excluded_tags]
+        options["shards"] = {
+            "default": default_shard,
+            "modulo": shard_modulo,
+        }
+        tag_shards = {ts["tag"].name: ts["shard"] for ts in tag_shards}
+        if tag_shards:
+            options["shards"]["tags"] = tag_shards
         data["options"] = options
 
         return data

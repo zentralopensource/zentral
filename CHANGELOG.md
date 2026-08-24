@@ -11,6 +11,11 @@ A data asset can be created and updated with its content in the request now, bas
 The `file_uri` and `file_sha256` attributes of the data asset endpoints are not required fields anymore. A request without `file_uri` and without `source` gives one error for the two of them, and not one "This field is required." for each attribute.
 
 
+#### Monolith
+
+Every key of a sub manifest package has the same scope: a condition, excluded tags and shards. You can remove a package from a part of your fleet first, then increase the shard. Excluded tags that you set for a *Managed Uninstalls* package through the API apply now. The machines that carry those tags keep the package.
+
+
 #### Osquery
 
 Zentral publishes a `zentral_audit` event when a user creates, updates or deletes an Osquery object from the web console: automatic table constructions, configurations, configuration packs, enrollments, file categories, packs, pack queries, queries and distributed query runs. Each event carries the full value of the object before and after the change, and the user, the source IP and the request that made it.
@@ -105,6 +110,8 @@ Fixed an MDM software update enforcement in latest mode that took a device out o
 Malformed MDM client capabilities do not take a device out of management anymore. The lookup of the supported status items failed on a type, and the `tokens` and `declaration-items` check-ins and `/connect` gave a 500. The status subscriptions use the items that all the clients support now, and Zentral writes a warning.
 
 The MDM software update enforcement API rejects a null delay in days or local time when a maximum target OS version is set. A latest enforcement needs both fields to calculate the target date of its declaration. If you omit them, the defaults of 14 days and 09:30 apply, as before.
+
+Fixed the scope of a Monolith sub manifest package that uses the *Default Installs* key. Zentral put the package in the `default_installs` of every machine, and ignored the excluded tags and the shards. A machine out of scope kept a self-serve entry that can install the package later, with no request from the user. The web console form also removed the excluded tags and the shards from a package that uses the *Managed Updates* key.
 
 
 ## 2026.5

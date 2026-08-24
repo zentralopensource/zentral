@@ -46,7 +46,7 @@
       <tr id="tag-shard-{{ tag.pk }}"{% if not active %} style="display:none;"{% endif %}>
         <td>{% inventory_tag tag %}</td>
         <td style="padding:5px">
-          <input type="number" class="form-control hide-if-not-install" name="tag-shard-{{ tag.pk }}" value="{{ shard }}" min="0", max="1000"{% if not active %} disabled{% endif %}>
+          <input type="number" class="form-control" name="tag-shard-{{ tag.pk }}" value="{{ shard }}" min="0", max="1000"{% if not active %} disabled{% endif %}>
         </td>
         <td>
           <button type="button" data-tag-pk="{{ tag.pk }}" class="btn btn-danger del-tag-shard">

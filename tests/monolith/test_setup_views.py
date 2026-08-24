@@ -2339,6 +2339,83 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
         self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
 
+    def test_add_sub_manifest_pkg_info_excluded_tags_and_tag_shards(self):
+        sub_manifest = force_sub_manifest()
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        shard_tag = Tag.objects.create(name=get_random_string(12))
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        pkginfo_name = force_name_with_info()
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "managed_installs",
+             "excluded_tags": [excluded_tag.pk],
+             "default_shard": 5,
+             "shard_modulo": 10,
+             f"tag-shard-{shard_tag.pk}": 7},  # the excluded tag has no shard, it is skipped
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
+        self.assertEqual(
+            smpi.options,
+            {"excluded_tags": [excluded_tag.name],
+             "shards": {"default": 5, "modulo": 10, "tags": {shard_tag.name: 7}}}
+        )
+
+    def test_add_sub_manifest_pkg_info_tag_shard_capped_at_the_modulo(self):
+        sub_manifest = force_sub_manifest()
+        shard_tag = Tag.objects.create(name=get_random_string(12))
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        pkginfo_name = force_name_with_info()
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "managed_installs",
+             "default_shard": 5,
+             "shard_modulo": 10,
+             f"tag-shard-{shard_tag.pk}": 42},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
+        self.assertEqual(smpi.options["shards"]["tags"], {shard_tag.name: 10})
+
+    def test_add_managed_updates_sub_manifest_pkg_info_shard(self):
+        sub_manifest = force_sub_manifest()
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        pkginfo_name = force_name_with_info()
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "managed_updates",
+             "default_shard": 90,
+             "shard_modulo": 100},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
+        self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
+
+    def test_add_managed_uninstalls_sub_manifest_pkg_info_shard(self):
+        sub_manifest = force_sub_manifest()
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        pkginfo_name = force_name_with_info()
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "managed_uninstalls",
+             "default_shard": 90,
+             "shard_modulo": 100},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/sub_manifest.html")
+        smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
+        self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
+
     # delete submanifest pkginfo
 
     def test_delete_sub_manifest_pkg_info_redirect(self):

@@ -13,11 +13,17 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 from .conf import monolith_conf
 from .events import post_monolith_enrollment_event, post_monolith_munki_request
-from .models import MunkiNameError, parse_munki_name, CacheServer, EnrolledMachine, ManifestEnrollmentPackage
-from .utils import filter_catalog_data, filter_sub_manifest_data
+from .models import (MunkiNameError, parse_munki_name, filter_sub_manifest_data,
+                     CacheServer, EnrolledMachine, ManifestEnrollmentPackage)
+from .utils import filter_catalog_data
 
 
 logger = logging.getLogger('zentral.contrib.monolith.public_views')
+
+
+# bumped when the shape of a built sub manifest changes, so that the instances of two releases
+# do not read each other's entries during a rolling deploy
+SUB_MANIFEST_CACHE_VERSION = 2
 
 
 class MRBaseView(View):
@@ -212,17 +218,16 @@ class MRManifestView(MRNameView):
             sub_manifest_name = None
             sub_manifest_data = None
             try:
-                sub_manifest_name, sub_manifest_data = cache.get(cache_key)
-                if not isinstance(sub_manifest_data, dict):  # TODO remove, needed for sm pkg options migration
-                    raise ValueError
-            except (TypeError, ValueError):
+                sub_manifest_name, sub_manifest_data = cache.get(cache_key, version=SUB_MANIFEST_CACHE_VERSION)
+            except TypeError:  # cache miss, cache.get returned None
                 # verify machine access to sub manifest and respond
                 sub_manifest = self.manifest.sub_manifest(sm_id, self.tags)
                 if sub_manifest:
                     sub_manifest_name = sub_manifest.name
                     sub_manifest_data = sub_manifest.build()
                 # set the cache value, even if sub_manifest_name and sub_manifest_data are None
-                cache.set(cache_key, (sub_manifest_name, sub_manifest_data), timeout=604800)  # 7 days
+                cache.set(cache_key, (sub_manifest_name, sub_manifest_data),
+                          timeout=604800, version=SUB_MANIFEST_CACHE_VERSION)  # 7 days
             else:
                 event_payload["cache"]["hit"] = True
             if sub_manifest_name:
