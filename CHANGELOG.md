@@ -43,6 +43,8 @@ The `version` attribute of an Osquery query in an event payload is the version o
 ### Bug fixes
 
 
+Fixed the `zentral_audit` events of the Santa enrollments and the Santa enrolled machines, which were not linked to the object they report. A model that declares the parents of an object replaced the link to the object itself, and the events of that object did not reach its page. A model keeps control of its own key when it declares one, because the MDM commands are linked by UUID and not by primary key.
+
 Fixed the version of an Osquery query in the events published when a user changed the query from the web console. The version was a database expression, and not a number.
 
 Fixed the `zentral_audit` event published when a user increases the version of an enrollment. The enrollment payload had no version, so the event showed the same value before and after the change. The payload has the `version` and `updated_at` attributes now, for the Monolith, Munki, Osquery, Santa and Turbo enrollments.

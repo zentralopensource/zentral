@@ -320,6 +320,9 @@ class APIToken(models.Model):
 
 
 class OIDCAPITokenIssuer(models.Model):
+    # the verbose name of this model gives "accounts_oidcapi_token_issuer"
+    linked_objects_key = "accounts_oidc_api_token_issuer"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=256, unique=True)
@@ -369,10 +372,6 @@ class OIDCAPITokenIssuer(models.Model):
         if self.description:
             d["description"] = self.description
         return d
-
-    def linked_objects_keys_for_event(self):
-        # to override the default key
-        return {"accounts_oidc_api_token_issuer": ((str(self.pk),),)}
 
     def get_discovery_uri(self):
         return get_discovery_uri_from_issuer_uri(self.issuer_uri)

@@ -545,6 +545,20 @@ register_event_type(BaseEvent)
 # Zentral audit event
 
 
+def linked_objects_key(instance):
+    """The metadata objects key of a model instance.
+
+    A model sets linked_objects_key to override it, for a verbose name that does not read well.
+    """
+    key = getattr(instance, "linked_objects_key", None)
+    if key:
+        return key
+    key = instance._meta.verbose_name.replace(" ", "_")
+    if instance._meta.app_label != "inventory":  # shorter names for the inventory objects
+        key = f"{instance._meta.app_label}_{key}"
+    return key
+
+
 class AuditEvent(BaseEvent):
 
     class Action(Enum):
@@ -572,13 +586,15 @@ class AuditEvent(BaseEvent):
         if machine_serial_number:
             em_kwargs["machine_serial_number"] = machine_serial_number
         metadata = EventMetadata(**em_kwargs)
-        try:
-            metadata.add_objects(instance.linked_objects_keys_for_event())
-        except AttributeError:
-            key = instance._meta.verbose_name.replace(" ", "_")
-            if instance._meta.app_label != "inventory":  # shorter names for the inventory objects
-                key = f"{instance._meta.app_label}_{key}"
-            metadata.add_objects({key: ((instance.pk,),)})
+        # the object the event is about is always linked. a model that declares its own key keeps
+        # control of it — DeviceCommand links itself by uuid, not by pk — but a model that only
+        # declares its parents no longer drops the link to itself.
+        get_extra_keys = getattr(instance, "linked_objects_keys_for_event", None)
+        extra_keys = get_extra_keys() if get_extra_keys is not None else {}
+        own_key = linked_objects_key(instance)
+        if own_key not in extra_keys:
+            metadata.add_objects({own_key: ((instance.pk,),)})
+        metadata.add_objects(extra_keys)
         # payload
         payload = {
             "action": action.value,

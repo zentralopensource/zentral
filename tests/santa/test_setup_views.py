@@ -770,7 +770,9 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
               }}
         )
         metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"santa_configuration": [str(configuration.pk)]})
+        self.assertEqual(metadata["objects"],
+                         {"santa_enrollment": [str(enrollment_pk)],
+                          "santa_configuration": [str(configuration.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
     # create voting group

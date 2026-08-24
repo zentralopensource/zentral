@@ -292,7 +292,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertIsNone(event.payload["object"]["prev_value"]["forced_sync_type"])
         self.assertEqual(event.payload["object"]["new_value"]["forced_sync_type"], "CLEAN_ALL")
         self.assertEqual(event.metadata.objects,
-                         {"santa_configuration": [(self.configuration.pk,)]})
+                         {"santa_enrolled_machine": [(enrolled_machine.pk,)],
+                          "santa_configuration": [(self.configuration.pk,)]})
 
     def test_force_clean_sync_defaults_to_clean(self):
         enrolled_machine = self.force_enrolled_machine()
