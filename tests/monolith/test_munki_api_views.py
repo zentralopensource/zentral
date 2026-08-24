@@ -2,8 +2,10 @@ from datetime import datetime
 import copy
 import os.path
 import plistlib
+from unittest.mock import patch
 from urllib.parse import urlparse
 import uuid
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse, NoReverseMatch
@@ -704,6 +706,49 @@ class MonolithAPIViewsTestCase(TestCase):
              'conditional_items': [{'condition': "machine_type == 'LAPTOP'",
                                     'optional_installs': ['deuxième nom']}]}
         )
+
+    # we want to use the cache for these tests
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    @patch("zentral.contrib.monolith.public_views.post_monolith_munki_request")
+    def test_manifest_cache_hit(self, post_monolith_munki_request):
+        cache.clear()  # the locmem cache is shared inside the process
+        self._force_smpi()
+        url = reverse("monolith_public:repository_manifest", args=("12345678",))
+        first = self._make_munki_request(url, serial_number="12345678")
+        self.assertEqual(first.status_code, 200)
+        self.assertFalse(post_monolith_munki_request.call_args_list[-1].kwargs["cache"]["hit"])
+        second = self._make_munki_request(url, serial_number="12345678")
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(post_monolith_munki_request.call_args_list[-1].kwargs["cache"]["hit"])
+        self.assertEqual(first.content, second.content)
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    @patch("zentral.contrib.monolith.public_views.post_monolith_munki_request")
+    def test_sub_manifest_cache_hit(self, post_monolith_munki_request):
+        cache.clear()  # the locmem cache is shared inside the process
+        _, _, sub_manifest = self._force_smpi(name="deuxième nom")
+        url = reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),))
+        first = self._make_munki_request(url, serial_number="12345678")
+        self.assertEqual(first.status_code, 200)
+        self.assertFalse(post_monolith_munki_request.call_args_list[-1].kwargs["cache"]["hit"])
+        second = self._make_munki_request(url, serial_number="12345678")
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(post_monolith_munki_request.call_args_list[-1].kwargs["cache"]["hit"])
+        self.assertEqual(
+            plistlib.loads(second.content),
+            {'managed_installs': ['deuxième nom']}
+        )
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    def test_sub_manifest_not_available_cached(self):
+        cache.clear()  # the locmem cache is shared inside the process
+        # a sub manifest the machine cannot read is cached too, and stays a 404
+        _, _, sub_manifest = self._force_smpi()
+        sub_manifest.manifestsubmanifest_set.all().delete()
+        url = reverse("monolith_public:repository_manifest", args=(sub_manifest.get_munki_name(),))
+        for _ in range(2):
+            response = self._make_munki_request(url, serial_number="12345678")
+            self.assertEqual(response.status_code, 404)
 
     # repository package
 

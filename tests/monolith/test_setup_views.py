@@ -13,7 +13,7 @@ from django.utils.text import slugify
 
 from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (
     Catalog,
     Condition,
@@ -2339,6 +2339,41 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         smpi = sub_manifest.submanifestpkginfo_set.get(pkg_info_name=pkginfo_name)
         self.assertEqual(smpi.options, {"shards": {"default": 90, "modulo": 100}})
 
+    def test_add_sub_manifest_pkg_info_default_shard_greater_than_the_modulo(self):
+        sub_manifest = force_sub_manifest()
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        pkginfo_name = force_name_with_info()
+        response = self.client.post(
+            reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)),
+            {"pkg_info_name": pkginfo_name.pk,
+             "key": "managed_installs",
+             "default_shard": 20,
+             "shard_modulo": 10},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/edit_sub_manifest_pkg_info.html")
+        self.assertFormError(
+            response.context["form"], "default_shard",
+            "Must be less than or equal to the shard modulo"
+        )
+        self.assertEqual(sub_manifest.submanifestpkginfo_set.count(), 0)
+
+    def test_add_sub_manifest_pkg_info_excluded_tags_scoped_to_the_business_unit(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        sub_manifest = force_sub_manifest(mbu=mbu)
+        mbu_tag = Tag.objects.create(name=get_random_string(12), meta_business_unit=mbu)
+        global_tag = Tag.objects.create(name=get_random_string(12))
+        other_mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        other_tag = Tag.objects.create(name=get_random_string(12), meta_business_unit=other_mbu)
+        self.login("monolith.add_submanifestpkginfo", "monolith.view_submanifest")
+        response = self.client.get(reverse("monolith:sub_manifest_add_pkg_info", args=(sub_manifest.pk,)))
+        self.assertEqual(response.status_code, 200)
+        excluded_tags = response.context["form"].fields["excluded_tags"].queryset
+        self.assertIn(mbu_tag, excluded_tags)
+        self.assertIn(global_tag, excluded_tags)
+        self.assertNotIn(other_tag, excluded_tags)
+
     def test_add_sub_manifest_pkg_info_excluded_tags_and_tag_shards(self):
         sub_manifest = force_sub_manifest()
         excluded_tag = Tag.objects.create(name=get_random_string(12))
@@ -2752,6 +2787,83 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
                              [],
                              True)]})]
         )
+
+    def test_manifest_machine_info_scoped_packages(self):
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        shard_tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=self.serial_number, tag=shard_tag)
+        options = {"excluded_tags": [excluded_tag.name],
+                   "shards": {"default": 50, "modulo": 100, "tags": {shard_tag.name: 90}}}
+        self.pkginfo_1_1.data["zentral_monolith"] = options
+        self.pkginfo_1_1.save()
+        sub_manifest = force_sub_manifest(manifest=self.manifest)
+        smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
+        smpi.options = options
+        smpi.save()
+        self.login("monolith.view_manifest", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
+                                   + "?serial_number=" + self.serial_number)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "monolith/machine_info.html")
+        packages = dict(response.context["packages"])
+        # the repository package, with its status and its scope
+        _, status, excluded_tags, _, default_shard_repr, tag_shards, included = (
+            packages[self.pkginfo_name_1.name]["pkgsinfo"][0]
+        )
+        self.assertEqual(status, "installed")
+        self.assertEqual(excluded_tags, [excluded_tag])
+        self.assertEqual(default_shard_repr, "50/100")
+        self.assertEqual(tag_shards, [(shard_tag, 90)])
+        # the sub manifest package, with the same scope
+        smpi_sub_manifest, key, excluded_tags, _, default_shard_repr, tag_shards, _ = (
+            packages[smpi.pkg_info_name.name]["sub_manifests"][0]
+        )
+        self.assertEqual(smpi_sub_manifest, sub_manifest)
+        self.assertEqual(key, "managed installs")
+        self.assertEqual(excluded_tags, [excluded_tag])
+        self.assertEqual(default_shard_repr, "50/100")
+        self.assertEqual(tag_shards, [(shard_tag, 90)])
+
+    def test_manifest_machine_info_excluded_tag(self):
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number=self.serial_number, tag=excluded_tag)
+        options = {"excluded_tags": [excluded_tag.name]}
+        self.pkginfo_1_1.data["zentral_monolith"] = options
+        self.pkginfo_1_1.save()
+        sub_manifest = force_sub_manifest(manifest=self.manifest)
+        smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
+        smpi.options = options
+        smpi.save()
+        self.login("monolith.view_manifest", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
+                                   + "?serial_number=" + self.serial_number)
+        self.assertEqual(response.status_code, 200)
+        packages = dict(response.context["packages"])
+        # the machine carries an excluded tag, the two packages are out of scope
+        self.assertFalse(packages[self.pkginfo_name_1.name]["pkgsinfo"][0][-1])
+        self.assertFalse(packages[smpi.pkg_info_name.name]["sub_manifests"][0][-1])
+
+    def test_manifest_machine_info_unknown_scope_tags(self):
+        # the tags of the options are stored by name, and a tag can be deleted after that
+        options = {"excluded_tags": [get_random_string(12)],
+                   "shards": {"default": 50, "modulo": 100, "tags": {get_random_string(12): 90}}}
+        self.pkginfo_1_1.data["zentral_monolith"] = options
+        self.pkginfo_1_1.save()
+        sub_manifest = force_sub_manifest(manifest=self.manifest)
+        smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
+        smpi.options = options
+        smpi.save()
+        self.login("monolith.view_manifest", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:manifest_machine_info", args=(self.manifest.pk,))
+                                   + "?serial_number=" + self.serial_number)
+        self.assertEqual(response.status_code, 200)
+        packages = dict(response.context["packages"])
+        for _, _, excluded_tags, _, _, tag_shards, _ in packages[self.pkginfo_name_1.name]["pkgsinfo"]:
+            self.assertEqual(excluded_tags, [])
+            self.assertEqual(tag_shards, [])
+        for _, _, excluded_tags, _, _, tag_shards, _ in packages[smpi.pkg_info_name.name]["sub_manifests"]:
+            self.assertEqual(excluded_tags, [])
+            self.assertEqual(tag_shards, [])
 
     # manifest catalog
     # create manifest_catalog
