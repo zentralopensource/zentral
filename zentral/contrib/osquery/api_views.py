@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
-                               RetrieveUpdateDestroyAPIViewWithAudit)
+                               MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_osquery_pack_update_events
 from .models import Configuration, ConfigurationPack, Enrollment, Pack, Query, AutomaticTableConstruction, FileCategory
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
@@ -34,9 +34,10 @@ class AutomaticTableConstructionList(ListCreateAPIViewWithAudit):
     """
     List all AutomaticTableConstructions or create a new AutomaticTableConstruction
     """
-    queryset = AutomaticTableConstruction.objects.all()
+    queryset = AutomaticTableConstruction.objects.all().order_by("name")
     serializer_class = AutomaticTableConstructionSerializer
     filterset_class = AutomaticTableConstructionFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class AutomaticTableConstructionDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -51,9 +52,10 @@ class ConfigurationList(ListCreateAPIViewWithAudit):
     """
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
-    queryset = Configuration.objects.all()
+    queryset = Configuration.objects.all().order_by("name")
     serializer_class = ConfigurationSerializer
     filterset_fields = ('name',)
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -74,8 +76,9 @@ class EnrollmentList(ListCreateAPIViewWithAudit):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    queryset = Enrollment.objects.all().order_by("pk")
     serializer_class = EnrollmentSerializer
+    pagination_class = MaxLimitOffsetPagination
 
 
 class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -148,9 +151,10 @@ class FileCategoryList(ListCreateAPIViewWithAudit):
     """
     List, Create file categories, search by name or configuration_id
     """
-    queryset = FileCategory.objects.all()
+    queryset = FileCategory.objects.all().order_by("name")
     serializer_class = FileCategorySerializer
     filterset_class = FileCategoryFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class FileCategoryDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -247,9 +251,10 @@ class PackFilter(filters.FilterSet):
 
 
 class PackList(ListCreateAPIViewWithAudit):
-    queryset = Pack.objects.all()
+    queryset = Pack.objects.all().order_by("name")
     serializer_class = PackSerializer
     filterset_class = PackFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class PackDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -266,9 +271,10 @@ class QueryFilter(filters.FilterSet):
 
 
 class QueryList(ListCreateAPIViewWithAudit):
-    queryset = Query.objects.all()
+    queryset = Query.objects.all().order_by("name")
     serializer_class = QuerySerializer
     filterset_class = QueryFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class QueryDetail(RetrieveUpdateDestroyAPIViewWithAudit):
@@ -285,9 +291,10 @@ class ConfigurationPackFilter(filters.FilterSet):
 
 
 class ConfigurationPackList(ListCreateAPIViewWithAudit):
-    queryset = ConfigurationPack.objects.all()
+    queryset = ConfigurationPack.objects.all().order_by("pk")
     serializer_class = ConfigurationPackSerializer
     filterset_class = ConfigurationPackFilter
+    pagination_class = MaxLimitOffsetPagination
 
 
 class ConfigurationPackDetail(RetrieveUpdateDestroyAPIViewWithAudit):

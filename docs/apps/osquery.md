@@ -46,6 +46,22 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 #### Methods
 
 Use `PUT` to update an object, and send all its attributes. `PATCH` is not available, and gives a `405 Method Not Allowed`.
+
+#### Paginated lists
+
+The list endpoints answer with a page and not with an array:
+
+```json
+{
+  "count": 132,
+  "next": "https://zentral.example.com/api/osquery/queries/?limit=50&offset=50",
+  "previous": null,
+  "results": []
+}
+```
+
+Use the `limit` and the `offset` query parameters to select a page. The default limit is 50, and the maximum limit is 500. Read `next` until it is `null` to get all the objects.
+
 ### /api/osquery/atcs/
 
 #### List all ATCs.

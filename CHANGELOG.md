@@ -32,6 +32,11 @@ The enrolled machine and sync state metrics are bucketed by the age of the last 
 ### Backward incompatibilities
 
 
+#### 🧨 Osquery API list endpoints
+
+The list endpoints of the Osquery API answer with a page and not with an array. Read the objects in the `results` attribute, and follow `next` to read the pages that come after the first one. The `limit` and the `offset` query parameters select a page. The default limit is 50, and the maximum limit is 500.
+
+
 #### 🧨 PATCH on the Osquery API
 
 `PATCH` gives a `405 Method Not Allowed` on the Osquery API. Use `PUT`, and send all the attributes of the object. A `PATCH` did not do a correct partial update: it gave a 500 on the queries and on the enrollments, and it renamed a file category or a pack, because the slug was computed from a name that the request did not contain.
