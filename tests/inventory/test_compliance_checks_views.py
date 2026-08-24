@@ -11,6 +11,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.compliance_checks import InventoryJMESPathCheck
 from zentral.contrib.inventory.models import JMESPathCheck, MachineSnapshotCommit, MachineTag, MetaMachine, Source, Tag
 from zentral.core.compliance_checks.models import ComplianceCheck, MachineStatus, Status
+from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 from zentral.utils.time import naive_utcnow
@@ -147,21 +148,31 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(form.initial["source_name"], source_name)
         self.assertEqual(form.initial["jmespath_expression"], jmespath_expression)
 
-    def test_create_compliance_check_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_compliance_check_post(self, post_event):
         self.login("inventory.add_jmespathcheck", "inventory.view_jmespathcheck")
         name = get_random_string(12)
-        response = self.client.post(reverse("inventory:create_compliance_check"),
-                                    {"ccf-name": name,
-                                     "ccf-description": get_random_string(12),
-                                     "jcf-source_name": get_random_string(12),
-                                     "jcf-platforms": ["MACOS"],
-                                     "jcf-jmespath_expression": "contains(profiles[*].uuid, `yolo`)"},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("inventory:create_compliance_check"),
+                                        {"ccf-name": name,
+                                         "ccf-description": get_random_string(12),
+                                         "jcf-source_name": get_random_string(12),
+                                         "jcf-platforms": ["MACOS"],
+                                         "jcf-jmespath_expression": "contains(profiles[*].uuid, `yolo`)"},
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
         self.assertContains(response, name)
         jmespath_check = response.context["object"]
         self.assertEqual(jmespath_check.platforms, ["MACOS"])
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["pk"], str(jmespath_check.pk))
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["inventory_jmespath_check"], [str(jmespath_check.pk)])
+        self.assertEqual(metadata["objects"]["compliance_check"],
+                         [str(jmespath_check.compliance_check.pk)])
 
     def test_create_compliance_check_post_name_collision(self):
         cc = self._force_jmespath_check()
@@ -330,19 +341,23 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(cc.compliance_check.name, name)
         self.assertEqual(cc.compliance_check.version, old_version)  # only the name changed → same version
 
-    def test_update_compliance_check_post_updated_version(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_compliance_check_post_updated_version(self, post_event):
         cc = self._force_jmespath_check()
+        prev_value = cc.serialize_for_event()
         old_version = cc.compliance_check.version
         self.login("inventory.change_jmespathcheck", "inventory.view_jmespathcheck")
         source_name = get_random_string(12)
-        response = self.client.post(reverse("inventory:update_compliance_check", args=(cc.pk,)),
-                                    {"ccf-name": cc.compliance_check.name,
-                                     "ccf-description": cc.compliance_check.description,
-                                     "jcf-source_name": source_name,
-                                     "jcf-platforms": ["IPADOS", "MACOS"],
-                                     "initial-jcf-platforms": cc.platforms,  # required for has_changed() to work!
-                                     "jcf-jmespath_expression": cc.jmespath_expression},
-                                    follow=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("inventory:update_compliance_check", args=(cc.pk,)),
+                {"ccf-name": cc.compliance_check.name,
+                 "ccf-description": cc.compliance_check.description,
+                 "jcf-source_name": source_name,
+                 "jcf-platforms": ["IPADOS", "MACOS"],
+                 "initial-jcf-platforms": cc.platforms,  # required for has_changed() to work!
+                 "jcf-jmespath_expression": cc.jmespath_expression},
+                follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_detail.html")
         self.assertNotContains(response, cc.source_name)
@@ -353,6 +368,13 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         # source name and platforms changed → version updated
         self.assertEqual(cc.compliance_check.version, old_version + 1)
         self.assertEqual(sorted(cc.platforms), ["IPADOS", "MACOS"])
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["prev_value"], prev_value)
+        # the previous value is read before the forms validate, so it is the value before the post
+        self.assertNotEqual(event.payload["object"]["prev_value"]["source_name"],
+                            event.payload["object"]["new_value"]["source_name"])
 
     def test_update_compliance_check_post_name_collision(self):
         cc0 = self._force_jmespath_check()
@@ -388,17 +410,29 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "inventory/compliancecheck_confirm_delete.html")
         self.assertContains(response, cc.compliance_check.name)
 
-    def test_delete_compliance_check_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_compliance_check_post(self, post_event):
         cc0 = self._force_jmespath_check()
         cc = self._force_jmespath_check()
         cc_pk = cc.pk
+        prev_cc_pk = cc.compliance_check.pk
         self.login('inventory.delete_jmespathcheck', 'inventory.view_jmespathcheck')
-        response = self.client.post(reverse("inventory:delete_compliance_check", args=(cc_pk,)), follow=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("inventory:delete_compliance_check", args=(cc_pk,)),
+                                        follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/compliancecheck_list.html")
         self.assertNotContains(response, reverse('inventory:compliance_check', args=(cc_pk,)))
         self.assertContains(response, cc0.compliance_check.name)
         self.assertContains(response, reverse('inventory:compliance_check', args=(cc0.pk,)))
+        # the compliance check goes with the JMESPath check
+        self.assertFalse(ComplianceCheck.objects.filter(pk=prev_cc_pk).exists())
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "deleted")
+        self.assertEqual(event.payload["object"]["pk"], str(cc_pk))
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["compliance_check"], [str(prev_cc_pk)])
 
     # devtool
 

@@ -1,9 +1,9 @@
-from django.db import connection, transaction
+from django.db import connection
 from django.http import Http404
 from django.urls import reverse
 from django.utils import timezone
 from django_filters import rest_framework as filters
-from rest_framework import generics, status
+from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -11,9 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
 from zentral.core.events.base import EventRequest
-from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
-                               ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
-from .events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
+from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .models import (CurrentMachineSnapshot,
                      JMESPathCheck,
@@ -415,39 +414,21 @@ class JMESPathCheckFilter(filters.FilterSet):
     name = filters.CharFilter(field_name="compliance_check__name")
 
 
-class JMESPathCheckList(generics.ListCreateAPIView):
+class JMESPathCheckList(ListCreateAPIViewWithAudit):
     """
     List, search by name or create JMESPath compliance checks.
     """
     queryset = JMESPathCheck.objects.select_related("compliance_check").all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = JMESPathCheckSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = JMESPathCheckFilter
 
-    def perform_create(self, serializer):
-        serializer.save()
-        event = JMESPathCheckCreated.build_from_request_and_object(self.request, serializer.instance)
-        transaction.on_commit(lambda: event.post())
 
-
-class JMESPathCheckDetail(generics.RetrieveUpdateDestroyAPIView):
+class JMESPathCheckDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a JMESPath compliance check.
     """
     queryset = JMESPathCheck.objects.select_related("compliance_check").all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = JMESPathCheckSerializer
-
-    def perform_update(self, serializer):
-        serializer.save()
-        event = JMESPathCheckUpdated.build_from_request_and_object(self.request, serializer.instance)
-        transaction.on_commit(lambda: event.post())
-
-    def perform_destroy(self, instance):
-        event = JMESPathCheckDeleted.build_from_request_and_object(self.request, instance)
-        instance.compliance_check.delete()
-        transaction.on_commit(lambda: event.post())
 
 
 class MetaBusinessUnitList(ListCreateAPIViewWithAudit):

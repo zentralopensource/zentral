@@ -1649,6 +1649,11 @@ class JMESPathCheck(models.Model):
     def linked_objects_keys_for_event(self):
         return {"compliance_check": [(self.compliance_check_id,)]}
 
+    def delete(self, *args, **kwargs):
+        # the compliance check cascades back to this object, so the views only have to delete it
+        self.compliance_check.delete()
+        return super().delete(*args, **kwargs)
+
     def get_platforms_display(self):
         return ", ".join(sorted(PLATFORM_CHOICES_DICT.get(p) for p in self.platforms))
 

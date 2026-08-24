@@ -4,6 +4,11 @@
 ### Features
 
 
+#### Inventory
+
+The inventory JMESPath compliance check publishes the same `zentral_audit` events as the other objects now, from the web console and from the API.
+
+
 #### MDM
 
 A data asset can be created and updated with its content in the request now, base 64 encoded in the new `source` attribute, and not only with a `file_uri` that points to an object in an S3 bucket. `file_uri` and `source` are mutually exclusive, and one of them is required. Zentral computes `file_sha256` from a `source`, and requires it only with a `file_uri`. A `file_sha256` given with a `source` is verified against the content. A data asset created from a `source` has no filename.
@@ -79,6 +84,10 @@ The `version` attribute of an Osquery query in an event payload is the version o
 #### 🧨 PATCH on the Monolith API
 
 `PATCH` gives a `405 Method Not Allowed` on the Monolith catalog, condition, enrollment and manifest enrollment package endpoints. Use `PUT`, and send all the attributes of the object.
+
+#### 🧨 Inventory JMESPath compliance check events
+
+The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `inventory_jmespath_check_deleted` events do not exist anymore. The JMESPath compliance checks publish `zentral_audit` events, like the other objects. A probe or a query on the three event types must use `zentral_audit` with the `inventory.jmespathcheck` model. The events are still linked to the compliance check and to the JMESPath check, so the events page of a check does not change. The `inventory_jmespath_check_status_updated` event does not change.
 
 #### 🧨 Santa enrolled machines metrics
 

@@ -7,7 +7,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
-from zentral.contrib.inventory.events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
+from zentral.core.events.base import AuditEvent
 from zentral.contrib.inventory.models import JMESPathCheck, Tag
 from zentral.contrib.inventory.compliance_checks import InventoryJMESPathCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
@@ -127,8 +127,14 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         # event
         self.assertEqual(len(post_event.call_args.args), 1)
         event = post_event.call_args.args[0]
-        self.assertIsInstance(event, JMESPathCheckCreated)
-        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["model"], "inventory.jmespathcheck")
+        self.assertEqual(event.payload["object"]["pk"], str(jpcc.pk))
+        # the event still reaches the compliance check
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["compliance_check"], [str(jpcc.compliance_check.pk)])
+        self.assertEqual(metadata["objects"]["inventory_jmespath_check"], [str(jpcc.pk)])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_jpcc_empty_description(self, post_event):
@@ -160,8 +166,14 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         # event
         self.assertEqual(len(post_event.call_args.args), 1)
         event = post_event.call_args.args[0]
-        self.assertIsInstance(event, JMESPathCheckCreated)
-        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["model"], "inventory.jmespathcheck")
+        self.assertEqual(event.payload["object"]["pk"], str(jpcc.pk))
+        # the event still reaches the compliance check
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["compliance_check"], [str(jpcc.compliance_check.pk)])
+        self.assertEqual(metadata["objects"]["inventory_jmespath_check"], [str(jpcc.pk)])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_jpcc_missing_description(self, post_event):
@@ -192,8 +204,14 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         # event
         self.assertEqual(len(post_event.call_args.args), 1)
         event = post_event.call_args.args[0]
-        self.assertIsInstance(event, JMESPathCheckCreated)
-        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["model"], "inventory.jmespathcheck")
+        self.assertEqual(event.payload["object"]["pk"], str(jpcc.pk))
+        # the event still reaches the compliance check
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["compliance_check"], [str(jpcc.compliance_check.pk)])
+        self.assertEqual(metadata["objects"]["inventory_jmespath_check"], [str(jpcc.pk)])
 
     # get compliance check
 
@@ -279,8 +297,11 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         # event
         self.assertEqual(len(post_event.call_args.args), 1)
         event = post_event.call_args.args[0]
-        self.assertIsInstance(event, JMESPathCheckUpdated)
-        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["pk"], str(jpcc.pk))
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["compliance_check"], [str(jpcc.compliance_check.pk)])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_jpcc_same_name_no_platforms_no_tags(self, post_event):
@@ -304,8 +325,11 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         # event
         self.assertEqual(len(post_event.call_args.args), 1)
         event = post_event.call_args.args[0]
-        self.assertIsInstance(event, JMESPathCheckUpdated)
-        self.assertEqual(event.payload["pk"], jpcc.compliance_check.pk)
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["pk"], str(jpcc.pk))
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["compliance_check"], [str(jpcc.compliance_check.pk)])
 
     # delete compliance check
 
@@ -326,8 +350,11 @@ class JMESPathCheckAPITests(TestCase, LoginCase, RequestCase):
         # event
         self.assertEqual(len(post_event.call_args.args), 1)
         event = post_event.call_args.args[0]
-        self.assertIsInstance(event, JMESPathCheckDeleted)
-        self.assertEqual(event.payload["pk"], cc_pk)
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["action"], "deleted")
+        self.assertEqual(event.payload["object"]["pk"], str(jpcc.pk))
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"]["compliance_check"], [str(cc_pk)])
 
     # list compliance check
 

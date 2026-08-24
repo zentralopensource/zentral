@@ -7,16 +7,16 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import transaction
 from django.db.models import F
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
-from django.views.generic import DeleteView, DetailView, FormView, ListView, TemplateView, View
+from django.views.generic import DetailView, FormView, ListView, TemplateView, View
 
 from pbac.engine import engine
+from zentral.core.events.base import AuditEvent
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
@@ -34,10 +34,10 @@ from zentral.utils.views import (
     UpdateViewWithAudit,
     UserPaginationListView,
     UserPaginationMixin,
+    post_audit_event,
 )
 
 from .compliance_checks import InventoryJMESPathCheck
-from .events import JMESPathCheckCreated, JMESPathCheckDeleted, JMESPathCheckUpdated
 from .forms import (
     AndroidAppSearchForm,
     CreateTagForm,
@@ -968,8 +968,7 @@ class CreateComplianceCheckView(PermissionRequiredMixin, TemplateView):
         jmespath_check.compliance_check = compliance_check
         jmespath_check.save()
         jmespath_check_form.save_m2m()
-        event = JMESPathCheckCreated.build_from_request_and_object(self.request, jmespath_check)
-        transaction.on_commit(lambda: event.post())
+        post_audit_event(self.request, jmespath_check, AuditEvent.Action.CREATED)
         return redirect(jmespath_check)
 
     def post(self, request, *args, **kwargs):
@@ -1018,6 +1017,9 @@ class UpdateComplianceCheckView(PermissionRequiredMixin, TemplateView):
             pk=kwargs["pk"]
         )
         self.compliance_check = self.object.compliance_check
+        # a ModelForm writes the posted data onto its instance while it validates, so the previous
+        # value has to be read before the forms exist
+        self.prev_value = self.object.serialize_for_event()
         return super().dispatch(request, *args, **kwargs)
 
     def get_forms(self):
@@ -1064,8 +1066,8 @@ class UpdateComplianceCheckView(PermissionRequiredMixin, TemplateView):
         jmespath_check_form.save_m2m()
         if compliance_check_form.has_changed() or jmespath_check_form.has_changed():
             jmespath_check.refresh_from_db()  # get version number
-            event = JMESPathCheckUpdated.build_from_request_and_object(self.request, jmespath_check)
-            transaction.on_commit(lambda: event.post())
+            post_audit_event(self.request, jmespath_check, AuditEvent.Action.UPDATED,
+                             prev_value=self.prev_value)
         return redirect(jmespath_check)
 
     def post(self, request, *args, **kwargs):
@@ -1076,7 +1078,7 @@ class UpdateComplianceCheckView(PermissionRequiredMixin, TemplateView):
             return self.forms_invalid(compliance_check_form, jmespath_check_form)
 
 
-class DeleteComplianceCheckView(PermissionRequiredMixin, DeleteView):
+class DeleteComplianceCheckView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "inventory.delete_jmespathcheck"
     template_name = "inventory/compliancecheck_confirm_delete.html"
     model = JMESPathCheck
@@ -1086,13 +1088,14 @@ class DeleteComplianceCheckView(PermissionRequiredMixin, DeleteView):
         ctx["compliance_check"] = self.object.compliance_check
         return ctx
 
+    def get_success_url(self):
+        return reverse("inventory:compliance_checks")
+
     def form_valid(self, form):
         name = self.object.compliance_check.name
-        event = JMESPathCheckDeleted.build_from_request_and_object(self.request, self.object)
-        self.object.compliance_check.delete()
+        response = super().form_valid(form)
         messages.info(self.request, f'Compliance check "{name}" deleted')
-        transaction.on_commit(lambda: event.post())
-        return redirect("inventory:compliance_checks")
+        return response
 
 
 class ComplianceCheckEventsMixin:
