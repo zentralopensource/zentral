@@ -1,0 +1,11 @@
+<span class="ed-cmd-pending d-none" data-pending="{% if commands_pending %}1{% else %}0{% endif %}"></span>
+{% if commands_count %}
+  <table class="table table-striped align-middle ">
+    {% include "mdm/_device_command_rows.html" %}
+  </table>
+  {% if commands_count > 1 %}
+    <p>
+      <a href="{% url 'mdm:enrolled_device_commands' object.pk %}">See all commands</a>
+    </p>
+  {% endif %}
+{% endif %}
