@@ -3,7 +3,7 @@ from django.db import transaction
 from django_filters import rest_framework as filters
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from rest_framework import generics, status
+from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
@@ -11,7 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
-from zentral.utils.drf import DefaultDjangoModelPermissions, DjangoPermissionRequired
+from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_osquery_pack_update_events
 from .models import Configuration, ConfigurationPack, Enrollment, Pack, Query, AutomaticTableConstruction, FileCategory
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
@@ -29,43 +30,37 @@ class AutomaticTableConstructionFilter(filters.FilterSet):
     name = filters.CharFilter()
 
 
-class AutomaticTableConstructionList(generics.ListCreateAPIView):
+class AutomaticTableConstructionList(ListCreateAPIViewWithAudit):
     """
     List all AutomaticTableConstructions or create a new AutomaticTableConstruction
     """
     queryset = AutomaticTableConstruction.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = AutomaticTableConstructionSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = AutomaticTableConstructionFilter
 
 
-class AutomaticTableConstructionDetail(generics.RetrieveUpdateDestroyAPIView):
+class AutomaticTableConstructionDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete an AutomaticTableConstruction instance.
     """
     queryset = AutomaticTableConstruction.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = AutomaticTableConstructionSerializer
 
 
-class ConfigurationList(generics.ListCreateAPIView):
+class ConfigurationList(ListCreateAPIViewWithAudit):
     """
     List all Configurations, search Configuration by name, or create a new Configuration.
     """
     queryset = Configuration.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_fields = ('name',)
 
 
-class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
+class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a Configuration instance.
     """
     queryset = Configuration.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationSerializer
 
     def perform_destroy(self, instance):
@@ -75,21 +70,19 @@ class ConfigurationDetail(generics.RetrieveUpdateDestroyAPIView):
             return super().perform_destroy(instance)
 
 
-class EnrollmentList(generics.ListCreateAPIView):
+class EnrollmentList(ListCreateAPIViewWithAudit):
     """
     List all Enrollments or create a new Enrollment
     """
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
 
-class EnrollmentDetail(generics.RetrieveUpdateDestroyAPIView):
+class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete an Enrollment instance.
     """
     queryset = Enrollment.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = EnrollmentSerializer
 
     def perform_destroy(self, instance):
@@ -151,23 +144,20 @@ class FileCategoryFilter(filters.FilterSet):
     name = filters.CharFilter()
 
 
-class FileCategoryList(generics.ListCreateAPIView):
+class FileCategoryList(ListCreateAPIViewWithAudit):
     """
     List, Create file categories, search by name or configuration_id
     """
     queryset = FileCategory.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = FileCategorySerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = FileCategoryFilter
 
 
-class FileCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+class FileCategoryDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, Update, Delete a file category
     """
     queryset = FileCategory.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = FileCategorySerializer
 
 
@@ -256,17 +246,14 @@ class PackFilter(filters.FilterSet):
     name = filters.CharFilter()
 
 
-class PackList(generics.ListCreateAPIView):
+class PackList(ListCreateAPIViewWithAudit):
     queryset = Pack.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = PackSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = PackFilter
 
 
-class PackDetail(generics.RetrieveUpdateDestroyAPIView):
+class PackDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Pack.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = PackSerializer
 
 
@@ -278,17 +265,14 @@ class QueryFilter(filters.FilterSet):
     name = filters.CharFilter()
 
 
-class QueryList(generics.ListCreateAPIView):
+class QueryList(ListCreateAPIViewWithAudit):
     queryset = Query.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = QueryFilter
 
 
-class QueryDetail(generics.RetrieveUpdateDestroyAPIView):
+class QueryDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Query.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = QuerySerializer
 
 
@@ -300,15 +284,12 @@ class ConfigurationPackFilter(filters.FilterSet):
                                                  queryset=Configuration.objects.all())
 
 
-class ConfigurationPackList(generics.ListCreateAPIView):
+class ConfigurationPackList(ListCreateAPIViewWithAudit):
     queryset = ConfigurationPack.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationPackSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = ConfigurationPackFilter
 
 
-class ConfigurationPackDetail(generics.RetrieveUpdateDestroyAPIView):
+class ConfigurationPackDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = ConfigurationPack.objects.all()
-    permission_classes = [DefaultDjangoModelPermissions]
     serializer_class = ConfigurationPackSerializer

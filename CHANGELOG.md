@@ -17,6 +17,8 @@ Zentral publishes a `zentral_audit` event when a user creates, updates or delete
 
 A run that stops other runs of the same query — the "Halt current runs" option — now publishes one event for each stopped run. Before, the other runs ended with no record of it.
 
+The Osquery API publishes the same `zentral_audit` events as the web console now. The nine endpoints of the automatic table constructions, the configurations, the configuration packs, the enrollments, the file categories, the packs and the queries were the last ones that changed an object with no record of it.
+
 
 #### Santa
 
@@ -28,6 +30,11 @@ The enrolled machine and sync state metrics are bucketed by the age of the last 
 
 
 ### Backward incompatibilities
+
+
+#### 🧨 PATCH on the Osquery API
+
+`PATCH` gives a `405 Method Not Allowed` on the Osquery API. Use `PUT`, and send all the attributes of the object. A `PATCH` did not do a correct partial update: it gave a 500 on the queries and on the enrollments, and it renamed a file category or a pack, because the slug was computed from a name that the request did not contain.
 
 
 #### 🧨 Osquery query payload in events

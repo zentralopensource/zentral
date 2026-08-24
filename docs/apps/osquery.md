@@ -8,7 +8,7 @@ To activate the osquery module, you need to add a `zentral.contrib.osquery` sect
 
 ## Audit events
 
-Zentral publishes a `zentral_audit` event when a user creates, updates or deletes an Osquery object from the web console: automatic table constructions, configurations, configuration packs, enrollments, file categories, packs, pack queries, queries, and distributed query runs. Each event carries the value of the object before and after the change, with the user, the source IP and the request that made it.
+Zentral publishes a `zentral_audit` event when a user creates, updates or deletes an Osquery object from the web console or from the API: automatic table constructions, configurations, configuration packs, enrollments, file categories, packs, pack queries, queries, and distributed query runs. Each event carries the value of the object before and after the change, with the user, the source IP and the request that made it.
 
 Most of these objects are managed with the Zentral Terraform provider: the automatic table constructions, the configurations, the configuration packs, the enrollments, the file categories, the packs and the queries. For these objects, the event records a change that did not come from the Terraform configuration.
 
@@ -43,6 +43,9 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 * `Content-Type: application/x-osquery-conf`
 * `Content-Type: application/yaml`
 
+#### Methods
+
+Use `PUT` to update an object, and send all its attributes. `PATCH` is not available, and gives a `405 Method Not Allowed`.
 ### /api/osquery/atcs/
 
 #### List all ATCs.

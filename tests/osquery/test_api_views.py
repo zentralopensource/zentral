@@ -9,6 +9,7 @@ from django.utils.crypto import get_random_string
 from django.utils.http import http_date
 from django.utils.text import slugify
 
+from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
@@ -188,6 +189,45 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "osquery.delete_packquery",
         )
 
+    # http methods
+
+    def test_patch_is_not_allowed(self):
+        """Zentral only does full updates.
+
+        A partial update leaves a declared field out of validated_data, and the serializers read
+        those fields directly: QuerySerializer pops compliance_check_enabled, EnrollmentSerializer
+        pops secret, and the file category and the pack serializers slugify a name that is not
+        there, which renames the object.
+        """
+        self.set_permissions(
+            "osquery.change_automatictableconstruction",
+            "osquery.change_configuration",
+            "osquery.change_configurationpack",
+            "osquery.change_enrollment",
+            "osquery.change_filecategory",
+            "osquery.change_pack",
+            "osquery.change_query",
+        )
+        configuration_pack = self.force_configuration_pack()
+        targets = (
+            ("atc", self.force_atc()),
+            ("configuration", self.force_configuration()),
+            ("configuration_pack", configuration_pack),
+            ("enrollment", self.force_enrollment()[0]),  # force_enrollment gives (enrollment, tags)
+            ("file_category", self.force_file_category()),
+            ("pack", self.force_pack()),
+            ("query", self.force_query()),
+        )
+        for url_name, obj in targets:
+            with self.subTest(url_name):
+                response = self.client.patch(
+                    reverse(f"osquery_api:{url_name}", args=[obj.pk]),
+                    data="{}",
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Token {self._get_api_key()}",
+                )
+                self.assertEqual(response.status_code, 405)
+
     # list atcs
 
     def test_get_atcs_unauthorized(self):
@@ -366,7 +406,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "detail": "No AutomaticTableConstruction matches the given query."
         })
 
-    def test_update_atc(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_atc(self, post_event):
         atc = self.force_atc()
         self.set_permissions("osquery.change_automatictableconstruction")
         data = {
@@ -378,7 +419,9 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "columns": ["un", "deux", "trois"],
             "platforms": ["darwin"]
         }
-        response = self.put(reverse("osquery_api:atc", args=[atc.id]), data)
+        prev_value = atc.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse("osquery_api:atc", args=[atc.id]), data)
         self.assertEqual(response.status_code, 200)
         atc.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -399,6 +442,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(atc.columns, ["un", "deux", "trois"])
         self.assertEqual(atc.platforms, ["darwin"])
         self.assertEqual(atc.description, "yolo changed")
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "updated", atc, prev_value=prev_value)
 
     # create atc
 
@@ -447,17 +492,19 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "columns": ["This list may not be empty."]
         })
 
-    def test_create_atc(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_atc(self, post_event):
         self.set_permissions("osquery.add_automatictableconstruction")
-        response = self.post(reverse("osquery_api:atcs"), {
-            "name": "yolo",
-            "description": "yolo",
-            "table_name": "yolo",
-            "query": "select 1 from yo;",
-            "columns": ["un", "deux"],
-            "platforms": ["darwin", "windows"],
-            "path": "/home/yolo"
-        })
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("osquery_api:atcs"), {
+                "name": "yolo",
+                "description": "yolo",
+                "table_name": "yolo",
+                "query": "select 1 from yo;",
+                "columns": ["un", "deux"],
+                "platforms": ["darwin", "windows"],
+                "path": "/home/yolo"
+            })
         self.assertEqual(response.status_code, 201)
         atc = AutomaticTableConstruction.objects.first()
         self.assertEqual(response.json(), {
@@ -479,6 +526,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(atc.columns, ["un", "deux"])
         self.assertEqual(atc.platforms, ["darwin", "windows"])
         self.assertEqual(atc.path, "/home/yolo")
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "created", atc)
 
     # delete atc
 
@@ -498,12 +547,17 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "detail": "No AutomaticTableConstruction matches the given query."
         })
 
-    def test_delete_atc(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_atc(self, post_event):
         atc = self.force_atc()
         self.set_permissions("osquery.delete_automatictableconstruction")
-        response = self.delete(reverse("osquery_api:atc", args=[atc.id]))
+        prev_value = atc.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("osquery_api:atc", args=[atc.id]))
         self.assertEqual(response.status_code, 204)
         self.assertFalse(AutomaticTableConstruction.objects.exists())
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "deleted", atc, prev_value=prev_value)
 
     # list file categories
 
@@ -682,7 +736,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "detail": "No FileCategory matches the given query."
         })
 
-    def test_update_file_category(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_file_category(self, post_event):
         file_category = self.force_file_category()
         self.set_permissions("osquery.change_filecategory")
         data = {
@@ -693,7 +748,9 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "file_paths_queries": [],
             "access_monitoring": True
         }
-        response = self.put(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
+        prev_value = file_category.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse("osquery_api:file_category", args=[file_category.id]), data=data)
         self.assertEqual(response.status_code, 200)
         file_category.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -715,6 +772,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(file_category.access_monitoring, True)
         self.assertEqual(file_category.description, "description of the example file category")
         self.assertEqual(file_category.file_paths_queries, [])
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "updated", file_category, prev_value=prev_value)
 
     # create file category
 
@@ -763,7 +822,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "access_monitoring": ["This field may not be null."],
         })
 
-    def test_create_file_category(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_file_category(self, post_event):
         self.set_permissions("osquery.add_filecategory")
         data = {
             "name": "file category name",
@@ -772,7 +832,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "description": "description of the example file category",
             "file_paths_queries": ['select * from file_paths where path like "/home/yo/*.bin";'],
         }
-        response = self.post(reverse("osquery_api:file_categories"), data=data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("osquery_api:file_categories"), data=data)
         file_category = FileCategory.objects.first()
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json(), {
@@ -795,6 +856,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(file_category.description, "description of the example file category")
         self.assertEqual(file_category.file_paths_queries,
                          ['select * from file_paths where path like "/home/yo/*.bin";'])
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "created", file_category)
 
     # delete file category
 
@@ -814,12 +877,17 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "detail": "No FileCategory matches the given query."
         })
 
-    def test_delete_file_category(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_file_category(self, post_event):
         file_category = self.force_file_category()
         self.set_permissions("osquery.delete_filecategory")
-        response = self.delete(reverse("osquery_api:file_category", args=[file_category.id]))
+        prev_value = file_category.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("osquery_api:file_category", args=[file_category.id]))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(FileCategory.objects.count(), 0)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "deleted", file_category, prev_value=prev_value)
 
     # list configurations
 
@@ -969,7 +1037,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "file_categories": ['Invalid pk "9999" - object does not exist.']
         })
 
-    def test_create_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_configuration(self, post_event):
         atc = self.force_atc()
         file_category = self.force_file_category()
         self.set_permissions("osquery.add_configuration")
@@ -986,7 +1055,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                 'foo': 'bar'
             }
         }
-        response = self.post(reverse('osquery_api:configurations'), data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse('osquery_api:configurations'), data)
         self.assertEqual(response.status_code, 201)
         configuration = Configuration.objects.get(name="Configuration0")
         self.assertEqual(response.json(), {
@@ -1014,6 +1084,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(configuration.automatic_table_constructions.all()[0], atc)
         self.assertEqual(configuration.file_categories.all()[0], file_category)
         self.assertEqual(configuration.options, {'foo': 'bar'})
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "created", configuration)
 
     # update configuration
 
@@ -1133,7 +1205,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         })
         self.assertEqual(configuration.file_categories.all()[0], file_category)
 
-    def test_update_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_configuration(self, post_event):
         configuration = self.force_configuration()
         new_name = get_random_string(12)
         atc = self.force_atc()
@@ -1152,7 +1225,9 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             }
         }
         self.set_permissions("osquery.change_configuration")
-        response = self.put(reverse('osquery_api:configuration', args=(configuration.pk,)), data)
+        prev_value = configuration.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse('osquery_api:configuration', args=(configuration.pk,)), data)
         self.assertEqual(response.status_code, 200)
         configuration.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1178,6 +1253,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(configuration.automatic_table_constructions.count(), 1)
         self.assertEqual(configuration.file_categories.count(), 1)
         self.assertEqual(configuration.options, {"foo": "bar"})
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "updated", configuration, prev_value=prev_value)
 
     # delete configuration
 
@@ -1206,11 +1283,16 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ["This configuration cannot be deleted"])
 
-    def test_delete_configuration(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_configuration(self, post_event):
         configuration = self.force_configuration()
         self.set_permissions("osquery.delete_configuration")
-        response = self.delete(reverse('osquery_api:configuration', args=(configuration.pk,)))
+        prev_value = configuration.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse('osquery_api:configuration', args=(configuration.pk,)))
         self.assertEqual(response.status_code, 204)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "deleted", configuration, prev_value=prev_value)
 
     # list enrollments
 
@@ -1482,16 +1564,18 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     # create enrollment
 
-    def test_create_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_enrollment(self, post_event):
         config = self.force_configuration()
         self.set_permissions("osquery.add_enrollment")
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
-        response = self.post(
-            reverse('osquery_api:enrollments'),
-            {'configuration': config.pk,
-             'secret': {"meta_business_unit": self.mbu.pk,
-                        "tags": [t.id for t in tags]}}
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(
+                reverse('osquery_api:enrollments'),
+                {'configuration': config.pk,
+                 'secret': {"meta_business_unit": self.mbu.pk,
+                            "tags": [t.id for t in tags]}}
+            )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Enrollment.objects.filter(configuration__name=config.name).count(), 1)
         enrollment = Enrollment.objects.get(configuration__name=config.name)
@@ -1500,10 +1584,13 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             set(enrollment.secret.tags.all()),
             set(tags)
         )
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "created", enrollment)
 
     # update enrollment
 
-    def test_update_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_enrollment(self, post_event):
         enrollment, _ = self.force_enrollment(tag_count=2)
         enrollment_secret = enrollment.secret
         self.assertEqual(enrollment.osquery_release, "")
@@ -1523,7 +1610,9 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                 "osquery_release": new_osquery_release,
                 "secret": secret_data}
         self.set_permissions("osquery.change_enrollment")
-        response = self.put(reverse('osquery_api:enrollment', args=(enrollment.pk,)), data)
+        prev_value = enrollment.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse('osquery_api:enrollment', args=(enrollment.pk,)), data)
         self.assertEqual(response.status_code, 200)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.osquery_release, new_osquery_release)
@@ -1535,6 +1624,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             set(enrollment.secret.tags.all()),
             set(tags)
         )
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "updated", enrollment, prev_value=prev_value)
 
     # delete enrollment
 
@@ -1548,11 +1639,16 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_enrollment(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_enrollment(self, post_event):
         enrollment, _ = self.force_enrollment()
         self.set_permissions("osquery.delete_enrollment")
-        response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
+        prev_value = enrollment.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse('osquery_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 204)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "deleted", enrollment, prev_value=prev_value)
 
     @patch("zentral.contrib.osquery.models.BaseEnrollment.can_be_deleted")
     def test_delete_enrollment_cannot_be_deleted(self, can_be_deleted):
@@ -1761,7 +1857,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "shard": ["Ensure this value is less than or equal to 100."]
         })
 
-    def test_update_pack(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_pack(self, post_event):
         pack = self.force_pack()
         self.set_permissions("osquery.change_pack")
         data = {
@@ -1771,7 +1868,9 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "shard": 1,
             "event_routing_key": "pack_updated"
         }
-        response = self.put(reverse("osquery_api:pack", args=(pack.pk,)), data)
+        prev_value = pack.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse("osquery_api:pack", args=(pack.pk,)), data)
         self.assertEqual(response.status_code, 200)
         pack.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -1791,6 +1890,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(pack.discovery_queries, ["select * from osquery_info"])
         self.assertEqual(pack.shard, 1)
         self.assertEqual(pack.event_routing_key, "pack_updated")
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "updated", pack, prev_value=prev_value)
 
     # create pack
 
@@ -1847,7 +1948,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "shard": ["Ensure this value is less than or equal to 100."]
         })
 
-    def test_create_pack(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_pack(self, post_event):
         self.set_permissions("osquery.add_pack")
         data = {
             "name": "pack created",
@@ -1856,7 +1958,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "shard": 1,
             "event_routing_key": "pack_created"
         }
-        response = self.post(reverse("osquery_api:packs"), data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("osquery_api:packs"), data)
         self.assertEqual(response.status_code, 201)
         pack = Pack.objects.first()
         self.assertEqual(response.json(), {
@@ -1876,6 +1979,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(pack.discovery_queries, ["select * from osquery_info"])
         self.assertEqual(pack.shard, 1)
         self.assertEqual(pack.event_routing_key, "pack_created")
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "created", pack)
 
     # delete pack <int:pk>
 
@@ -1892,12 +1997,17 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.delete(reverse("osquery_api:pack", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_pack_by_pk(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_pack_by_pk(self, post_event):
         self.set_permissions("osquery.delete_pack")
         pack = self.force_pack()
-        response = self.delete(reverse("osquery_api:pack", args=(pack.pk,)))
+        prev_value = pack.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("osquery_api:pack", args=(pack.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertFalse(Pack.objects.filter(pk=pack.pk).exists())
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "deleted", pack, prev_value=prev_value)
 
     # put pack <slug:slug>
 
@@ -2570,14 +2680,16 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
 
-    def test_create_query(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_query(self, post_event):
         data = {
             "name": "test_query01",
             "sql": "select * from osquery_info;",
             "compliance_check_enabled": False
         }
         self.set_permissions("osquery.add_query")
-        response = self.post(reverse("osquery_api:queries"), data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
         query = Query.objects.get(name='test_query01')
@@ -2597,6 +2709,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                           "created_at": query.created_at.isoformat(),
                           "updated_at": query.updated_at.isoformat()
                           })
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "created", query)
 
     def test_create_query_with_scheduling(self):
         name = get_random_string(12)
@@ -2931,16 +3045,21 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
 
-    def test_update_query(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_query(self, post_event):
         query = self.force_query()
         new_name = get_random_string(12)
         data = {"name": new_name, "sql": query.sql}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        prev_value = query.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
         self.assertEqual(response.status_code, 200)
         query.refresh_from_db()
         self.assertEqual(Query.objects.filter(name=new_name).count(), 1)
         self.assertEqual(query.name, new_name)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "updated", query, prev_value=prev_value)
 
     def test_update_query_add_scheduling(self):
         pack = self.force_pack()
@@ -3240,12 +3359,17 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     # delete query
 
-    def test_delete_query(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_query(self, post_event):
         query = self.force_query()
         self.set_permissions("osquery.delete_query")
-        response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
+        prev_value = query.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("osquery_api:query", args=(query.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "deleted", query, prev_value=prev_value)
 
     def test_delete_query_with_pack_query(self):
         query = self.force_query(pack_query_mode="diff")
@@ -3422,7 +3546,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "non_field_errors": [f"'{tag.name}' cannot be both included and excluded"]
         })
 
-    def test_update_configuration_pack(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_configuration_pack(self, post_event):
         self.set_permissions("osquery.change_configurationpack")
         configuration_pack = self.force_configuration_pack(force_tags=True)
         new_configuration = self.force_configuration()
@@ -3434,7 +3559,9 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "tags": [new_tag.id],
             "excluded_tags": [new_excluded_tag.id]
         }
-        response = self.put(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
+        prev_value = configuration_pack.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.put(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)), data)
         self.assertEqual(response.status_code, 200)
         configuration_pack.refresh_from_db()
         self.assertEqual(response.json(), {
@@ -3448,6 +3575,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(configuration_pack.tags.count(), 1)
         self.assertEqual(configuration_pack.excluded_tags.count(), 1)
         self.assertEqual(configuration_pack.pack, new_pack)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "updated", configuration_pack, prev_value=prev_value)
 
     # create configuration pack
 
@@ -3528,7 +3657,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         })
         self.assertEqual(configuration_pack.configuration, configuration)
 
-    def test_create_configuration_pack(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_configuration_pack(self, post_event):
         self.set_permissions("osquery.add_configurationpack")
         configuration = self.force_configuration()
         pack = self.force_pack()
@@ -3539,7 +3669,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "tags": [tag.id],
             "excluded_tags":  [excluded_tag.id],
         }
-        response = self.post(reverse("osquery_api:configuration_packs"), data)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("osquery_api:configuration_packs"), data)
         self.assertEqual(response.status_code, 201)
         configuration_pack = ConfigurationPack.objects.first()
         self.assertEqual(response.json(), {
@@ -3553,6 +3684,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(configuration_pack.pack, pack)
         self.assertEqual(configuration_pack.tags.count(), 1)
         self.assertEqual(configuration_pack.excluded_tags.count(), 1)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "created", configuration_pack)
 
     # delete configuration pack
 
@@ -3569,12 +3702,17 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.delete(reverse("osquery_api:configuration_pack", args=(9999,)))
         self.assertEqual(response.status_code, 404)
 
-    def test_delete_configuration_pack(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_delete_configuration_pack(self, post_event):
         self.set_permissions("osquery.delete_configurationpack")
         configuration_pack = self.force_configuration_pack()
-        response = self.delete(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)))
+        prev_value = configuration_pack.serialize_for_event()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.delete(reverse("osquery_api:configuration_pack", args=(configuration_pack.pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(ConfigurationPack.objects.count(), 0)
+        self.assertEqual(len(callbacks), 1)
+        assert_audit_event(self, post_event, "deleted", configuration_pack, prev_value=prev_value)
 
     # terraform export
 
