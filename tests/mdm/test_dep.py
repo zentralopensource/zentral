@@ -13,7 +13,12 @@ from zentral.contrib.mdm.dep import (
     iter_unassigned_dep_device_serial_numbers,
     sync_dep_virtual_server_devices,
 )
-from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE, CursorIterator, DEPProfileThrottledError
+from zentral.contrib.mdm.dep_client import (
+    DEVICE_BATCH_SIZE,
+    CursorIterator,
+    DEPClientError,
+    DEPProfileThrottledError,
+)
 from zentral.contrib.mdm.events.dep import DEPDeviceChangeEvent
 from zentral.contrib.mdm.models import DEPDevice
 from zentral.contrib.mdm.tasks import define_dep_profile_task
@@ -471,6 +476,21 @@ class TestDEPEnrollment(TestCase):
         device.refresh_from_db()
         self.assertIsNone(device.enrollment)
 
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_device_profile_unknown_response_structure(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        client = Mock()
+        # Apple answered, but not about the device that was asked for
+        client.assign_profile.return_value = {"devices": {}}
+        from_dep_virtual_server.return_value = client
+
+        with self.assertRaises(DEPClientError) as cm:
+            assign_dep_device_profile(device, enrollment)
+        self.assertEqual(str(cm.exception), "Unknown client response structure")
+        device.refresh_from_db()
+        self.assertIsNone(device.enrollment)
+
     # protocol version 10 attributes
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
@@ -554,6 +574,30 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(dep_device.last_op_type, "modified")
         # an absent key leaves it alone, it does not clear it
         self.assertTrue(dep_device.released_by_replacement)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_skips_a_stale_operation(self, from_dep_token):
+        server = self.force_synced_server()
+        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        DEPDevice.objects.filter(pk=dep_device.pk).update(last_op_type=DEPDevice.OP_TYPE_MODIFIED,
+                                                          last_op_date=datetime(2026, 8, 24, 12, 0, 0))
+
+        def device_iterator():
+            # the same device can come back more than once, and out of order
+            yield from [{'op_date': '2026-08-23T15:41:06Z',
+                         'op_type': 'deleted',
+                         'serial_number': dep_device.serial_number}]
+            return get_random_string(12)
+
+        client = Mock()
+        client.sync_devices.return_value = CursorIterator(device_iterator())
+        from_dep_token.return_value = client
+        # a record already carrying a newer operation is left alone, and not reported either
+        self.assertEqual(list(sync_dep_virtual_server_devices(server)), [])
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.last_op_type, DEPDevice.OP_TYPE_MODIFIED)
+        self.assertEqual(dep_device.last_op_date, datetime(2026, 8, 24, 12, 0, 0))
+        self.assertFalse(dep_device.is_deleted())
 
     # events
 

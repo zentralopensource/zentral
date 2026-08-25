@@ -299,3 +299,208 @@ class TestDEPClientDeviceChunks(TestCase):
         response = self.dep_client().disown_devices(serial_numbers)
         self.assertEqual(len(send_request.call_args_list), 2)
         self.assertEqual(len(response["devices"]), DEVICE_BATCH_SIZE + 1)
+
+
+class TestDEPClientTransport(TestCase):
+    """The requests layer, which every other test mocks away."""
+
+    maxDiff = None
+
+    def build_client(self):
+        client = build_client()
+        # the OAuth session and the session that carries the X-ADM-Auth-Session header are the two
+        # ends that talk to Apple. The headers dict stays real, it is where the token lives.
+        client.oauth_session = Mock()
+        client.default_session.request = Mock()
+        return client
+
+    @staticmethod
+    def build_response(status_code=200, json_data=None, json_error=False, headers=None, content=b"", text=""):
+        response = Mock()
+        response.status_code = status_code
+        response.headers = {} if headers is None else headers
+        response.content = content
+        response.text = text
+        if json_error:
+            response.json.side_effect = ValueError("no JSON object could be decoded")
+        else:
+            response.json.return_value = json_data
+        if status_code >= 400:
+            response.raise_for_status.side_effect = RequestException(response=response)
+        else:
+            response.raise_for_status.return_value = None
+        return response
+
+    # get_auth_session_token
+
+    def test_get_auth_session_token_reuses_the_current_one(self):
+        client = self.build_client()
+        client.auth_session_token = "yolo"
+        client.get_auth_session_token()
+        client.oauth_session.get.assert_not_called()
+
+    def test_get_auth_session_token_renew_asks_for_a_new_one(self):
+        client = self.build_client()
+        client.auth_session_token = "old"
+        client._account = ACCOUNT_DETAIL
+        client._limits = {"/devices": 5000}
+        client.oauth_session.get.return_value = self.build_response(json_data={"auth_session_token": "new"})
+        client.get_auth_session_token(renew=True)
+        client.oauth_session.get.assert_called_once_with("https://mdmenrollment.apple.com/session")
+        self.assertEqual(client.auth_session_token, "new")
+        # the account detail describes the session it came from
+        self.assertIsNone(client._account)
+        self.assertEqual(client._limits, {})
+
+    def test_get_auth_session_token_terms_not_signed(self):
+        client = self.build_client()
+        client.oauth_session.get.return_value = self.build_response(status_code=403, text="T_C_NOT_SIGNED\n")
+        with self.assertRaises(DEPClientError) as cm:
+            client.get_auth_session_token()
+        self.assertEqual(cm.exception.status_code, 403)
+        self.assertEqual(cm.exception.error_code, "T_C_NOT_SIGNED")
+        self.assertEqual(str(cm.exception),
+                         "Could not get auth session token, error code: T_C_NOT_SIGNED, status code: 403")
+
+    def test_get_auth_session_token_server_error_has_no_error_code(self):
+        client = self.build_client()
+        client.oauth_session.get.return_value = self.build_response(status_code=500, text="oops")
+        with self.assertRaises(DEPClientError) as cm:
+            client.get_auth_session_token()
+        self.assertEqual(cm.exception.status_code, 500)
+        # only a 403 carries one
+        self.assertIsNone(cm.exception.error_code)
+
+    def test_get_auth_session_token_without_a_response(self):
+        client = self.build_client()
+        client.oauth_session.get.side_effect = RequestException("connection reset by peer")
+        with self.assertRaises(DEPClientError) as cm:
+            client.get_auth_session_token()
+        self.assertIsNone(cm.exception.status_code)
+        self.assertIsNone(cm.exception.error_code)
+        self.assertEqual(str(cm.exception), "Could not get auth session token")
+
+    # send_request
+
+    def test_send_request_returns_the_json(self):
+        client = self.build_client()
+        client.auth_session_token = "first"
+        client.default_session.request.return_value = self.build_response(json_data={"org_name": "Yolo"})
+        self.assertEqual(client.send_request("account"), {"org_name": "Yolo"})
+        client.default_session.request.assert_called_once_with(
+            "GET", "https://mdmenrollment.apple.com/account", json=None, params={}
+        )
+
+    def test_send_request_keeps_the_rotated_session_token(self):
+        client = self.build_client()
+        client.auth_session_token = "first"
+        client.default_session.request.return_value = self.build_response(
+            json_data={}, headers={"X-ADM-Auth-Session": "second"}
+        )
+        client.send_request("account")
+        # the service issues a new token in its answers to the other calls
+        self.assertEqual(client.auth_session_token, "second")
+
+    def test_send_request_without_a_new_token_keeps_the_current_one(self):
+        client = self.build_client()
+        client.auth_session_token = "first"
+        client.default_session.request.return_value = self.build_response(json_data={})
+        client.send_request("account")
+        self.assertEqual(client.auth_session_token, "first")
+
+    def test_send_request_falls_back_to_the_body(self):
+        client = self.build_client()
+        client.auth_session_token = "yolo"
+        client.default_session.request.return_value = self.build_response(json_error=True, content=b"<plist/>")
+        self.assertEqual(client.send_request("profile", profile_uuid="8ECF"), b"<plist/>")
+        client.default_session.request.assert_called_once_with(
+            "GET", "https://mdmenrollment.apple.com/profile", json=None, params={"profile_uuid": "8ECF"}
+        )
+
+    def test_send_request_posts_the_body(self):
+        client = self.build_client()
+        client.auth_session_token = "yolo"
+        client.default_session.request.return_value = self.build_response(json_data={"devices": []})
+        client.send_request("devices", "POST", json={"devices": ["SN00000001"]})
+        client.default_session.request.assert_called_once_with(
+            "POST", "https://mdmenrollment.apple.com/devices", json={"devices": ["SN00000001"]}, params={}
+        )
+
+    def test_send_request_renews_the_session_token_and_retries(self):
+        client = self.build_client()
+        client.auth_session_token = "expired"
+        client.oauth_session.get.return_value = self.build_response(json_data={"auth_session_token": "fresh"})
+        client.default_session.request.side_effect = [
+            self.build_response(status_code=401),
+            self.build_response(json_data={"org_name": "Yolo"}),
+        ]
+        self.assertEqual(client.send_request("account"), {"org_name": "Yolo"})
+        client.oauth_session.get.assert_called_once_with("https://mdmenrollment.apple.com/session")
+        self.assertEqual(len(client.default_session.request.call_args_list), 2)
+        self.assertEqual(client.auth_session_token, "fresh")
+
+    def test_send_request_gives_up_when_the_new_token_is_refused_too(self):
+        client = self.build_client()
+        client.auth_session_token = "expired"
+        client.oauth_session.get.return_value = self.build_response(status_code=403, text="ACCESS_DENIED")
+        client.default_session.request.return_value = self.build_response(status_code=403, text="ACCESS_DENIED")
+        with self.assertRaises(DEPClientError) as cm:
+            client.send_request("account")
+        # the error of the renewal, not of the request it was for
+        self.assertEqual(str(cm.exception),
+                         "Could not get auth session token, error code: ACCESS_DENIED, status code: 403")
+
+    def test_send_request_bad_request_carries_the_error_code(self):
+        client = self.build_client()
+        client.auth_session_token = "yolo"
+        client.default_session.request.return_value = self.build_response(
+            status_code=400, text="DEVICE_NOT_FOUND\n"
+        )
+        with self.assertRaises(DEPClientError) as cm:
+            client.send_request("device/replacementDetails", device="SN00000001")
+        self.assertEqual(cm.exception.status_code, 400)
+        self.assertEqual(cm.exception.error_code, "DEVICE_NOT_FOUND")
+
+    def test_send_request_server_error_has_no_error_code(self):
+        client = self.build_client()
+        client.auth_session_token = "yolo"
+        client.default_session.request.return_value = self.build_response(status_code=503, text="Try again")
+        with self.assertRaises(DEPClientError) as cm:
+            client.send_request("account")
+        self.assertEqual(cm.exception.status_code, 503)
+        self.assertIsNone(cm.exception.error_code)
+        self.assertEqual(str(cm.exception), "Could not perform operation, status code: 503")
+
+    def test_send_request_without_a_response(self):
+        client = self.build_client()
+        client.auth_session_token = "yolo"
+        client.default_session.request.side_effect = RequestException("connection reset by peer")
+        with self.assertRaises(DEPClientError) as cm:
+            client.send_request("account")
+        self.assertIsNone(cm.exception.status_code)
+        self.assertIsNone(cm.exception.error_code)
+
+    def test_send_request_asks_for_a_session_token_first(self):
+        client = self.build_client()
+        client.oauth_session.get.return_value = self.build_response(json_data={"auth_session_token": "first"})
+        client.default_session.request.return_value = self.build_response(json_data={})
+        client.send_request("account")
+        client.oauth_session.get.assert_called_once_with("https://mdmenrollment.apple.com/session")
+        self.assertEqual(client.default_session.headers["X-ADM-Auth-Session"], "first")
+
+    # profiles
+
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_get_profile(self, send_request):
+        send_request.return_value = {"profile_name": "yolo"}
+        response = build_client().get_profile("8ecf1f2e-2b0a-4c1e-9a4f-2b3c4d5e6f70")
+        self.assertEqual(response, {"profile_name": "yolo"})
+        send_request.assert_called_once_with('profile', profile_uuid="8ECF1F2E2B0A4C1E9A4F2B3C4D5E6F70")
+
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_add_profile(self, send_request):
+        profile = {"profile_name": "yolo", "devices": []}
+        send_request.return_value = {"profile_uuid": "8ECF1F2E2B0A4C1E9A4F2B3C4D5E6F70"}
+        response = build_client().add_profile(profile)
+        self.assertEqual(response, {"profile_uuid": "8ECF1F2E2B0A4C1E9A4F2B3C4D5E6F70"})
+        send_request.assert_called_once_with('profile', 'POST', json=profile)
