@@ -216,10 +216,12 @@ class DEPClient(object):
             limit = None
             try:
                 limit = self.get_uri_limit(uri)
-            except DEPClientError:
+            except DEPClientError as e:
                 # the account detail is a convenience here, not a precondition: a smaller request
-                # costs more of them, it does not make the response wrong
-                logger.warning("Could not read the account detail to size the %s requests", uri)
+                # costs more of them, it does not make the response wrong. What Apple answered is
+                # logged with it: a silent fall back to the default is how a client that cannot
+                # talk to Apple at all goes unnoticed.
+                logger.warning("Could not read the account detail to size the %s requests: %s", uri, e)
             self._limits[uri] = limit
         return self._limits[uri] or default
 

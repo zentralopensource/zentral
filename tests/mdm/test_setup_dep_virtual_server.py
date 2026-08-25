@@ -12,6 +12,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import encrypt_cms_payload
 from zentral.contrib.mdm.dep import add_dep_token_certificate
+from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.mdm.models import DEPToken, DEPVirtualServer
 from zentral.core.events.base import AuditEvent
 from .utils import force_dep_enrollment, force_dep_virtual_server
@@ -264,7 +265,65 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/depvirtualserver_connect.html")
         dep_token2 = DEPToken.objects.get(pk=self.client.session["current_dep_token_id"])
         self.assertEqual(dep_token, dep_token2)
-        self.assertFormError(response.context["form"], "encrypted_token", "Could not read or use encrypted token")
+        self.assertFormError(response.context["form"], "encrypted_token", "Could not read encrypted token")
+
+    @patch("zentral.contrib.mdm.forms.DEPClient")
+    def test_connect_dep_virtual_server_post_apple_error(self, DEPClient):
+        DEPClient.return_value.get_account.side_effect = DEPClientError(
+            "Could not perform operation", error_code="T_C_NOT_SIGNED", status_code=403
+        )
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        session = self.client.session
+        dep_token = DEPToken.objects.create()
+        add_dep_token_certificate(dep_token)
+        session["current_dep_token_id"] = dep_token.pk
+        session.save()
+        with self.assertLogs("zentral.contrib.mdm.forms", level="ERROR") as cm:
+            response = self.client.post(reverse("mdm:connect_dep_virtual_server"),
+                                        {"action": "upload",
+                                         "encrypted_token": self._build_encrypted_token(dep_token)})
+        self.assertEqual(response.status_code, 200)
+        # the token decrypted, so the operator has to know what Apple answered about it
+        self.assertFormError(response.context["form"], "encrypted_token",
+                             "Could not use encrypted token: T_C_NOT_SIGNED")
+        self.assertIn("Could not use the DEP token", cm.output[0])
+        # nothing was saved
+        dep_token.refresh_from_db()
+        self.assertIsNone(dep_token.consumer_key)
+        self.assertFalse(DEPVirtualServer.objects.filter(token=dep_token).exists())
+
+    @patch("zentral.contrib.mdm.forms.DEPClient")
+    def test_connect_dep_virtual_server_post_apple_error_without_code(self, DEPClient):
+        DEPClient.return_value.get_account.side_effect = DEPClientError(
+            "Could not perform operation", status_code=503
+        )
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        session = self.client.session
+        dep_token = DEPToken.objects.create()
+        add_dep_token_certificate(dep_token)
+        session["current_dep_token_id"] = dep_token.pk
+        session.save()
+        with self.assertLogs("zentral.contrib.mdm.forms", level="ERROR"):
+            response = self.client.post(reverse("mdm:connect_dep_virtual_server"),
+                                        {"action": "upload",
+                                         "encrypted_token": self._build_encrypted_token(dep_token)})
+        self.assertFormError(response.context["form"], "encrypted_token",
+                             "Could not use encrypted token: HTTP 503")
+
+    @patch("zentral.contrib.mdm.forms.DEPClient")
+    def test_connect_dep_virtual_server_post_unknown_error(self, DEPClient):
+        DEPClient.return_value.get_account.side_effect = ValueError("yolo")
+        self.login("mdm.add_depvirtualserver", "mdm.view_depvirtualserver")
+        session = self.client.session
+        dep_token = DEPToken.objects.create()
+        add_dep_token_certificate(dep_token)
+        session["current_dep_token_id"] = dep_token.pk
+        session.save()
+        with self.assertLogs("zentral.contrib.mdm.forms", level="ERROR"):
+            response = self.client.post(reverse("mdm:connect_dep_virtual_server"),
+                                        {"action": "upload",
+                                         "encrypted_token": self._build_encrypted_token(dep_token)})
+        self.assertFormError(response.context["form"], "encrypted_token", "Could not use encrypted token")
 
     @patch("zentral.contrib.mdm.forms.DEPClient")
     def test_connect_dep_virtual_server_post(self, DEPClient):

@@ -23,7 +23,7 @@ from .commands.set_recovery_lock import validate_recovery_password
 from .crypto import generate_push_certificate_key_bytes, load_push_certificate_and_key
 from .declarations import verify_declaration_source
 from .dep import decrypt_dep_token
-from .dep_client import DEPClient
+from .dep_client import DEPClient, DEPClientError
 from .models import (
     Artifact,
     ArtifactVersion,
@@ -369,20 +369,39 @@ class EncryptedDEPTokenForm(forms.ModelForm):
 
     def clean(self):
         encrypted_token = self.cleaned_data["encrypted_token"]
-        if encrypted_token:
-            payload = encrypted_token.read()
-            try:
-                data = decrypt_dep_token(self.instance, payload)
-                kwargs = {k: data.get(k) for k in ("consumer_key", "consumer_secret",
-                                                   "access_token", "access_secret")}
-                account_d = DEPClient(**kwargs).get_account()
-            except Exception:
-                self.add_error("encrypted_token", "Could not read or use encrypted token")
-            else:
-                self.cleaned_data["decrypted_dep_token"] = data
-                self.cleaned_data["account"] = account_d
-        else:
+        if not encrypted_token:
             self.add_error("encrypted_token", "This field is mandatory")
+            return self.cleaned_data
+        payload = encrypted_token.read()
+        # reading the token and using it fail for unrelated reasons, and only the difference tells
+        # the operator what to do: a token Zentral cannot decrypt was issued for another server,
+        # a token Apple refuses is a different problem, and the answer says which one
+        try:
+            data = decrypt_dep_token(self.instance, payload)
+            kwargs = {k: data.get(k) for k in ("consumer_key", "consumer_secret",
+                                               "access_token", "access_secret")}
+        except Exception:
+            logger.exception("Could not read the encrypted DEP token")
+            self.add_error("encrypted_token", "Could not read encrypted token")
+            return self.cleaned_data
+        try:
+            account_d = DEPClient(**kwargs).get_account()
+        except DEPClientError as e:
+            logger.exception("Could not use the DEP token")
+            # T_C_NOT_SIGNED means the terms have to be signed in ABM, ACCESS_DENIED that the
+            # token belongs to another server: the operator can act on neither without the code
+            err_msg = "Could not use encrypted token"
+            if e.error_code:
+                err_msg = f"{err_msg}: {e.error_code}"
+            elif e.status_code:
+                err_msg = f"{err_msg}: HTTP {e.status_code}"
+            self.add_error("encrypted_token", err_msg)
+        except Exception:
+            logger.exception("Could not use the DEP token")
+            self.add_error("encrypted_token", "Could not use encrypted token")
+        else:
+            self.cleaned_data["decrypted_dep_token"] = data
+            self.cleaned_data["account"] = account_d
         return self.cleaned_data
 
     def save(self):

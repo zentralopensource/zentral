@@ -166,6 +166,16 @@ class TestDEPClientAccountLimits(TestCase):
         self.assertEqual(len(response["devices"]), 3)
 
     @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_unreadable_account_detail_logs_what_apple_answered(self, send_request):
+        send_request.side_effect = DEPClientError("Could not perform operation",
+                                                  error_code="USER_AGENT_INVALID", status_code=400)
+        client = build_client()
+        with self.assertLogs("zentral.contrib.mdm.dep_client", level="WARNING") as cm:
+            # the size falls back to the default, and the reason does not stay silent
+            self.assertEqual(client.get_pagination_limit("server/devices"), DEFAULT_PAGINATION_LIMIT)
+        self.assertIn("USER_AGENT_INVALID", cm.output[0])
+
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
     def test_explicit_batch_request_limit_wins(self, send_request):
         send_request.return_value = {"devices": [], "more_to_follow": False, "cursor": "yolo"}
         client = DEPClient("ck", "cs", "at", "as", batch_request_limit=7)
