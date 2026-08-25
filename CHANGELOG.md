@@ -17,7 +17,7 @@ The `file_uri` and `file_sha256` attributes of the data asset endpoints are not 
 
 Zentral uses version 10 of the Apple device assignment protocol now, and not version 3. Apple sends more device attributes with it. The web console and the DEP device endpoints show them: the Wi-Fi, Bluetooth and Ethernet MAC addresses, the EID, the IMEI and MEID numbers, the MDM migration deadline, and if the device replaces another one. The list endpoint has a new `is_replacement_device` filter.
 
-The first synchronization after the update posts one `dep_device_change` event per device, because the new attributes get their value. This occurs one time only.
+Only the devices that a synchronization reports get the new attributes. A delta synchronization reports the devices that changed, so a full synchronization (`?full_sync=true`) is necessary to get the attributes of all the devices. It posts one `dep_device_change` event per device, one time only: the new attributes get their value, and the `os` of an iPad changes from `iOS` to `iPadOS`.
 
 Apple can throttle the assignment of the default enrollment. Zentral counts the throttled devices apart from the failed ones now, and assigns them again after the delay Apple gives.
 
