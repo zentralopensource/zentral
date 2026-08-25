@@ -24,7 +24,11 @@ class TestMDMDEPDeviceModel(TestCase, SerializeForEventAssertions):
             set(d),
             {"pk", "serial_number", "virtual_server", "enrollment",
              "asset_tag", "color", "description", "device_family", "model", "os",
-             "device_assigned_by", "device_assigned_date", "last_op_type", "last_op_date",
+             "eid", "imei", "meid",
+             "bluetooth_mac_address", "ethernet_mac_address", "wifi_mac_address",
+             "is_replacement_device", "released_by_replacement",
+             "device_assigned_by", "device_assigned_date", "mdm_migration_deadline",
+             "last_op_type", "last_op_date",
              "profile_status", "profile_uuid", "profile_assign_time", "profile_push_time",
              "disowned_at", "created_at", "updated_at"},
         )

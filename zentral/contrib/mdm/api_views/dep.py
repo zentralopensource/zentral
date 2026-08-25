@@ -59,7 +59,7 @@ class DEPDeviceList(ListAPIView):
     filter_backends = (filters.DjangoFilterBackend, OrderingFilter)
     filterset_fields = (
         'device_family',
-        'enrollment', 'profile_status', 'profile_uuid',
+        'enrollment', 'is_replacement_device', 'profile_status', 'profile_uuid',
         'serial_number', 'virtual_server'
     )
     ordering_fields = ('created_at', 'last_op_date', 'updated_at')

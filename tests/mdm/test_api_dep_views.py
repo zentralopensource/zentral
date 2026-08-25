@@ -242,6 +242,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'previous': None,
              'results': [
                  {'asset_tag': dep_device.asset_tag,
+                  'bluetooth_mac_address': dep_device.bluetooth_mac_address,
                   'color': 'SPACE GRAY',
                   'created_at': dep_device.created_at.isoformat(),
                   'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
@@ -249,19 +250,27 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
                   'disowned_at': None,
+                  'eid': dep_device.eid,
                   'enrollment': dep_device.enrollment.pk,
+                  'ethernet_mac_address': dep_device.ethernet_mac_address,
                   'id': dep_device.pk,
+                  'imei': dep_device.imei,
+                  'is_replacement_device': False,
                   'last_op_date': dep_device.last_op_date.isoformat(),
                   'last_op_type': 'added',
+                  'mdm_migration_deadline': None,
+                  'meid': dep_device.meid,
                   'model': 'iPhone X',
                   'os': 'iOS',
                   'profile_assign_time': None,
                   'profile_push_time': None,
                   'profile_status': 'empty',
                   'profile_uuid': None,
+                  'released_by_replacement': False,
                   'serial_number': dep_device.serial_number,
                   'updated_at': dep_device.updated_at.isoformat(),
-                  'virtual_server': dep_device.virtual_server.pk}
+                  'virtual_server': dep_device.virtual_server.pk,
+                  'wifi_mac_address': dep_device.wifi_mac_address}
              ]}
         )
 
@@ -279,6 +288,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'previous': None,
              'results': [
                  {'asset_tag': dep_device.asset_tag,
+                  'bluetooth_mac_address': dep_device.bluetooth_mac_address,
                   'color': 'SPACE GRAY',
                   'created_at': dep_device.created_at.isoformat(),
                   'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
@@ -286,19 +296,27 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
                   'disowned_at': None,
+                  'eid': dep_device.eid,
                   'enrollment': None,
+                  'ethernet_mac_address': dep_device.ethernet_mac_address,
                   'id': dep_device.pk,
+                  'imei': dep_device.imei,
+                  'is_replacement_device': False,
                   'last_op_date': dep_device.last_op_date.isoformat(),
                   'last_op_type': 'added',
+                  'mdm_migration_deadline': None,
+                  'meid': dep_device.meid,
                   'model': 'iPhone X',
                   'os': 'iOS',
                   'profile_assign_time': None,
                   'profile_push_time': None,
                   'profile_status': 'empty',
                   'profile_uuid': None,
+                  'released_by_replacement': False,
                   'serial_number': dep_device.serial_number,
                   'updated_at': dep_device.updated_at.isoformat(),
-                  'virtual_server': dep_device.virtual_server.pk}
+                  'virtual_server': dep_device.virtual_server.pk,
+                  'wifi_mac_address': dep_device.wifi_mac_address}
              ]}
         )
 
@@ -316,6 +334,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'previous': None,
              'results': [
                  {'asset_tag': dep_device.asset_tag,
+                  'bluetooth_mac_address': dep_device.bluetooth_mac_address,
                   'color': 'SPACE GRAY',
                   'created_at': dep_device.created_at.isoformat(),
                   'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
@@ -323,19 +342,27 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
                   'disowned_at': None,
+                  'eid': dep_device.eid,
                   'enrollment': None,
+                  'ethernet_mac_address': dep_device.ethernet_mac_address,
                   'id': dep_device.pk,
+                  'imei': dep_device.imei,
+                  'is_replacement_device': False,
                   'last_op_date': dep_device.last_op_date.isoformat(),
                   'last_op_type': 'added',
+                  'mdm_migration_deadline': None,
+                  'meid': dep_device.meid,
                   'model': 'iPhone X',
                   'os': 'iOS',
                   'profile_assign_time': None,
                   'profile_push_time': None,
                   'profile_status': 'empty',
                   'profile_uuid': None,
+                  'released_by_replacement': False,
                   'serial_number': dep_device.serial_number,
                   'updated_at': dep_device.updated_at.isoformat(),
-                  'virtual_server': dep_device.virtual_server.pk}
+                  'virtual_server': dep_device.virtual_server.pk,
+                  'wifi_mac_address': dep_device.wifi_mac_address}
              ]}
         )
 
@@ -356,6 +383,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'previous': 'http://testserver/api/mdm/dep/devices/?limit=1&ordering=-created_at',
              'results': [
                  {'asset_tag': dep_device.asset_tag,
+                  'bluetooth_mac_address': dep_device.bluetooth_mac_address,
                   'color': 'SPACE GRAY',
                   'created_at': dep_device.created_at.isoformat(),
                   'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
@@ -363,19 +391,27 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                   'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                   'device_family': 'iPhone',
                   'disowned_at': None,
+                  'eid': dep_device.eid,
                   'enrollment': None,
+                  'ethernet_mac_address': dep_device.ethernet_mac_address,
                   'id': dep_device.pk,
+                  'imei': dep_device.imei,
+                  'is_replacement_device': False,
                   'last_op_date': dep_device.last_op_date.isoformat(),
                   'last_op_type': 'added',
+                  'mdm_migration_deadline': None,
+                  'meid': dep_device.meid,
                   'model': 'iPhone X',
                   'os': 'iOS',
                   'profile_assign_time': None,
                   'profile_push_time': None,
                   'profile_status': 'empty',
                   'profile_uuid': None,
+                  'released_by_replacement': False,
                   'serial_number': dep_device.serial_number,
                   'updated_at': dep_device.updated_at.isoformat(),
-                  'virtual_server': dep_device.virtual_server.pk}
+                  'virtual_server': dep_device.virtual_server.pk,
+                  'wifi_mac_address': dep_device.wifi_mac_address}
              ]}
         )
 
@@ -399,6 +435,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'asset_tag': dep_device.asset_tag,
+             'bluetooth_mac_address': dep_device.bluetooth_mac_address,
              'color': 'SPACE GRAY',
              'created_at': dep_device.created_at.isoformat(),
              'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
@@ -406,19 +443,27 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'device_assigned_date': dep_device.device_assigned_date.isoformat(),
              'device_family': 'iPhone',
              'disowned_at': None,
+             'eid': dep_device.eid,
              'enrollment': None,
+             'ethernet_mac_address': dep_device.ethernet_mac_address,
              'id': dep_device.pk,
+             'imei': dep_device.imei,
+             'is_replacement_device': False,
              'last_op_date': dep_device.last_op_date.isoformat(),
              'last_op_type': 'added',
+             'mdm_migration_deadline': None,
+             'meid': dep_device.meid,
              'model': 'iPhone X',
              'os': 'iOS',
              'profile_assign_time': None,
              'profile_push_time': None,
              'profile_status': 'empty',
              'profile_uuid': None,
+             'released_by_replacement': False,
              'serial_number': dep_device.serial_number,
              'updated_at': dep_device.updated_at.isoformat(),
-             'virtual_server': dep_device.virtual_server.pk}
+             'virtual_server': dep_device.virtual_server.pk,
+             'wifi_mac_address': dep_device.wifi_mac_address}
         )
 
     # update dep device
@@ -474,6 +519,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(
             response.json(),
             {'asset_tag': dep_device.asset_tag,
+             'bluetooth_mac_address': dep_device.bluetooth_mac_address,
              'color': 'SPACE GRAY',
              'created_at': dep_device.created_at.isoformat(),
              'description': 'IPHONE X SPACE GRAY 64GB-ZDD',
@@ -481,19 +527,27 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'device_assigned_date': dep_device.device_assigned_date.isoformat(),
              'device_family': 'iPhone',
              'disowned_at': None,
+             'eid': dep_device.eid,
              'enrollment': enrollment.pk,
+             'ethernet_mac_address': dep_device.ethernet_mac_address,
              'id': dep_device.pk,
+             'imei': dep_device.imei,
+             'is_replacement_device': False,
              'last_op_date': dep_device.last_op_date.isoformat(),
              'last_op_type': 'added',
+             'mdm_migration_deadline': None,
+             'meid': dep_device.meid,
              'model': 'iPhone X',
              'os': 'iOS',
              'profile_assign_time': None,
              'profile_push_time': None,
              'profile_status': 'empty',
              'profile_uuid': None,
+             'released_by_replacement': False,
              'serial_number': dep_device.serial_number,
              'updated_at': dep_device.updated_at.isoformat(),
-             'virtual_server': dep_device.virtual_server.pk}
+             'virtual_server': dep_device.virtual_server.pk,
+             'wifi_mac_address': dep_device.wifi_mac_address}
         )
         assign_dep_device_profile.assert_called_once_with(dep_device, enrollment)
 

@@ -315,6 +315,10 @@ def force_dep_virtual_server(server_uuid=None):
 # DEP device
 
 
+def random_mac_address():
+    return ":".join(get_random_string(2, allowed_chars="0123456789abcdef") for _ in range(6))
+
+
 def force_dep_device(
     server=None,
     device_family="iPhone",
@@ -334,6 +338,8 @@ def force_dep_device(
         last_op_type=op_type,
         last_op_date=naive_utcnow(),
         profile_status=profile_status,
+        bluetooth_mac_address=random_mac_address(),
+        wifi_mac_address=random_mac_address(),
     )
     if device_family == "iPhone":
         dep_device.color = "SPACE GRAY"
@@ -341,12 +347,16 @@ def force_dep_device(
         dep_device.device_family = device_family
         dep_device.model = "iPhone X"
         dep_device.os = "iOS"
+        dep_device.eid = get_random_string(32, allowed_chars="0123456789ABCDEF")
+        dep_device.imei = [get_random_string(15, allowed_chars="0123456789")]
+        dep_device.meid = [get_random_string(14, allowed_chars="0123456789")]
     else:
         dep_device.color = "MIDNIGHT"
         dep_device.description = "MBA 13.6 MDN"
         dep_device.device_family = "Mac"
         dep_device.model = "MacBook Air"
         dep_device.os = "OSX"
+        dep_device.ethernet_mac_address = random_mac_address()
     if profile_status != DEPDevice.PROFILE_STATUS_EMPTY:
         if enrollment is None:
             enrollment = force_dep_enrollment(mbu)

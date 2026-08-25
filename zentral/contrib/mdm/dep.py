@@ -153,21 +153,36 @@ def dep_device_update_dict(device, known_enrollments=None):
     if known_enrollments is None:
         known_enrollments = {}
     update_d = {"enrollment": None,
+                "mdm_migration_deadline": None,
                 "profile_uuid": None,
                 "profile_assign_time": None,
                 "profile_push_time": None,
                 "profile_status": DEPDevice.PROFILE_STATUS_EMPTY}
 
-    # device attributes
-    for attr in ("asset_tag",
-                 "color",
-                 "description",
-                 "device_family",
-                 "model",
-                 "os"):
-        update_d[attr] = device.get(attr) or ""
-        if attr != "asset_tag":
-            update_d[attr] = update_d[attr][:256]
+    # device attributes, truncated to what the column holds. Apple documents no maximum length.
+    for attr, max_length in (("asset_tag", None),
+                             ("color", 256),
+                             ("description", 256),
+                             ("device_family", 256),
+                             ("model", 256),
+                             ("os", 256),
+                             ("eid", 64),
+                             ("bluetooth_mac_address", 23),
+                             ("ethernet_mac_address", 23),
+                             ("wifi_mac_address", 23)):
+        val = device.get(attr) or ""
+        update_d[attr] = val[:max_length] if max_length else val
+
+    # array attributes
+    for attr in ("imei", "meid"):
+        update_d[attr] = [str(val) for val in device.get(attr) or []]
+
+    update_d["is_replacement_device"] = bool(device.get("is_replacement_device"))
+
+    # Apple reports this one only with a deleted operation, so an absent key must leave it alone
+    # rather than clear it. Left out of the update dict, it is left out of the update statement.
+    if "released_by_replacement" in device:
+        update_d["released_by_replacement"] = bool(device["released_by_replacement"])
 
     # standard nullable attibutes
     for attr in ("device_assigned_by",
@@ -194,6 +209,7 @@ def dep_device_update_dict(device, known_enrollments=None):
 
     # datetime nullable attributes
     for attr in ("device_assigned_date",
+                 "mdm_migration_deadline",
                  "profile_assign_time",
                  "profile_push_time"):
         try:

@@ -196,6 +196,29 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("mdm:assign_dep_device_profile", args=(device.pk,)))
         self.assertContains(response, reverse("mdm:refresh_dep_device", args=(device.pk,)))
 
+    def test_dep_device_protocol_10_attributes(self):
+        device = force_dep_device(mbu=self.mbu)
+        self.login("mdm.view_depdevice")
+        response = self.client.get(reverse("mdm:dep_device", args=(device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depdevice_detail.html")
+        self.assertContains(response, device.eid)
+        self.assertContains(response, device.imei[0])
+        self.assertContains(response, device.meid[0])
+        self.assertContains(response, device.wifi_mac_address)
+        self.assertContains(response, device.bluetooth_mac_address)
+        # they identify a device as well as its serial number does
+        self.assertContains(response, f'<span class="private-content">{device.wifi_mac_address}</span>')
+
+    def test_dep_devices_replacement_badge(self):
+        device = force_dep_device()
+        self.login("mdm.view_depdevice")
+        response = self.client.get(reverse("mdm:dep_devices"))
+        self.assertNotContains(response, "REPLACEMENT")
+        DEPDevice.objects.filter(pk=device.pk).update(is_replacement_device=True)
+        response = self.client.get(reverse("mdm:dep_devices"))
+        self.assertContains(response, "REPLACEMENT")
+
     # test assign profile
 
     def test_assign_profile_redirect(self):

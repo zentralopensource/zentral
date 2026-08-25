@@ -471,6 +471,90 @@ class TestDEPEnrollment(TestCase):
         device.refresh_from_db()
         self.assertIsNone(device.enrollment)
 
+    # protocol version 10 attributes
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_stores_the_protocol_10_attributes(self, from_dep_token):
+        server = force_dep_virtual_server()
+        serial_number = get_random_string(10).upper()
+        client = Mock()
+        client.fetch_devices.return_value = CursorIterator([
+            {'device_assigned_by': 'support@zentral.com',
+             'device_assigned_date': '2026-08-24T19:09:22Z',
+             'device_family': 'iPhone',
+             'eid': '89049032004008882600123456789012',
+             'imei': ['359544000123456'],
+             'meid': ['35404606565661'],
+             'bluetooth_mac_address': '14:98:77:aa:bb:01',
+             'wifi_mac_address': '14:98:77:aa:bb:02',
+             'ethernet_mac_address': '14:98:77:aa:bb:03',
+             'is_replacement_device': True,
+             'mdm_migration_deadline': '2026-09-30T12:00:00Z',
+             'os': 'iOS',
+             'profile_status': 'empty',
+             'serial_number': serial_number}
+        ])
+        from_dep_token.return_value = client
+        dep_devices = list(sync_dep_virtual_server_devices(server))
+        self.assertEqual(len(dep_devices), 1)
+        d, _ = dep_devices[0]
+        d.refresh_from_db()
+        self.assertEqual(d.eid, '89049032004008882600123456789012')
+        self.assertEqual(d.imei, ['359544000123456'])
+        self.assertEqual(d.meid, ['35404606565661'])
+        self.assertEqual(d.bluetooth_mac_address, '14:98:77:aa:bb:01')
+        self.assertEqual(d.wifi_mac_address, '14:98:77:aa:bb:02')
+        self.assertEqual(d.ethernet_mac_address, '14:98:77:aa:bb:03')
+        self.assertTrue(d.is_replacement_device)
+        self.assertEqual(d.mdm_migration_deadline, datetime(2026, 9, 30, 12, 0, 0))
+        # Apple only reports it with a deleted operation
+        self.assertFalse(d.released_by_replacement)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_released_by_replacement(self, from_dep_token):
+        server = self.force_synced_server()
+        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        # the fixture stamps the last operation now, which would make the one below look stale
+        DEPDevice.objects.filter(pk=dep_device.pk).update(last_op_date=None)
+
+        def device_iterator():
+            yield from [{'op_date': '2026-08-24T15:41:06Z',
+                         'op_type': 'deleted',
+                         'released_by_replacement': True,
+                         'serial_number': dep_device.serial_number}]
+            return get_random_string(12)
+
+        client = Mock()
+        client.sync_devices.return_value = CursorIterator(device_iterator())
+        from_dep_token.return_value = client
+        list(sync_dep_virtual_server_devices(server))
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.last_op_type, DEPDevice.OP_TYPE_DELETED)
+        self.assertTrue(dep_device.released_by_replacement)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_keeps_released_by_replacement(self, from_dep_token):
+        server = self.force_synced_server()
+        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        DEPDevice.objects.filter(pk=dep_device.pk).update(released_by_replacement=True,
+                                                          last_op_date=None)
+
+        def device_iterator():
+            # Apple reports the attribute only with a deleted operation
+            yield from [{'op_date': '2026-08-24T15:41:06Z',
+                         'op_type': 'modified',
+                         'serial_number': dep_device.serial_number}]
+            return get_random_string(12)
+
+        client = Mock()
+        client.sync_devices.return_value = CursorIterator(device_iterator())
+        from_dep_token.return_value = client
+        list(sync_dep_virtual_server_devices(server))
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.last_op_type, "modified")
+        # an absent key leaves it alone, it does not clear it
+        self.assertTrue(dep_device.released_by_replacement)
+
     # events
 
     def force_synced_server(self):
@@ -582,6 +666,11 @@ class TestDEPEnrollment(TestCase):
                          'model': 'iPhone X',
                          'os': 'iOS',
                          'asset_tag': dep_device.asset_tag,
+                         'eid': dep_device.eid,
+                         'imei': dep_device.imei,
+                         'meid': dep_device.meid,
+                         'bluetooth_mac_address': dep_device.bluetooth_mac_address,
+                         'wifi_mac_address': dep_device.wifi_mac_address,
                          'device_assigned_by': dep_device.device_assigned_by,
                          'device_assigned_date': dep_device.device_assigned_date.isoformat(),
                          'op_date': '2023-06-17T15:41:06Z',

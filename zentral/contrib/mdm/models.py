@@ -2205,12 +2205,24 @@ class DEPDevice(models.Model):
     device_family = models.CharField(max_length=256, default="")
     model = models.CharField(max_length=256, default="")
     os = models.CharField(max_length=256, default="")
+    # identifiers, only reported from the 10th version of the Apple protocol
+    eid = models.CharField(max_length=64, default="")
+    imei = ArrayField(models.CharField(max_length=64), default=list, blank=True)
+    meid = ArrayField(models.CharField(max_length=64), default=list, blank=True)
+    # 48 or 64 bit with separators, like inventory.NetworkInterface.mac
+    bluetooth_mac_address = models.CharField(max_length=23, default="")
+    ethernet_mac_address = models.CharField(max_length=23, default="")
+    wifi_mac_address = models.CharField(max_length=23, default="")
+    is_replacement_device = models.BooleanField(default=False)
     # assignment
     device_assigned_by = models.EmailField(editable=False)
     device_assigned_date = models.DateTimeField(editable=False)
+    mdm_migration_deadline = models.DateTimeField(null=True)
     # sync service
     last_op_type = models.CharField(max_length=64, choices=OP_TYPE_CHOICES, null=True, editable=False)
     last_op_date = models.DateTimeField(null=True, editable=False)
+    # Apple reports this one only with a deleted operation, so it is set, never cleared
+    released_by_replacement = models.BooleanField(default=False)
     # profile
     profile_status = models.CharField(max_length=64,
                                       choices=PROFILE_STATUS_CHOICES,
@@ -2267,10 +2279,19 @@ class DEPDevice(models.Model):
             "device_family": self.device_family,
             "model": self.model,
             "os": self.os,
+            "eid": self.eid,
+            "imei": list(self.imei),
+            "meid": list(self.meid),
+            "bluetooth_mac_address": self.bluetooth_mac_address,
+            "ethernet_mac_address": self.ethernet_mac_address,
+            "wifi_mac_address": self.wifi_mac_address,
+            "is_replacement_device": self.is_replacement_device,
             "device_assigned_by": self.device_assigned_by,
             "device_assigned_date": _dep_device_isoformat(self.device_assigned_date),
+            "mdm_migration_deadline": _dep_device_isoformat(self.mdm_migration_deadline),
             "last_op_type": self.last_op_type,
             "last_op_date": _dep_device_isoformat(self.last_op_date),
+            "released_by_replacement": self.released_by_replacement,
             "profile_status": self.profile_status,
             "profile_uuid": str(self.profile_uuid) if self.profile_uuid else None,
             "profile_assign_time": _dep_device_isoformat(self.profile_assign_time),

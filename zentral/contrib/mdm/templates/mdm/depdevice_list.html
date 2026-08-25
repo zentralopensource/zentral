@@ -51,6 +51,9 @@
             {% if dep_device.is_deleted %}
             <span class="label label-danger">DELETED</span>
             {% endif %}
+            {% if dep_device.is_replacement_device %}
+            <span class="label label-info">REPLACEMENT</span>
+            {% endif %}
         </td>
         <td>{{ dep_device.description|default:"-" }}</td>
         <td>
