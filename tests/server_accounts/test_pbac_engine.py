@@ -535,6 +535,7 @@ class PBACEngineTestCase(TestCase):
             ("deleteMachineTag", "Inventory"),
             ("viewMachineTag", "Inventory"),
             ("disownDEPDevice", "MDM"),
+            ("forceInstallArtifact", "MDM"),
             ("viewAdminPassword", "MDM"),
             ("viewDeviceLockPIN", "MDM"),
             ("viewFileVaultPRK", "MDM"),
