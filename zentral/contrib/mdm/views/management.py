@@ -11,9 +11,11 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.functional import cached_property
 from django.views.generic import DetailView, FormView, ListView, TemplateView, UpdateView, View
+from pbac.engine import engine
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
+from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
-from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
+from zentral.contrib.mdm.artifacts import ForceArtifactInstallError, Target, update_blueprint_serialized_artifacts
 from zentral.contrib.mdm.commands.base import load_command, registered_manual_commands
 from zentral.contrib.mdm.dep import assign_dep_device_profile, refresh_dep_device
 from zentral.contrib.mdm.dep_client import DEPClientError
@@ -54,10 +56,11 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
                                         Profile, ProvisioningProfile, StoreApp)
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
+from zentral.contrib.mdm.pbac import ForceInstallArtifactRequest
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.contrib.mdm.tasks import bulk_assign_location_asset_task
 from zentral.core.events.base import AuditEvent
-from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, PBACViewMixin, post_audit_event,
                                  UpdateViewWithAudit, UserPaginationListView)
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 
@@ -1328,6 +1331,37 @@ class EnrolledDeviceListView(PermissionRequiredMixin, UserPaginationListView):
         return ctx
 
 
+def target_artifacts_with_force_install_requests(target, user):
+    """The target artifacts with their batch-authorized force install PBAC requests.
+
+    A list of (target_artifact, force_install_request) tuples. The request is None when a
+    forced install cannot happen: the device is blocked or checked out, or the row is not
+    the artifact version in scope.
+    """
+    enrolled_device = target.enrolled_device
+    force_install_eligible_av_pks = {}
+    if enrolled_device.blocked_at is None and enrolled_device.checkout_at is None:
+        force_install_eligible_av_pks = {
+            artifact["pk"]: artifact_version["pk"]
+            for artifact, artifact_version in target.all_in_scope_serialized()
+        }
+    machine = MetaMachine(enrolled_device.serial_number)
+    target_artifacts = []
+    pbac_requests = []
+    for target_artifact in (target.target.target_artifacts
+                                         .select_related("artifact_version__artifact")
+                                         .all()
+                                         .order_by("-updated_at")):
+        artifact = target_artifact.artifact_version.artifact
+        force_install_request = None
+        if force_install_eligible_av_pks.get(str(artifact.pk)) == str(target_artifact.artifact_version.pk):
+            force_install_request = ForceInstallArtifactRequest(user, machine, artifact, target.channel)
+            pbac_requests.append(force_install_request)
+        target_artifacts.append((target_artifact, force_install_request))
+    engine.authorize_requests(pbac_requests)
+    return target_artifacts
+
+
 class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
     permission_required = "mdm.view_enrolleddevice"
     model = EnrolledDevice
@@ -1351,11 +1385,9 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
                                                      .order_by("location_asset__asset__name"))
         ctx["device_assignments_count"] = ctx["device_assignments"].count()
         # target artifacts
-        ctx["target_artifacts"] = (self.object.target_artifacts
-                                              .select_related("artifact_version__artifact")
-                                              .all()
-                                              .order_by("-updated_at"))
-        ctx["target_artifacts_count"] = ctx["target_artifacts"].count()
+        target = Target(self.object)
+        ctx["target_artifacts"] = target_artifacts_with_force_install_requests(target, self.request.user)
+        ctx["target_artifacts_count"] = len(ctx["target_artifacts"])
         # commands
         commands_qs = (
             self.object.commands
@@ -1371,7 +1403,6 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
         ctx["enrollment_session_info_list"] = list(self.object.iter_enrollment_session_info())
         ctx["enrollment_session_info_count"] = len(ctx["enrollment_session_info_list"])
         ctx["create_command_links"] = []
-        target = Target(self.object)
         for db_name, command_class in registered_manual_commands.items():
             if command_class.verify_target(target):
                 ctx["create_command_links"].append((
@@ -1495,11 +1526,9 @@ class EnrolledUserView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["enrolled_device"] = ctx["object"].enrolled_device
-        ctx["target_artifacts"] = (self.object.target_artifacts
-                                              .select_related("artifact_version__artifact")
-                                              .all()
-                                              .order_by("-updated_at"))
-        ctx["target_artifacts_count"] = ctx["target_artifacts"].count()
+        target = Target(self.object.enrolled_device, self.object)
+        ctx["target_artifacts"] = target_artifacts_with_force_install_requests(target, self.request.user)
+        ctx["target_artifacts_count"] = len(ctx["target_artifacts"])
         commands_qs = (
             self.object.commands
                        .select_related("artifact_version__artifact")
@@ -1558,6 +1587,72 @@ class PokeEnrolledUserView(PermissionRequiredMixin, View):
         send_enrolled_user_notification(enrolled_user, request=request)
         messages.info(request, "User poked!")
         return redirect(enrolled_user)
+
+
+class BaseForceInstallArtifactView(PBACViewMixin, TemplateView):
+    template_name = "mdm/targetartifact_confirm_force_install.html"
+    pbac_request_class = ForceInstallArtifactRequest
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.load_target_objects(kwargs)
+        self.artifact = get_object_or_404(Artifact, pk=kwargs["artifact_pk"])
+        return {"machine": MetaMachine(self.enrolled_device.serial_number),
+                "artifact": self.artifact,
+                "channel": self.channel}
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["enrolled_device"] = self.enrolled_device
+        ctx["enrolled_user"] = self.enrolled_user
+        ctx["artifact"] = self.artifact
+        ctx["target_artifact"] = ((self.enrolled_user or self.enrolled_device)
+                                  .target_artifacts
+                                  .select_related("artifact_version__artifact")
+                                  .filter(artifact_version__artifact=self.artifact)
+                                  .order_by("-updated_at")
+                                  .first())
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        target = Target(self.enrolled_device, self.enrolled_user)
+        try:
+            _, deleted_command_count = target.force_artifact_install(self.artifact, request)
+        except ForceArtifactInstallError as error:
+            messages.error(request, str(error))
+        else:
+            if self.enrolled_user:
+                enrolled_user = self.enrolled_user
+                transaction.on_commit(lambda: send_enrolled_user_notification(enrolled_user, request=request))
+            else:
+                enrolled_device = self.enrolled_device
+                transaction.on_commit(lambda: send_enrolled_device_notification(enrolled_device, request=request))
+            message = f"Installation of artifact {self.artifact} requested."
+            if deleted_command_count:
+                message += " {} stale command{} deleted.".format(
+                    deleted_command_count, "" if deleted_command_count == 1 else "s"
+                )
+            messages.info(request, message)
+        return redirect(self.enrolled_user or self.enrolled_device)
+
+
+class ForceInstallDeviceArtifactView(BaseForceInstallArtifactView):
+    channel = Channel.DEVICE
+
+    def load_target_objects(self, kwargs):
+        self.enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        self.enrolled_user = None
+
+
+class ForceInstallUserArtifactView(BaseForceInstallArtifactView):
+    channel = Channel.USER
+
+    def load_target_objects(self, kwargs):
+        self.enrolled_user = get_object_or_404(
+            EnrolledUser.objects.select_related("enrolled_device__push_certificate"),
+            enrolled_device__pk=kwargs["device_pk"],
+            pk=kwargs["pk"],
+        )
+        self.enrolled_device = self.enrolled_user.enrolled_device
 
 
 class CreateEnrolledDeviceCommandView(PermissionRequiredMixin, FormView):

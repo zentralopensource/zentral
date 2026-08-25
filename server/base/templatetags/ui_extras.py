@@ -69,6 +69,10 @@ ACTION = {
         'icon': "bi bi-download",
         'tooltip': "Download",
     },
+    'FORCE_INSTALL': {
+        'icon': "bi bi-lightning-charge-fill",
+        'tooltip': "Force install",
+    },
     'REFRESH': {
         'icon': "bi bi-arrow-counterclockwise",
         'tooltip': "Renew",

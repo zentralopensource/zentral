@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:index' %}">MDM</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'mdm:enrolled_devices' %}">Devices</a></li>
+  <li class="breadcrumb-item"><a href="{{ enrolled_device.get_absolute_url }}">{{ enrolled_device }}</a></li>
+  {% if enrolled_user %}
+  <li class="breadcrumb-item"><a href="{{ enrolled_user.get_absolute_url }}">{{ enrolled_user }}</a></li>
+  {% endif %}
+  <li class="breadcrumb-item active">Force install artifact</li>
+</ol>
+
+<h3>Force install artifact {{ artifact }}</h3>
+
+<form method="post">{% csrf_token %}
+  <p>Do you really want to force the install of this artifact?</p>
+  {% if target_artifact %}
+  <table class="table">
+    <tbody>
+      <tr>
+        <th>Status</th>
+        <td>{{ target_artifact.get_status_display }}</td>
+      </tr>
+      <tr>
+        <th>Last updated</th>
+        <td>{{ target_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      </tr>
+      <tr>
+        <th>Install count</th>
+        <td>{{ target_artifact.install_count }}</td>
+      </tr>
+      <tr>
+        <th>Retries</th>
+        <td>{{ target_artifact.retry_count }}/{{ target_artifact.max_retry_count }}</td>
+      </tr>
+      {% if target_artifact.force_install_requested_at %}
+      <tr>
+        <th>Install requested</th>
+        <td>{{ target_artifact.force_install_requested_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% endif %}
+  <p>
+    {% if enrolled_user %}
+    <a href="{{ enrolled_user.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+    {% else %}
+    <a href="{{ enrolled_device.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+    {% endif %}
+    <button type="submit" class="btn btn-warning">Yes</button>
+  </p>
+</form>
+{% endblock %}

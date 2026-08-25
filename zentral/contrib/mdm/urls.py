@@ -401,6 +401,9 @@ urlpatterns = [
     path('devices/<int:pk>/clear_release/',
          views.UnblockEnrolledDeviceView.as_view(),
          name="unblock_enrolled_device"),
+    path('devices/<int:pk>/artifacts/<uuid:artifact_pk>/force_install/',
+         views.ForceInstallDeviceArtifactView.as_view(),
+         name="force_install_device_artifact"),
 
     # enrolled device commands
     path('devices/<int:pk>/commands/<str:db_name>/create/',
@@ -420,6 +423,9 @@ urlpatterns = [
     path('devices/<int:device_pk>/users/<int:pk>/poke/',
          views.PokeEnrolledUserView.as_view(),
          name="poke_enrolled_user"),
+    path('devices/<int:device_pk>/users/<int:pk>/artifacts/<uuid:artifact_pk>/force_install/',
+         views.ForceInstallUserArtifactView.as_view(),
+         name="force_install_user_artifact"),
 
     # enrolled user commands
     path('users/commands/<uuid:uuid>/result/',

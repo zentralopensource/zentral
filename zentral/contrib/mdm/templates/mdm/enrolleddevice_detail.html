@@ -520,10 +520,11 @@
           <th>Version</th>
           <th>Status</th>
           <th>Last updated</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
-        {% for target_artifact in target_artifacts %}
+        {% for target_artifact, force_install_request in target_artifacts %}
           {% with target_artifact.artifact_version as artifact_version %}
             {% with artifact_version.artifact as artifact %}
               <tr>
@@ -544,6 +545,9 @@
                 </td>
                 <td>
                   {{ target_artifact.get_status_display }}
+                  {% if target_artifact.force_install_requested_at %}
+                    <span class="badge text-bg-warning">install requested</span>
+                  {% endif %}
                   {% if target_artifact.extra_info.reasons %}
                     <a data-bs-toggle="collapse" href="#mi-{{ target_artifact.pk }}">more info</a>
                     <div class="collapse" id="mi-{{ target_artifact.pk }}">
@@ -552,6 +556,12 @@
                   {% endif %}
                 </td>
                 <td>{{ target_artifact.updated_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+                <td>
+                  {% if force_install_request.is_authorized %}
+                    {% url 'mdm:force_install_device_artifact' object.pk artifact.pk as force_install_url %}
+                    {% button 'FORCE_INSTALL' force_install_url %}
+                  {% endif %}
+                </td>
               </tr>
             {% endwith %}
           {% endwith %}
