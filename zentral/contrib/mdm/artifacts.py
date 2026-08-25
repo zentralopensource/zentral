@@ -10,6 +10,7 @@ from itertools import chain
 
 import psycopg2.extras
 from django.db import connection, transaction
+from django.db.models import Q
 from psycopg2 import sql
 
 from zentral.contrib.inventory.models import MetaMachine
@@ -34,6 +35,7 @@ from .models import (
     Blueprint,
     BlueprintArtifact,
     Channel,
+    Command,
     DeclarationRef,
     DeviceArtifact,
     DeviceAssignment,
@@ -44,6 +46,10 @@ from .models import (
 )
 
 logger = logging.getLogger("zentral.contrib.mdm.artifacts")
+
+
+class ForceArtifactInstallError(Exception):
+    pass
 
 
 # blueprint artifacts serialization
@@ -389,6 +395,7 @@ class Target:
                 target_artifact.installed_at,
                 _prepare_os_version(target_artifact.os_version_at_install_time, (0, 0, 0)),
                 target_artifact.retry_count,
+                target_artifact.force_install_requested_at,
             )
             if target_artifact_status.present:
                 current_artifact["present"] = True
@@ -429,10 +436,15 @@ class Target:
             # artifact never seen → install, not present
             return True
         # get artifact version status for the target, with a sane default value
-        av_status, av_installed_at, av_os_version, av_retry_count = target_artifact["versions"].get(
-            artifact_version["pk"],
-            (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0), 0)
+        av_status, av_installed_at, av_os_version, av_retry_count, av_force_install_requested_at = (
+            target_artifact["versions"].get(
+                artifact_version["pk"],
+                (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0), 0, None)
+            )
         )
+        if av_force_install_requested_at:
+            # an operator requested a forced install of this artifact version
+            return True
         if av_status.present:
             # reinstall on OS update
             reinstall_on_os_update = Artifact.ReinstallOnOSUpdate(artifact["reinstall_on_os_update"])
@@ -517,9 +529,9 @@ class Target:
                     or artifact["type"] in done_types
                 )
             else:
-                _, _, _, retry_count = target_artifact.get("versions", {}).get(
+                _, _, _, retry_count, _ = target_artifact.get("versions", {}).get(
                     artifact_version["pk"],
-                    (None, None, None, 0)
+                    (None, None, None, 0, None)
                 )
                 artifacts.append((artifact, artifact_version, retry_count))
                 return False, True
@@ -564,6 +576,36 @@ class Target:
             return DeviceArtifact, {"enrolled_device": self.target}
         else:
             return UserArtifact, {"enrolled_user": self.target}
+
+    def _target_artifact_retries_exhausted(self, result_d, incoming_unique_install_identifier):
+        """Whether no further automatic install attempt will happen for a failed target artifact.
+
+        None when it cannot be determined. For the DDM artifacts, the retry ladder stops when the
+        advertised server token stops changing: a failure reported for the currently advertised
+        server token is the final one.
+        """
+        if result_d["_op"] == "deleted":
+            return None
+        if result_d["status"] != TargetArtifact.Status.FAILED:
+            return False
+        artifact_type = Artifact.Type(result_d["a_type"])
+        if not self.declarative_management or artifact_type not in self.ddm_managed_artifact_types():
+            # installed with MDM commands, which are never automatically retried
+            return True
+        if not incoming_unique_install_identifier:
+            return None
+        if self.blueprint is None:
+            return None
+        artifact = self.blueprint.serialized_artifacts.get(str(result_d["a_pk"]))
+        if artifact is None:
+            return None
+        artifact_version_pk = str(result_d["artifact_version_id"])
+        for artifact_version in artifact["versions"]:
+            if artifact_version["pk"] == artifact_version_pk:
+                return incoming_unique_install_identifier == get_artifact_version_server_token(
+                    self, artifact, artifact_version, result_d["retry_count"]
+                )
+        return None
 
     def update_target_artifacts(self, target_artifacts_info, artifact_types=None):
         """
@@ -619,7 +661,7 @@ class Target:
                 '  ({target_column_name}, "artifact_version_id", "status", "extra_info",'
                 '   "installed_at", "os_version_at_install_time",'
                 '   "unique_install_identifier", "install_count", "retry_count", "max_retry_count",'
-                '   "created_at", "updated_at")'
+                '   "force_install_requested_at", "created_at", "updated_at")'
                 '  select %(target_pk)s, tai.av_pk, tai.status, tai.extra_info::jsonb,'
                 # if present, insert installed at timestamp
                 "  case when tai.present then %(now)s else null end,"
@@ -633,6 +675,8 @@ class Target:
                 "  case when tai.present or tai.status in ('Uninstalled', 'AwaitingConfirmation') then 0 else 1 end,"
                 # set max retry count to the default value at insert
                 "  %(artifact_retries)s,"
+                # a target artifact reported by the device is never force installed
+                "  null,"
                 '  %(now)s, %(now)s'
                 '  from target_artifact_info tai'
                 #  conflict
@@ -659,6 +703,8 @@ class Target:
                 '  max_retry_count = case when'
                 '  excluded.retry_count = 0'
                 '  then {table_name}.retry_count + %(artifact_retries)s else {table_name}.max_retry_count end,'
+                # a processed update resolves a pending forced install
+                '  force_install_requested_at = null,'
                 '  updated_at = %(now)s'
                 '  where ('
                 # condition of the conflict
@@ -705,10 +751,16 @@ class Target:
             target_column_name=sql.Identifier("enrolled_device_id" if model == DeviceArtifact else "enrolled_user_id")
         )
 
+        incoming_unique_install_identifiers = {}
+        if target_artifacts_info:
+            for _, av_pk, _, _, unique_install_identifier in target_artifacts_info:
+                incoming_unique_install_identifiers[str(av_pk)] = str(unique_install_identifier)
+
         event_payloads = []
 
         def queue_event_payload(result_d):
             extra_info = result_d["extra_info"]
+            force_install_requested_at = result_d["force_install_requested_at"]
             payload = {
                 "result": result_d["_op"],
                 "channel": str(self.channel),
@@ -730,6 +782,12 @@ class Target:
                     "install_count": result_d["install_count"],
                     "retry_count": result_d["retry_count"],
                     "max_retry_count": result_d["max_retry_count"],
+                    "force_install_requested_at": (force_install_requested_at.isoformat()
+                                                   if force_install_requested_at else None),
+                    "retries_exhausted": self._target_artifact_retries_exhausted(
+                        result_d,
+                        incoming_unique_install_identifiers.get(str(result_d["artifact_version_id"]))
+                    ),
                     "created_at": result_d["created_at"].isoformat(),
                     "updated_at": result_d["updated_at"].isoformat(),
                 }
@@ -796,6 +854,59 @@ class Target:
              status, extra_info or {}, unique_install_identifier or "")
         ]
         return self.update_target_artifacts(target_artifacts_info)
+
+    def force_artifact_install(self, artifact, request):
+        if self.enrolled_device.blocked_at is not None:
+            raise ForceArtifactInstallError("Device blocked")
+        if self.enrolled_device.checkout_at is not None:
+            raise ForceArtifactInstallError("Device checked out")
+        artifact_pk = str(artifact.pk)
+        for serialized_artifact, serialized_artifact_version in self.all_in_scope_serialized():
+            if serialized_artifact["pk"] == artifact_pk:
+                artifact_version_pk = serialized_artifact_version["pk"]
+                break
+        else:
+            raise ForceArtifactInstallError("Artifact not in scope")
+        model, model_kwargs = self.get_target_artifact_model_and_kwargs()
+        with transaction.atomic():
+            target_artifact = (
+                model.objects.select_for_update(of=("self",))
+                             .select_related("artifact_version__artifact")
+                             .filter(artifact_version__pk=artifact_version_pk, **model_kwargs)
+                             .first()
+            )
+            if target_artifact is None:
+                raise ForceArtifactInstallError(
+                    "No install attempted yet for the artifact version in scope. "
+                    "It will be installed at the next connection."
+                )
+            target_artifact.force_install_requested_at = naive_utcnow()
+            target_artifact.retry_count += 1
+            # more automatic retries after the forced install attempt
+            target_artifact.max_retry_count = target_artifact.retry_count + self.ARTIFACT_RETRIES
+            target_artifact.save(update_fields=["force_install_requested_at", "retry_count",
+                                                "max_retry_count", "updated_at"])
+            db_command_model, db_command_kwargs = self.get_db_command_model_and_kwargs()
+            # queued or NotNow commands linked to the artifact are stale: they could resolve the
+            # forced install with the state of a previous install attempt when they are processed.
+            deleted_command_count, _ = db_command_model.objects.filter(
+                Q(time__isnull=True) | Q(status=Command.Status.NOT_NOW),
+                artifact_version__artifact=artifact,
+                **db_command_kwargs
+            ).delete()
+            payload = {
+                "result": "updated",
+                "channel": str(self.channel),
+                "target_artifact": target_artifact.serialize_for_event(),
+            }
+            payload["target_artifact"]["retries_exhausted"] = False
+            if self.enrolled_user:
+                payload["enrolled_user"] = {
+                    "pk": self.enrolled_user.pk,
+                    "user_id": self.enrolled_user.user_id,
+                }
+            transaction.on_commit(lambda: post_target_artifact_update_events(self, [payload], request))
+        return target_artifact, deleted_command_count
 
     # declarations
 

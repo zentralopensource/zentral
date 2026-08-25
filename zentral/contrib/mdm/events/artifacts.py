@@ -1,7 +1,7 @@
 import logging
 import uuid
 from zentral.core.events import register_event_type
-from zentral.core.events.base import BaseEvent, EventMetadata
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
 
 
 logger = logging.getLogger('zentral.contrib.mdm.events.artifacts')
@@ -39,12 +39,14 @@ class TargetArtifactUpdateEvent(BaseEvent):
 register_event_type(TargetArtifactUpdateEvent)
 
 
-def post_target_artifact_update_events(target, payloads):
+def post_target_artifact_update_events(target, payloads, request=None):
     event_uuid = uuid.uuid4()
+    event_request = EventRequest.build_from_request(request) if request else None
     for index, payload in enumerate(payloads):
         event_metadata = EventMetadata(
             uuid=event_uuid, index=index,
             machine_serial_number=target.serial_number,
+            request=event_request,
         )
         event = TargetArtifactUpdateEvent(event_metadata, payload)
         event.post()

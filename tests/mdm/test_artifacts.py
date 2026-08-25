@@ -4,11 +4,13 @@ import uuid
 from datetime import date, datetime, time, timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.contrib.auth.models import AnonymousUser
+from django.test import RequestFactory, TestCase
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
-from zentral.contrib.mdm.artifacts import Target, update_blueprint_serialized_artifacts
+from zentral.contrib.mdm.artifacts import (ForceArtifactInstallError, Target,
+                                           update_blueprint_serialized_artifacts)
 from zentral.contrib.mdm.declarations import (build_target_management_status_subscriptions,
                                              get_artifact_version_server_token)
 from zentral.contrib.mdm.models import (
@@ -19,7 +21,9 @@ from zentral.contrib.mdm.models import (
     Blueprint,
     BlueprintArtifact,
     Channel,
+    Command,
     DeviceArtifact,
+    DeviceCommand,
     EnrolledDevice,
     EnrolledUser,
     EnterpriseApp,
@@ -31,6 +35,7 @@ from zentral.contrib.mdm.models import (
     StoreApp,
     TargetArtifact,
     UserArtifact,
+    UserCommand,
 )
 from zentral.utils.time import naive_utcnow
 
@@ -1776,7 +1781,7 @@ class TestMDMArtifacts(TestCase):
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
-            (TargetArtifact.Status.INSTALLED, datetime(2001, 2, 3, 4, 5, 6), (10, 5, 2), 0)
+            (TargetArtifact.Status.INSTALLED, datetime(2001, 2, 3, 4, 5, 6), (10, 5, 2), 0, None)
         )
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
@@ -1792,11 +1797,13 @@ class TestMDMArtifacts(TestCase):
                                       'version': 1},
                  'created_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'extra_info': {'active': True, 'valid': 'valid'},
+                 'force_install_requested_at': None,
                  'install_count': 1,
                  'installed_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'max_retry_count': 2,
                  'os_version_at_install_time': '10.5.2',
                  'retry_count': 0,
+                 'retries_exhausted': False,
                  'status': 'Installed',
                  'unique_install_identifier': str(profile_av.pk),
                  'updated_at': datetime(2001, 2, 3, 4, 5, 6).isoformat()
@@ -1816,7 +1823,7 @@ class TestMDMArtifacts(TestCase):
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av2.pk)]
         self.assertEqual(
             serialized_av,
-            (TargetArtifact.Status.INSTALLED, datetime(2002, 3, 4, 5, 6, 7), (10, 5, 3), 0)
+            (TargetArtifact.Status.INSTALLED, datetime(2002, 3, 4, 5, 6, 7), (10, 5, 3), 0, None)
         )
         self.assertEqual(len(post_event.call_args_list), 3)
         created_event = post_event.call_args_list[1].args[0]
@@ -1832,11 +1839,13 @@ class TestMDMArtifacts(TestCase):
                                       'version': 2},
                  'created_at': datetime(2002, 3, 4, 5, 6, 7).isoformat(),
                  'extra_info': {'active': True, 'valid': 'valid'},
+                 'force_install_requested_at': None,
                  'install_count': 1,
                  'installed_at': datetime(2002, 3, 4, 5, 6, 7).isoformat(),
                  'max_retry_count': 2,
                  'os_version_at_install_time': '10.5.3',
                  'retry_count': 0,
+                 'retries_exhausted': False,
                  'status': 'Installed',
                  'unique_install_identifier': str(profile_av2.pk),
                  'updated_at': datetime(2002, 3, 4, 5, 6, 7).isoformat()
@@ -1859,11 +1868,13 @@ class TestMDMArtifacts(TestCase):
                                       'version': 1},
                  'created_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'extra_info': {'active': True, 'valid': 'valid'},
+                 'force_install_requested_at': None,
                  'install_count': 1,
                  'installed_at': datetime(2001, 2, 3, 4, 5, 6).isoformat(),
                  'max_retry_count': 2,
                  'os_version_at_install_time': '10.5.2',
                  'retry_count': 0,
+                 'retries_exhausted': None,
                  'status': 'Installed',
                  'unique_install_identifier': str(profile_av.pk),
                  'updated_at': datetime(2001, 2, 3, 4, 5, 6).isoformat()
@@ -1883,7 +1894,7 @@ class TestMDMArtifacts(TestCase):
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av2.pk)]
         self.assertEqual(
             serialized_av,
-            (TargetArtifact.Status.INSTALLED, datetime(2002, 3, 4, 5, 6, 7), (10, 5, 3), 0)
+            (TargetArtifact.Status.INSTALLED, datetime(2002, 3, 4, 5, 6, 7), (10, 5, 3), 0, None)
         )
 
     @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
@@ -1897,7 +1908,7 @@ class TestMDMArtifacts(TestCase):
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
-            (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0), 0)
+            (TargetArtifact.Status.UNINSTALLED, None, (0, 0, 0), 0, None)
         )
 
     @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
@@ -1910,7 +1921,7 @@ class TestMDMArtifacts(TestCase):
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
-            (TargetArtifact.Status.AWAITING_CONFIRMATION, None, (0, 0, 0), 0)
+            (TargetArtifact.Status.AWAITING_CONFIRMATION, None, (0, 0, 0), 0, None)
         )
 
     @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
@@ -1928,7 +1939,7 @@ class TestMDMArtifacts(TestCase):
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
-            (TargetArtifact.Status.FAILED, None, (0, 0, 0), 1)
+            (TargetArtifact.Status.FAILED, None, (0, 0, 0), 1, None)
         )
         self.assertEqual(
             DeviceArtifact.objects.get(artifact_version=profile_av).extra_info,
@@ -1943,7 +1954,7 @@ class TestMDMArtifacts(TestCase):
         serialized_av = target._serialized_target_artifacts[str(profile_a.pk)]["versions"][str(profile_av.pk)]
         self.assertEqual(
             serialized_av,
-            (TargetArtifact.Status.INSTALLED, datetime(2002, 3, 4, 5, 6, 7), (10, 5, 2), 1)
+            (TargetArtifact.Status.INSTALLED, datetime(2002, 3, 4, 5, 6, 7), (10, 5, 2), 1, None)
         )
         self.assertEqual(
             DeviceArtifact.objects.get(artifact_version=profile_av).extra_info,
@@ -2181,3 +2192,311 @@ class TestMDMArtifacts(TestCase):
             "Machine %s: software update enforcement conflict",
             target.serial_number
         )
+
+    # force_artifact_install
+
+    def test_force_artifact_install_device_blocked(self):
+        _, artifact, _ = self._force_blueprint_artifact()
+        self.enrolled_device.blocked_at = naive_utcnow()
+        target = Target(self.enrolled_device)
+        with self.assertRaises(ForceArtifactInstallError) as cm:
+            target.force_artifact_install(artifact, None)
+        self.assertEqual(str(cm.exception), "Device blocked")
+
+    def test_force_artifact_install_device_checked_out(self):
+        _, artifact, _ = self._force_blueprint_artifact()
+        self.enrolled_device.checkout_at = naive_utcnow()
+        target = Target(self.enrolled_device)
+        with self.assertRaises(ForceArtifactInstallError) as cm:
+            target.force_artifact_install(artifact, None)
+        self.assertEqual(str(cm.exception), "Device checked out")
+
+    def test_force_artifact_install_artifact_not_in_scope(self):
+        artifact, _ = self._force_artifact()
+        target = Target(self.enrolled_device)
+        with self.assertRaises(ForceArtifactInstallError) as cm:
+            target.force_artifact_install(artifact, None)
+        self.assertEqual(str(cm.exception), "Artifact not in scope")
+
+    def test_force_artifact_install_no_target_artifact(self):
+        _, artifact, _ = self._force_blueprint_artifact()
+        target = Target(self.enrolled_device)
+        with self.assertRaises(ForceArtifactInstallError) as cm:
+            target.force_artifact_install(artifact, None)
+        self.assertEqual(
+            str(cm.exception),
+            "No install attempted yet for the artifact version in scope. "
+            "It will be installed at the next connection."
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
+    def test_force_artifact_install_installed_profile(self, patched_naive_utcnow, post_event):
+        patched_naive_utcnow.side_effect = (
+            datetime(2001, 2, 3, 4, 5, 6),
+            datetime(2002, 3, 4, 5, 6, 7),
+            datetime(2003, 4, 5, 6, 7, 8),
+        )
+        _, artifact, (artifact_version,) = self._force_blueprint_artifact()
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_artifact(
+                artifact_version,
+                TargetArtifact.Status.INSTALLED,
+                unique_install_identifier=str(uuid.uuid4()),
+            )
+        self.assertIsNone(Target(self.enrolled_device).next_to_install())
+        request = RequestFactory().post("/", HTTP_USER_AGENT="godzilla")
+        request.user = AnonymousUser()
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target_artifact, deleted_command_count = target.force_artifact_install(artifact, request)
+        self.assertEqual(deleted_command_count, 0)
+        self.assertEqual(target_artifact.artifact_version, artifact_version)
+        self.assertEqual(target_artifact.status, TargetArtifact.Status.INSTALLED)
+        self.assertEqual(target_artifact.force_install_requested_at, datetime(2002, 3, 4, 5, 6, 7))
+        self.assertEqual(target_artifact.retry_count, 1)
+        self.assertEqual(target_artifact.max_retry_count, 3)
+        self.assertEqual(target_artifact.install_count, 1)
+        self.assertEqual(target_artifact.installed_at, datetime(2001, 2, 3, 4, 5, 6))
+        # the artifact version is to install again
+        self.assertEqual(Target(self.enrolled_device).next_to_install(), artifact_version)
+        # two events, the second one for the forced install, with the request in the metadata
+        self.assertEqual(len(post_event.call_args_list), 2)
+        update_event = post_event.call_args_list[0].args[0]
+        force_event = post_event.call_args_list[1].args[0]
+        self.assertEqual(force_event.payload["result"], "updated")
+        self.assertEqual(force_event.payload["channel"], "Device")
+        force_ta_payload = force_event.payload["target_artifact"]
+        self.assertEqual(force_ta_payload["status"], "Installed")
+        self.assertEqual(force_ta_payload["force_install_requested_at"],
+                         datetime(2002, 3, 4, 5, 6, 7).isoformat())
+        self.assertEqual(force_ta_payload["retries_exhausted"], False)
+        self.assertEqual(force_ta_payload["retry_count"], 1)
+        self.assertEqual(force_ta_payload["max_retry_count"], 3)
+        # same payload keys as the events posted by the target artifact updates
+        self.assertEqual(set(force_ta_payload.keys()),
+                         set(update_event.payload["target_artifact"].keys()))
+        self.assertEqual(force_event.metadata.request.user_agent, "godzilla")
+        self.assertEqual(force_event.metadata.machine_serial_number, self.enrolled_device.serial_number)
+        # the acknowledged install clears the pending forced install
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_artifact(
+                artifact_version,
+                TargetArtifact.Status.ACKNOWLEDGED,
+                unique_install_identifier=str(uuid.uuid4()),
+            )
+        target_artifact.refresh_from_db()
+        self.assertIsNone(target_artifact.force_install_requested_at)
+        self.assertEqual(target_artifact.install_count, 2)
+        self.assertEqual(target_artifact.retry_count, 1)
+        self.assertEqual(target_artifact.max_retry_count, 3)
+        self.assertIsNone(Target(self.enrolled_device).next_to_install())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_force_artifact_install_user_channel(self, post_event):
+        _, artifact, (artifact_version,) = self._force_blueprint_artifact(channel=Channel.USER)
+        target = Target(self.enrolled_device, self.enrolled_user)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_artifact(artifact_version, TargetArtifact.Status.INSTALLED)
+        stale_user_command = UserCommand.objects.create(
+            uuid=uuid.uuid4(),
+            enrolled_user=self.enrolled_user,
+            name="InstallProfile",
+            artifact_version=artifact_version,
+        )
+        target = Target(self.enrolled_device, self.enrolled_user)
+        with self.captureOnCommitCallbacks(execute=True):
+            target_artifact, deleted_command_count = target.force_artifact_install(artifact, None)
+        self.assertEqual(deleted_command_count, 1)
+        self.assertEqual(UserCommand.objects.filter(pk=stale_user_command.pk).count(), 0)
+        self.assertIsInstance(target_artifact, UserArtifact)
+        self.assertEqual(target_artifact.enrolled_user, self.enrolled_user)
+        force_event = post_event.call_args_list[-1].args[0]
+        self.assertEqual(force_event.payload["channel"], "User")
+        self.assertEqual(force_event.payload["enrolled_user"],
+                         {"pk": self.enrolled_user.pk, "user_id": self.enrolled_user.user_id})
+        self.assertIsNone(force_event.metadata.request)
+        self.assertEqual(Target(self.enrolled_device, self.enrolled_user).next_to_install(), artifact_version)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_force_artifact_install_sweeps_stale_commands(self, post_event):
+        _, artifact, (artifact_version,) = self._force_blueprint_artifact(artifact_type=Artifact.Type.STORE_APP)
+        _, other_artifact, (other_artifact_version,) = self._force_blueprint_artifact()
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_artifact(artifact_version, TargetArtifact.Status.AWAITING_CONFIRMATION)
+        DeviceCommand.objects.create(
+            uuid=uuid.uuid4(),
+            enrolled_device=self.enrolled_device,
+            name="ManagedApplicationList",
+            artifact_version=artifact_version,
+        )
+        DeviceCommand.objects.create(
+            uuid=uuid.uuid4(),
+            enrolled_device=self.enrolled_device,
+            name="InstalledApplicationList",
+            artifact_version=artifact_version,
+            time=naive_utcnow(),
+            status=Command.Status.NOT_NOW,
+        )
+        processed_command = DeviceCommand.objects.create(
+            uuid=uuid.uuid4(),
+            enrolled_device=self.enrolled_device,
+            name="InstallApplication",
+            artifact_version=artifact_version,
+            time=naive_utcnow(),
+            status=Command.Status.ACKNOWLEDGED,
+        )
+        other_artifact_command = DeviceCommand.objects.create(
+            uuid=uuid.uuid4(),
+            enrolled_device=self.enrolled_device,
+            name="InstallProfile",
+            artifact_version=other_artifact_version,
+        )
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            _, deleted_command_count = target.force_artifact_install(artifact, None)
+        self.assertEqual(deleted_command_count, 2)
+        self.assertEqual(
+            set(DeviceCommand.objects.filter(enrolled_device=self.enrolled_device)
+                                     .values_list("uuid", flat=True)),
+            {processed_command.uuid, other_artifact_command.uuid}
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_target_artifact_retries_exhausted_ddm_ladder(self, post_event):
+        _, artifact, (artifact_version,) = force_blueprint_artifact(
+            blueprint=self.blueprint1,
+            artifact_type=Artifact.Type.CONFIGURATION,
+        )
+        self.enrolled_device.declarative_management = True
+        base_server_token = str(artifact_version.pk)
+
+        def report_failure(reported_server_token):
+            target = Target(self.enrolled_device)
+            with self.captureOnCommitCallbacks(execute=True):
+                target.update_target_artifacts(
+                    [(str(artifact.pk), str(artifact_version.pk), TargetArtifact.Status.FAILED,
+                      {"active": False, "valid": "invalid"}, reported_server_token)]
+                )
+            return post_event.call_args_list[-1].args[0], target
+
+        # first failure, of the initial server token: one retry is scheduled
+        event, target = report_failure(base_server_token)
+        self.assertEqual(event.payload["target_artifact"]["retry_count"], 1)
+        self.assertEqual(event.payload["target_artifact"]["max_retry_count"], 2)
+        self.assertEqual(event.payload["target_artifact"]["retries_exhausted"], False)
+        self.assertEqual(
+            [d["ServerToken"]
+             for d in target.declaration_items["Declarations"]["Configurations"]
+             if d["Identifier"] == f"zentral.declaration.{artifact.pk}"],
+            [f"{base_server_token}.rc-1"]
+        )
+        # second failure, of the first retry: the last retry is scheduled
+        event, target = report_failure(f"{base_server_token}.rc-1")
+        self.assertEqual(event.payload["target_artifact"]["retry_count"], 2)
+        self.assertEqual(event.payload["target_artifact"]["retries_exhausted"], False)
+        # third failure, of the last retry: the retries are exhausted
+        event, target = report_failure(f"{base_server_token}.rc-2")
+        self.assertEqual(event.payload["target_artifact"]["retry_count"], 2)
+        self.assertEqual(event.payload["target_artifact"]["retries_exhausted"], True)
+        self.assertEqual(
+            [d["ServerToken"]
+             for d in target.declaration_items["Declarations"]["Configurations"]
+             if d["Identifier"] == f"zentral.declaration.{artifact.pk}"],
+            [f"{base_server_token}.rc-2"]
+        )
+        # the forced install unblocks the frozen server token
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target_artifact, _ = target.force_artifact_install(artifact, None)
+        self.assertEqual(target_artifact.status, TargetArtifact.Status.FAILED)
+        self.assertEqual(target_artifact.retry_count, 3)
+        self.assertEqual(target_artifact.max_retry_count, 5)
+        target = Target(self.enrolled_device)
+        self.assertEqual(
+            [d["ServerToken"]
+             for d in target.declaration_items["Declarations"]["Configurations"]
+             if d["Identifier"] == f"zentral.declaration.{artifact.pk}"],
+            [f"{base_server_token}.rc-3"]
+        )
+        # the device applies the new server token, the pending forced install is resolved
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_artifacts(
+                [(str(artifact.pk), str(artifact_version.pk), TargetArtifact.Status.INSTALLED,
+                  {"active": True, "valid": "valid"}, f"{base_server_token}.rc-3")]
+            )
+        event = post_event.call_args_list[-1].args[0]
+        self.assertEqual(event.payload["target_artifact"]["status"], "Installed")
+        self.assertEqual(event.payload["target_artifact"]["retries_exhausted"], False)
+        self.assertEqual(event.payload["target_artifact"]["force_install_requested_at"], None)
+        target_artifact.refresh_from_db()
+        self.assertIsNone(target_artifact.force_install_requested_at)
+        self.assertEqual(target_artifact.install_count, 1)
+        self.assertEqual(target_artifact.retry_count, 3)
+        self.assertEqual(target_artifact.max_retry_count, 5)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_target_artifact_retries_exhausted_command_failure(self, post_event):
+        _, artifact, (artifact_version,) = self._force_blueprint_artifact()
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_artifact(artifact_version, TargetArtifact.Status.FAILED)
+        event = post_event.call_args_list[-1].args[0]
+        # no automatic retries for the MDM command installs
+        self.assertEqual(event.payload["target_artifact"]["retries_exhausted"], True)
+
+    def test_target_artifact_retries_exhausted_unknown(self):
+        _, artifact, (artifact_version,) = self._force_blueprint_artifact()
+        self.enrolled_device.declarative_management = True
+        target = Target(self.enrolled_device)
+        result_d = {
+            "_op": "updated",
+            "status": "Failed",
+            "a_type": str(Artifact.Type.CONFIGURATION),
+            "a_pk": str(artifact.pk),
+            "artifact_version_id": str(artifact_version.pk),
+            "retry_count": 1,
+        }
+        # profiles are not DDM managed without the blueprint option
+        self.blueprint1.legacy_profiles_via_ddm = False
+        self.assertEqual(
+            target._target_artifact_retries_exhausted(dict(result_d, a_type=str(Artifact.Type.PROFILE)), "yolo"),
+            True
+        )
+        self.blueprint1.legacy_profiles_via_ddm = True
+        # no reported server token
+        self.assertIsNone(target._target_artifact_retries_exhausted(result_d, None))
+        # no blueprint
+        no_blueprint_target = Target(self.enrolled_device_no_blueprint)
+        self.enrolled_device_no_blueprint.declarative_management = True
+        self.assertIsNone(no_blueprint_target._target_artifact_retries_exhausted(result_d, "yolo"))
+        # artifact not serialized in the blueprint
+        self.assertIsNone(
+            target._target_artifact_retries_exhausted(dict(result_d, a_pk=str(uuid.uuid4())), "yolo")
+        )
+        # artifact version not serialized in the blueprint
+        self.assertIsNone(
+            target._target_artifact_retries_exhausted(
+                dict(result_d, a_pk=str(artifact.pk), artifact_version_id=str(uuid.uuid4())),
+                "yolo"
+            )
+        )
+
+    def test_force_install_requested_store_app_license_missing(self):
+        _, artifact, (artifact_version,) = force_blueprint_artifact(
+            blueprint=self.blueprint1,
+            artifact_type=Artifact.Type.STORE_APP,
+        )
+        DeviceArtifact.objects.create(
+            enrolled_device=self.enrolled_device,
+            artifact_version=artifact_version,
+            status=TargetArtifact.Status.UNINSTALLED,
+            force_install_requested_at=naive_utcnow(),
+        )
+        target = Target(self.enrolled_device)
+        # no device assignment: the missing license check comes first
+        self.assertIsNone(target.next_to_install())
+        self.assertEqual(len(target.missing_asset_assignments), 1)

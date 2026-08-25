@@ -3444,7 +3444,6 @@ class TargetArtifact(models.Model):
         UNINSTALLED = "Uninstalled"
         FAILED = "Failed"
         REMOVAL_FAILED = "RemovalFailed"
-        FORCE_REINSTALL = "ForceReinstall"
 
         @property
         def present(self):
@@ -3455,7 +3454,7 @@ class TargetArtifact(models.Model):
             # higher wins when a device reports the same artifact version more than once in a
             # status report (see get_status_report_target_artifacts_info)
             return (self.FAILED, self.REMOVAL_FAILED, self.UNINSTALLED,
-                    self.AWAITING_CONFIRMATION, self.FORCE_REINSTALL,
+                    self.AWAITING_CONFIRMATION,
                     self.ACKNOWLEDGED, self.INSTALLED).index(self)
 
     artifact_version = models.ForeignKey(ArtifactVersion, on_delete=models.PROTECT)
@@ -3475,12 +3474,40 @@ class TargetArtifact(models.Model):
     install_count = models.IntegerField(default=0)
     retry_count = models.IntegerField(default=0)
     max_retry_count = models.IntegerField(default=0)
+    force_install_requested_at = models.DateTimeField(null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         abstract = True
+
+    def serialize_for_event(self):
+        artifact_version = self.artifact_version
+        artifact = artifact_version.artifact
+        return {
+            "artifact_version": {
+                "pk": str(artifact_version.pk),
+                "version": artifact_version.version,
+                "artifact": {
+                    "pk": str(artifact.pk),
+                    "type": artifact.type,
+                    "name": artifact.name,
+                },
+            },
+            "status": self.status,
+            "extra_info": self.extra_info,
+            "installed_at": self.installed_at.isoformat() if self.installed_at else None,
+            "os_version_at_install_time": self.os_version_at_install_time,
+            "unique_install_identifier": self.unique_install_identifier,
+            "install_count": self.install_count,
+            "retry_count": self.retry_count,
+            "max_retry_count": self.max_retry_count,
+            "force_install_requested_at": (self.force_install_requested_at.isoformat()
+                                           if self.force_install_requested_at else None),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
 
 
 class DeviceArtifact(TargetArtifact):
