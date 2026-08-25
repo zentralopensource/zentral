@@ -22,8 +22,6 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
     installed_size = installer_item_size * 10  # TODO: bug
     installcheck_script = (
         '#!/bin/bash\n'
-        # do not install if the Turbo agent is present
-        '[[ -d "/opt/zentral/lib/Turbo.app" ]] && exit 1\n'
         f'ENROLLMENT_PLIST="/usr/local/zentral/{builder.local_subfolder}/enrollment.plist"\n'
         'PLUTIL="/usr/bin/plutil"\n'
         # the tests of the builder come before the ones below, so that they can skip the installation

@@ -15,6 +15,10 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     build_tmpl_dir = os.path.join(BASE_DIR, "build.tmpl")
     local_subfolder = "munki"
 
+    def get_extra_installcheck_script(self):
+        # the Turbo agent runs the Zentral preflight and postflight itself
+        return '[[ -d "/opt/zentral/lib/Turbo.app" ]] && exit 1\n'
+
     def extra_build_steps(self):
         tls_hostname = self.get_tls_hostname()
         # munki zentral preflight and postflight script

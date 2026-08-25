@@ -175,6 +175,23 @@ class MonolithModelsTestCase(TestCase):
         self.assertEqual(sorted_objects(self.manifest.catalogs([self.tag_2, self.tag_1])),
                          sorted_objects([self.catalog_1, self.catalog_2]))
 
+    def test_munki_manifest_enrollment_package_installcheck_script_skips_turbo_machines(self):
+        mep = force_manifest_enrollment_package(self.manifest, module="munki")
+        mep.refresh_from_db()
+        installcheck_script = mep.pkg_info["installcheck_script"]
+        # the Turbo test comes before every test that installs the package
+        self.assertIn(
+            'PLUTIL="/usr/bin/plutil"\n'
+            '[[ -d "/opt/zentral/lib/Turbo.app" ]] && exit 1\n'
+            '[[ ! -f "$ENROLLMENT_PLIST" ]] && exit 0\n',
+            installcheck_script
+        )
+
+    def test_osquery_manifest_enrollment_package_installcheck_script_installs_on_turbo_machines(self):
+        mep = force_manifest_enrollment_package(self.manifest, module="osquery")
+        mep.refresh_from_db()
+        self.assertNotIn("Turbo.app", mep.pkg_info["installcheck_script"])
+
     def test_manifest_enrollment_package(self):
         mep_1 = force_manifest_enrollment_package(self.manifest, module="munki")
         mep_2 = force_manifest_enrollment_package(self.manifest, module="osquery",

@@ -155,6 +155,8 @@ The Osquery enrollment package finds the `osqueryd` binary at installation time 
 
 Munki installs the Osquery enrollment package again when `osqueryd` moves. The postinstall script writes the path that it found in `/usr/local/zentral/osquery/enrollment.plist`, and the installcheck script of the pkginfo compares it with the path on the machine.
 
+Munki installs the Osquery enrollment package on a machine that has the Turbo agent now. The installcheck script of every enrollment package stopped the installation if `/opt/zentral/lib/Turbo.app` was present. Only the Munki enrollment package makes this test now, because the Turbo agent runs the Zentral preflight and the postflight itself.
+
 
 ## 2026.5
 
