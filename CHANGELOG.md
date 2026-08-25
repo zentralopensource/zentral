@@ -21,6 +21,12 @@ Only the devices that a synchronization reports get the new attributes. A delta 
 
 Apple can throttle the assignment of the default enrollment. Zentral counts the throttled devices apart from the failed ones now, and assigns them again after the delay Apple gives.
 
+An operator can force the install of an artifact on an enrolled device or on an enrolled user. Use it when a target artifact is stuck: a certificate distributed via DDM that failed and does not recover, a Store App that never updates, or an installed profile that must be applied again. The *Force install* button is on the artifact rows of the device and user pages, and the new `force_install` API endpoints do the same. The action is gated by the new `MDM::Action::"forceInstallArtifact"` PBAC action, with the artifact type, ID, name and the channel in the context. The stale pending commands linked to the artifact are deleted, and the target is notified.
+
+New paginated API endpoints list the target artifacts of the enrolled devices and of the enrolled users, with device or user, artifact, status and pending forced install filters. Filter on an artifact and a status to find the devices where it is stuck, fleet wide.
+
+The `target_artifact_update` events carry two new attributes: `force_install_requested_at`, set while a forced install is pending, and `retries_exhausted`, `true` on the failure of the final install attempt of an artifact, when no automatic retry will follow. The event of a forced install request carries the full request context of the operator.
+
 
 #### Monolith
 

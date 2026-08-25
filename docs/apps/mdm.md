@@ -215,6 +215,43 @@ These configurations are typically applied by assigning a dedicated blueprint du
 
 For more details on configuring Automated Device Enrollment (ADE), refer to the [Setup an Enrollment Profile](#setup-an-enrollment-profile) section.
 
+## Force artifact install
+
+An operator can force the install of an artifact on one enrolled device or on one enrolled user. Use it when a target artifact is stuck. Examples: a certificate distributed via DDM that failed and does not recover, a Store App that never updates, or an installed profile that must be applied again.
+
+The action works on the recorded install state: the target artifact of the artifact version in scope must exist. When there is no target artifact, the artifact is a new install. Poke the device instead, and the normal pipeline installs the artifact at the next connection. The action is not available when the device is blocked or checked out.
+
+When the operator forces an install:
+
+- Zentral deletes the pending stale commands linked to the artifact. If they were processed later, they could resolve the forced install with the state of a previous install attempt.
+- Zentral bumps the retry counts of the target artifact. For a DDM artifact, this changes the `ServerToken` of the declaration, and the device applies the declaration again during the next declarative management synchronization. A failed DDM artifact frozen at the maximum retry count is unblocked. For the other artifacts, Zentral sends a new install command at the next connection.
+- Zentral notifies the target (APNs), so that this happens straight away.
+
+A forced install grants one install attempt, plus automatic retries for a DDM artifact if the attempt fails. Any processed target artifact update resolves the pending forced install: a successful install, a failed attempt, or a status report that covers the artifact.
+
+In the web console, the *Force install* button is on the artifact rows of the device and user pages. It only shows for the artifact version in scope. The [HTTP API endpoints](#apimdmdevicesintpkartifactsuuidartifact_pkforce_install) are documented below.
+
+### Force artifact install permission
+
+The action is gated by the `MDM::Action::"forceInstallArtifact"` PBAC action. It takes the inventory machine resource, so a policy can be scoped to a machine or to a meta business unit. The context carries `artifactType`, `artifactID`, `artifactName` and `channel`, so a policy can also be scoped to some artifacts. Example:
+
+```
+permit (
+  principal in Role::"42",
+  action == MDM::Action::"forceInstallArtifact",
+  resource
+) when {
+  context.artifactType == "Store App"
+};
+```
+
+### Force artifact install events
+
+Each change of a target artifact is recorded as a `target_artifact_update` event. The event for a forced install carries the full request context of the operator: the authenticated user, the source IP, the user agent and the resolved view name. The `target_artifact` payload has two attributes for this feature:
+
+- `force_install_requested_at`: set when the forced install is requested, and back to `null` when it is resolved.
+- `retries_exhausted`: `true` on the failure event of the final install attempt, when no automatic retry will follow. Use it to find the artifacts that will not recover on their own.
+
 ## FileVault Configuration
 
 Zentral manages FileVault settings for full disk encryption on macOS devices via MDM. Using a dedicated configuration, it allows the creation and assignment of an individual FileVault configuration to one or more MDM Blueprints. This approach provides centralized control over FileVault application, user experience, and key management, ensuring compliance with the organization’s data encryption policies.
@@ -1027,6 +1064,47 @@ Response:
 }
 ```
 
+### `/api/mdm/devices/<int:pk>/artifacts/<uuid:artifact_pk>/force_install/`
+
+ * method: `POST`
+ * PBAC action: `MDM::Action::"forceInstallArtifact"`
+
+Use this endpoint to force the install of an artifact on an enrolled device. See [Force artifact install](#force-artifact-install). The updated target artifact is returned, with the number of stale commands that were deleted.
+
+Example:
+
+```bash
+curl -XPOST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/mdm/devices/27/artifacts/b89d21a5-2bd3-4b06-b98e-25d405e5f0ea/force_install/
+```
+
+Response:
+
+```json
+{
+  "target_artifact": {
+    "id": 1443,
+    "enrolled_device": 27,
+    "artifact": "b89d21a5-2bd3-4b06-b98e-25d405e5f0ea",
+    "artifact_version": "c9a4d15e-0e18-4c05-8f39-1f47f8f3ac2c",
+    "version": 3,
+    "status": "Failed",
+    "extra_info": {"active": false, "valid": "invalid"},
+    "installed_at": null,
+    "os_version_at_install_time": null,
+    "unique_install_identifier": "",
+    "install_count": 0,
+    "retry_count": 3,
+    "max_retry_count": 5,
+    "force_install_requested_at": "2026-08-25T10:12:13.297831",
+    "created_at": "2026-08-20T09:14:47.183947",
+    "updated_at": "2026-08-25T10:12:13.298004"
+  },
+  "deleted_command_count": 1
+}
+```
+
 ### `/api/mdm/devices/<int:pk>/block/`
 
  * method: `POST`
@@ -1375,6 +1453,58 @@ Response:
 }
 ```
 
+### `/api/mdm/devices/artifacts/`
+
+ * method: `GET`
+ * PBAC action: `MDM::Action::"viewDeviceArtifact"`
+ * available filters:
+     * `enrolled_device`
+     * `artifact`
+     * `status`
+     * `force_install_requested`
+ * pagination:
+     * `limit` (max `500`, `50` by default)
+     * `offset`
+
+Use this endpoint to list the target artifacts of the enrolled devices: the install state of each artifact version on each device, with the install and retry counts. Filter on `enrolled_device` for the artifacts of one device, or on `artifact` and `status` to find the devices where an artifact is stuck, fleet wide.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/mdm/devices/artifacts/?enrolled_device=27&status=Failed"
+```
+
+Response:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1443,
+      "enrolled_device": 27,
+      "artifact": "b89d21a5-2bd3-4b06-b98e-25d405e5f0ea",
+      "artifact_version": "c9a4d15e-0e18-4c05-8f39-1f47f8f3ac2c",
+      "version": 3,
+      "status": "Failed",
+      "extra_info": {"active": false, "valid": "invalid"},
+      "installed_at": null,
+      "os_version_at_install_time": null,
+      "unique_install_identifier": "",
+      "install_count": 0,
+      "retry_count": 2,
+      "max_retry_count": 2,
+      "force_install_requested_at": null,
+      "created_at": "2026-08-20T09:14:47.183947",
+      "updated_at": "2026-08-25T10:03:12.746519"
+    }
+  ]
+}
+```
+
 ### `/api/mdm/devices/commands/`
 
  * method: `GET`
@@ -1602,6 +1732,28 @@ Response:
   "task_result_url": "/api/task_result/b1512b8d-1e17-4181-a1c3-93a7243fddd4/"
 }
 ```
+
+### `/api/mdm/users/artifacts/`
+
+ * method: `GET`
+ * PBAC action: `MDM::Action::"viewUserArtifact"`
+ * available filters:
+     * `enrolled_user`
+     * `artifact`
+     * `status`
+     * `force_install_requested`
+ * pagination:
+     * `limit` (max `500`, `50` by default)
+     * `offset`
+
+Use this endpoint to list the target artifacts of the enrolled users. Same response format as the [enrolled device endpoint](#apimdmdevicesartifacts), with an `enrolled_user` attribute instead of `enrolled_device`.
+
+### `/api/mdm/users/<int:pk>/artifacts/<uuid:artifact_pk>/force_install/`
+
+ * method: `POST`
+ * PBAC action: `MDM::Action::"forceInstallArtifact"`
+
+Use this endpoint to force the install of an artifact on an enrolled user. Same behavior and response format as the [enrolled device endpoint](#apimdmdevicesintpkartifactsuuidartifact_pkforce_install).
 
 ### `/api/mdm/users/commands/`
 
