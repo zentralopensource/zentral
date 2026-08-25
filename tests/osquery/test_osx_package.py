@@ -1,0 +1,82 @@
+import gzip
+import io
+import os
+import subprocess
+import tempfile
+from unittest.mock import patch
+from django.test import TestCase
+from zentral.contrib.osquery.osx_package.builder import OSQUERYD_PATHS, OsqueryZentralEnrollPkgBuilder
+from .utils import force_enrollment
+
+
+ORBIT_PATH = "/opt/orbit/bin/osqueryd/macos-app/stable/osquery.app/Contents/MacOS/osqueryd"
+STANDARD_PATH = "/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd"
+
+
+class OsqueryOSXPackageTestCase(TestCase):
+    @staticmethod
+    def _extract_scripts(package_content):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            package_path = os.path.join(tmpdir, "test.pkg")
+            with open(package_path, "wb") as f:
+                f.write(package_content)
+            scripts_arch = subprocess.run(["xar", "-f", package_path, "-x", "--to-stdout", "Scripts"],
+                                          capture_output=True, check=True).stdout
+            scripts_dir = os.path.join(tmpdir, "scripts")
+            os.mkdir(scripts_dir)
+            subprocess.run(["bsdcpio", "-i", "--quiet"],
+                           input=gzip.GzipFile(fileobj=io.BytesIO(scripts_arch)).read(),
+                           cwd=scripts_dir, check=True, capture_output=True)
+            scripts = {}
+            for name in ("preinstall", "postinstall"):
+                with open(os.path.join(scripts_dir, name)) as f:
+                    scripts[name] = f.read()
+            return scripts
+
+    def _build_scripts(self, enrollment=None):
+        if enrollment is None:
+            enrollment = force_enrollment()
+        builder = OsqueryZentralEnrollPkgBuilder(enrollment)
+        _, _, package_content = builder.build()
+        return self._extract_scripts(package_content)
+
+    # osqueryd paths
+
+    def test_osqueryd_paths_order(self):
+        self.assertEqual(OSQUERYD_PATHS[0], STANDARD_PATH)
+        self.assertEqual(OSQUERYD_PATHS[1], ORBIT_PATH)
+        self.assertEqual(OSQUERYD_PATHS[-1], "/usr/local/bin/osqueryd")
+
+    def test_scripts_have_no_placeholder_left(self):
+        for name, content in self._build_scripts().items():
+            self.assertNotIn("%", content, name)
+
+    def test_scripts_include_all_osqueryd_paths(self):
+        scripts = self._build_scripts()
+        serialized_paths = " ".join(f'"{p}"' for p in OSQUERYD_PATHS)
+        for name, content in scripts.items():
+            self.assertIn(f"for CANDIDATE_PATH in {serialized_paths}", content, name)
+
+    def test_preinstall_requires_an_osqueryd_if_none_included(self):
+        scripts = self._build_scripts()
+        self.assertIn('if [[ -z "$OSQUERYD_PATH" ]] && [[ "0" != "1" ]]', scripts["preinstall"])
+
+    def test_preinstall_does_not_require_an_osqueryd_if_one_is_included(self):
+        enrollment = force_enrollment()
+        enrollment.osquery_release = "5.10.2"
+        # keep a component package, the release asset is not available in the tests
+        with patch.object(OsqueryZentralEnrollPkgBuilder, "get_extra_packages", return_value=[]), \
+             patch.object(OsqueryZentralEnrollPkgBuilder, "get_product_archive_title", return_value=None):
+            scripts = self._build_scripts(enrollment)
+        self.assertIn('if [[ -z "$OSQUERYD_PATH" ]] && [[ "1" != "1" ]]', scripts["preinstall"])
+
+    def test_postinstall_updates_the_launch_daemon_and_the_enrollment_plist(self):
+        postinstall = self._build_scripts()["postinstall"]
+        self.assertIn(
+            '/usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $OSQUERYD_PATH" "$ZENTRAL_OSQUERY_PLIST"',
+            postinstall
+        )
+        self.assertIn(
+            '/usr/bin/plutil -replace osqueryd_path -string "$OSQUERYD_PATH" "$ENROLLMENT_PLIST"',
+            postinstall
+        )

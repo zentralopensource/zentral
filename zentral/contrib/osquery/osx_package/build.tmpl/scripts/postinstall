@@ -1,17 +1,25 @@
 #!/bin/bash
 # Postinstall script
 
-OSQUERYD_PATH="/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd"
-PLIST_OSQUERYD_PATH="/usr/local/bin/osqueryd"
+ZENTRAL_OSQUERY_PLIST="/Library/LaunchDaemons/pro.zentral.osqueryd.plist"
 
-# symlink for launch daemon plist
-if [[ -e "$OSQUERYD_PATH" ]]
+OSQUERYD_PATH=""
+for CANDIDATE_PATH in %OSQUERYD_PATHS%
+do
+    if [[ -x "$CANDIDATE_PATH" ]]
+    then
+        OSQUERYD_PATH="$CANDIDATE_PATH"
+        break
+    fi
+done
+
+if [[ -n "$OSQUERYD_PATH" ]]
 then
-    ln -s "$OSQUERYD_PATH" "$PLIST_OSQUERYD_PATH"
+    /usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $OSQUERYD_PATH" "$ZENTRAL_OSQUERY_PLIST"
 fi
 
 # load launch daemon
-/bin/launchctl load -w "/Library/LaunchDaemons/pro.zentral.osqueryd.plist"
+/bin/launchctl load -w "$ZENTRAL_OSQUERY_PLIST"
 
 # write zentral base url
 /usr/bin/defaults write /Library/Preferences/io.zentral.plist base_url "https://%TLS_HOSTNAME%"

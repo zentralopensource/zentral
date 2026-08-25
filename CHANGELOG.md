@@ -151,6 +151,8 @@ The MDM software update enforcement API rejects a null delay in days or local ti
 
 Fixed the scope of a Monolith sub manifest package that uses the *Default Installs* key. Zentral put the package in the `default_installs` of every machine, and ignored the excluded tags and the shards. A machine out of scope kept a self-serve entry that can install the package later, with no request from the user. The web console form also removed the excluded tags and the shards from a package that uses the *Managed Updates* key.
 
+The Osquery enrollment package finds the `osqueryd` binary at installation time now, and writes its path in the launch daemon. It looks at the standard location, `/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd`, then at the location of the Fleet orbit agent, `/opt/orbit/bin/osqueryd/macos-app/stable/osquery.app/Contents/MacOS/osqueryd`, then at the `/usr/local/bin/osqueryd` symbolic link. Before, the launch daemon always started `/usr/local/bin/osqueryd`, and the package made that symbolic link only for the standard location. On a machine with osquery in a different place, the installation reported no error and the daemon did not start. The installation stops with an error now if it finds no `osqueryd` and the package includes none.
+
 
 ## 2026.5
 

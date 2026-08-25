@@ -6,6 +6,14 @@ from zentral.contrib.osquery.releases import get_osquery_local_asset
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# tried in this order. the second path is the one the Fleet orbit agent uses, the last one is the symbolic
+# link that the osquery package makes, for an installation in a different place.
+OSQUERYD_PATHS = (
+    "/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd",
+    "/opt/orbit/bin/osqueryd/macos-app/stable/osquery.app/Contents/MacOS/osqueryd",
+    "/usr/local/bin/osqueryd",
+)
+
 
 class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     name = "Zentral Osquery Enrollment"
@@ -32,15 +40,26 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
             extra_packages.append(get_osquery_local_asset(release, ".pkg"))
         return extra_packages
 
-    def extra_build_steps(self):
-        # enroll secret secret in preinstall
-        self.replace_in_file(self.get_build_path("scripts", "preinstall"),
-                             (("%ENROLL_SECRET_SECRET%", self.build_kwargs["enrollment_secret_secret"]),))
+    @staticmethod
+    def _get_serialized_osqueryd_paths():
+        return " ".join(f'"{p}"' for p in OSQUERYD_PATHS)
 
-        # tls_hostname in postinstall
+    def extra_build_steps(self):
+        osqueryd_paths_replacement = ("%OSQUERYD_PATHS%", self._get_serialized_osqueryd_paths())
+
+        # enroll secret secret and osqueryd paths in preinstall
+        self.replace_in_file(
+            self.get_build_path("scripts", "preinstall"),
+            (("%ENROLL_SECRET_SECRET%", self.build_kwargs["enrollment_secret_secret"]),
+             # the package installs an osqueryd, so the machine does not need one already
+             ("%OSQUERYD_INCLUDED%", "1" if self.build_kwargs.get("release") else "0"),
+             osqueryd_paths_replacement)
+        )
+
+        # tls_hostname and osqueryd paths in postinstall
         tls_hostname = self.get_tls_hostname()
-        hostname_replacement = (("%TLS_HOSTNAME%", tls_hostname),)
-        self.replace_in_file(self.get_build_path("scripts", "postinstall"), hostname_replacement)
+        self.replace_in_file(self.get_build_path("scripts", "postinstall"),
+                             (("%TLS_HOSTNAME%", tls_hostname), osqueryd_paths_replacement))
 
         # Extra flags
         extra_flags = self.build_kwargs["serialized_flags"]

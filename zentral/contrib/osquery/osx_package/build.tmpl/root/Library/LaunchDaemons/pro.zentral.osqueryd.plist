@@ -10,7 +10,7 @@
   <string>pro.zentral.osqueryd</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/osqueryd</string>
+    <string>/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd</string>
     <string>--flagfile=/usr/local/zentral/osquery/flagfile.txt</string>
   </array>
   <key>RunAtLoad</key>

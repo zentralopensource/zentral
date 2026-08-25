@@ -8,6 +8,23 @@ VENDOR_OSQUERY_PLIST="/Library/LaunchDaemons/com.facebook.osqueryd.plist"
 LEGACY_WATCHDOG_PLIST="/Library/LaunchDaemons/io.zentral.osquery.watchdog.plist"
 ZENTRAL_OSQUERY_PLIST="/Library/LaunchDaemons/pro.zentral.osqueryd.plist"
 
+# stop before the steps below remove the osquery database, if the launch daemon has no osqueryd to start
+OSQUERYD_PATH=""
+for CANDIDATE_PATH in %OSQUERYD_PATHS%
+do
+    if [[ -x "$CANDIDATE_PATH" ]]
+    then
+        OSQUERYD_PATH="$CANDIDATE_PATH"
+        break
+    fi
+done
+
+if [[ -z "$OSQUERYD_PATH" ]] && [[ "%OSQUERYD_INCLUDED%" != "1" ]]
+then
+    echo "Could not find osqueryd in %OSQUERYD_PATHS%" >&2
+    exit 1
+fi
+
 # unload and disable the standard Osquery launch daemon
 if [[ -e "$VENDOR_OSQUERY_PLIST" ]]; then
     /bin/launchctl unload -w "$VENDOR_OSQUERY_PLIST"
