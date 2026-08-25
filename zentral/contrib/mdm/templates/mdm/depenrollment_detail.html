@@ -245,6 +245,10 @@
         <td>{{ object.await_device_configured|yesno }}</td>
         </tr>
         <tr>
+        <th>await declarations timeout</th>
+        <td>{% if object.await_declarations_timeout %}{{ object.await_declarations_timeout }} min{% else %}-{% endif %}</td>
+        </tr>
+        <tr>
         <th>auto advance setup</th>
         <td>{{ object.auto_advance_setup|yesno }}</td>
         </tr>

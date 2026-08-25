@@ -911,6 +911,25 @@ class Target:
             if not self._is_artifact_version_license_missing(artifact_version):
                 yield artifact, artifact_version, retry_count
 
+    def ddm_declarations_pending(self):
+        """True while a declaration we advertised has not been reported by the device yet.
+
+        A declaration the device evaluated is done, whatever the outcome: Installed, Failed, or
+        Uninstalled because it is valid but inactive. Only the ones it has said nothing about
+        yet, and the ones it is still validating, are pending. Presence of the target artifact
+        row is the signal, not the status: an unreported version defaults to Uninstalled, which
+        a deliberately inactive declaration also reports.
+        """
+        for artifact, artifact_version, _ in self.iter_declaration_artifacts():
+            versions = self._serialized_target_artifacts.get(artifact["pk"], {}).get("versions", {})
+            try:
+                status = versions[artifact_version["pk"]][0]
+            except KeyError:
+                return True
+            if status == TargetArtifact.Status.AWAITING_CONFIRMATION:
+                return True
+        return False
+
     # https://developer.apple.com/documentation/devicemanagement/declarationitemsresponse/manifestdeclarationitems
     @cached_property
     def _declaration_items_and_snapshot(self):

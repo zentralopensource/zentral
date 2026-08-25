@@ -2015,6 +2015,14 @@ class DEPVirtualServer(models.Model):
         return d
 
 
+# Declarations scoped to the Setup Assistant
+
+
+DEFAULT_AWAIT_DECLARATIONS_TIMEOUT = 5
+MIN_AWAIT_DECLARATIONS_TIMEOUT = 1
+MAX_AWAIT_DECLARATIONS_TIMEOUT = 60
+
+
 class DEPEnrollment(MDMEnrollment):
 
     class UsernamePattern(models.TextChoices):
@@ -2086,6 +2094,15 @@ class DEPEnrollment(MDMEnrollment):
         help_text="If true, the device will not continue in Setup Assistant "
                   "until the MDM server sends a command that states the device is configured. "
                   "Required when using the authenticated user details or for the extra admin."
+    )
+    await_declarations_timeout = models.IntegerField(
+        default=DEFAULT_AWAIT_DECLARATIONS_TIMEOUT,
+        validators=[MinValueValidator(MIN_AWAIT_DECLARATIONS_TIMEOUT),
+                    MaxValueValidator(MAX_AWAIT_DECLARATIONS_TIMEOUT)],
+        help_text="While the device awaits the DeviceConfigured command, delay in minutes after which it is "
+                  "sent even if the declarations scoped to the Setup Assistant have not been reported. "
+                  "The device is notified as soon as it reports them, so this deadline is only reached when "
+                  "it reports nothing. 5 min by default, 1 min min, 1 hour max."
     )
     # configuration_web_url is automatically set for authentication or direct MDM payload download
     department = models.CharField(max_length=125, blank=True)  # see DEPARTMENT_INVALID error

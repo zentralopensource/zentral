@@ -103,6 +103,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                      "de-await_device_configured": "on",
                                      "de-admin_password_complexity": 3,
                                      "de-admin_password_rotation_delay": 60,
+                                     "de-await_declarations_timeout": 5,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -126,6 +127,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                      "de-admin_short_name": "fomo",
                                      "de-admin_password_complexity": 3,
                                      "de-admin_password_rotation_delay": 60,
+                                     "de-await_declarations_timeout": 5,
                                      "es-meta_business_unit": self.mbu.pk},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
@@ -240,7 +242,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                      "es-meta_business_unit": self.mbu.pk,
                                      "de-is_supervised": "on",
                                      "de-admin_password_complexity": 3,
-                                     "de-admin_password_rotation_delay": 60},
+                                     "de-admin_password_rotation_delay": 60,
+                                     "de-await_declarations_timeout": 5},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
@@ -266,7 +269,8 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                      "es-meta_business_unit": self.mbu.pk,
                                      "de-is_supervised": "on",
                                      "de-admin_password_complexity": 3,
-                                     "de-admin_password_rotation_delay": 60},
+                                     "de-admin_password_rotation_delay": 60,
+                                     "de-await_declarations_timeout": 5},
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_form.html")
@@ -304,6 +308,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                      "de-admin_short_name": "fomo",
                                      "de-admin_password_complexity": 3,
                                      "de-admin_password_rotation_delay": 60,
+                                     "de-await_declarations_timeout": 5,
                                      "de-await_device_configured": "on",
                                      "de-admin_password": "1234",
                                      "de-ssp-Accessibility": "on",
@@ -331,6 +336,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(enrollment.admin_short_name, "fomo")
         self.assertEqual(enrollment.admin_password_complexity, 3)
         self.assertEqual(enrollment.admin_password_rotation_delay, 60)
+        self.assertEqual(enrollment.await_declarations_timeout, 5)
         client.add_profile.assert_called_once()
         self.assertEqual(enrollment.uuid, profile_uuid)
         self.assertContains(response, "OS version &lt; 15")
@@ -504,6 +510,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                          "de-admin_short_name": "Fomo",
                                          "de-admin_password_complexity": 2,
                                          "de-admin_password_rotation_delay": 15,
+                                         "de-await_declarations_timeout": 5,
                                          "de-await_device_configured": "on",
                                          "es-meta_business_unit": self.mbu.pk},
                                         follow=True)
@@ -543,6 +550,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                          "de-virtual_server": enrollment.virtual_server.pk,
                                          "de-admin_password_complexity": 3,
                                          "de-admin_password_rotation_delay": 60,
+                                         "de-await_declarations_timeout": 5,
                                          "de-is_mdm_removable": "on",
                                          "es-meta_business_unit": self.mbu.pk},
                                         follow=True)
@@ -576,6 +584,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                          "de-admin_short_name": "fomo2",
                                          "de-admin_password_complexity": 2,
                                          "de-admin_password_rotation_delay": 15,
+                                         "de-await_declarations_timeout": 5,
                                          "de-await_device_configured": "on",
                                          "es-meta_business_unit": self.mbu.pk},
                                         follow=True)
@@ -617,6 +626,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                                          "de-hidden_admin": "on",
                                          "de-admin_password_complexity": 2,
                                          "de-admin_password_rotation_delay": 15,
+                                         "de-await_declarations_timeout": 5,
                                          "de-await_device_configured": "on",
                                          "es-meta_business_unit": self.mbu.pk},
                                         follow=True)
