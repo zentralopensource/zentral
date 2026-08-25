@@ -83,7 +83,10 @@ class CursorIterator(object):
 class DEPClient(object):
     API_URL = "https://mdmenrollment.apple.com/"
     TOKEN_HEADER = "X-ADM-Auth-Session"
-    SERVER_PROTOCOL_VERSION = "3"
+    # Apple never rejects this header, it clamps to the newest version it knows. A high number
+    # would opt us into whatever ships next, unannounced, so this is pinned to the newest version
+    # the Device assignment documentation describes.
+    SERVER_PROTOCOL_VERSION = "10"
 
     def __init__(self, consumer_key, consumer_secret, access_token, access_secret, batch_request_limit=None):
         self.default_session = Session()
