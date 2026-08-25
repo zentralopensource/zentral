@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+from base.utils import deployment_info
 from django.test import TestCase
 from requests import RequestException
 
@@ -299,6 +300,21 @@ class TestDEPClientDeviceChunks(TestCase):
         response = self.dep_client().disown_devices(serial_numbers)
         self.assertEqual(len(send_request.call_args_list), 2)
         self.assertEqual(len(response["devices"]), DEVICE_BATCH_SIZE + 1)
+
+
+class TestDEPClientSession(TestCase):
+    maxDiff = None
+
+    def test_the_sessions_name_zentral_in_the_user_agent(self):
+        client = build_client()
+        # the service answers USER_AGENT_INVALID to the default user agent of the requests library
+        self.assertEqual(client.default_session.headers["User-Agent"], deployment_info.user_agent)
+        self.assertEqual(client.oauth_session.headers["User-Agent"], deployment_info.user_agent)
+        self.assertTrue(client.default_session.headers["User-Agent"].startswith("Zentral/"))
+
+    def test_the_default_session_carries_the_protocol_version(self):
+        client = build_client()
+        self.assertEqual(client.default_session.headers["X-Server-Protocol-Version"], "10")
 
 
 class TestDEPClientTransport(TestCase):

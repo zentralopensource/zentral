@@ -11,6 +11,8 @@ from itertools import islice
 from requests import Session, RequestException
 from requests_oauthlib import OAuth1Session
 
+from base.utils import deployment_info
+
 logger = logging.getLogger("zentral.contrib.mdm.dep_client")
 
 
@@ -92,13 +94,17 @@ class DEPClient(object):
         self.default_session = Session()
         self.default_session.headers.update({
             "X-Server-Protocol-Version": self.SERVER_PROTOCOL_VERSION,
-            "Content-Type": "application/json;charset=UTF8"
+            "Content-Type": "application/json;charset=UTF8",
+            # the service answers USER_AGENT_INVALID to the default user agent of the requests
+            # library, so Zentral names itself here like it does in its other clients
+            "User-Agent": deployment_info.user_agent,
         })
         self.oauth_session = OAuth1Session(client_key=consumer_key,
                                            client_secret=consumer_secret,
                                            resource_owner_key=access_token,
                                            resource_owner_secret=access_secret,
                                            realm='ADM')
+        self.oauth_session.headers.update({"User-Agent": deployment_info.user_agent})
         # None: ask Apple. An explicit value overrides what the account detail advertises.
         self.batch_request_limit = batch_request_limit
         self._account = None
