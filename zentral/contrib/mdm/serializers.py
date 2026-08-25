@@ -47,6 +47,7 @@ from .models import (
     DEPEnrollment,
     DEPEnrollmentCustomView,
     DEPVirtualServer,
+    DeviceArtifact,
     DeviceCommand,
     EnrolledDevice,
     EnrolledUser,
@@ -66,6 +67,7 @@ from .models import (
     SCEPIssuer,
     SoftwareUpdateEnforcement,
     StoreApp,
+    UserArtifact,
     UserCommand,
 )
 from .payloads import get_configuration_profile_info
@@ -73,6 +75,42 @@ from .utils import get_provisioning_profile_info
 from .validators import DEPEnrollmentValidator
 
 logger = logging.getLogger("zentral.contrib.mdm.serializers")
+
+
+class BaseTargetArtifactSerializer(serializers.ModelSerializer):
+    artifact = serializers.UUIDField(source="artifact_version.artifact_id", read_only=True)
+    version = serializers.IntegerField(source="artifact_version.version", read_only=True)
+
+    class Meta:
+        fields = (
+            "id",
+            "artifact",
+            "artifact_version",
+            "version",
+            "status",
+            "extra_info",
+            "installed_at",
+            "os_version_at_install_time",
+            "unique_install_identifier",
+            "install_count",
+            "retry_count",
+            "max_retry_count",
+            "force_install_requested_at",
+            "created_at",
+            "updated_at",
+        )
+
+
+class DeviceArtifactSerializer(BaseTargetArtifactSerializer):
+    class Meta(BaseTargetArtifactSerializer.Meta):
+        model = DeviceArtifact
+        fields = ("enrolled_device",) + BaseTargetArtifactSerializer.Meta.fields
+
+
+class UserArtifactSerializer(BaseTargetArtifactSerializer):
+    class Meta(BaseTargetArtifactSerializer.Meta):
+        model = UserArtifact
+        fields = ("enrolled_user",) + BaseTargetArtifactSerializer.Meta.fields
 
 
 class DeviceCommandSerializer(serializers.ModelSerializer):
