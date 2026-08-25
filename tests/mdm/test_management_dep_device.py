@@ -317,6 +317,31 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
         post_event.assert_not_called()
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_profile_post_throttled(self, from_dep_virtual_server):
+        enrollment = force_dep_enrollment(self.mbu)
+        device = force_dep_device(server=enrollment.virtual_server)
+        client = Mock()
+        client.assign_profile.return_value = {"devices": {device.serial_number: "THROTTLED"},
+                                              "retry_after_seconds": 300}
+        from_dep_virtual_server.return_value = client
+        self.login("mdm.change_depdevice")
+        response = self.client.post(
+            reverse("mdm:assign_dep_device_profile", args=(device.pk,)),
+            {"enrollment": enrollment.pk},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/depdevice_form.html")
+        device.refresh_from_db()
+        self.assertIsNone(device.enrollment)
+        # the operator is told to come back, not that the assignment failed
+        self.assertFormError(
+            response.context["form"], None,
+            f"Apple is throttling the assignment of profile {enrollment.uuid} "
+            f"to device {device.serial_number}, retry after: 300s"
+        )
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
     def test_assign_profile_post_err(self, from_dep_virtual_server):
         enrollment = force_dep_enrollment(self.mbu)
         device = force_dep_device(server=enrollment.virtual_server)

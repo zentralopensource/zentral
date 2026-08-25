@@ -91,14 +91,41 @@ def sync_dep_virtual_server_devices_task(dep_virtual_server_pk, force_full_sync=
 # payload, an expired token - would fail again the same way.
 DEP_RETRY_STATUS_CODES = frozenset([429, 500, 502, 503, 504])
 
+# Apple decides how long a throttled assignment waits, but not that it waits for a day
+DEP_MAX_THROTTLED_COUNTDOWN = 3600
+
+
+def dep_throttled_countdown(retry_after_seconds, retries):
+    if retry_after_seconds:
+        return min(max(retry_after_seconds, 1), DEP_MAX_THROTTLED_COUNTDOWN)
+    # Apple answers a delay from the 10th version of its protocol only
+    return 60 * 2 ** retries
+
+
+def merge_dep_assignment_operations(prev_operations, operations):
+    """Carry what the previous attempts assigned into the operations of this one.
+
+    Only the assignments accumulate: an assigned device leaves the work list, so no two attempts
+    count the same one. The throttled and failed counts are the state of the last attempt, how many
+    devices are still waiting and how many Apple still refuses.
+    """
+    if not prev_operations:
+        return operations
+    operations = dict(operations)
+    operations["assigned"] += prev_operations.get("assigned", 0)
+    return operations
+
 
 @shared_task(bind=True, max_retries=5)
-def assign_dep_virtual_server_default_enrollment_task(self, dep_virtual_server_pk, **kwargs):
+def assign_dep_virtual_server_default_enrollment_task(self, dep_virtual_server_pk,
+                                                     prev_operations=None, **kwargs):
     server = DEPVirtualServer.objects.select_related("default_enrollment").get(pk=dep_virtual_server_pk)
     result = {"dep_virtual_server": {"pk": server.pk,
                                      "name": server.name},
-              "operations": {"assigned": 0,
-                             "failed": 0}}
+              "operations": merge_dep_assignment_operations(
+                  prev_operations,
+                  {"assigned": 0, "throttled": 0, "failed": 0, "retry_after_seconds": None}
+              )}
     with transaction.atomic():
         if not try_lock_dep_virtual_server_sync(server.pk):
             # a synchronization is holding the lock. Retry rather than wait for the next one to
@@ -111,11 +138,24 @@ def assign_dep_virtual_server_default_enrollment_task(self, dep_virtual_server_p
                 result["status"] = "SKIPPED"
                 return result
         try:
-            result["operations"] = assign_dep_virtual_server_default_enrollment(server)
+            operations = assign_dep_virtual_server_default_enrollment(server)
         except DEPClientError as e:
             if e.status_code in DEP_RETRY_STATUS_CODES:
                 raise self.retry(exc=e, countdown=60 * 2 ** self.request.retries)
             raise
+    result["operations"] = operations = merge_dep_assignment_operations(prev_operations, operations)
+    if operations["throttled"]:
+        # outside the transaction on purpose: a retry raised inside it would roll back the
+        # assignments this attempt has written, and the next one would redo work Apple accepted
+        try:
+            raise self.retry(
+                countdown=dep_throttled_countdown(operations["retry_after_seconds"],
+                                                  self.request.retries),
+                kwargs=dict(kwargs, prev_operations=operations)
+            )
+        except MaxRetriesExceededError:
+            result["status"] = "THROTTLED"
+            return result
     result["status"] = "SUCCESS"
     return result
 

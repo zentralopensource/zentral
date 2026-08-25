@@ -20,7 +20,15 @@ from zentral.utils.certificates import split_certificate_chain
 from zentral.utils.time import naive_utcnow
 
 from .crypto import decrypt_cms_payload_with_pem_privkey
-from .dep_client import DEVICE_BATCH_SIZE, DEPClient, DEPClientError, iter_device_chunks
+from .dep_client import (
+    DEVICE_BATCH_SIZE,
+    PROFILE_ASSIGNMENT_SUCCESS,
+    PROFILE_ASSIGNMENT_THROTTLED,
+    DEPClient,
+    DEPClientError,
+    DEPProfileThrottledError,
+    iter_device_chunks,
+)
 from .events.dep import (
     ORIGIN_DEFAULT_ENROLLMENT_ASSIGNMENT,
     DEPDeviceChangeEvent,
@@ -385,7 +393,7 @@ def apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollme
 
 
 def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
-    result = {"assigned": 0, "failed": 0}
+    result = {"assigned": 0, "throttled": 0, "failed": 0, "retry_after_seconds": None}
     default_enrollment = dep_virtual_server.default_enrollment
     if default_enrollment is None:
         return result
@@ -400,10 +408,20 @@ def assign_dep_virtual_server_default_enrollment(dep_virtual_server):
         iter_unassigned_dep_device_serial_numbers(dep_virtual_server, batch_size), batch_size
     ):
         response = client.assign_profile(default_enrollment.uuid, serial_numbers)
+        retry_after_seconds = response.get("retry_after_seconds")
+        if retry_after_seconds and (result["retry_after_seconds"] is None
+                                    or retry_after_seconds > result["retry_after_seconds"]):
+            result["retry_after_seconds"] = retry_after_seconds
         success_devices = []
         for serial_number, status in response["devices"].items():
-            if status == "SUCCESS":
+            if status == PROFILE_ASSIGNMENT_SUCCESS:
                 success_devices.append(serial_number)
+            elif status == PROFILE_ASSIGNMENT_THROTTLED:
+                # not a failure. The work list is derived from the database, so a throttled device
+                # keeps its place in it, and the next attempt finds it again.
+                result["throttled"] += 1
+                logger.warning("Apple is throttling the assignment of profile %s to device %s",
+                               default_enrollment.uuid, serial_number)
             else:
                 result["failed"] += 1
                 logger.error("Could not assign profile %s to device %s: %s",
@@ -438,12 +456,17 @@ def assign_dep_device_profile(dep_device, dep_profile):
         result = response["devices"][serial_number]
     except KeyError:
         raise DEPClientError("Unknown client response structure")
-    if result == "SUCCESS":
+    if result == PROFILE_ASSIGNMENT_SUCCESS:
         # fetch a fresh device record and apply the updates
         updated_device = dep_client.get_devices([serial_number])[serial_number]
         for attr, val in dep_device_update_dict(updated_device).items():
             setattr(dep_device, attr, val)
         dep_device.save()
+    elif result == PROFILE_ASSIGNMENT_THROTTLED:
+        err_msg = (f"Apple is throttling the assignment of profile {dep_profile.uuid} "
+                   f"to device {serial_number}")
+        logger.warning(err_msg)
+        raise DEPProfileThrottledError(err_msg, retry_after_seconds=response.get("retry_after_seconds"))
     else:
         err_msg = f"Could not assign profile {dep_profile.uuid} to device {serial_number}: {result}"
         logger.error(err_msg)

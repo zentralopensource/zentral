@@ -150,6 +150,8 @@ To fully utilize ADE, you need to create an *Enrollment* in the *MDM > Overview 
 
 Devices can be assigned from Apple's side to a management service like Zentral via the [ABM](https://support.apple.com/guide/apple-business-manager/create-an-api-account-axm33189f66a/1/web/1) or [ASM](https://support.apple.com/guide/apple-school-manager/create-an-api-account-axm33189f66a/1/web/1) API. For device assignments in ABM/ASM to be reflected in Zentral, go to the *MDM > DEP Virtual Servers > [Instance Name]* section and click the `Synchronize` button. The devices will also be visible in the *MDM > Overview > DEP Devices* section. Syncronizations can be triggered per DEP Virtual Server over the Zentral API as well.
 
+Apple can throttle the assignment of the default enrollment. Zentral does not report a failure when this occurs. It counts the throttled devices, waits for the delay that Apple gives, and assigns them again. A throttled device keeps its place in the list of devices to assign. Zentral makes 5 attempts. After that, the next synchronization starts the assignment again.
+
 ### Setup an Enrollment Profile
 
 To set up an Automated Device Enrollment (ADE) in Zentral, you need to create an *Enrollment*. Follow these steps:

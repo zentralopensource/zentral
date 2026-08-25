@@ -7,12 +7,13 @@ from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep import (
+    assign_dep_device_profile,
     assign_dep_virtual_server_default_enrollment,
     define_dep_profile,
     iter_unassigned_dep_device_serial_numbers,
     sync_dep_virtual_server_devices,
 )
-from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE, CursorIterator
+from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE, CursorIterator, DEPProfileThrottledError
 from zentral.contrib.mdm.events.dep import DEPDeviceChangeEvent
 from zentral.contrib.mdm.models import DEPDevice
 from zentral.contrib.mdm.tasks import define_dep_profile_task
@@ -314,7 +315,7 @@ class TestDEPEnrollment(TestCase):
         from_dep_virtual_server.return_value = client
 
         self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
-                         {"assigned": 1, "failed": 0})
+                         {"assigned": 1, "throttled": 0, "failed": 0, "retry_after_seconds": None})
         client.assign_profile.assert_called_once_with(enrollment.uuid, [device.serial_number])
         client.get_devices.assert_called_once_with([device.serial_number])
         device.refresh_from_db()
@@ -341,7 +342,7 @@ class TestDEPEnrollment(TestCase):
         from_dep_virtual_server.return_value = client
 
         self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
-                         {"assigned": 0, "failed": 0})
+                         {"assigned": 0, "throttled": 0, "failed": 0, "retry_after_seconds": None})
         device.refresh_from_db()
         self.assertIsNone(device.enrollment)
         # nothing was written, so it stays a candidate for the next run
@@ -357,7 +358,7 @@ class TestDEPEnrollment(TestCase):
         from_dep_virtual_server.return_value = client
 
         self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
-                         {"assigned": 0, "failed": 1})
+                         {"assigned": 0, "throttled": 0, "failed": 1, "retry_after_seconds": None})
         device.refresh_from_db()
         self.assertIsNone(device.enrollment)
         # it stays a candidate, the next synchronization enqueues the task again
@@ -383,7 +384,7 @@ class TestDEPEnrollment(TestCase):
         from_dep_virtual_server.return_value = client
 
         self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
-                         {"assigned": 3, "failed": 0})
+                         {"assigned": 3, "throttled": 0, "failed": 0, "retry_after_seconds": None})
         self.assertEqual(
             [c.args[1] for c in client.assign_profile.call_args_list],
             [serial_numbers[:2], serial_numbers[2:]]
@@ -394,7 +395,7 @@ class TestDEPEnrollment(TestCase):
         server = force_dep_virtual_server()
         force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
         self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
-                         {"assigned": 0, "failed": 0})
+                         {"assigned": 0, "throttled": 0, "failed": 0, "retry_after_seconds": None})
         from_dep_virtual_server.assert_not_called()
 
     @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
@@ -406,8 +407,69 @@ class TestDEPEnrollment(TestCase):
         client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
         from_dep_virtual_server.return_value = client
         self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
-                         {"assigned": 0, "failed": 0})
+                         {"assigned": 0, "throttled": 0, "failed": 0, "retry_after_seconds": None})
         client.assign_profile.assert_not_called()
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_throttled(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
+        client.assign_profile.return_value = {"devices": {device.serial_number: "THROTTLED"},
+                                              "retry_after_seconds": 120}
+        from_dep_virtual_server.return_value = client
+
+        # a throttled device is not a failure
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 0, "throttled": 1, "failed": 0, "retry_after_seconds": 120})
+        # Apple did not assign anything, so there is nothing to read back
+        client.get_devices.assert_not_called()
+        device.refresh_from_db()
+        self.assertIsNone(device.enrollment)
+        # it keeps its place in the work list
+        self.assertEqual(list(iter_unassigned_dep_device_serial_numbers(server)), [device.serial_number])
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_partly_throttled(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        devices = [force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+                   for _ in range(3)]
+        serial_numbers = sorted(d.serial_number for d in devices)
+        profile_uuid = str(enrollment.uuid).upper().replace("-", "")
+        client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
+        client.assign_profile.return_value = {"devices": {serial_numbers[0]: "SUCCESS",
+                                                          serial_numbers[1]: "THROTTLED",
+                                                          serial_numbers[2]: "FAILED"},
+                                              "retry_after_seconds": 90}
+        client.get_devices.return_value = {
+            serial_numbers[0]: {"profile_uuid": profile_uuid, "profile_status": "assigned"}
+        }
+        from_dep_virtual_server.return_value = client
+
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server),
+                         {"assigned": 1, "throttled": 1, "failed": 1, "retry_after_seconds": 90})
+        # only the assigned device is read back
+        client.get_devices.assert_called_once_with([serial_numbers[0]])
+        self.assertEqual(sorted(iter_unassigned_dep_device_serial_numbers(server)), serial_numbers[1:])
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_device_profile_throttled(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        client = Mock()
+        client.assign_profile.return_value = {"devices": {device.serial_number: "THROTTLED"},
+                                              "retry_after_seconds": 42}
+        from_dep_virtual_server.return_value = client
+
+        with self.assertRaises(DEPProfileThrottledError) as cm:
+            assign_dep_device_profile(device, enrollment)
+        self.assertEqual(cm.exception.retry_after_seconds, 42)
+        self.assertIn("retry after: 42s", str(cm.exception))
+        client.get_devices.assert_not_called()
+        device.refresh_from_db()
+        self.assertIsNone(device.enrollment)
 
     # events
 

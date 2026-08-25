@@ -30,6 +30,28 @@ class DEPClientError(Exception):
         return ", ".join(items)
 
 
+class DEPProfileThrottledError(DEPClientError):
+    """Apple is throttling the profile assignment of a device.
+
+    Not a failure: the device is still Apple's to assign, and the response says how long to wait.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.retry_after_seconds = kwargs.pop("retry_after_seconds", None)
+        super().__init__(*args, **kwargs)
+
+    def __str__(self):
+        items = [super().__str__()]
+        if self.retry_after_seconds:
+            items.append("retry after: {}s".format(self.retry_after_seconds))
+        return ", ".join(items)
+
+
+# the values Apple answers for a device in a profile assignment response
+PROFILE_ASSIGNMENT_SUCCESS = "SUCCESS"
+PROFILE_ASSIGNMENT_THROTTLED = "THROTTLED"
+
+
 # fallbacks, used when the account detail advertises no limit for the endpoint. The device array
 # endpoints have never been seen advertising one, and /devices answers a request carrying 5000
 # serial numbers in full, so the batch size is ours: it is the size a batch is applied at, so that
@@ -248,11 +270,20 @@ class DEPClient(object):
     def assign_profile(self, profile_uuid, serial_numbers):
         profile_uuid = self.prepare_uuid_for_request(profile_uuid)
         devices = {}
+        retry_after_seconds = None
         for chunk in iter_device_chunks(serial_numbers, self.get_device_batch_size("/profile/devices")):
             body = {"devices": chunk, "profile_uuid": profile_uuid}
             response = self.send_request('profile/devices', 'POST', json=body)
             devices.update(response.get("devices") or {})
-        return {"devices": devices}
+            # one delay per response, and the longest of them covers the throttled devices of all
+            chunk_retry_after_seconds = response.get("retry_after_seconds")
+            if isinstance(chunk_retry_after_seconds, int) and chunk_retry_after_seconds > 0:
+                if retry_after_seconds is None or chunk_retry_after_seconds > retry_after_seconds:
+                    retry_after_seconds = chunk_retry_after_seconds
+        result = {"devices": devices}
+        if retry_after_seconds is not None:
+            result["retry_after_seconds"] = retry_after_seconds
+        return result
 
     def disown_devices(self, serial_numbers):
         devices = {}

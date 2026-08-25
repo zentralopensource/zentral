@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.test import TestCase
+from requests import RequestException
 
 from zentral.contrib.mdm.dep_client import (
     DEFAULT_PAGINATION_LIMIT,
@@ -249,6 +250,34 @@ class TestDEPClientDeviceChunks(TestCase):
         self.assertEqual(len(response["devices"]), DEVICE_BATCH_SIZE + 3)
         self.assertEqual(response["devices"][serial_numbers[0]], "SUCCESS")
         self.assertEqual(response["devices"][serial_numbers[-1]], "FAILED")
+
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_assign_profile_keeps_the_longest_retry_after_seconds(self, send_request):
+        serial_numbers = build_serial_numbers(DEVICE_BATCH_SIZE + 3)
+        send_request.side_effect = [
+            {"devices": {sn: "THROTTLED" for sn in serial_numbers[:DEVICE_BATCH_SIZE]},
+             "retry_after_seconds": 60},
+            {"devices": {sn: "THROTTLED" for sn in serial_numbers[DEVICE_BATCH_SIZE:]},
+             "retry_after_seconds": 300},
+        ]
+        response = self.dep_client().assign_profile("8ecf1f2e-2b0a-4c1e-9a4f-2b3c4d5e6f70", serial_numbers)
+        # one delay per response, and the longest of them covers the throttled devices of all
+        self.assertEqual(response["retry_after_seconds"], 300)
+
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_assign_profile_no_retry_after_seconds_no_key(self, send_request):
+        serial_numbers = build_serial_numbers(2)
+        send_request.return_value = {"devices": {sn: "SUCCESS" for sn in serial_numbers}}
+        response = self.dep_client().assign_profile("8ecf1f2e-2b0a-4c1e-9a4f-2b3c4d5e6f70", serial_numbers)
+        self.assertNotIn("retry_after_seconds", response)
+
+    @patch("zentral.contrib.mdm.dep_client.DEPClient.send_request")
+    def test_assign_profile_ignores_an_unusable_retry_after_seconds(self, send_request):
+        serial_numbers = build_serial_numbers(2)
+        send_request.return_value = {"devices": {sn: "THROTTLED" for sn in serial_numbers},
+                                     "retry_after_seconds": "soon"}
+        response = self.dep_client().assign_profile("8ecf1f2e-2b0a-4c1e-9a4f-2b3c4d5e6f70", serial_numbers)
+        self.assertNotIn("retry_after_seconds", response)
 
     # disown_devices
 
