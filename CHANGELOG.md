@@ -157,6 +157,8 @@ Munki installs the Osquery enrollment package again when `osqueryd` moves, and w
 
 Munki installs the Osquery enrollment package on a machine that has the Turbo agent now. The installcheck script of every enrollment package stopped the installation if `/opt/zentral/lib/Turbo.app` was present. Only the Munki enrollment package makes this test now, because the Turbo agent runs the Zentral preflight and the postflight itself.
 
+The `rebuild_manifest_enrollment_packages` command takes a `--manifest` option with one or more manifest IDs now, to rebuild the enrollment packages of a part of the manifests only. It also takes a `--new-version` option, which increases the version of each enrollment package that it rebuilds, and gives it a new filename. The enrollment versions do not change with it, so the machines that are up to date do not install the packages again.
+
 
 ## 2026.5
 
