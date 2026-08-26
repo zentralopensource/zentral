@@ -315,6 +315,9 @@ class PackageBuilder(BasePackageBuilder, APIConfigToolsMixin):
     def get_extra_packages(self):
         return []
 
+    def get_extra_installcheck_script(self):
+        return None
+
     def get_etag(self):
         return None
 

@@ -2,6 +2,7 @@
 # Postinstall script
 
 ZENTRAL_OSQUERY_PLIST="/Library/LaunchDaemons/pro.zentral.osqueryd.plist"
+ENROLLMENT_PLIST="/usr/local/zentral/osquery/enrollment.plist"
 
 OSQUERYD_PATH=""
 for CANDIDATE_PATH in %OSQUERYD_PATHS%
@@ -16,6 +17,8 @@ done
 if [[ -n "$OSQUERYD_PATH" ]]
 then
     /usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $OSQUERYD_PATH" "$ZENTRAL_OSQUERY_PLIST"
+    # the installcheck script of the munki pkginfo reads this to install again when osqueryd moves
+    /usr/bin/plutil -replace osqueryd_path -string "$OSQUERYD_PATH" "$ENROLLMENT_PLIST"
 fi
 
 # load launch daemon

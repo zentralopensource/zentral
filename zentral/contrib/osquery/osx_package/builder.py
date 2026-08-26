@@ -40,6 +40,20 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
             extra_packages.append(get_osquery_local_asset(release, ".pkg"))
         return extra_packages
 
+    def get_extra_installcheck_script(self):
+        return (
+            f'OSQUERYD_PATH="$($PLUTIL -extract osqueryd_path raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
+            f'for CANDIDATE_PATH in {self._get_serialized_osqueryd_paths()}\n'
+            'do\n'
+            'if [[ -x "$CANDIDATE_PATH" ]]\n'
+            'then\n'
+            # osqueryd moved, the launch daemon points at the old path, install again
+            '[[ -n "$OSQUERYD_PATH" ]] && [[ "$CANDIDATE_PATH" != "$OSQUERYD_PATH" ]] && exit 0\n'
+            'break\n'
+            'fi\n'
+            'done\n'
+        )
+
     @staticmethod
     def _get_serialized_osqueryd_paths():
         return " ".join(f'"{p}"' for p in OSQUERYD_PATHS)

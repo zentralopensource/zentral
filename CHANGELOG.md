@@ -153,6 +153,8 @@ Fixed the scope of a Monolith sub manifest package that uses the *Default Instal
 
 The Osquery enrollment package finds the `osqueryd` binary at installation time now, and writes its path in the launch daemon. It looks at the standard location, `/opt/osquery/lib/osquery.app/Contents/MacOS/osqueryd`, then at the location of the Fleet orbit agent, `/opt/orbit/bin/osqueryd/macos-app/stable/osquery.app/Contents/MacOS/osqueryd`, then at the `/usr/local/bin/osqueryd` symbolic link. Before, the launch daemon always started `/usr/local/bin/osqueryd`, and the package made that symbolic link only for the standard location. On a machine with osquery in a different place, the installation reported no error and the daemon did not start. The installation stops with an error now if it finds no `osqueryd` and the package includes none.
 
+Munki installs the Osquery enrollment package again when `osqueryd` moves. The postinstall script writes the path that it found in `/usr/local/zentral/osquery/enrollment.plist`, and the installcheck script of the pkginfo compares it with the path on the machine.
+
 
 ## 2026.5
 

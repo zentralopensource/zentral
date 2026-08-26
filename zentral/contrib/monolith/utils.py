@@ -26,6 +26,8 @@ def make_package_info(builder, manifest_enrollment_package, package_content):
         '[[ -d "/opt/zentral/lib/Turbo.app" ]] && exit 1\n'
         f'ENROLLMENT_PLIST="/usr/local/zentral/{builder.local_subfolder}/enrollment.plist"\n'
         'PLUTIL="/usr/bin/plutil"\n'
+        # the tests of the builder come before the ones below, so that they can skip the installation
+        f'{builder.get_extra_installcheck_script() or ""}'
         # if no enrollment, install
         '[[ ! -f "$ENROLLMENT_PLIST" ]] && exit 0\n'
         # extract the current enrollment values

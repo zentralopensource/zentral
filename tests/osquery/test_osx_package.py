@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 from unittest.mock import patch
 from django.test import TestCase
+from zentral.contrib.monolith.utils import make_package_info
 from zentral.contrib.osquery.osx_package.builder import OSQUERYD_PATHS, OsqueryZentralEnrollPkgBuilder
 from .utils import force_enrollment
 
@@ -80,3 +81,33 @@ class OsqueryOSXPackageTestCase(TestCase):
             '/usr/bin/plutil -replace osqueryd_path -string "$OSQUERYD_PATH" "$ENROLLMENT_PLIST"',
             postinstall
         )
+
+    # installcheck script
+
+    def test_extra_installcheck_script(self):
+        builder = OsqueryZentralEnrollPkgBuilder(force_enrollment())
+        script = builder.get_extra_installcheck_script()
+        self.assertIn('OSQUERYD_PATH="$($PLUTIL -extract osqueryd_path raw $ENROLLMENT_PLIST 2> /dev/null)"', script)
+        self.assertIn(f'for CANDIDATE_PATH in {" ".join(chr(34) + p + chr(34) for p in OSQUERYD_PATHS)}', script)
+        self.assertIn('[[ -n "$OSQUERYD_PATH" ]] && [[ "$CANDIDATE_PATH" != "$OSQUERYD_PATH" ]] && exit 0', script)
+
+    def test_package_info_installcheck_script_includes_the_extra_script(self):
+        enrollment = force_enrollment()
+        builder = OsqueryZentralEnrollPkgBuilder(enrollment)
+        package_info = make_package_info(builder, FakeManifestEnrollmentPackage(), b"1234")
+        installcheck_script = package_info["installcheck_script"]
+        # the extra script comes before the tests of the enrollment values, and after the variables it uses
+        self.assertIn(
+            'PLUTIL="/usr/bin/plutil"\n'
+            + builder.get_extra_installcheck_script()
+            + '[[ ! -f "$ENROLLMENT_PLIST" ]] && exit 0\n',
+            installcheck_script
+        )
+
+
+class FakeManifestEnrollmentPackage:
+    def get_name(self):
+        return "test"
+
+    def get_requires(self):
+        return []
