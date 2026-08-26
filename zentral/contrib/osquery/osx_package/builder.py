@@ -14,6 +14,9 @@ OSQUERYD_PATHS = (
     "/usr/local/bin/osqueryd",
 )
 
+LAUNCH_DAEMON_LABEL = "pro.zentral.osqueryd"
+LAUNCH_DAEMON_PLIST = f"/Library/LaunchDaemons/{LAUNCH_DAEMON_LABEL}.plist"
+
 
 class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
     name = "Zentral Osquery Enrollment"
@@ -45,10 +48,15 @@ class OsqueryZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
             f'OSQUERYD_PATH="$($PLUTIL -extract osqueryd_path raw $ENROLLMENT_PLIST 2> /dev/null)"\n'
             f'for CANDIDATE_PATH in {self._get_serialized_osqueryd_paths()}\n'
             'do\n'
+            # the tests below ask for an installation. they run only with an osqueryd on the machine, because the
+            # preinstall script rejects an installation without one.
             'if [[ -x "$CANDIDATE_PATH" ]]\n'
             'then\n'
-            # osqueryd moved, the launch daemon points at the old path, install again
+            # osqueryd moved, the launch daemon points at the old path
             '[[ -n "$OSQUERYD_PATH" ]] && [[ "$CANDIDATE_PATH" != "$OSQUERYD_PATH" ]] && exit 0\n'
+            # the launch daemon is gone, or does not run
+            f'[[ ! -f "{LAUNCH_DAEMON_PLIST}" ]] && exit 0\n'
+            f'/bin/launchctl list {LAUNCH_DAEMON_LABEL} 2> /dev/null | grep -q \'"PID"\' || exit 0\n'
             'break\n'
             'fi\n'
             'done\n'

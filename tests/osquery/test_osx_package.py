@@ -1,12 +1,14 @@
 import gzip
 import io
 import os
+import plistlib
 import subprocess
 import tempfile
 from unittest.mock import patch
 from django.test import TestCase
 from zentral.contrib.monolith.utils import make_package_info
-from zentral.contrib.osquery.osx_package.builder import OSQUERYD_PATHS, OsqueryZentralEnrollPkgBuilder
+from zentral.contrib.osquery.osx_package.builder import (LAUNCH_DAEMON_LABEL, LAUNCH_DAEMON_PLIST,
+                                                        OSQUERYD_PATHS, OsqueryZentralEnrollPkgBuilder)
 from .utils import force_enrollment
 
 
@@ -73,6 +75,7 @@ class OsqueryOSXPackageTestCase(TestCase):
 
     def test_postinstall_updates_the_launch_daemon_and_the_enrollment_plist(self):
         postinstall = self._build_scripts()["postinstall"]
+        self.assertIn(f'ZENTRAL_OSQUERY_PLIST="{LAUNCH_DAEMON_PLIST}"', postinstall)
         self.assertIn(
             '/usr/libexec/PlistBuddy -c "Set :ProgramArguments:0 $OSQUERYD_PATH" "$ZENTRAL_OSQUERY_PLIST"',
             postinstall
@@ -82,6 +85,12 @@ class OsqueryOSXPackageTestCase(TestCase):
             postinstall
         )
 
+    def test_launch_daemon_constants_match_the_package(self):
+        plist_path = os.path.join(OsqueryZentralEnrollPkgBuilder.build_tmpl_dir, "root",
+                                  LAUNCH_DAEMON_PLIST.lstrip("/"))
+        with open(plist_path, "rb") as f:
+            self.assertEqual(plistlib.load(f)["Label"], LAUNCH_DAEMON_LABEL)
+
     # installcheck script
 
     def test_extra_installcheck_script(self):
@@ -90,6 +99,13 @@ class OsqueryOSXPackageTestCase(TestCase):
         self.assertIn('OSQUERYD_PATH="$($PLUTIL -extract osqueryd_path raw $ENROLLMENT_PLIST 2> /dev/null)"', script)
         self.assertIn(f'for CANDIDATE_PATH in {" ".join(chr(34) + p + chr(34) for p in OSQUERYD_PATHS)}', script)
         self.assertIn('[[ -n "$OSQUERYD_PATH" ]] && [[ "$CANDIDATE_PATH" != "$OSQUERYD_PATH" ]] && exit 0', script)
+        self.assertIn(f'[[ ! -f "{LAUNCH_DAEMON_PLIST}" ]] && exit 0', script)
+        self.assertIn(f'/bin/launchctl list {LAUNCH_DAEMON_LABEL} 2> /dev/null | grep -q \'"PID"\' || exit 0',
+                      script)
+        # the launch daemon tests only run with an osqueryd on the machine: without one the preinstall script
+        # rejects the installation, and munki would report a failure on every run
+        self.assertTrue(script.index('if [[ -x "$CANDIDATE_PATH" ]]') < script.index("/bin/launchctl list"))
+        self.assertTrue(script.index("/bin/launchctl list") < script.index("break"))
 
     def test_package_info_installcheck_script_includes_the_extra_script(self):
         enrollment = force_enrollment()
