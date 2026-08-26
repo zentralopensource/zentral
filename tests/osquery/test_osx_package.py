@@ -85,6 +85,23 @@ class OsqueryOSXPackageTestCase(TestCase):
             postinstall
         )
 
+    def test_no_release_no_product_archive_and_no_extra_package(self):
+        builder = OsqueryZentralEnrollPkgBuilder(force_enrollment())
+        self.addCleanup(builder._clean)
+        self.assertIsNone(builder.get_product_archive_title())
+        self.assertEqual(builder.get_extra_packages(), [])
+
+    def test_release_product_archive_with_the_release_package(self):
+        enrollment = force_enrollment()
+        enrollment.osquery_release = "5.10.2"
+        builder = OsqueryZentralEnrollPkgBuilder(enrollment)
+        self.addCleanup(builder._clean)
+        self.assertEqual(builder.get_product_archive_title(), builder.name)
+        with patch("zentral.contrib.osquery.osx_package.builder.get_osquery_local_asset",
+                   return_value="/fomo/osquery.pkg") as get_osquery_local_asset:
+            self.assertEqual(builder.get_extra_packages(), ["/fomo/osquery.pkg"])
+        get_osquery_local_asset.assert_called_once_with("5.10.2", ".pkg")
+
     def test_launch_daemon_constants_match_the_package(self):
         plist_path = os.path.join(OsqueryZentralEnrollPkgBuilder.build_tmpl_dir, "root",
                                   LAUNCH_DAEMON_PLIST.lstrip("/"))
