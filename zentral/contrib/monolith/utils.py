@@ -68,7 +68,11 @@ def build_manifest_enrollment_package(mep):
     _, _, package_content = builder.build()
     mep.pkg_info = make_package_info(builder, mep, package_content)
     mep.file.delete(False)
-    mep.file.save(mep.get_installer_item_filename(),
+    filename = mep.get_installer_item_filename()
+    # the delete above only covers the current name. An orphan file left at the target name
+    # makes a storage that does not overwrite files add a random suffix to the package.
+    mep.file.storage.delete(mep.file.field.generate_filename(mep, filename))
+    mep.file.save(filename,
                   ContentFile(package_content),
                   save=True)
 

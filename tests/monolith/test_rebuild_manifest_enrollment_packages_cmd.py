@@ -3,6 +3,7 @@ from unittest.mock import PropertyMock, patch
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
+from zentral.contrib.monolith.models import ManifestEnrollmentPackage
 from .utils import force_manifest, force_manifest_enrollment_package
 
 
@@ -38,6 +39,19 @@ class RebuildManifestEnrollmentPackagesTestCase(TestCase):
             stdout, stderr = self.call_command()
         self.assertEqual(stderr, "")
         self.assertTrue(stdout.startswith(f"{mep.file.name} rebuilt\n"))
+
+    def test_rebuild_with_an_orphan_file_at_the_target_name(self):
+        mep = self.force_mep()
+        filename = mep.file.name
+        # leave the file behind as an orphan occupying the target name,
+        # like a rolled back transaction or a previous test run would
+        ManifestEnrollmentPackage.objects.filter(pk=mep.pk).update(file="")
+        mep.refresh_from_db()
+        stdout, stderr = self.call_command()
+        mep.refresh_from_db()
+        self.assertEqual(stderr, "")
+        self.assertEqual(mep.file.name, filename)
+        self.assertIn(f"{filename} rebuilt", stdout)
 
     def test_rebuild_all_quiet(self):
         self.force_mep()
