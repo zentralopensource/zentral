@@ -115,6 +115,8 @@ The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `
 ### Bug fixes
 
 
+The notifier sets a connect timeout and a socket timeout on its Redis client now. Without them the socket stays in blocking mode: a Redis server that stops answering and does not close the connection, a managed Redis during a failover for example, blocked a notification for ever in the middle of a web request. The client raises an error now, and the notifier reconnects.
+
 Fixed the `zentral_audit` events of the Santa enrollments and the Santa enrolled machines, which were not linked to the object they report. A model that declares the parents of an object replaced the link to the object itself, and the events of that object did not reach its page. A model keeps control of its own key when it declares one, because the MDM commands are linked by UUID and not by primary key.
 
 Fixed the version of an Osquery query in the events published when a user changed the query from the web console. The version was a database expression, and not a number.

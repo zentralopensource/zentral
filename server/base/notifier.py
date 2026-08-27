@@ -13,6 +13,11 @@ logger = logging.getLogger("server.base.notifier")
 
 class Notifier:
     _reconnection_delay_range = (1.0, 3.0)
+    # Unset, redis-py blocks for ever on a server that stops answering without closing
+    # the connection: send_notification() and subscribe() deadlock, and nothing is
+    # raised for their except blocks to catch.
+    _socket_connect_timeout = 3.0
+    _socket_timeout = 3.0
 
     def __init__(self, config):
         self._client = None
@@ -44,6 +49,8 @@ class Notifier:
             "username": config.get("username"),
             "password": config.get("password"),
             "decode_responses": True,
+            "socket_connect_timeout": self._socket_connect_timeout,
+            "socket_timeout": self._socket_timeout,
         }
 
     def _get_client(self):
