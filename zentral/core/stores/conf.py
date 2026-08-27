@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 import weakref
 from base.notifier import notifier
 from zentral.conf import settings
@@ -15,10 +16,13 @@ __all__ = ['stores']
 
 class Stores:
     default_max_custom_store_count = 3
+    # Fallback for missed notifier notifications
+    max_age_seconds = 300
 
     def __init__(self, with_sync=False):
         self._stores = None
         self._admin_console_store = None
+        self._last_load_ts = None
         self._lock = threading.Lock()
         self.with_sync = with_sync
         self._sync_started = False
@@ -27,6 +31,7 @@ class Stores:
         with self._lock:
             self._stores = None
             self._admin_console_store = None
+            self._last_load_ts = None
 
     def _start_sync(self):
         if self.with_sync:
@@ -34,30 +39,39 @@ class Stores:
                 notifier.add_callback("stores.store", weakref.WeakMethod(self.clear))
                 self._sync_started = True
 
+    def _cache_is_fresh(self):
+        return (
+            self._stores is not None
+            and self._last_load_ts is not None
+            and time.monotonic() - self._last_load_ts <= self.max_age_seconds
+        )
+
     def _load(self, force=False):
         self._start_sync()
-        if self._stores is None or force:
-            self._stores = []
-            self._admin_console_store = None
-            first_store = None
-            # IMPORTANT order_by created_at to get a stable ordering, even if the stores are renamed
-            for db_store in Store.objects.prefetch_related("events_url_authorized_roles").all().order_by("created_at"):
-                store = db_store.get_backend(load=True)
-                self._stores.append(store)
-                # admin console store?
-                if db_store.admin_console:
-                    if self._admin_console_store:
-                        logger.error('Multiple admin console store')
-                    else:
-                        self._admin_console_store = store
-                elif not first_store:
-                    first_store = store
-            if not self._admin_console_store:
-                logger.error('No admin console store')
-                if first_store:
-                    self._admin_console_store = first_store
+        if not force and self._cache_is_fresh():
+            return
+        self._stores = []
+        self._admin_console_store = None
+        first_store = None
+        # IMPORTANT order_by created_at to get a stable ordering, even if the stores are renamed
+        for db_store in Store.objects.prefetch_related("events_url_authorized_roles").all().order_by("created_at"):
+            store = db_store.get_backend(load=True)
+            self._stores.append(store)
+            # admin console store?
+            if db_store.admin_console:
+                if self._admin_console_store:
+                    logger.error('Multiple admin console store')
                 else:
-                    logger.error('No stores')
+                    self._admin_console_store = store
+            elif not first_store:
+                first_store = store
+        if not self._admin_console_store:
+            logger.error('No admin console store')
+            if first_store:
+                self._admin_console_store = first_store
+            else:
+                logger.error('No stores')
+        self._last_load_ts = time.monotonic()
 
     # public API
 
