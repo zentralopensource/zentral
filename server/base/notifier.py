@@ -18,6 +18,9 @@ class Notifier:
     # raised for their except blocks to catch.
     _socket_connect_timeout = 3.0
     _socket_timeout = 3.0
+    # The listener only reads, and can_read() returns False instead of raising, so only
+    # this PING write finds a dead connection. Useless without _socket_timeout.
+    _health_check_interval = 30
 
     def __init__(self, config):
         self._client = None
@@ -51,6 +54,7 @@ class Notifier:
             "decode_responses": True,
             "socket_connect_timeout": self._socket_connect_timeout,
             "socket_timeout": self._socket_timeout,
+            "health_check_interval": self._health_check_interval,
         }
 
     def _get_client(self):

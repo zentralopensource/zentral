@@ -34,3 +34,7 @@ class TestNotifierKwargs(SimpleTestCase):
         notifier = Notifier(None)
         self.assertEqual(notifier._kwargs["socket_connect_timeout"], 3.0)
         self.assertEqual(notifier._kwargs["socket_timeout"], 3.0)
+
+    def test_health_check_interval(self):
+        notifier = Notifier(None)
+        self.assertEqual(notifier._kwargs["health_check_interval"], 30)
