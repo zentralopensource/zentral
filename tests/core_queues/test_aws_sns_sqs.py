@@ -844,3 +844,48 @@ class AWSSNSSQSQueuesTestCase(TestCase):
             thread.start.assert_called_once()
             thread.join.assert_called_once()
         self.assertTrue(consumer.stop_event.is_set())
+
+    # store worker config
+
+    def _build_store_worker(self):
+        with patch("zentral.core.queues.backends.aws_sns_sqs.EventQueues.get_queue") as get_queue:
+            get_queue.return_value = (True, "store-worker-http", "https://www.example.com/fomo")
+            store = self.build_store(name=get_random_string(12), provisioned=True)
+            return store, self.get_queues().get_store_worker(store)
+
+    def test_stop_receiving_for_store_update(self):
+        store, w = self._build_store_worker()
+        self.assertFalse(w.stop_receiving_event.is_set())
+        with self.assertLogs("zentral.core.queues.backends.aws_sns_sqs", level="WARNING") as cm:
+            w.stop_receiving_for_store_update()
+        self.assertTrue(w.stop_receiving_event.is_set())
+        self.assertIn(f"store worker {store.name} - stop receiving events, the store has been updated",
+                      "\n".join(cm.output))
+
+    def test_stop_receiving_for_store_update_is_idempotent(self):
+        _, w = self._build_store_worker()
+        with self.assertLogs("zentral.core.queues.backends.aws_sns_sqs", level="WARNING") as cm:
+            w.stop_receiving_for_store_update()
+            w.stop_receiving_for_store_update()
+        # both ways of learning can find the same change, the second one is a no-op
+        self.assertEqual(len(cm.output), 1)
+        self.assertTrue(w.stop_receiving_event.is_set())
+
+    def test_store_worker_run_watches_the_store_config(self):
+        store, w = self._build_store_worker()
+        with patch("zentral.core.queues.backends.aws_sns_sqs.StoreWorkerConfigWatcher") as watcher, \
+             patch.object(BaseConsumer, "run") as consumer_run:
+            w.run()
+        watcher.assert_called_once_with(store, w.stop_receiving_for_store_update)
+        # the with block is what keeps it: the notifier holds its callback weakly
+        watcher.return_value.__enter__.assert_called_once()
+        watcher.return_value.__exit__.assert_called_once()
+        consumer_run.assert_called_once()
+
+    def test_store_worker_run_leaves_the_watcher_on_an_error(self):
+        _, w = self._build_store_worker()
+        with patch("zentral.core.queues.backends.aws_sns_sqs.StoreWorkerConfigWatcher") as watcher, \
+             patch.object(BaseConsumer, "run", side_effect=Exception("boom")):
+            with self.assertRaises(Exception):
+                w.run()
+        watcher.return_value.__exit__.assert_called_once()

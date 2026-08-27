@@ -133,6 +133,8 @@ The event store cache expires after 300 seconds now. A notifier notification was
 
 The probe caches expire after 300 seconds now. A notifier notification was the only thing that made an instance load them again, so an instance that did not get one matched events against the probes it read when it started. Some probe views are built from another view. Such a view follows the version of the view it is built from, and not an age of its own, so 300 seconds is the delay for all of them.
 
+A store worker verifies the configuration of its store every 300 seconds now. Before, only a notifier notification made the worker apply a change, and the notifier does not guarantee delivery. A worker that did not receive the notification kept the event filters and the credentials from its start, and an operator had to restart it. The worker now stops when it finds a change to its store, and starts again with the configuration in the database.
+
 Fixed the `zentral_audit` events of the Santa enrollments and the Santa enrolled machines, which were not linked to the object they report. A model that declares the parents of an object replaced the link to the object itself, and the events of that object did not reach its page. A model keeps control of its own key when it declares one, because the MDM commands are linked by UUID and not by primary key.
 
 Fixed the version of an Osquery query in the events published when a user changed the query from the web console. The version was a database expression, and not a number.

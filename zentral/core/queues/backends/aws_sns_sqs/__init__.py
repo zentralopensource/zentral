@@ -4,11 +4,9 @@ import queue
 import signal
 import threading
 import time
-import weakref
 from importlib import import_module
 
 import boto3
-from base.notifier import notifier
 from botocore.config import Config
 from django.utils.functional import cached_property
 
@@ -17,6 +15,7 @@ from zentral.conf.config import ConfigDict
 from zentral.core.queues.backends.base import BaseEventQueues
 from zentral.core.queues.compression import compress_raw_event_if_needed
 from zentral.core.queues.preprocessing import iter_preprocessed_events
+from zentral.core.stores.sync import StoreWorkerConfigWatcher
 from zentral.utils.signals import setup_signal_handler
 from zentral.utils.time import naive_utcnow
 
@@ -59,6 +58,9 @@ class WorkerMixin:
 
     def log_info(self, msg, *args):
         self.log(msg, logging.INFO, *args)
+
+    def log_warning(self, msg, *args):
+        self.log(msg, logging.WARNING, *args)
 
     def log_error(self, msg, *args):
         self.log(msg, logging.ERROR, *args)
@@ -174,20 +176,16 @@ class ProcessWorker(WorkerMixin, Consumer):
 
 
 class StoreWorkerMixin(WorkerMixin):
-    def store_notification_handler(self, *args, **kwargs):
-        try:
-            if str(args[0]) == str(self.event_store.pk):
-                if not self.stop_receiving_event.is_set():
-                    logger.warning("Stop receiving events because the store has been updated.")
-                    self.stop_receiving_event.set()
-        except Exception:
-            logger.exception("Could not process store update notification.")
+    def stop_receiving_for_store_update(self):
+        if not self.stop_receiving_event.is_set():
+            self.log_warning("stop receiving events, the store has been updated")
+            self.stop_receiving_event.set()
 
     def run(self, *args, **kwargs):
         self.log_info("run")
         super().setup_metrics_exporter(*args, **kwargs)
-        notifier.add_callback("stores.store", weakref.WeakMethod(self.store_notification_handler))
-        super().run(*args, **kwargs)
+        with StoreWorkerConfigWatcher(self.event_store, self.stop_receiving_for_store_update):
+            super().run(*args, **kwargs)
 
     def skip_event(self, receipt_handle, event_d):
         event_type = event_d['_zentral']['type']
