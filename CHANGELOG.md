@@ -111,6 +111,12 @@ The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `
 
 `zentral_santa_enrolled_machines_total` and `zentral_santa_enrolled_machines_sync_total` are replaced by `zentral_santa_enrolled_machines_bucket` and `zentral_santa_enrolled_machines_sync_bucket`, which have an `le` label. The `le="+Inf"` bucket gives the value of the two removed gauges: in a dashboard or an alert, change the metric name and select that bucket. A query that sums the buckets counts each machine seven times.
 
+#### 🧨 Privilege escalation hardening — task results
+
+A task belongs to the user or the service account that launched it, and `/api/task_result/<task_id>/` and `/api/task_result/<task_id>/download/` answer only for that principal. A superuser reads all of them, as before. Until now the two endpoints only asked for a valid session or API token: any authenticated principal that had a task ID could read the state of that task and download its file, and an export carries everything the principal that launched it was allowed to see. The state endpoint gives the `UNKNOWN` status for the task of a different principal, like it does for a task that does not exist, and the download endpoint gives a `404`. The task list and the task pages of the web console already applied this rule.
+
+A task that a device launched, and a task that Zentral launched before version 2025.11, has no user, so only a superuser can read those. The exports are temporary: launch the export again to get a file that you can download.
+
 
 ### Bug fixes
 

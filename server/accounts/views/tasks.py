@@ -3,8 +3,8 @@ import logging
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.views.generic import DetailView
-from django_celery_results.models import TaskResult
 
+from accounts.models import task_results_for_user
 from zentral.utils.views import UserPaginationListView
 
 logger = logging.getLogger("zentral.accounts.views.tasks")
@@ -12,10 +12,9 @@ logger = logging.getLogger("zentral.accounts.views.tasks")
 
 class TaskViewMixin:
     def get_queryset(self):
-        queryset = TaskResult.objects.select_related('usertask').all()
-        if not self.request.user.is_superuser:
-            queryset = queryset.filter(usertask__user=self.request.user)
-        return queryset.order_by('-date_created')
+        return (task_results_for_user(self.request.user)
+                .select_related('usertask')
+                .order_by('-date_created'))
 
 
 class TasksView(LoginRequiredMixin, TaskViewMixin, UserPaginationListView):

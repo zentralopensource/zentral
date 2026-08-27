@@ -11,19 +11,25 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
+from accounts.models import task_results_for_user
 from zentral.utils.storage import file_storage_has_signed_urls
 
 
 logger = logging.getLogger("server.base.api_views")
 
 
-class TaskResultView(APIView):
+class BaseTaskResultView(APIView):
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
 
+    def get_task_results(self):
+        return task_results_for_user(self.request.user)
+
+
+class TaskResultView(BaseTaskResultView):
     def get(self, request, *args, **kwargs):
         task_id = str(kwargs["task_id"])
         try:
-            task_result = TaskResult.objects.get(task_id=task_id)
+            task_result = self.get_task_results().get(task_id=task_id)
         except TaskResult.DoesNotExist:
             response = {"id": task_id,
                         "status": "UNKNOWN",
@@ -46,15 +52,13 @@ class TaskResultView(APIView):
         return Response(response)
 
 
-class TaskResultFileDownloadView(APIView):
-    authentication_classes = [APITokenAuthentication, SessionAuthentication]
-
+class TaskResultFileDownloadView(BaseTaskResultView):
     @cached_property
     def _redirect_to_files(self):
         return file_storage_has_signed_urls()
 
     def get(self, request, *args, **kwargs):
-        task_result = get_object_or_404(TaskResult, task_id=str(kwargs["task_id"]), status="SUCCESS")
+        task_result = get_object_or_404(self.get_task_results(), task_id=str(kwargs["task_id"]), status="SUCCESS")
         try:
             result = json.loads(task_result.result)
         except (TypeError, ValueError):

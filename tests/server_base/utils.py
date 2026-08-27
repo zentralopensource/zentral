@@ -5,10 +5,11 @@ from datetime import timedelta
 from django.utils.crypto import get_random_string
 from django_celery_results.models import TaskResult
 
+from accounts.models import UserTask
 from zentral.utils.time import naive_utcnow
 
 
-def force_task_result(bad_json=False, result=None):
+def force_task_result(bad_json=False, result=None, user=None):
     if result is None:
         result = {
             "filepath": f"exports/santa_targets_export_{get_random_string(12)}.xlsx",
@@ -35,5 +36,7 @@ def force_task_result(bad_json=False, result=None):
         date_done=naive_utcnow() - timedelta(days=1),
         meta='{"children": []}'
     )
+    if user is not None:
+        UserTask.objects.create(user=user, task_result=tr)
     filepath = result.pop("filepath", None)
     return tr, result, filepath

@@ -382,6 +382,15 @@ class UserTask(models.Model):
     task_result = models.OneToOneField(TaskResult, on_delete=models.CASCADE)
 
 
+def task_results_for_user(user):
+    # a task result can carry an export of everything its user was allowed to see, so it stays
+    # theirs. Superusers read them all, service accounts never do, like ZentralBackend.has_perm.
+    queryset = TaskResult.objects.all()
+    if user.is_service_account or not user.is_superuser:
+        queryset = queryset.filter(usertask__user=user)
+    return queryset
+
+
 class PolicyManager(models.Manager):
     def not_provisioned(self):
         return self.filter(provisioning_uid__isnull=True)

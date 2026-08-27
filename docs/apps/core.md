@@ -115,6 +115,8 @@ Issuers can also be managed over the API, at `/api/accounts/token_issuers/oidc/`
 
 Use this endpoint to get the status of a task. If the task generates a file, a `download_url` attribute will be included. The `download_url` will redirect to the exported file (for example, a signed S3 URL if Zentral is configured with a S3 bucket). A process should wait for a task if `unready` is true.
 
+A task belongs to the user or the service account that launched it. Only that principal can read its status, and a superuser can read the status of all the tasks. The endpoint gives the `UNKNOWN` status for the task of a different principal, like it does for a task that does not exist. A task that a device launched, and a task that Zentral launched before version 2025.11, has no user: only a superuser can read it.
+
 Example:
 
 ```
@@ -146,6 +148,8 @@ Result:
 * PBAC action: none
 
 Use this endpoint to download the result of a task. A process waiting for a task result should only hit this endpoint when the URL is present in a task response (see [above](#apitask_resultuuidtask_id)).
+
+Only the principal that launched the task, or a superuser, can download the file. The endpoint gives a `404` to the others.
 
 Example:
 

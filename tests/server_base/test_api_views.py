@@ -24,6 +24,13 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             is_service_account=True
         )
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.other_user = User.objects.create_user(
+            get_random_string(12), "{}@zentral.io".format(get_random_string(12)), get_random_string(12)
+        )
+        cls.superuser = User.objects.create_user(
+            get_random_string(12), "{}@zentral.io".format(get_random_string(12)), get_random_string(12),
+            is_superuser=True
+        )
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.service_account.groups.set([cls.group])
         cls.user.groups.set([cls.group])
@@ -65,7 +72,7 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.json(), {"id": task_id, "status": "UNKNOWN", "unready": True})
 
     def test_task_result(self):
-        tr, result, _ = force_task_result()
+        tr, result, _ = force_task_result(user=self.service_account)
         response = self.get(reverse("base_api:task_result", args=(tr.task_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -79,7 +86,7 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         )
 
     def test_task_result_bad_json(self):
-        tr, _, _ = force_task_result(bad_json=True)
+        tr, _, _ = force_task_result(bad_json=True, user=self.service_account)
         response = self.get(reverse("base_api:task_result", args=(tr.task_id,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -91,7 +98,7 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         )
 
     def test_task_result_login(self):
-        tr, result, _ = force_task_result()
+        tr, result, _ = force_task_result(user=self.user)
         self.login()
         response = self.get(reverse("base_api:task_result", args=(tr.task_id,)), include_token=False)
         self.assertEqual(response.status_code, 200)
@@ -104,6 +111,55 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              "result": result,
              "download_url": f"/api/task_result/{tr.task_id}/download/"}
         )
+
+    def test_task_result_other_user_unknown(self):
+        tr, _, _ = force_task_result(user=self.other_user)
+        response = self.get(reverse("base_api:task_result", args=(tr.task_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"id": tr.task_id, "status": "UNKNOWN", "unready": True})
+
+    def test_task_result_other_user_unknown_login(self):
+        tr, _, _ = force_task_result(user=self.other_user)
+        self.login()
+        response = self.get(reverse("base_api:task_result", args=(tr.task_id,)), include_token=False)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"id": tr.task_id, "status": "UNKNOWN", "unready": True})
+
+    def test_task_result_without_user_unknown(self):
+        tr, _, _ = force_task_result()
+        response = self.get(reverse("base_api:task_result", args=(tr.task_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"id": tr.task_id, "status": "UNKNOWN", "unready": True})
+
+    def test_task_result_superuser(self):
+        tr, result, _ = force_task_result(user=self.other_user)
+        self.client.force_login(self.superuser)
+        response = self.get(reverse("base_api:task_result", args=(tr.task_id,)), include_token=False)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"id": tr.task_id,
+             "name": "zentral.contrib.santa.tasks.export_targets",
+             "status": "SUCCESS",
+             "unready": False,
+             "result": result,
+             "download_url": f"/api/task_result/{tr.task_id}/download/"}
+        )
+
+    def test_task_result_without_user_superuser(self):
+        tr, result, _ = force_task_result()
+        self.client.force_login(self.superuser)
+        response = self.get(reverse("base_api:task_result", args=(tr.task_id,)), include_token=False)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "SUCCESS")
+
+    def test_task_result_superuser_service_account_unknown(self):
+        # a service account is never a superuser, but the flag is only forced on save
+        User.objects.filter(pk=self.service_account.pk).update(is_superuser=True)
+        tr, _, _ = force_task_result(user=self.other_user)
+        response = self.get(reverse("base_api:task_result", args=(tr.task_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"id": tr.task_id, "status": "UNKNOWN", "unready": True})
 
     # task result file download
 
@@ -123,22 +179,22 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_result_file_download_bad_json(self):
-        tr, _, _ = force_task_result(bad_json=True)
+        tr, _, _ = force_task_result(bad_json=True, user=self.service_account)
         response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)))
         self.assertEqual(response.status_code, 404)
 
     def test_result_no_filepath(self):
-        tr, _, _ = force_task_result(result={})
+        tr, _, _ = force_task_result(result={}, user=self.service_account)
         response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)))
         self.assertEqual(response.status_code, 404)
 
     def test_result_file_download_not_exists(self):
-        tr, result, _ = force_task_result()
+        tr, result, _ = force_task_result(user=self.service_account)
         response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)))
         self.assertEqual(response.status_code, 404)
 
     def test_result_file_download_direct(self):
-        tr, result, filepath = force_task_result()
+        tr, result, filepath = force_task_result(user=self.service_account)
         with default_storage.open(filepath, "wb") as f:
             f.write(b"yolo")
         response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)))
@@ -147,10 +203,43 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.headers["Content-Disposition"], result["headers"]["Content-Disposition"])
         self.assertEqual(b"".join(response.streaming_content), b"yolo")
 
+    def test_result_file_download_other_user_404(self):
+        tr, _, filepath = force_task_result(user=self.other_user)
+        with default_storage.open(filepath, "wb") as f:
+            f.write(b"yolo")
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_result_file_download_other_user_404_login(self):
+        tr, _, filepath = force_task_result(user=self.other_user)
+        with default_storage.open(filepath, "wb") as f:
+            f.write(b"yolo")
+        self.login()
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 404)
+
+    def test_result_file_download_without_user_404(self):
+        tr, _, filepath = force_task_result()
+        with default_storage.open(filepath, "wb") as f:
+            f.write(b"yolo")
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_result_file_download_superuser(self):
+        tr, result, filepath = force_task_result(user=self.other_user)
+        with default_storage.open(filepath, "wb") as f:
+            f.write(b"yolo")
+        self.client.force_login(self.superuser)
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)),
+                            include_token=False)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"yolo")
+
     @patch("base.api_views.file_storage_has_signed_urls")
     def test_result_file_download_redirect_login(self, file_storage_has_signed_urls):
         file_storage_has_signed_urls.return_value = True
-        tr, result, filepath = force_task_result()
+        tr, result, filepath = force_task_result(user=self.user)
         self.login()
         response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)),
                             include_token=False)
