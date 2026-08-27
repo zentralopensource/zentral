@@ -66,25 +66,28 @@ def create_task_result_on_publish(sender=None, headers=None, body=None, **kwargs
 
     except Exception:
         logger.exception("Could not store pending task %s result", headers["id"])
-    else:
-        if 'task_user' in task_kwargs:
-            try:
-                task_user_pk = task_kwargs['task_user']
 
-                # TODO: better circular import
-                from accounts.models import User, UserTask
-                from django_celery_results.models import TaskResult
+    task_user_pk = task_kwargs.get('task_user')
+    if task_user_pk is not None:
+        # TODO: better circular import
+        from accounts.models import User, UserTask
+        from django_celery_results.models import TaskResult
 
-                UserTask.objects.create(
-                    user=User.objects.get(id=task_user_pk),
-                    task_result=TaskResult.objects.get(task_id=headers["id"])
-                )
-            except Exception:
-                logger.exception(
-                    "UserTask could not be created. Is the user %s or task %s result missing?",
-                    task_user_pk,
-                    headers["id"]
-                )
+        try:
+            user = User.objects.get(pk=task_user_pk)
+        except User.DoesNotExist:
+            # the cascade took the ownership row away with the user. Nobody is left to attribute
+            # the task to, and nobody is left to keep it from either.
+            logger.error("Task %s user %s does not exist", headers["id"], task_user_pk)
+        else:
+            # the task result endpoints key on this row, so a task published without it could not
+            # be read by the user who asked for it. This signal runs before the message is
+            # published: an error here fails the launch and leaves nothing queued.
+            # A retry publishes the same task ID again, hence the get_or_create.
+            UserTask.objects.get_or_create(
+                task_result=TaskResult.objects.get(task_id=headers["id"]),
+                defaults={"user": user},
+            )
 
 
 before_task_publish.connect(create_task_result_on_publish, dispatch_uid='create_task_result_on_publish')
