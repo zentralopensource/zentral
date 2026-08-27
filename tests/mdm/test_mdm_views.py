@@ -916,6 +916,30 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.refresh_from_db()
         self.assertTrue(session.enrolled_device.awaiting_configuration)
 
+    def test_authenticate_already_authenticated_session_aborts(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        push_magic = session.enrolled_device.push_magic
+        token = session.enrolled_device.token.tobytes()
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            self._authenticate_payload(udid, serial_number, session),
+            session,
+            serial_number=serial_number,
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(
+            post_event,
+            "cannot authenticate enrollment session",
+            enrollment_session_status=DEPEnrollmentSession.COMPLETED,
+        )
+        # the request is rolled back
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.COMPLETED)
+        self.assertEqual(session.enrolled_device.push_magic, push_magic)
+        self.assertEqual(session.enrolled_device.token.tobytes(), token)
+
     def test_device_channel_token_update_missing_awaiting_configuration_keeps_current(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True)
         session.enrolled_device.awaiting_configuration = True
@@ -936,6 +960,117 @@ class MDMViewsTestCase(TestCase):
         self._assertSuccess(post_event, awaiting_configuration=None)
         session.enrolled_device.refresh_from_db()
         self.assertTrue(session.enrolled_device.awaiting_configuration)
+
+    def _device_channel_token_update_payload(self, udid, session, push_magic=None, token=None):
+        return {
+            "UDID": udid,
+            # No UserID or EnrollmentUserID -> Device Channel
+            "MessageType": "TokenUpdate",
+            "AwaitingConfiguration": False,
+            "NotOnConsole": False,
+            "PushMagic": push_magic if push_magic is not None else get_random_string(12),
+            "Token": token if token is not None else get_random_string(12).encode("utf-8"),
+            "Topic": session.get_enrollment().push_certificate.topic,
+        }
+
+    def test_device_channel_token_update_reenrollment_started_completes(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        reenrollment_session = ReEnrollmentSession.objects.create_from_enrollment_session(session)
+        self.assertEqual(reenrollment_session.status, ReEnrollmentSession.STARTED)
+        push_magic = get_random_string(12)
+        token = get_random_string(12).encode("utf-8")
+        payload = self._device_channel_token_update_payload(
+            udid, reenrollment_session, push_magic=push_magic, token=token
+        )
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            payload,
+            reenrollment_session,
+            serial_number=serial_number,
+        )
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(
+            post_event, token_type="device", device_created=False, user_created=False
+        )
+        reenrollment_session.refresh_from_db()
+        self.assertEqual(reenrollment_session.status, ReEnrollmentSession.COMPLETED)
+        self.assertEqual(reenrollment_session.enrolled_device.push_magic, push_magic)
+        self.assertEqual(reenrollment_session.enrolled_device.token.tobytes(), token)
+
+    def test_device_channel_token_update_reenrollment_refreshes_cert_not_valid_after(self, post_event):
+        # cert_not_valid_after drives the re-enrollment trigger
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        session.enrolled_device.cert_not_valid_after = datetime(2026, 1, 1)
+        session.enrolled_device.save()
+        reenrollment_session = ReEnrollmentSession.objects.create_from_enrollment_session(session)
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            self._device_channel_token_update_payload(
+                udid, reenrollment_session, push_magic=get_random_string(12)
+            ),
+            reenrollment_session,
+            serial_number=serial_number,
+        )
+        self.assertEqual(response.status_code, 200)
+        reenrollment_session.refresh_from_db()
+        self.assertEqual(reenrollment_session.status, ReEnrollmentSession.COMPLETED)
+        # the test client certificate expires on 2034-05-06
+        self.assertEqual(
+            reenrollment_session.enrolled_device.cert_not_valid_after, datetime(2034, 5, 6)
+        )
+
+    def _user_channel_token_update_payload(self, udid, session):
+        return {
+            "UDID": udid,
+            "UserID": str(uuid.uuid4()),  # -> User Channel
+            "MessageType": "TokenUpdate",
+            "AwaitingConfiguration": False,
+            "NotOnConsole": False,
+            "PushMagic": get_random_string(12),
+            "Token": get_random_string(12).encode("utf-8"),
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "UserLongName": get_random_string(42),
+            "UserShortName": get_random_string(12),
+        }
+
+    def test_user_channel_token_update_does_not_complete_the_session(self, post_event):
+        # a user channel token update carries no device token
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True)
+        self.assertFalse(session.enrolled_device.token)
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            self._user_channel_token_update_payload(udid, session),
+            session,
+        )
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, token_type="user", user_created=True)
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
+        self.assertEqual(session.enrolled_device.users.count(), 1)
+
+    def test_device_channel_token_update_first_enrollment_started_does_not_complete(self, post_event):
+        # only a re-enrollment may complete from STARTED
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            self._device_channel_token_update_payload(
+                udid, session, push_magic=get_random_string(12)
+            ),
+            session,
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(
+            post_event,
+            "cannot complete enrollment session",
+            enrollment_session_status=DEPEnrollmentSession.STARTED,
+        )
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
 
     def test_set_bootstrap_token_missing_awaiting_configuration_keeps_current(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(

@@ -54,6 +54,7 @@ from zentral.contrib.mdm.events.downloads import (
     post_mdm_download_error_event,
     post_mdm_download_event,
 )
+from zentral.contrib.mdm.exceptions import EnrollmentSessionStatusError
 from zentral.contrib.mdm.inventory import (
     ms_tree_from_payload,
     update_realm_user_machine_tags,
@@ -335,13 +336,19 @@ class CheckinView(MDMView):
                 )
 
         # update enrollment session
-        self.enrollment_session.set_authenticated_status(enrolled_device)
+        try:
+            self.enrollment_session.set_authenticated_status(enrolled_device)
+        except EnrollmentSessionStatusError:
+            # report it instead of a 500
+            self.abort("cannot authenticate enrollment session",
+                       enrollment_session_status=self.enrollment_session.status)
 
         # post event
         self.post_event("success", new_enrolled_device=created, reenrollment=is_reenrollment)
 
     def do_token_update(self):
         self.get_push_certificate()
+        self.get_certificate()
         awaiting_configuration = self.payload.get("AwaitingConfiguration")
         if awaiting_configuration is None:
             # Keep the current value: a TokenUpdate that omits AwaitingConfiguration must not clobber the
@@ -361,6 +368,10 @@ class CheckinView(MDMView):
             # payload token is the enrolled device token
             enrolled_device_defaults["token"] = payload_token
 
+        if self.certificate:
+            # cert_not_valid_after drives the re-enrollment trigger
+            enrolled_device_defaults.update(build_enrolled_device_cert_defaults(self.certificate))
+
         # enrolled device
         enrolled_device, device_created = EnrolledDevice.objects.update_or_create(
             udid=self.enrolled_device_udid,
@@ -373,8 +384,14 @@ class CheckinView(MDMView):
             enrolled_device.save(update_fields=["unlock_token", "updated_at"])
 
         # Update enrollment session
-        if enrolled_device.token and not self.enrollment_session.is_completed():
-            self.enrollment_session.set_completed_status(enrolled_device)
+        # a user channel token update carries no device token
+        if not self.enrollment_session.is_completed() and enrolled_device.token:
+            try:
+                self.enrollment_session.set_completed_status(enrolled_device)
+            except EnrollmentSessionStatusError:
+                # report it instead of a 500
+                self.abort("cannot complete enrollment session",
+                           enrollment_session_status=self.enrollment_session.status)
 
         # enrolled user
         user_created = False

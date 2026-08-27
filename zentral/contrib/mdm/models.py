@@ -2635,8 +2635,9 @@ class ReEnrollmentSession(EnrollmentSession):
         self._set_next_status(self.AUTHENTICATED, test, enrolled_device=enrolled_device)
 
     def set_completed_status(self, enrolled_device):
+        # a token update can complete the session with no authenticate
         test = (enrolled_device
-                and self.status == self.AUTHENTICATED
+                and self.status in (self.STARTED, self.AUTHENTICATED)
                 and self.enrolled_device == enrolled_device)
         self._set_next_status(self.COMPLETED, test)
 
