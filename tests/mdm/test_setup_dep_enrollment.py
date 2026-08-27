@@ -523,7 +523,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(enrollment.realm, realm)
         self.assertEqual(enrollment.macos_min_version, "13.3.1")
         self.assertEqual(enrollment.skip_setup_items, ["AppleID"])
-        define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
+        define_dep_profile_task.apply_async.assert_called_once_with(
+            (enrollment.pk,), {"task_user": self.user.pk}
+        )
 
     @patch("zentral.contrib.mdm.views.dep_enrollments.define_dep_profile_task")
     def test_update_dep_enrollment_post_remove_admin(self, define_dep_profile_task):
@@ -550,7 +552,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
         # the DEP profile push and the audit event
         self.assertEqual(len(callbacks), 2)
-        define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
+        define_dep_profile_task.apply_async.assert_called_once_with(
+            (enrollment.pk,), {"task_user": self.user.pk}
+        )
         enrollment.refresh_from_db()
         self.assertIsNone(enrollment.admin_full_name)
         self.assertIsNone(enrollment.admin_short_name)
@@ -583,7 +587,9 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/depenrollment_detail.html")
         # the DEP profile push and the audit event
         self.assertEqual(len(callbacks), 2)
-        define_dep_profile_task.apply_async.assert_called_once_with((enrollment.pk,))
+        define_dep_profile_task.apply_async.assert_called_once_with(
+            (enrollment.pk,), {"task_user": self.user.pk}
+        )
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.admin_full_name, "yolo2")
         self.assertEqual(enrollment.admin_short_name, "fomo2")

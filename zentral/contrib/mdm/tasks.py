@@ -161,7 +161,8 @@ def assign_dep_virtual_server_default_enrollment_task(self, dep_virtual_server_p
 
 
 @shared_task
-def define_dep_profile_task(dep_enrollment_pk):
+def define_dep_profile_task(dep_enrollment_pk, **kwargs):
+    # kwargs absorbs task_user, added by the view for the UserTask created in the celery signal
     dep_enrollment = DEPEnrollment.objects.select_related("virtual_server").get(pk=dep_enrollment_pk)
     return define_dep_profile(dep_enrollment)
 

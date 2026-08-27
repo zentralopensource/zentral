@@ -115,6 +115,8 @@ The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `
 ### Bug fixes
 
 
+The task that pushes an updated DEP profile to Apple Business Manager belongs to the user who saved the enrollment now. It was the only task that a user launched with no record of the user, so it was not in the task list of that user, and only a superuser saw its result.
+
 A retried task does not write an error to the logs about its user record anymore. Celery publishes a retry with the same task ID, Zentral tried to write the record a second time, and the unique constraint refused it. The task that assigns the default enrollment of a DEP virtual server retries when Apple throttles it.
 
 The notifier sets a connect timeout, a socket timeout and a health check interval on its Redis client now. Without the timeouts the socket stays in blocking mode: a Redis server that stops answering and does not close the connection, a managed Redis during a failover for example, blocked a notification for ever in the middle of a web request. The health check interval covers the listener thread, which reads only, and which stayed silent for ever on the same connection because a read that times out there does not give an error. The listener sends a periodic PING now, and the write that fails is what makes the notifier reconnect. Zentral applies configuration changes on the probes, the event stores and the Monolith repositories again after this failure, and not only after a restart.

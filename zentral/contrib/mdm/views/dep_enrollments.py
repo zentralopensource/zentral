@@ -148,7 +148,11 @@ class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
             enrollment_secret_form.save_m2m()
             if serialize_dep_profile(dep_enrollment) != prev_dep_profile:
                 logger.info("Push updated DEP profile %s to ABM", dep_enrollment.pk)
-                transaction.on_commit(lambda: define_dep_profile_task.apply_async((dep_enrollment.pk,)))
+                transaction.on_commit(
+                    lambda: define_dep_profile_task.apply_async(
+                        (dep_enrollment.pk,), {"task_user": request.user.id}
+                    )
+                )
             else:
                 logger.info("DEP profile %s unchanged", dep_enrollment.pk)
             post_audit_event(request, dep_enrollment, AuditEvent.Action.UPDATED, prev_value=prev_value)
