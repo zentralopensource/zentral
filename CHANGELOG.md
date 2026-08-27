@@ -125,6 +125,8 @@ The task that pushes an updated DEP profile to Apple Business Manager belongs to
 
 A retried task does not write an error to the logs about its user record anymore. Celery publishes a retry with the same task ID, Zentral tried to write the record a second time, and the unique constraint refused it. The task that assigns the default enrollment of a DEP virtual server retries when Apple throttles it.
 
+The task list of the web console reads the user of each task together with the tasks now. It made one more query for each row of the page, and a superuser sees the tasks of all the users.
+
 The notifier sets a connect timeout, a socket timeout and a health check interval on its Redis client now. Without the timeouts the socket stays in blocking mode: a Redis server that stops answering and does not close the connection, a managed Redis during a failover for example, blocked a notification for ever in the middle of a web request. The health check interval covers the listener thread, which reads only, and which stayed silent for ever on the same connection because a read that times out there does not give an error. The listener sends a periodic PING now, and the write that fails is what makes the notifier reconnect. Zentral applies configuration changes on the probes, the event stores and the Monolith repositories again after this failure, and not only after a restart.
 
 The event store cache expires after 300 seconds now. A notifier notification was the only thing that made an instance load it again, so an instance that did not get one kept the store configuration it read when it started, and sent events to a store an operator had already changed. The Cedar policies cache had this protection, the store cache did not.

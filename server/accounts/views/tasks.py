@@ -13,7 +13,7 @@ logger = logging.getLogger("zentral.accounts.views.tasks")
 class TaskViewMixin:
     def get_queryset(self):
         return (task_results_for_user(self.request.user)
-                .select_related('usertask')
+                .select_related('usertask__user')
                 .order_by('-date_created'))
 
 
