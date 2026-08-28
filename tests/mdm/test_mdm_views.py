@@ -1052,6 +1052,32 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
         self.assertEqual(session.enrolled_device.users.count(), 1)
 
+    def test_user_channel_token_update_without_user_short_name(self, post_event):
+        # UserShortName is optional, and the column is not nullable
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True)
+        payload = self._user_channel_token_update_payload(udid, session)
+        del payload["UserShortName"]
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, token_type="user", user_created=True)
+        enrolled_user = session.enrolled_device.users.get(user_id=payload["UserID"])
+        self.assertEqual(enrolled_user.long_name, payload["UserLongName"])
+        self.assertEqual(enrolled_user.short_name, "")
+
+    def test_user_channel_token_update_without_user_short_name_keeps_the_stored_one(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu, authenticated=True)
+        payload = self._user_channel_token_update_payload(udid, session)
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        second_payload = self._user_channel_token_update_payload(udid, session)
+        second_payload["UserID"] = payload["UserID"]
+        del second_payload["UserShortName"]
+        response = self._put(reverse("mdm_public:checkin"), second_payload, session)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, token_type="user", user_created=False)
+        enrolled_user = session.enrolled_device.users.get(user_id=payload["UserID"])
+        self.assertEqual(enrolled_user.short_name, payload["UserShortName"])
+
     def test_device_channel_token_update_first_enrollment_started_does_not_complete(self, post_event):
         # only a re-enrollment may complete from STARTED
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)

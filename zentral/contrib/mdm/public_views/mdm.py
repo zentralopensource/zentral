@@ -401,8 +401,11 @@ class CheckinView(MDMView):
             enrolled_user_defaults = {"enrolled_device": enrolled_device,
                                       "enrollment_id": self.enrollment_user_id,
                                       "long_name": self.payload.get("UserLongName"),
-                                      "short_name": self.payload.get("UserShortName"),
                                       "token": payload_token}
+            # UserShortName is optional, and the column is not nullable
+            short_name = self.payload.get("UserShortName")
+            if short_name is not None:
+                enrolled_user_defaults["short_name"] = short_name
             enrolled_user, user_created = EnrolledUser.objects.update_or_create(
                 user_id=self.enrolled_user_id,
                 defaults=enrolled_user_defaults

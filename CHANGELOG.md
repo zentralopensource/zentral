@@ -183,6 +183,8 @@ Malformed MDM client capabilities do not take a device out of management anymore
 
 An MDM re-enrollment completes on the token update of the device now. The re-enrollment profile carries the payload identifier of the profile it replaces, so the device updates its MDM payload and sends no authenticate. Zentral waited for that authenticate: the session stayed in the started state, the check-in gave a 500 with no event on each token update, and the certificate expiry date that starts the next re-enrollment was never written, so the device re-enrolled every four hours. A token update writes that date now. An authenticate on a session that is already authenticated is still refused, with a 400 and an event that carries the status of the session, and not a 500.
 
+An MDM token update that has no `UserShortName` does not give a 500 anymore. Apple makes the key optional, but the short name of an enrolled user is not nullable. The check-in writes the column only when the payload carries the key now, and a new user gets an empty short name.
+
 The MDM software update enforcement API rejects a null delay in days or local time when a maximum target OS version is set. A latest enforcement needs both fields to calculate the target date of its declaration. If you omit them, the defaults of 14 days and 09:30 apply, as before.
 
 Fixed the scope of a Monolith sub manifest package that uses the *Default Installs* key. Zentral put the package in the `default_installs` of every machine, and ignored the excluded tags and the shards. A machine out of scope kept a self-serve entry that can install the package later, with no request from the user. The web console form also removed the excluded tags and the shards from a package that uses the *Managed Updates* key.
