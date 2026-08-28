@@ -104,7 +104,7 @@ An issuer that does not accept a token — bad signature, wrong audience, or a c
 
 Once the issuer exists, the workload exchanges its identity token at [`/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/`](#apiaccountstoken_issuersoidcuuidissuer_idauth). The tokens it mints are ordinary API tokens with an expiry, and appear in the service account's token list like any other.
 
-Issuers can also be managed over the API, at `/api/accounts/token_issuers/oidc/`.
+Issuers can also be managed over the API — see [`/api/accounts/token_issuers/oidc/`](#apiaccountstoken_issuersoidc).
 
 ## HTTP API
 
@@ -159,10 +159,153 @@ curl -H "Authorization: Token $ZTL_API_TOKEN" \
      https://$ZTL_FQDN/api/task_result/d40e9320-8c0c-459b-bfdb-001a9f73619f/download/
 ```
 
+### `/api/accounts/token_issuers/oidc/`
+
+The issuers themselves, as described in [OIDC API token issuers](#oidc-api-token-issuers). An issuer can only be attached to a service account, and only by someone allowed to [issue credentials for it](#who-can-issue-a-token-for-whom).
+
+**NB:** creating or updating an issuer fetches the OpenID configuration from the `issuer_uri` to validate it, so the Zentral server needs to be able to reach the provider. An unreachable or non-OpenID URI is a `400`.
+
+#### List all OIDC API token issuers
+
+* method: GET
+* PBAC action: `Accounts::Action::"viewOIDCAPITokenIssuer"`
+* Optional filter parameter:
+    * `name`: name of the issuer
+* Optional ordering parameter:
+    * `ordering`: `created_at` or `-created_at`. `-created_at` by default.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/accounts/token_issuers/oidc/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": "4d3fcc26-1509-4221-985e-7da77e1106dc",
+            "name": "GitHub Actions - infra",
+            "description": "Deploys from the infra repository",
+            "issuer_uri": "https://token.actions.githubusercontent.com",
+            "audience": "https://zentral.example.com",
+            "cel_condition": "claims.repository == \"acme/infra\"",
+            "max_validity": 900,
+            "created_at": "2026-08-20T13:06:49.861942",
+            "updated_at": "2026-08-20T13:06:49.861947",
+            "user": 8
+        }
+    ]
+}
+```
+
+#### Add an OIDC API token issuer
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Accounts::Action::"createOIDCAPITokenIssuer"`
+
+`user` is the primary key of the service account the issuer mints tokens for.
+
+Example:
+
+issuer.json
+
+```json
+{
+  "user": 8,
+  "name": "GitHub Actions - infra",
+  "description": "Deploys from the infra repository",
+  "issuer_uri": "https://token.actions.githubusercontent.com",
+  "audience": "https://zentral.example.com",
+  "cel_condition": "claims.repository == \"acme/infra\"",
+  "max_validity": 900
+}
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X POST -d @issuer.json \
+  https://$ZTL_FQDN/api/accounts/token_issuers/oidc/ \
+  |python3 -m json.tool
+```
+
+Response (201 Created):
+
+```json
+{
+    "id": "4d3fcc26-1509-4221-985e-7da77e1106dc",
+    "name": "GitHub Actions - infra",
+    "description": "Deploys from the infra repository",
+    "issuer_uri": "https://token.actions.githubusercontent.com",
+    "audience": "https://zentral.example.com",
+    "cel_condition": "claims.repository == \"acme/infra\"",
+    "max_validity": 900,
+    "created_at": "2026-08-20T13:06:49.861942",
+    "updated_at": "2026-08-20T13:06:49.861947",
+    "user": 8
+}
+```
+
+### `/api/accounts/token_issuers/oidc/<uuid:pk>/`
+
+#### Get an OIDC API token issuer
+
+* method: GET
+* PBAC action: `Accounts::Action::"viewOIDCAPITokenIssuer"`
+* `<uuid:pk>`: the primary key of the issuer
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/accounts/token_issuers/oidc/4d3fcc26-1509-4221-985e-7da77e1106dc/ \
+  |python3 -m json.tool
+```
+
+#### Update an OIDC API token issuer
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Accounts::Action::"updateOIDCAPITokenIssuer"`
+* `<uuid:pk>`: the primary key of the issuer
+
+Send every attribute, `user` included — it is re-checked against your own roles on each update.
+
+#### Delete an OIDC API token issuer
+
+* method: DELETE
+* PBAC action: `Accounts::Action::"deleteOIDCAPITokenIssuer"`
+* `<uuid:pk>`: the primary key of the issuer
+
+Deleting an issuer stops it minting new tokens. The tokens it already minted stay valid until they expire — delete them from the service account's token list to revoke them now.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -X DELETE \
+  https://$ZTL_FQDN/api/accounts/token_issuers/oidc/4d3fcc26-1509-4221-985e-7da77e1106dc/
+```
+
+Response (204 No Content)
+
 ### `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/`
 
 * method: POST
-* PBAC action: none
+* PBAC action: none — the identity token is the credential
 
 Use this endpoint to exchange an OIDC identity token (Signed JWT) for a short-lived API token. The issuer must be set up first — see [OIDC API token issuers](#oidc-api-token-issuers).
 

@@ -124,6 +124,157 @@ Zentral will parse the body of the request based on the `Content-Type` HTTP head
 
 * `Content-Type: application/json`
 
+### /api/monolith/repositories/
+
+Terraform resource: [`zentral_monolith_repository`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_repository)  
+Terraform data source: [`zentral_monolith_repository`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_repository)
+
+A repository is where the Munki packages and pkginfo files come from. See [Repositories](#repositories) for the difference between the backends.
+
+|Attribute|Description|
+|---|---|
+|`name`|Required, unique.|
+|`backend`|`S3`, `AZURE` or `VIRTUAL`. A `VIRTUAL` repository holds packages uploaded directly into Zentral.|
+|`s3_kwargs` / `azure_kwargs`|The backend settings. Only the one matching `backend` is used; the other stays `null`.|
+|`meta_business_unit`|Optional. Restricts the repository to one business unit. Once set it cannot be changed.|
+
+`provisioning_uid`, `icon_hashes`, `client_resources` and `last_synced_at` are read only. A repository created by provisioning carries a `provisioning_uid`, and can be neither updated nor deleted over the API — it is owned by whatever provisioned it.
+
+#### List all repositories
+
+* method: GET
+* PBAC action: `Monolith::Action::"viewRepository"`
+* Optional filter parameter:
+    * `name`: name of the repository
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/monolith/repositories/" \
+  |python3 -m json.tool
+```
+
+Response
+
+```json
+[
+    {
+        "id": 4,
+        "provisioning_uid": null,
+        "backend": "VIRTUAL",
+        "azure_kwargs": null,
+        "s3_kwargs": null,
+        "name": "Virtual",
+        "meta_business_unit": 7,
+        "icon_hashes": {},
+        "client_resources": [],
+        "created_at": "2026-08-20T13:12:53.147701",
+        "updated_at": "2026-08-20T13:12:53.149058",
+        "last_synced_at": null
+    }
+]
+```
+
+#### Add a repository
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Monolith::Action::"createRepository"`
+
+Example
+
+repository.json
+
+```json
+{
+  "name": "S3",
+  "backend": "S3",
+  "s3_kwargs": {
+    "bucket": "acme-munki",
+    "region_name": "eu-central-1",
+    "prefix": "munki_repo"
+  }
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @repository.json \
+  "https://$ZTL_FQDN/api/monolith/repositories/" \
+  |python3 -m json.tool
+```
+
+Response (201 Created)
+
+```json
+{
+    "id": 5,
+    "provisioning_uid": null,
+    "backend": "S3",
+    "azure_kwargs": null,
+    "s3_kwargs": {
+        "bucket": "acme-munki",
+        "region_name": "eu-central-1",
+        "prefix": "munki_repo"
+    },
+    "name": "S3",
+    "meta_business_unit": null,
+    "icon_hashes": {},
+    "client_resources": [],
+    "created_at": "2026-08-20T13:12:53.155983",
+    "updated_at": "2026-08-20T13:12:53.156155",
+    "last_synced_at": null
+}
+```
+
+**IMPORTANT** When using AWS S3 buckets, do not put credentials in `s3_kwargs` — use [AWS instance profiles](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html), [task IAM roles](https://docs.aws.amazon.com/AmazonECS/latest/userguide/task-iam-roles.html) or another integrated authentication mechanism.
+
+### /api/monolith/repositories/`<int:pk>`/
+
+#### Get a repository
+
+* method: GET
+* PBAC action: `Monolith::Action::"viewRepository"`
+* `<int:pk>`: the primary key of the repository
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/monolith/repositories/4/" \
+  |python3 -m json.tool
+```
+
+#### Update a repository
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Monolith::Action::"updateRepository"`
+* `<int:pk>`: the primary key of the repository
+
+A provisioned repository cannot be updated. Neither can `meta_business_unit` be changed once it is set.
+
+#### Delete a repository
+
+* method: DELETE
+* PBAC action: `Monolith::Action::"deleteRepository"`
+* `<int:pk>`: the primary key of the repository
+
+A repository whose catalogs are linked to a manifest cannot be deleted, and neither can a provisioned one.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/monolith/repositories/4/"
+```
+
+Response (204 No Content)
+
 ### /api/monolith/repositories/`<int:pk>`/sync/
 
 #### Fetch the package infos, the icons, the client resources from the repository
@@ -185,6 +336,9 @@ Only one sync runs at a time for a given repository. If a sync is already in pro
 ```
 
 ### /api/monolith/manifests/
+
+Terraform resource: [`zentral_monolith_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest)  
+Terraform data source: [`zentral_monolith_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_manifest)
 
 #### List all manifests
 
@@ -351,7 +505,50 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
+### /api/monolith/manifests/`<int:pk>`/cache_servers/
+
+#### Register a Munki cache server
+
+* method: POST
+* Content-Type: application/json
+* PBAC actions — **all three** are required:
+    * `Monolith::Action::"updateManifest"`
+    * `Monolith::Action::"createCacheServer"`
+    * `Monolith::Action::"updateCacheServer"`
+* `<int:pk>`: the primary key of the manifest.
+
+Use this endpoint from a [Munki cache server](https://github.com/munki/munki/wiki/Managed-Software-Center-Preferences) to register itself with a manifest. Zentral then serves that cache server's `base_url` to the machines reaching it from the same public IP address.
+
+|Attribute|Description|
+|---|---|
+|`name`|Required. The cache server name. Registering again with the same name updates the existing record rather than adding one.|
+|`base_url`|Required. The URL the machines should fetch the packages from.|
+
+The caller's public IP address is recorded from the request — it is not part of the payload.
+
+Example
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Berlin office", "base_url": "http://munki-cache.acme.example.com"}' \
+  "https://$ZTL_FQDN/api/monolith/manifests/1/cache_servers/" \
+  |python3 -m json.tool
+```
+
+Response
+
+```json
+{
+  "status": 0
+}
+```
+
 ### /api/monolith/catalogs/
+
+Terraform resource: [`zentral_monolith_catalog`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_catalog)  
+Terraform data source: [`zentral_monolith_catalog`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_catalog)
 
 #### List all catalogs
 
@@ -514,6 +711,9 @@ Response (204 No Content)
 
 ### /api/monolith/conditions/
 
+Terraform resource: [`zentral_monolith_condition`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_condition)  
+Terraform data source: [`zentral_monolith_condition`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_condition)
+
 #### List all conditions
 
 * method: GET
@@ -669,6 +869,9 @@ $ curl -X DELETE \
 Response (204 No Content)
 
 ### /api/monolith/enrollments/
+
+Terraform resource: [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_enrollment)  
+Terraform data source: [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_enrollment)
 
 #### List all enrollments
 
@@ -885,7 +1088,162 @@ $ curl -X DELETE \
 
 Response (204 No Content)
 
+### /api/monolith/enrollments/`<int:pk>`/plist/
+
+The [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_enrollment) Terraform resource exposes this URL as its read-only `plist_url` attribute.
+
+#### Download the enrollment plist file
+
+* method: GET
+* PBAC action: `Monolith::Action::"viewEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+A plist with the Munki configuration keys, for a custom settings payload on the `ManagedInstalls` preference domain. This is the URL returned as the enrollment's `plist_download_url`.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/monolith/enrollments/1/plist/" \
+  --output zentral_monolith_configuration.plist
+```
+
+### /api/monolith/enrollments/`<int:pk>`/configuration_profile/
+
+The [`zentral_monolith_enrollment`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_enrollment) Terraform resource exposes this URL as its read-only `configuration_profile_url` attribute.
+
+#### Download the enrollment configuration profile
+
+* method: GET
+* PBAC action: `Monolith::Action::"viewEnrollment"`
+* `<int:pk>`: the primary key of the enrollment.
+
+The same keys as a signed configuration profile, ready to distribute over MDM. This is the URL returned as the enrollment's `configuration_profile_download_url`.
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/monolith/enrollments/1/configuration_profile/" \
+  --output zentral_monolith_configuration.mobileconfig
+```
+
+### /api/monolith/manifest_enrollment_packages/
+
+Terraform resource: [`zentral_monolith_manifest_enrollment_package`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest_enrollment_package)
+
+A manifest enrollment package attaches another module's enrollment — munki, osquery, … — to a manifest, so that monolith adds the corresponding package to the manifest of the machines in scope. The builders available are the ones listed under `enrollment_package_builders` in the [monolith configuration](#zentral-configuration).
+
+|Attribute|Description|
+|---|---|
+|`manifest`|Required. The primary key of the manifest.|
+|`builder`|Required. The dotted path of the builder, exactly as configured in `enrollment_package_builders`.|
+|`enrollment_pk`|Required. The primary key of the enrollment to distribute, in the module the builder belongs to.|
+|`tags`|The tags a machine must carry to get the package. **All** of them are required — unlike catalogs, enrollment packages use AND logic. Empty means every machine.|
+
+`version` is read only, and bumped whenever the package is rebuilt.
+
+#### List all manifest enrollment packages
+
+* method: GET
+* PBAC action: `Monolith::Action::"viewManifestEnrollmentPackage"`
+* Optional filter parameters:
+    * `manifest_id`: the primary key of a manifest
+    * `builder`: the dotted path of a builder
+
+Example
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/monolith/manifest_enrollment_packages/?manifest_id=1" \
+  |python3 -m json.tool
+```
+
+Response
+
+```json
+[
+    {
+        "id": 1,
+        "manifest": 1,
+        "tags": [
+            3
+        ],
+        "builder": "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder",
+        "enrollment_pk": 2,
+        "version": 1,
+        "created_at": "2026-08-20T13:12:53.147701",
+        "updated_at": "2026-08-20T13:12:53.149058"
+    }
+]
+```
+
+#### Add a manifest enrollment package
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Monolith::Action::"createManifestEnrollmentPackage"`
+
+Adding one bumps the manifest version and builds the package. The enrollment it points at becomes owned by monolith — from then on it cannot be updated or deleted through its own module's API.
+
+Example
+
+manifest_enrollment_package.json
+
+```json
+{
+  "manifest": 1,
+  "builder": "zentral.contrib.osquery.osx_package.builder.OsqueryZentralEnrollPkgBuilder",
+  "enrollment_pk": 2,
+  "tags": [3]
+}
+```
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @manifest_enrollment_package.json \
+  "https://$ZTL_FQDN/api/monolith/manifest_enrollment_packages/" \
+  |python3 -m json.tool
+```
+
+### /api/monolith/manifest_enrollment_packages/`<int:pk>`/
+
+#### Get a manifest enrollment package
+
+* method: GET
+* PBAC action: `Monolith::Action::"viewManifestEnrollmentPackage"`
+* `<int:pk>`: the primary key of the manifest enrollment package.
+
+#### Update a manifest enrollment package
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Monolith::Action::"updateManifestEnrollmentPackage"`
+* `<int:pk>`: the primary key of the manifest enrollment package.
+
+#### Delete a manifest enrollment package
+
+* method: DELETE
+* PBAC action: `Monolith::Action::"deleteManifestEnrollmentPackage"`
+* `<int:pk>`: the primary key of the manifest enrollment package.
+
+Deleting one bumps the manifest version and removes the package from the manifests. The underlying enrollment is **kept** — it is released back to its own module, not deleted.
+
+Example
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/monolith/manifest_enrollment_packages/1/"
+```
+
+Response (204 No Content)
+
 ### /api/monolith/manifest_catalogs/
+
+Terraform resource: [`zentral_monolith_manifest_catalog`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest_catalog)
 
 #### List all manifest catalogs
 
@@ -1048,6 +1406,8 @@ Response (204 No Content)
 
 ### /api/monolith/manifest_sub_manifests/
 
+Terraform resource: [`zentral_monolith_manifest_sub_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_manifest_sub_manifest)
+
 #### List all manifest sub manifests
 
 * method: GET
@@ -1209,6 +1569,9 @@ Response (204 No Content)
 
 ### /api/monolith/sub_manifests/
 
+Terraform resource: [`zentral_monolith_sub_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_sub_manifest)  
+Terraform data source: [`zentral_monolith_sub_manifest`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/data-sources/monolith_sub_manifest)
+
 #### List all sub manifests
 
 * method: GET
@@ -1369,6 +1732,8 @@ $ curl -X DELETE \
 Response (204 No Content)
 
 ### /api/monolith/sub_manifest_pkg_infos/
+
+Terraform resource: [`zentral_monolith_sub_manifest_pkg_info`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/monolith_sub_manifest_pkg_info)
 
 #### List all sub manifest pkg infos
 
