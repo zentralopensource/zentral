@@ -43,6 +43,10 @@ Zentral adds a `default_installs` package to the `optional_installs` of the sub 
 
 The Monolith API publishes the same `zentral_audit` events as the web console now. The catalogs, the conditions, the enrollments and the manifest enrollment packages changed with no record of it.
 
+The version of a PkgInfo in the *PkgInfos* list and on a PkgInfo name page links to its data now: the pkginfo as it is stored in Zentral, the pkginfo as it is served in the catalogs, and the differences between the two. Use it to see the rewrites monolith applies, for example the `installer_item_location` it points at its own repository endpoint.
+
+The raw pkginfo carries the installation checks and the pre/postinstall scripts, so the new `Monolith::Action::"viewPkgInfoData"` PBAC action gates the page, and it is not part of the viewer action groups. It takes the PkgInfo as its resource, with its repository and its active catalogs as parents, and the repository with its meta business unit as parent, so a policy can be scoped to one PkgInfo, to a catalog, to a repository, or to the meta business unit. A `forbid` policy on a catalog takes a restricted catalog back. The action has no API endpoint, and no service account can reach it.
+
 
 #### Munki
 
