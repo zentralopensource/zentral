@@ -117,6 +117,10 @@ A task belongs to the user or the service account that launched it, and `/api/ta
 
 A task that a device launched, and a task that Zentral launched before version 2025.11, has no user, so only a superuser can read those. The exports are temporary: launch the export again to get a file that you can download.
 
+#### 🧨 PBAC User action groups
+
+The `UserActions` action groups contain the view actions of the models now. A role with a permit on `Action::"GlobalUserActions"`, or on the `UserActions` group of one namespace, reads the pages and the API endpoints of the models in that scope. Review your policies before you update.
+
 
 ### Bug fixes
 

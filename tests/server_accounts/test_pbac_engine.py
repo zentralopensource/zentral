@@ -529,11 +529,11 @@ class PBACEngineTestCase(TestCase):
             ],
         )
 
-    def test_user_actions(self):
-        user_action_keys = (
+    def test_user_only_actions(self):
+        # The actions a user role gets on top of a viewer role.
+        user_only_action_keys = (
             ("createMachineTag", "Inventory"),
             ("deleteMachineTag", "Inventory"),
-            ("viewMachineTag", "Inventory"),
             ("disownDEPDevice", "MDM"),
             ("forceInstallArtifact", "MDM"),
             ("viewAdminPassword", "MDM"),
@@ -542,10 +542,10 @@ class PBACEngineTestCase(TestCase):
             ("viewRecoveryPassword", "MDM"),
             ("syncRepository", "Monolith"),
             ("forceCleanSync", "Santa"),
-            ("viewEnrolledMachine", "Santa"),
         )
-        found_user_actions = 0
+        found_user_only_actions = 0
         global_user_action_group = engine.get_action_group(ActionGroupBasename.USER)
+        global_viewer_action_group = engine.get_action_group(ActionGroupBasename.VIEWER)
         for (action_id, namespace_id), action in engine.actions.items():
             # NOOP is the module-level placeholder used by has_module_perms.
             # It belongs to admin/user/viewer in every namespace by design,
@@ -557,14 +557,52 @@ class PBACEngineTestCase(TestCase):
                 ActionGroupBasename.USER,
                 engine.get_namespace(namespace_id)
             )
-            if (action_id, namespace_id) in user_action_keys:
+            if (action_id, namespace_id) in user_only_action_keys:
                 self.assertIn(global_user_action_group, action.parents)
                 self.assertIn(user_action_group, action.parents)
-                found_user_actions += 1
-            else:
+                # The MDM secret readers are named view* but reveal a secret.
+                self.assertNotIn(global_viewer_action_group, action.parents)
+                found_user_only_actions += 1
+            elif global_viewer_action_group not in action.parents:
                 self.assertNotIn(global_user_action_group, action.parents)
                 self.assertNotIn(user_action_group, action.parents)
-        self.assertEqual(found_user_actions, len(user_action_keys))
+        self.assertEqual(found_user_only_actions, len(user_only_action_keys))
+
+    def test_action_groups_are_nested(self):
+        # A viewer action is a user action, a user action an admin action.
+        found_viewer_actions = found_user_actions = 0
+        for (_, namespace_id), action in engine.actions.items():
+            namespace = engine.get_namespace(namespace_id)
+            in_viewer_group = engine.get_action_group(ActionGroupBasename.VIEWER, namespace) in action.parents
+            if in_viewer_group:
+                found_viewer_actions += 1
+                self.assertIn(engine.get_action_group(ActionGroupBasename.VIEWER), action.parents)
+            if in_viewer_group or engine.get_action_group(ActionGroupBasename.USER, namespace) in action.parents:
+                found_user_actions += 1
+                self.assertIn(engine.get_action_group(ActionGroupBasename.USER, namespace), action.parents)
+                self.assertIn(engine.get_action_group(ActionGroupBasename.USER), action.parents)
+                self.assertIn(engine.get_action_group(ActionGroupBasename.ADMIN, namespace), action.parents)
+                self.assertIn(engine.get_action_group(ActionGroupBasename.ADMIN), action.parents)
+        self.assertTrue(found_viewer_actions)
+        self.assertGreater(found_user_actions, found_viewer_actions)
+
+    def test_model_default_view_action_groups(self):
+        # The model-default actions the engine auto-registers.
+        namespace = engine.get_namespace("Inventory")
+        for action_id, basenames in (
+            ("viewTag", (ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER)),
+            ("createTag", (ActionGroupBasename.ADMIN,)),
+            ("updateTag", (ActionGroupBasename.ADMIN,)),
+            ("deleteTag", (ActionGroupBasename.ADMIN,)),
+        ):
+            action = engine.get_action(action_id, namespace)
+            expected = []
+            for basename in basenames:
+                expected.extend((
+                    engine.get_action_group(basename, namespace),
+                    engine.get_action_group(basename),
+                ))
+            self.assertEqual(action.parents, expected)
 
 
 class PBACEngineRegistrationTestCase(TestCase):
