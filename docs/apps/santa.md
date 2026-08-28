@@ -759,9 +759,9 @@ The rulesets can be posted in JSON or YAML format. See *Examples* below, and the
 
 |Attribute|Mandatory|Value|
 |---|---|---|
-|`rule_type`|✓|Either `BINARY`, `CERTIFICATE`, `BUNDLE`, or `TEAMID`|
-|`identifier`|✓|The `BINARY`, `CERTIFICATE`, `BUNDLE` sha256 hex digest,<br>or the `TEAMID` of the signing certificate|
-|`policy`|✓|Either `ALLOWLIST`, `ALLOWLIST_COMPILER`, `BLOCKLIST`,<br>or `SILENT_BLOCKLIST`|
+|`rule_type`|✓|Either `CDHASH`, `BINARY`, `SIGNINGID`, `CERTIFICATE`,<br>or `TEAMID`|
+|`identifier`|✓|The `BINARY` or `CERTIFICATE` sha256 hex digest,<br>the `CDHASH` hex digest,<br>the `SIGNINGID` as `TEAMID:BUNDLEID` (or `platform:BUNDLEID`),<br>or the `TEAMID` of the signing certificate|
+|`policy`|✓|Either `ALLOWLIST`, `ALLOWLIST_COMPILER`, `BLOCKLIST`,<br>or `SILENT_BLOCKLIST`.<br>`ALLOWLIST_COMPILER` is only valid for the `SIGNINGID`, `BINARY`<br>and `CDHASH` rule types|
 |`custom_msg`||Optional message to show when the application is blocked.<br>Only valid for a `BLOCKLIST` policy|
 |`description`||Optional description to add context to a rule.<br>Only displayed in the Zentral GUI.|
 |`serial_numbers`||A list of machine serial numbers.<br>If set, **only** those machines will receive the rule|

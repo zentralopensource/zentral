@@ -139,6 +139,8 @@ class RuleSerializer(serializers.ModelSerializer):
 
         # policy
         policy = Rule.Policy(data.get("policy"))
+        if not policy.compatible_with_target_type(target_type):
+            raise serializers.ValidationError({"policy": Target.Type.compiler_policy_error()})
         if not policy.compatible_with_custom_msg_and_url:
             errors = {}
             for field in ["custom_msg", "custom_url"]:
@@ -289,6 +291,9 @@ class RuleUpdateSerializer(serializers.Serializer):
             if not identifier:
                 raise serializers.ValidationError({"identifier": f"Invalid {rule_type} identifier"})
             data["identifier"] = identifier
+        # compiler policy only on the rule types the client accepts it on
+        if not data["policy"].compatible_with_target_type(rule_type):
+            raise serializers.ValidationError({"policy": Target.Type.compiler_policy_error()})
         # custom message only with blocklist / CEL rule
         if not data["policy"].compatible_with_custom_msg_and_url:
             if data.get("custom_msg"):

@@ -1,6 +1,7 @@
 import datetime
+from django.core.exceptions import ValidationError
 from django.test import TestCase
-from zentral.contrib.santa.models import EnrolledMachine, Target
+from zentral.contrib.santa.models import EnrolledMachine, Rule, Target
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from .utils import (add_file_to_test_class, force_ballot, force_configuration, force_enrolled_machine,
                     force_realm_user, force_target, force_target_state, force_voting_group)
@@ -142,3 +143,51 @@ class SantaSerializationTestCase(TestCase, SerializeForEventAssertions):
         self.assertIsNone(serialized["last_preflight_at"])
         # the sync session is an implementation detail of the sync protocol
         self.assertNotIn("sync_session", serialized)
+
+
+class SantaRuleModelTestCase(TestCase):
+    maxDiff = None
+
+    # compiler policy target types
+
+    def test_compatible_with_compiler_policy(self):
+        # the order is the one the error message enumerates
+        self.assertEqual([member.value for member in Target.Type if member.compatible_with_compiler_policy],
+                         ["SIGNINGID", "BINARY", "CDHASH"])
+
+    def test_compiler_policy_error(self):
+        self.assertEqual(Target.Type.compiler_policy_error(),
+                         "Only available for SIGNINGID, BINARY, CDHASH targets")
+
+    # clean
+
+    def _clean_rule(self, target_type, policy):
+        rule = Rule(configuration=force_configuration(),
+                    target=force_target(target_type),
+                    policy=policy)
+        # the ruleset FK is nullable but not blank, and no rule form offers it
+        rule.full_clean(exclude=["ruleset"])
+
+    def test_clean_compiler_policy_incompatible_target_type(self):
+        for target_type in (Target.Type.TEAM_ID, Target.Type.CERTIFICATE):
+            with self.subTest(target_type):
+                with self.assertRaises(ValidationError) as cm:
+                    self._clean_rule(target_type, Rule.Policy.ALLOWLIST_COMPILER)
+                self.assertEqual(cm.exception.message_dict, {"policy": [Target.Type.compiler_policy_error()]})
+
+    def test_clean_compiler_policy_compatible_target_type(self):
+        for target_type in (Target.Type.CDHASH, Target.Type.BINARY, Target.Type.SIGNING_ID):
+            with self.subTest(target_type):
+                self._clean_rule(target_type, Rule.Policy.ALLOWLIST_COMPILER)
+
+    def test_clean_other_policy_any_target_type(self):
+        for target_type in (Target.Type.TEAM_ID, Target.Type.CERTIFICATE):
+            with self.subTest(target_type):
+                self._clean_rule(target_type, Rule.Policy.ALLOWLIST)
+
+    def test_clean_incomplete_rule(self):
+        for target, policy in ((None, Rule.Policy.ALLOWLIST_COMPILER),
+                               (force_target(Target.Type.TEAM_ID), None),
+                               (force_target(Target.Type.TEAM_ID), 42)):
+            with self.subTest(policy=policy, target=target):
+                Rule(configuration=force_configuration(), target=target, policy=policy).clean()

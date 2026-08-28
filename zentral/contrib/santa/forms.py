@@ -397,12 +397,17 @@ class RuleForm(RuleFormMixin, forms.Form):
                 self.add_error(error_field, f"Invalid {target_type} identifier")
 
         # policy
+        policy = None
         try:
             policy = int(cleaned_data.get("policy"))
         except (TypeError, ValueError):
             pass
 
         if policy:
+            # compiler policy only on the target types the client accepts it on
+            if target_type and not Rule.Policy(policy).compatible_with_target_type(target_type):
+                self.add_error("policy", Target.Type.compiler_policy_error())
+
             # custom message/url only on blocklist or CEL rules
             if not Rule.Policy(policy).compatible_with_custom_msg_and_url:
                 error_field = None

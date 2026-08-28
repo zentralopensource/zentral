@@ -4,7 +4,7 @@ from django.utils.crypto import get_random_string
 
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
-from zentral.contrib.santa.models import Configuration, Enrollment
+from zentral.contrib.santa.models import Configuration, Enrollment, Target
 from zentral.contrib.santa.serializers import EnrollmentSerializer, RuleUpdateSerializer
 
 
@@ -102,6 +102,29 @@ class SantaSerializersTestCase(TestCase):
         sha256_errors = s.errors.get("sha256", [])
         self.assertEqual(len(sha256_errors), 1)
         self.assertEqual(str(sha256_errors[0]), "This field cannot be used in a TEAMID rule")
+
+    def test_rule_compiler_policy_incompatible_rule_type(self):
+        for rule_type, identifier in (("TEAMID", "43AQ936H96"),
+                                      ("CERTIFICATE", get_random_string(64, "0123456789abcdef"))):
+            with self.subTest(rule_type):
+                data = {"rule_type": rule_type,
+                        "identifier": identifier,
+                        "policy": "ALLOWLIST_COMPILER"}
+                serializer = RuleUpdateSerializer(data=data)
+                self.assertFalse(serializer.is_valid())
+                ed = serializer.errors["policy"][0]
+                self.assertEqual(str(ed), Target.Type.compiler_policy_error())
+
+    def test_rule_compiler_policy(self):
+        for rule_type, identifier in (("CDHASH", get_random_string(40, "0123456789abcdef")),
+                                      ("BINARY", get_random_string(64, "0123456789abcdef")),
+                                      ("SIGNINGID", "43AQ936H96:org.mozilla.firefoxdeveloperedition")):
+            with self.subTest(rule_type):
+                data = {"rule_type": rule_type,
+                        "identifier": identifier,
+                        "policy": "ALLOWLIST_COMPILER"}
+                serializer = RuleUpdateSerializer(data=data)
+                self.assertTrue(serializer.is_valid())
 
     def test_rule_custom_msg_allowlist(self):
         data = {"rule_type": "BINARY",

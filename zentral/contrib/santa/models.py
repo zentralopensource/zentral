@@ -3,6 +3,7 @@ import uuid
 from collections import namedtuple
 
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
 from django.core.validators import (
     MaxValueValidator,
     MinLengthValidator,
@@ -295,6 +296,17 @@ class Target(models.Model):
         @classmethod
         def rule_choices(cls):
             return [(member.value, member.label) for member in cls if member.is_native]
+
+        @property
+        def compatible_with_compiler_policy(self):
+            # the client only accepts the compiler state on these rule types
+            return self.value in (self.SIGNING_ID, self.BINARY, self.CDHASH)
+
+        @classmethod
+        def compiler_policy_error(cls):
+            return "Only available for {} targets".format(
+                ", ".join(member.value for member in cls if member.compatible_with_compiler_policy)
+            )
 
         @property
         def url_name(self):
@@ -1192,6 +1204,14 @@ class Rule(models.Model):
         def compatible_with_custom_msg_and_url(self):
             return self.value in (self.BLOCKLIST, self.CEL)
 
+        def compatible_with_target_type(self, target_type):
+            # only answers for the policy itself: a CEL expression can return ALLOWLIST_COMPILER
+            # too, and the client resolves the CEL state before the (type, state) lookup, so a CEL
+            # rule reaches the same invalid combination. The expression is opaque to the server.
+            if self.value != self.ALLOWLIST_COMPILER:
+                return True
+            return Target.Type(target_type).compatible_with_compiler_policy
+
         @property
         def sync_only(self):
             # the REMOVE policy is only used for the sync protocol
@@ -1226,6 +1246,12 @@ class Rule(models.Model):
 
     class Meta:
         unique_together = (("configuration", "target"),)
+
+    def clean(self):
+        # clean() also runs when the field validation failed, so the policy can be missing or unknown here
+        if self.target_id and self.policy in self.Policy.values:
+            if not self.Policy(self.policy).compatible_with_target_type(self.target.type):
+                raise ValidationError({"policy": Target.Type.compiler_policy_error()})
 
     def is_blocking_rule(self):
         return self.policy in (self.Policy.BLOCKLIST, self.Policy.SILENT_BLOCKLIST)

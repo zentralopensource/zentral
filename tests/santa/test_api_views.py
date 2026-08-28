@@ -888,6 +888,48 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             {"rules": {"0": {"non_field_errors": ["Conflict between tags and excluded_tags"]}}}
         )
 
+    def test_ruleset_update_compiler_policy_rule_type_error(self):
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+        url = reverse("santa_api:ruleset_update")
+        for rule_type, identifier in ((Target.Type.TEAM_ID, new_team_id()),
+                                      (Target.Type.CERTIFICATE, new_sha256())):
+            with self.subTest(rule_type):
+                data = {
+                    "name": get_random_string(12),
+                    "rules": [
+                        {"rule_type": rule_type,
+                         "identifier": identifier,
+                         "policy": "ALLOWLIST_COMPILER"},
+                    ]
+                }
+                response = self.post(url, data)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json(), {"rules": {"0": {"policy": [Target.Type.compiler_policy_error()]}}})
+        self.assertEqual(Rule.objects.count(), 0)
+
+    def test_ruleset_update_compiler_policy_rules(self):
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+        url = reverse("santa_api:ruleset_update")
+        for rule_type, identifier in ((Target.Type.CDHASH, new_cdhash()),
+                                      (Target.Type.BINARY, new_sha256()),
+                                      (Target.Type.SIGNING_ID, new_signing_id_identifier())):
+            with self.subTest(rule_type):
+                data = {
+                    "name": get_random_string(12),
+                    "rules": [
+                        {"rule_type": rule_type,
+                         "identifier": identifier,
+                         "policy": "ALLOWLIST_COMPILER"},
+                    ]
+                }
+                response = self.post(url, data)
+                self.assertEqual(response.status_code, 200)
+                rule = self.configuration.rule_set.select_related("target").get(target__identifier=identifier)
+                self.assertEqual(rule.target.type, rule_type)
+                self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST_COMPILER)
+
     def test_ruleset_update_rule_unusual_signingid(self):
         self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
                              "santa.add_rule", "santa.change_rule", "santa.delete_rule")
@@ -1242,6 +1284,40 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                          {'target_type': ['"BUNDLE" is not a valid choice.']})
         self.assertEqual(Rule.objects.count(), 0)
 
+    def test_create_rule_compiler_policy_target_type_error(self):
+        self.set_permissions("santa.add_rule")
+        for target_type, target_identifier in ((Target.Type.TEAM_ID, new_team_id()),
+                                               (Target.Type.CERTIFICATE, new_sha256())):
+            with self.subTest(target_type):
+                data = {
+                    "configuration": self.configuration.pk,
+                    "policy": Rule.Policy.ALLOWLIST_COMPILER,
+                    "target_type": target_type,
+                    "target_identifier": target_identifier
+                }
+                response = self.post(reverse("santa_api:rules"), data)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(response.json(), {"policy": [Target.Type.compiler_policy_error()]})
+        self.assertEqual(Rule.objects.count(), 0)
+
+    def test_create_rule_compiler_policy(self):
+        self.set_permissions("santa.add_rule")
+        for target_type, target_identifier in ((Target.Type.CDHASH, new_cdhash()),
+                                               (Target.Type.BINARY, new_sha256()),
+                                               (Target.Type.SIGNING_ID, new_signing_id_identifier())):
+            with self.subTest(target_type):
+                data = {
+                    "configuration": self.configuration.pk,
+                    "policy": Rule.Policy.ALLOWLIST_COMPILER,
+                    "target_type": target_type,
+                    "target_identifier": target_identifier
+                }
+                response = self.post(reverse("santa_api:rules"), data)
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                rule = Rule.objects.select_related("target").get(pk=response.json()["id"])
+                self.assertEqual(rule.target.type, target_type)
+                self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST_COMPILER)
+
     def test_create_rule_policy_custom_msg_error(self):
         self.set_permissions("santa.add_rule")
         data = {
@@ -1560,6 +1636,24 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         rule.refresh_from_db()
         self.assertEqual(rule.description, "Description Text Updated")
         self.assertEqual(rule.version, 1)
+
+    def test_update_rule_compiler_policy_target_type_error(self):
+        self.set_permissions("santa.change_rule")
+        for target_type, target_identifier in ((Target.Type.TEAM_ID, new_team_id()),
+                                               (Target.Type.CERTIFICATE, new_sha256())):
+            with self.subTest(target_type):
+                rule = self.force_rule(target_type=target_type, target_identifier=target_identifier)
+                data = {
+                    "configuration": rule.configuration.pk,
+                    "policy": Rule.Policy.ALLOWLIST_COMPILER,
+                    "target_type": rule.target.type,
+                    "target_identifier": rule.target.identifier
+                }
+                response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(response.json(), {"policy": [Target.Type.compiler_policy_error()]})
+                rule.refresh_from_db()
+                self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST)
 
     def test_update_rule_change_tags(self):
         tags = [t.id for t in self.force_tags(3)]

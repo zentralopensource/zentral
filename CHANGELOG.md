@@ -111,6 +111,10 @@ The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `
 
 `zentral_santa_enrolled_machines_total` and `zentral_santa_enrolled_machines_sync_total` are replaced by `zentral_santa_enrolled_machines_bucket` and `zentral_santa_enrolled_machines_sync_bucket`, which have an `le` label. The `le="+Inf"` bucket gives the value of the two removed gauges: in a dashboard or an alert, change the metric name and select that bucket. A query that sums the buckets counts each machine seven times.
 
+#### 🧨 Santa compiler rules on team ID and certificate targets
+
+A rule with the `ALLOWLIST_COMPILER` policy is rejected on a target that is not a cdhash, a binary or a signing ID, in the web console, the rule API and the ruleset API. The Santa client only accepts the compiler state on those three rule types. On a team ID or a certificate it drops the rule when it evaluates it, so the rule synchronized cleanly and then left its target with no rule at all, which blocks the target in lockdown mode. The rules already in the database keep their policy, but Zentral rejects each of them at the next write: a ruleset that you post again, a `PUT` on the rule API, a Terraform configuration that you apply again, and a change to any other attribute of the rule in the web console.
+
 #### 🧨 Privilege escalation hardening — task results
 
 A task belongs to the user or the service account that launched it, and `/api/task_result/<task_id>/` and `/api/task_result/<task_id>/download/` answer only for that principal. A superuser reads all of them, as before. Until now the two endpoints only asked for a valid session or API token: any authenticated principal that had a task ID could read the state of that task and download its file, and an export carries everything the principal that launched it was allowed to see. The state endpoint gives the `UNKNOWN` status for the task of a different principal, like it does for a task that does not exist, and the download endpoint gives a `404`. The task list and the task pages of the web console already applied this rule.

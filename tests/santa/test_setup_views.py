@@ -1215,6 +1215,55 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/rule_form.html")
         self.assertFormError(response.context["form"], "custom_url", "Cannot be set for this rule policy")
 
+    def test_create_configuration_rule_missing_policy(self):
+        self.login("santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.BINARY,
+                                     "target_identifier": new_sha256()},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        self.assertFormError(response.context["form"], "policy", "This field is required.")
+
+    def test_create_configuration_compiler_policy_target_type_error(self):
+        self.login("santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        for target_type, target_identifier in ((Target.Type.TEAM_ID, new_team_id()),
+                                               (Target.Type.CERTIFICATE, new_sha256())):
+            with self.subTest(target_type):
+                response = self.client.post(
+                    reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                    {"target_type": target_type,
+                     "target_identifier": target_identifier,
+                     "policy": Rule.Policy.ALLOWLIST_COMPILER},
+                    follow=True,
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, "santa/rule_form.html")
+                self.assertFormError(response.context["form"], "policy", Target.Type.compiler_policy_error())
+        self.assertEqual(configuration.rule_set.count(), 0)
+
+    def test_create_configuration_compiler_policy_rules(self):
+        self.login("santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        for target_type, target_identifier in ((Target.Type.CDHASH, new_cdhash()),
+                                               (Target.Type.BINARY, new_sha256()),
+                                               (Target.Type.SIGNING_ID, new_signing_id_identifier())):
+            with self.subTest(target_type):
+                response = self.client.post(
+                    reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                    {"target_type": target_type,
+                     "target_identifier": target_identifier,
+                     "policy": Rule.Policy.ALLOWLIST_COMPILER},
+                    follow=True,
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, "santa/configuration_rules.html")
+                rule = configuration.rule_set.select_related("target").get(target__identifier=target_identifier)
+                self.assertEqual(rule.target.type, target_type)
+                self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST_COMPILER)
+
     def test_create_configuration_cel_expr_not_on_cel_rule_error(self):
         self.login("santa.add_configuration", "santa.view_configuration")
         configuration = force_configuration()
@@ -1709,6 +1758,37 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/rule_form.html")
         self.assertFormError(response.context["form"], "cel_expr", "Can only be set on CEL rules")
+
+    def test_update_configuration_rule_compiler_policy_target_type_error(self):
+        self.login("santa.change_rule")
+        for target_type in (Target.Type.TEAM_ID, Target.Type.CERTIFICATE):
+            with self.subTest(target_type):
+                rule = force_rule(target_type=target_type)
+                response = self.client.post(
+                    reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+                    {"policy": Rule.Policy.ALLOWLIST_COMPILER},
+                    follow=True,
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, "santa/rule_form.html")
+                self.assertFormError(response.context["form"], "policy", Target.Type.compiler_policy_error())
+                rule.refresh_from_db()
+                self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
+
+    def test_update_configuration_rule_to_compiler_policy(self):
+        self.login("santa.change_rule", "santa.view_rule")
+        for target_type in (Target.Type.CDHASH, Target.Type.BINARY, Target.Type.SIGNING_ID):
+            with self.subTest(target_type):
+                rule = force_rule(target_type=target_type)
+                response = self.client.post(
+                    reverse("santa:update_configuration_rule", args=(rule.configuration.pk, rule.pk)),
+                    {"policy": Rule.Policy.ALLOWLIST_COMPILER},
+                    follow=True,
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTemplateUsed(response, "santa/configuration_rules.html")
+                rule.refresh_from_db()
+                self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST_COMPILER)
 
     def test_update_configuration_rule_to_cel_rule(self):
         self.login("santa.view_configuration",
