@@ -4,7 +4,7 @@ import uuid
 from io import BytesIO
 from unittest.mock import patch
 
-from accounts.models import User
+from accounts.models import Policy, User
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
@@ -107,6 +107,28 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     def _get_url_namespace(self):
         return "monolith"
+
+    # utils
+
+    def _set_view_pkg_info_data_policy(self, repository=None, catalog=None, forbidden_catalog=None):
+        if repository:
+            scope = f'resource in Monolith::Repository::"{repository.pk}"'
+        elif catalog:
+            scope = f'resource in Monolith::Catalog::"{catalog.pk}"'
+        else:
+            scope = "resource"
+        source = ("permit ("
+                  f' principal in Role::"{self.group.pk}",'
+                  ' action == Monolith::Action::"viewPkgInfoData",'
+                  f" {scope}"
+                  ");\n")
+        if forbidden_catalog:
+            source += ("forbid ("
+                       " principal,"
+                       ' action == Monolith::Action::"viewPkgInfoData",'
+                       f' resource in Monolith::Catalog::"{forbidden_catalog.pk}"'
+                       ");\n")
+        Policy.objects.update_or_create(name="Monolith tests", defaults={"source": source})
 
     # index
 
@@ -1380,12 +1402,26 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 403)
 
+    def test_pkg_info_data_view_pkginfo_not_enough(self):
+        pkg_info = force_pkg_info()
+        self.login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_pkg_info_data_other_repository_denied(self):
+        pkg_info = force_pkg_info()
+        self.login()
+        self._set_view_pkg_info_data_policy(repository=force_repository())
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 403)
+
     def test_pkg_info_data(self):
         pkg_info = force_pkg_info()
         pkg_info.data["unattended_install"] = True
         pkg_info.data["installer_item_location"] = "yolo/fomo-1.0.pkg"
         pkg_info.save()
-        self.login("monolith.view_pkginfo")
+        self.login()
+        self._set_view_pkg_info_data_policy()
         response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/pkginfo_data.html")
@@ -1395,12 +1431,46 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "yolo/fomo-1.0.pkg")
         self.assertContains(response, response.context["served_pkg_info"]["installer_item_location"])
 
+    def test_pkg_info_data_repository_scoped_policy(self):
+        pkg_info = force_pkg_info()
+        self.login()
+        self._set_view_pkg_info_data_policy(repository=pkg_info.repository)
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 200)
+
+    def test_pkg_info_data_catalog_scoped_policy(self):
+        pkg_info = force_pkg_info()
+        self.login()
+        self._set_view_pkg_info_data_policy(catalog=pkg_info.active_catalogs().first())
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 200)
+
+    def test_pkg_info_data_other_catalog_denied(self):
+        pkg_info = force_pkg_info()
+        self.login()
+        self._set_view_pkg_info_data_policy(catalog=force_catalog(repository=pkg_info.repository))
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_pkg_info_data_forbidden_catalog_denied(self):
+        pkg_info = force_pkg_info()
+        restricted_catalog = force_catalog(repository=pkg_info.repository)
+        pkg_info.catalogs.add(restricted_catalog)
+        self.login()
+        self._set_view_pkg_info_data_policy(repository=pkg_info.repository,
+                                            forbidden_catalog=restricted_catalog)
+        response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+        self.assertEqual(response.status_code, 403)
+
     def test_pkg_info_data_rewrites(self):
         pkg_info = force_pkg_info()
         pkg_info.data["unattended_install"] = True
         pkg_info.data["installer_item_location"] = "yolo/fomo-1.0.pkg"
+        # a pkginfo synced from a repository carries its catalogs
+        pkg_info.data["catalogs"] = ["yolo"]
         pkg_info.save()
-        self.login("monolith.view_pkginfo")
+        self.login()
+        self._set_view_pkg_info_data_policy()
         response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 200)
         served_pkg_info = response.context["served_pkg_info"]
@@ -1417,7 +1487,8 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     def test_pkg_info_data_archived(self):
         pkg_info = force_pkg_info(archived=True)
-        self.login("monolith.view_pkginfo")
+        self.login()
+        self._set_view_pkg_info_data_policy()
         response = self.client.get(reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Archived at")
@@ -1425,9 +1496,77 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
     def test_pkg_info_name_links_to_pkg_info_data(self):
         pkg_info = force_pkg_info()
         self.login("monolith.view_pkginfoname", "monolith.view_pkginfo")
+        self._set_view_pkg_info_data_policy()
         response = self.client.get(reverse("monolith:pkg_info_name", args=(pkg_info.name.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+
+    def test_pkg_info_name_no_link_to_pkg_info_data(self):
+        pkg_info = force_pkg_info()
+        self.login("monolith.view_pkginfoname", "monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_info_name", args=(pkg_info.name.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, pkg_info.version)
+        self.assertNotContains(response, reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+
+    def test_pkg_info_name_no_link_to_pkg_info_data_other_repository(self):
+        pkg_info = force_pkg_info()
+        self.login("monolith.view_pkginfoname", "monolith.view_pkginfo")
+        self._set_view_pkg_info_data_policy(repository=force_repository())
+        response = self.client.get(reverse("monolith:pkg_info_name", args=(pkg_info.name.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("monolith:pkg_info_data", args=(pkg_info.pk,)))
+
+    def test_pkg_infos_links_to_pkg_info_data(self):
+        self.login("monolith.view_pkginfo")
+        self._set_view_pkg_info_data_policy()
+        response = self.client.get(reverse("monolith:pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("monolith:pkg_info_data", args=(self.pkginfo_1_1.pk,)))
+
+    def test_pkg_infos_no_link_to_pkg_info_data(self):
+        self.login("monolith.view_pkginfo")
+        response = self.client.get(reverse("monolith:pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.pkginfo_1_1.version)
+        self.assertNotContains(response, reverse("monolith:pkg_info_data", args=(self.pkginfo_1_1.pk,)))
+
+    def test_pkg_infos_links_only_to_authorized_catalog_pkg_info_data(self):
+        other_catalog = force_catalog(repository=self.repository)
+        other_pkg_info = PkgInfo.objects.create(repository=self.repository,
+                                                name=self.pkginfo_name_1, version="2.0",
+                                                data={"name": self.pkginfo_name_1.name,
+                                                      "version": "2.0"})
+        other_pkg_info.catalogs.set([other_catalog])
+        self.login("monolith.view_pkginfo")
+        self._set_view_pkg_info_data_policy(catalog=self.catalog_1)
+        response = self.client.get(reverse("monolith:pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("monolith:pkg_info_data", args=(self.pkginfo_1_1.pk,)))
+        self.assertNotContains(response, reverse("monolith:pkg_info_data", args=(other_pkg_info.pk,)))
+
+    def test_pkg_infos_catalog_search_does_not_widen_the_pkg_info_data_links(self):
+        # the pkg info is in two catalogs, the search only reports the one it is filtered
+        # on, but the forbidden catalog is a parent of the resource all the same
+        restricted_catalog = force_catalog(repository=self.repository)
+        self.pkginfo_1_1.catalogs.add(restricted_catalog)
+        self.login("monolith.view_pkginfo")
+        self._set_view_pkg_info_data_policy(repository=self.repository,
+                                            forbidden_catalog=restricted_catalog)
+        response = self.client.get(reverse("monolith:pkg_infos"), {"catalog": self.catalog_1.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.pkginfo_1_1.version)
+        self.assertNotContains(response, reverse("monolith:pkg_info_data", args=(self.pkginfo_1_1.pk,)))
+
+    def test_pkg_infos_links_only_to_authorized_repository_pkg_info_data(self):
+        other_pkg_info = force_pkg_info()
+        self.login("monolith.view_pkginfo")
+        self._set_view_pkg_info_data_policy(repository=self.repository)
+        response = self.client.get(reverse("monolith:pkg_infos"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("monolith:pkg_info_data", args=(self.pkginfo_1_1.pk,)))
+        self.assertContains(response, other_pkg_info.name.name)
+        self.assertNotContains(response, reverse("monolith:pkg_info_data", args=(other_pkg_info.pk,)))
 
     # delete pkg info
 

@@ -84,10 +84,9 @@
             <td colspan="3">The served pkginfo is identical to the stored one.</td>
         </tr>
     {% endfor %}
-        <tr>
-            <td></td>
-            <td>{{ pkg_info.data|jsonprettyprint }}</td>
-            <td>{{ served_pkg_info|jsonprettyprint }}</td>
+        <tr class="table-primary">
+            <td><b>Munki configuration</b></td>
+            <td colspan="2"><div class="my-2">{{ pkg_info.data|jsonprettyprint }}</div></td>
         </tr>
     </tbody>
 </table>
