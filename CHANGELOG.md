@@ -125,6 +125,10 @@ A task that a device launched, and a task that Zentral launched before version 2
 
 The `UserActions` action groups contain the view actions of the models now. A role with a permit on `Action::"GlobalUserActions"`, or on the `UserActions` group of one namespace, reads the pages and the API endpoints of the models in that scope. Review your policies before you update.
 
+#### 🧨 MDM event object keys
+
+Some MDM events linked an object under a key that did not match the key of the model, so a search found one half of the events only: the `zentral_audit` events of the object always used the model key. `mdm_artifactversion` is `mdm_artifact_version` now, `mdm_enrolleddevice` is `mdm_enrolled_device`, `mdm_enrolleduser` is `mdm_enrolled_user`, `mdm_command` is `mdm_device_command`, and `mdm_depenrollmentsession` is `mdm_dep_enrollment_session`, with the other enrollment sessions. Update a probe or a query that filters on an old key. No backfill is necessary: the stored events keep the old key, and they disappear with the retention of the event store.
+
 
 ### Bug fixes
 

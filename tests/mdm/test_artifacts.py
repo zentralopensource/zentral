@@ -1811,7 +1811,7 @@ class TestMDMArtifacts(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_artifact": [str(profile_a.pk)],
-                                               "mdm_artifactversion": [str(profile_av.pk)]})
+                                               "mdm_artifact_version": [str(profile_av.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm"])
         # v2
         status_report = build_status_report([(profile_av2, True, True, None)])
@@ -1853,7 +1853,7 @@ class TestMDMArtifacts(TestCase):
         )
         metadata = created_event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_artifact": [str(profile_a.pk)],
-                                               "mdm_artifactversion": [str(profile_av2.pk)]})
+                                               "mdm_artifact_version": [str(profile_av2.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm"])
         deleted_event = post_event.call_args_list[2].args[0]
         self.assertEqual(
@@ -1882,7 +1882,7 @@ class TestMDMArtifacts(TestCase):
         )
         metadata = deleted_event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_artifact": [str(profile_a.pk)],
-                                               "mdm_artifactversion": [str(profile_av.pk)]})
+                                               "mdm_artifact_version": [str(profile_av.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm"])
         # v2 again
         self.enrolled_device.os_version = "10.5.4"

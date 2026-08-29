@@ -1,6 +1,7 @@
 import logging
+from django.apps import apps
 from zentral.core.events import register_event_type
-from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, linked_objects_key
 from zentral.contrib.mdm.declarations.exceptions import (
     TokenDeviceInactiveError,
     TokenSessionNotFoundError,
@@ -30,16 +31,16 @@ class MDMDownloadEvent(BaseEvent):
         keys = {}
         dev = self.payload.get("enrolled_device")
         if dev and "pk" in dev:
-            keys["mdm_enrolleddevice"] = [(dev["pk"],)]
+            keys["mdm_enrolled_device"] = [(dev["pk"],)]
         usr = self.payload.get("enrolled_user")
         if usr and "pk" in usr:
-            keys["mdm_enrolleduser"] = [(usr["pk"],)]
+            keys["mdm_enrolled_user"] = [(usr["pk"],)]
         for target_key in ("cert_asset", "data_asset", "profile", "enterprise_app"):
             target = self.payload.get(target_key)
             if not target:
                 continue
             if "pk" in target:
-                keys["mdm_artifactversion"] = [(target["pk"],)]
+                keys["mdm_artifact_version"] = [(target["pk"],)]
             artifact = target.get("artifact") or {}
             if "pk" in artifact:
                 keys["mdm_artifact"] = [(artifact["pk"],)]
@@ -48,7 +49,14 @@ class MDMDownloadEvent(BaseEvent):
             keys["mdm_package"] = [(pkg["pk"],)]
         session = self.payload.get("enrollment_session")
         if session and "pk" in session and "model" in session:
-            keys[f"mdm_{session['model']}"] = [(session["pk"],)]
+            try:
+                session_model = apps.get_model("mdm", session["model"])
+            except LookupError:
+                # a removed model whose content type was cleaned up too — the session lookup
+                # already raised DoesNotExist, so drop the key and keep the 404
+                logger.error("Unknown enrollment session model: %s", session["model"])
+            else:
+                keys[linked_objects_key(session_model)] = [(session["pk"],)]
         return keys
 
 

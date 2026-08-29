@@ -14,7 +14,7 @@ class AdminPasswordUpdatedEvent(BaseEvent):
         keys = {}
         cmd_uuid = self.payload.get("command", {}).get("uuid")
         if cmd_uuid:
-            keys["mdm_command"] = [(cmd_uuid,)]
+            keys["mdm_device_command"] = [(cmd_uuid,)]
         return keys
 
 

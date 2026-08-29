@@ -545,17 +545,17 @@ register_event_type(BaseEvent)
 # Zentral audit event
 
 
-def linked_objects_key(instance):
-    """The metadata objects key of a model instance.
+def linked_objects_key(model):
+    """The metadata objects key of a model class or of one of its instances.
 
     A model sets linked_objects_key to override it, for a verbose name that does not read well.
     """
-    key = getattr(instance, "linked_objects_key", None)
+    key = getattr(model, "linked_objects_key", None)
     if key:
         return key
-    key = instance._meta.verbose_name.replace(" ", "_")
-    if instance._meta.app_label != "inventory":  # shorter names for the inventory objects
-        key = f"{instance._meta.app_label}_{key}"
+    key = model._meta.verbose_name.replace(" ", "_")
+    if model._meta.app_label != "inventory":  # shorter names for the inventory objects
+        key = f"{model._meta.app_label}_{key}"
     return key
 
 

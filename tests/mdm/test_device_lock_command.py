@@ -134,5 +134,5 @@ class DeviceLockCommandTestCase(TestCase):
         self.assertEqual(
             metadata["machine_serial_number"], self.enrolled_device.serial_number
         )
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "device_lock_pin"})

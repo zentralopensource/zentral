@@ -25,14 +25,14 @@ class TargetArtifactUpdateEvent(BaseEvent):
             logging.warning("Missing event information")
         else:
             keys["mdm_artifact"] = [(a_pk,)]
-            keys["mdm_artifactversion"] = [(av_pk,)]
+            keys["mdm_artifact_version"] = [(av_pk,)]
         # enrolled user
         try:
             eu_pk = self.payload["enrolled_user"]["pk"]
         except KeyError:
             pass
         else:
-            keys["mdm_enrolleduser"] = [(eu_pk,)]
+            keys["mdm_enrolled_user"] = [(eu_pk,)]
         return keys
 
 

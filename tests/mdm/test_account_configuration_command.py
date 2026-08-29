@@ -300,5 +300,5 @@ class AccountConfigurationCommandTestCase(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "admin_password"})

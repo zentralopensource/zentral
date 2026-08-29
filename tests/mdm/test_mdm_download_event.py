@@ -27,7 +27,7 @@ from zentral.contrib.mdm.events.downloads import (
     post_mdm_download_error_event,
 )
 from zentral.contrib.mdm.models import Artifact, Package
-from zentral.core.events.base import EventMetadata
+from zentral.core.events.base import EventMetadata, linked_objects_key
 
 from .utils import force_dep_enrollment_session, force_enrolled_user
 
@@ -86,8 +86,8 @@ class MDMDownloadEventTestCase(TestCase):
         self.assertEqual(
             event.get_linked_objects_keys(),
             {
-                "mdm_enrolleddevice": [(17,)],
-                "mdm_enrolleduser": [(42,)],
+                "mdm_enrolled_device": [(17,)],
+                "mdm_enrolled_user": [(42,)],
                 "mdm_package": [("pkg-uuid",)],
             },
         )
@@ -103,7 +103,7 @@ class MDMDownloadEventTestCase(TestCase):
         )
         self.assertEqual(
             event.get_linked_objects_keys(),
-            {"mdm_artifactversion": [("av-uuid",)], "mdm_artifact": [("a-uuid",)]},
+            {"mdm_artifact_version": [("av-uuid",)], "mdm_artifact": [("a-uuid",)]},
         )
 
     def test_get_linked_objects_keys_minimal(self, post_event):
@@ -122,7 +122,7 @@ class MDMDownloadEventTestCase(TestCase):
         )
         self.assertEqual(
             event.get_linked_objects_keys(),
-            {"mdm_package": [("pkg-uuid",)], "mdm_depenrollmentsession": [("42",)]},
+            {"mdm_package": [("pkg-uuid",)], "mdm_dep_enrollment_session": [("42",)]},
         )
 
     # success path: package_manifest
@@ -151,7 +151,7 @@ class MDMDownloadEventTestCase(TestCase):
         self.assertEqual(
             metadata["objects"],
             {
-                "mdm_enrolleddevice": [str(enrolled_device.pk)],
+                "mdm_enrolled_device": [str(enrolled_device.pk)],
                 "mdm_package": [str(package.pk)],
             },
         )
@@ -235,7 +235,7 @@ class MDMDownloadEventTestCase(TestCase):
             metadata["objects"],
             {
                 "mdm_package": [str(package.pk)],
-                f"mdm_{session_model_name}": [str(session_pk)],
+                linked_objects_key(session): [str(session_pk)],
             },
         )
 
@@ -264,7 +264,7 @@ class MDMDownloadEventTestCase(TestCase):
         metadata = event.metadata.serialize()
         # the missing user is still queryable via linked_objects.
         self.assertEqual(
-            metadata["objects"]["mdm_enrolleduser"], [str(user_pk)]
+            metadata["objects"]["mdm_enrolled_user"], [str(user_pk)]
         )
         # machine_serial_number is set because the device DID resolve.
         self.assertEqual(metadata["machine_serial_number"], session.enrolled_device.serial_number)

@@ -166,7 +166,7 @@ class SecurityInfoCommandTestCase(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(metadata["tags"], ["mdm"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -262,7 +262,7 @@ class SecurityInfoCommandTestCase(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -298,7 +298,7 @@ class SecurityInfoCommandTestCase(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -334,7 +334,7 @@ class SecurityInfoCommandTestCase(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -386,7 +386,7 @@ class SecurityInfoCommandTestCase(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -429,7 +429,7 @@ class SecurityInfoCommandTestCase(TestCase):
         )
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
-        self.assertEqual(metadata["objects"], {"mdm_command": [str(cmd.uuid)]})
+        self.assertEqual(metadata["objects"], {"mdm_device_command": [str(cmd.uuid)]})
         self.assertEqual(set(metadata["tags"]), {"mdm", "recovery_password"})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
