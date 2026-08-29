@@ -3,13 +3,15 @@ from unittest.mock import patch
 
 from accounts.models import User
 from django.contrib.auth.models import Group
-from django.test import TestCase
-from django.urls import reverse
+from django.test import SimpleTestCase, TestCase
+from django.urls import resolve, reverse
 from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import File, Source
 from zentral.contrib.santa.models import Target, TargetCounter, TargetState
+from zentral.contrib.santa.urls import urlpatterns as santa_urlpatterns
+from zentral.contrib.santa.views.targets import EventsMixin
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 from zentral.utils.time import naive_utcnow
@@ -937,3 +939,49 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
             {'file': [f'sha256|{self.file_sha256}'],
              'santa_configuration': [str(configuration.pk)]},
         )
+
+
+class SantaTargetEventsViewsURLsTestCase(SimpleTestCase):
+    # every link a target events view builds is derived from its target_type. A view carrying the
+    # target_type of a different target keeps serving the right events, but sends the users to the
+    # other target's pages, with an identifier those pages cannot resolve.
+    maxDiff = None
+    identifier = "0123456789abcdef0123456789abcdef01234567"
+
+    def iter_target_events_views(self):
+        for url_pattern in santa_urlpatterns:
+            view_class = getattr(url_pattern.callback, "view_class", None)
+            if view_class is not None and issubclass(view_class, EventsMixin):
+                yield url_pattern.name, view_class
+
+    def test_target_type_matches_url_name(self):
+        errors = []
+        url_names = {}
+        for url_name, view_class in self.iter_target_events_views():
+            prefix = view_class.target_type.lower()
+            expected = (f"{prefix}_events", f"fetch_{prefix}_events", f"{prefix}_events_store_redirect")
+            if url_name not in expected:
+                errors.append(f"{view_class.__name__} {view_class.target_type} routed as santa:{url_name}")
+            url_names.setdefault(view_class.target_type, set()).add(url_name)
+        self.assertEqual(errors, [])
+        # the target detail view builds the events links for every native target type
+        self.assertEqual(
+            url_names,
+            {target_type: {f"{target_type.lower()}_events",
+                           f"fetch_{target_type.lower()}_events",
+                           f"{target_type.lower()}_events_store_redirect"}
+             for target_type in Target.Type if target_type.is_native}
+        )
+
+    def test_target_events_views_links_stay_on_the_target(self):
+        errors = []
+        for _, view_class in self.iter_target_events_views():
+            view = view_class()
+            view.identifier = self.identifier
+            links = {m: getattr(view, m)() for m in ("get_fetch_url", "get_redirect_url", "get_store_redirect_url")}
+            links["target_url"] = reverse(view_class.target_type.url_name, args=(self.identifier,))
+            for link_name, url in links.items():
+                target_type = resolve(url).func.view_class.target_type
+                if target_type != view_class.target_type:
+                    errors.append(f"{view_class.__name__}.{link_name} links to a {target_type} page")
+        self.assertEqual(errors, [])

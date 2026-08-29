@@ -193,6 +193,8 @@ Munki installs the Osquery enrollment package on a machine that has the Turbo ag
 
 The `rebuild_manifest_enrollment_packages` command takes a `--manifest` option with one or more manifest IDs now, to rebuild the enrollment packages of a part of the manifests only. It also takes a `--new-version` option, which increases the version of each enrollment package that it rebuilds, and gives it a new filename. The enrollment versions do not change with it, so the machines that are up to date do not install the packages again.
 
+Fixed the links of the Santa cdhash event store redirect, which had the Signing ID target type. The view sends the user back to the events page of the target when the store gives no event URL. It sent them to the Signing ID events page instead, with a cdhash identifier that this page cannot find. The events the view read were the correct ones.
+
 
 ## 2026.5
 

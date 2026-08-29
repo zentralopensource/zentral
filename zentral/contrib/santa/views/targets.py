@@ -387,7 +387,7 @@ class FetchCDHashEventsView(EventsMixin, FetchEventsView):
 
 
 class CDHashEventsStoreRedirectView(EventsMixin, EventsStoreRedirectView):
-    target_type = Target.Type.SIGNING_ID
+    target_type = Target.Type.CDHASH
     object_key = "file"
     identifier_key = "cdhash"
 
