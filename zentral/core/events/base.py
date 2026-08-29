@@ -587,7 +587,7 @@ class AuditEvent(BaseEvent):
             em_kwargs["machine_serial_number"] = machine_serial_number
         metadata = EventMetadata(**em_kwargs)
         # the object the event is about is always linked. a model that declares its own key keeps
-        # control of it — DeviceCommand links itself by uuid, not by pk — but a model that only
+        # control of it — the MDM commands link themselves by uuid, not by pk — but a model that only
         # declares its parents no longer drops the link to itself.
         get_extra_keys = getattr(instance, "linked_objects_keys_for_event", None)
         extra_keys = get_extra_keys() if get_extra_keys is not None else {}

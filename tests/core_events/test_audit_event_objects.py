@@ -78,7 +78,7 @@ class RedundantSelfKeysTestCase(SimpleTestCase):
 
     A model that writes its own key with its own pk in linked_objects_keys_for_event() does the
     same work a second time. A model that writes its own key with something else keeps control of
-    it — the MDM device commands link themselves by uuid — so only the pk spelling is a defect.
+    it — the MDM commands link themselves by uuid — so only the pk spelling is a defect.
     """
 
     def iter_hooks(self):

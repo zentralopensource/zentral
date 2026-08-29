@@ -3644,6 +3644,11 @@ class UserCommand(Command):
                          name="apns_user_opti")
         ]
 
+    def linked_objects_keys_for_event(self):
+        keys = super().linked_objects_keys_for_event()
+        keys["mdm_user_command"] = [(str(self.uuid),)]
+        return keys
+
 
 # Apple software lookup service
 

@@ -457,3 +457,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'updated_at': db_cmd.updated_at.isoformat(),
              'uuid': str(cmd.uuid)}
         )
+
+    def test_enrolled_user_command_linked_objects_keys(self):
+        a, (av,) = force_artifact(channel=Channel.USER, version_count=1)
+        cmd = InstallProfile.create_for_target(Target(self.enrolled_device, self.enrolled_user), artifact_version=av)
+        db_command = cmd.db_command
+        self.assertEqual(
+            db_command.linked_objects_keys_for_event(),
+            {"mdm_user_command": [(str(cmd.uuid),)],
+             "mdm_artifact_version": [(str(av.pk),)],
+             "mdm_artifact": [(str(a.pk),)]}
+        )
