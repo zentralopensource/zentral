@@ -234,7 +234,8 @@ class Engine:
             else:
                 action_action = operation
                 if operation == "view":
-                    group_basenames.append(ActionGroupBasename.VIEWER)
+                    # User is a superset of Viewer.
+                    group_basenames.extend([ActionGroupBasename.USER, ActionGroupBasename.VIEWER])
             action_id = f"{action_action}{object_name}"
             codename = get_permission_codename(operation, opts)
             self.register_action(

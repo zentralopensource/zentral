@@ -56,6 +56,10 @@ permit (
 
 Each contrib app's actions are members of `<Namespace>::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` action groups. Globally, the same buckets exist as `Action::"GlobalAdminActions"`, `Action::"GlobalUserActions"` and `Action::"GlobalViewerActions"` — these aggregate the per-namespace groups so a single reference covers every app.
 
+The three groups are nested. `ViewerActions` contains the read actions. `UserActions` contains the same read actions, and adds the daily operations, for example a machine tag change or a Santa clean sync. `AdminActions` contains all of them, and adds the configuration changes. A role with `UserActions` can thus do all that a role with `ViewerActions` can do.
+
+A small number of actions read a secret — the MDM admin password, device lock PIN, FileVault PRK and recovery password. They have a `view` prefix, but they are members of `UserActions` and not of `ViewerActions`.
+
 ```
 // Anyone in this Role can perform every "view" action across every Zentral app.
 permit (
