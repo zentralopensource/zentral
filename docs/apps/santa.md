@@ -118,7 +118,7 @@ The payload is an array of [NotificationSettingItem](https://developer.apple.com
 
 ### Definitions
 
-Zentral Santa rule combine a *target* and a *policy*. The target can be of type `Binary`, `Bundle`, `Certificate` or `Team ID`. A target is uniquely identified by its type, and its identifier (sha256 hexdigest for `Binary`, `Bundle` and `Certificate` targets). The policy can be one of `Allowlist`, `Blocklist`, `Silent blocklist` and `Allowlist compiler`.
+A Zentral Santa rule combines a *target* and a *policy*. The target can be of type `cdhash`, `Binary`, `Signing ID`, `Certificate` or `Team ID`. A target is uniquely identified by its type, and its identifier: a sha256 hexdigest for `Binary` and `Certificate`, a 40 character hexdigest for `cdhash`, `TEAMID:SIGNINGID` for `Signing ID`, and the 10 character team ID for `Team ID`. `Bundle` is a sixth type that only exists in Zentral, see below. The policy can be one of `Allowlist`, `Allowlist compiler`, `Blocklist`, `Silent blocklist` and `CEL`.
 
 To avoid conflicts, there is at most **one rule per target** for each configuration.
 
@@ -127,6 +127,10 @@ To avoid conflicts, there is at most **one rule per target** for each configurat
 **Bundle** targets are only available when Zentral managed to get the full bundle information from Santa. This happens only when Santa blocks a binary that is part of a bundle, and when `Enable bundles` is set to true in the Zentral Santa configuration. Rules on a bundle target only exist in Zentral. There are expanded to a list of binary rules when sent to the Santa agent – this is the reason why we need the bundle information.
 
 **Allowlist compiler** rules will only generate local transitive rules when `Enable transitive rules` is set to true in the Zentral Santa configuration. A transitive Allowlist rule will be created locally for each file written by the targets of those Santa rules.
+
+This policy is only available for `cdhash`, `Binary` and `Signing ID` targets. The Santa agent does not accept the compiler policy on a `Certificate` or a `Team ID` rule. It drops such a rule when it evaluates it, and the target keeps no rule at all, which blocks it in lockdown mode. Zentral rejects these rules.
+
+**CEL** rules carry an expression that the Santa agent evaluates for each execution of the target. Zentral stores the expression and sends it to the agent with the rule. See the [Santa documentation](https://northpole.dev/features/binary-authorization.html#cel) for the syntax of the expression and for the values that it can return.
 
 ### Quick start
 
