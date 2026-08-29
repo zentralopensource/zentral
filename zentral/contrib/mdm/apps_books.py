@@ -384,7 +384,7 @@ def _update_or_create_asset(adam_id, pricing_param, defaults, notification_id, c
     )
     collected_objects["asset"] = asset
     if created:
-        payload = asset.serialize_for_event(keys_only=False)
+        payload = {"asset": asset.serialize_for_event(keys_only=False)}
         if notification_id:
             payload["notification_id"] = notification_id
         yield AssetCreatedEvent(EventMetadata(), payload)
@@ -397,7 +397,7 @@ def _update_or_create_asset(adam_id, pricing_param, defaults, notification_id, c
                 updated = True
         if updated:
             asset.save()
-            payload = asset.serialize_for_event(keys_only=False)
+            payload = {"asset": asset.serialize_for_event(keys_only=False)}
             if notification_id:
                 payload["notification_id"] = notification_id
             yield AssetUpdatedEvent(EventMetadata(), payload)
@@ -566,7 +566,7 @@ def refresh_asset_metadata(client, asset):
         if not updated:
             return False
         asset.save()
-        event = AssetUpdatedEvent(EventMetadata(), asset.serialize_for_event(keys_only=False))
+        event = AssetUpdatedEvent(EventMetadata(), {"asset": asset.serialize_for_event(keys_only=False)})
     event.post()
     return True
 

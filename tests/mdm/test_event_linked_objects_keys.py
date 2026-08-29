@@ -6,7 +6,7 @@ from django.test import SimpleTestCase
 import zentral.contrib.mdm.events
 import zentral.contrib.mdm.models
 from zentral.contrib.mdm.events.admin_password import AdminPasswordUpdatedEvent
-from zentral.contrib.mdm.events.apps_books import AssetCountNotificationEvent
+from zentral.contrib.mdm.events.apps_books import AssetCountNotificationEvent, AssetCreatedEvent
 from zentral.contrib.mdm.events.artifacts import TargetArtifactUpdateEvent
 from zentral.contrib.mdm.events.device_lock_pin import DeviceLockPinSetEvent
 from zentral.contrib.mdm.events.downloads import MDMDownloadEvent
@@ -107,6 +107,11 @@ CASES = (
         AssetCountNotificationEvent,
         {"asset": {"adam_id": "123", "pricing_param": "STDQ"}, "location": {"pk": 1}},
         {Asset: [("123", "STDQ")], Location: [(1,)]},
+    ),
+    (
+        AssetCreatedEvent,
+        {"asset": {"pk": 6, "adam_id": "123", "pricing_param": "STDQ", "product_type": "App"}},
+        {Asset: [("123", "STDQ")]},
     ),
     (
         DEPEnrollmentRequestEvent,

@@ -129,6 +129,10 @@ The `UserActions` action groups contain the view actions of the models now. A ro
 
 Some MDM events linked an object under a key that did not match the key of the model, so a search found one half of the events only: the `zentral_audit` events of the object always used the model key. `mdm_artifactversion` is `mdm_artifact_version` now, `mdm_enrolleddevice` is `mdm_enrolled_device`, `mdm_enrolleduser` is `mdm_enrolled_user`, `mdm_command` is `mdm_device_command`, and `mdm_depenrollmentsession` is `mdm_dep_enrollment_session`, with the other enrollment sessions. Update a probe or a query that filters on an old key. No backfill is necessary: the stored events keep the old key, and they disappear with the retention of the event store.
 
+#### 🧨 MDM asset event payloads
+
+The `mdm_asset_created` and `mdm_asset_updated` events put the asset in an `asset` object now, like the other apps & books events. The attributes of the asset were at the top level of the payload, so the two events linked no object at all: `get_linked_objects_keys()` reads the asset from the `asset` key. Update a probe or a query that reads `adam_id`, `pricing_param`, `name` or another attribute of the asset at the top level of these two payloads.
+
 
 ### Bug fixes
 

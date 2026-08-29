@@ -45,9 +45,13 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         event = events[0]
         self.assertIsInstance(event, AssetCreatedEvent)
         self.assertEqual(event.payload["notification_id"], notification_id)
-        self.assertEqual(event.payload["pk"], asset.pk)
-        self.assertEqual(event.payload["adam_id"], "yolo")
-        self.assertEqual(event.payload["pricing_param"], "fomo")
+        self.assertEqual(event.payload["asset"]["pk"], asset.pk)
+        self.assertEqual(event.payload["asset"]["adam_id"], "yolo")
+        self.assertEqual(event.payload["asset"]["pricing_param"], "fomo")
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"mdm_asset": [("yolo", "fomo")]}
+        )
         self.assertEqual(collected_objects, {"asset": asset})
 
     def test_update_or_create_asset_noop(self):
@@ -87,10 +91,14 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         event = events[0]
         self.assertIsInstance(event, AssetUpdatedEvent)
         self.assertEqual(event.payload["notification_id"], notification_id)
-        self.assertEqual(event.payload["pk"], asset.pk)
-        self.assertEqual(event.payload["adam_id"], asset.adam_id)
-        self.assertEqual(event.payload["pricing_param"], asset.pricing_param)
-        self.assertEqual(event.payload["supported_platforms"], ["iOS"])
+        self.assertEqual(event.payload["asset"]["pk"], asset.pk)
+        self.assertEqual(event.payload["asset"]["adam_id"], asset.adam_id)
+        self.assertEqual(event.payload["asset"]["pricing_param"], asset.pricing_param)
+        self.assertEqual(event.payload["asset"]["supported_platforms"], ["iOS"])
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"mdm_asset": [(asset.adam_id, asset.pricing_param)]}
+        )
         asset.refresh_from_db()
         self.assertEqual(asset.supported_platforms, ["iOS"])
         self.assertEqual(collected_objects, {"asset": asset})
@@ -562,7 +570,11 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(len(post_event.call_args_list), 1)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AssetUpdatedEvent)
-        self.assertEqual(event.payload["name"], asset_name)
+        self.assertEqual(event.payload["asset"]["name"], asset_name)
+        self.assertEqual(
+            event.get_linked_objects_keys(),
+            {"mdm_asset": [(asset.adam_id, asset.pricing_param)]}
+        )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_refresh_asset_metadata_not_in_storefront(self, post_event):
