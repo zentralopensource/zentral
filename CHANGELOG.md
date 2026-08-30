@@ -167,6 +167,8 @@ The Santa sync operations of a machine are serialized on its enrolled machine ro
 
 Fixed the Santa preflight that overwrote what another request committed on the same enrolled machine: it saved every column of the row it read. Only the attributes the client reports are written now.
 
+Fixed the 500 error when a user saves a Santa configuration with client certificate authentication on a server with no mTLS FQDN. The form put its error on a field removed from the configuration, and Django refuses an error on a field that does not exist.
+
 The inventory history cleanup deletes in bounded batches now. One unbounded statement for each table could delete millions of rows in one transaction, and keep the database at its maximum capacity for the full run. Each batch is a transaction, and a batch that gives an integrity error is retried alone.
 
 Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.
