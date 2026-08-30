@@ -111,9 +111,6 @@ class Command(BaseCommand):
 
                     token.delete()
 
-                    def on_commit_callback(event=event):
-                        event.post()
-
-                    transaction.on_commit(on_commit_callback)
+                    transaction.on_commit(event.post)
         finally:
             queues.stop()
