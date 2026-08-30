@@ -77,16 +77,20 @@ class MunkiAgentUnhealthyWatch(BaseWatch):
             f"   AND ({self._unhealthy()})"
         )
 
+    # The cast goes on the ws side, never on ms.id: casting the indexed column forecloses the primary
+    # key, and both of these become a scan of one row per machine instead of a lookup per degraded one.
+    _MATCH_SUBJECT = "ms.id = ws.subject_id::integer"
+
     @property
     def still_degraded(self):
         return (
             "SELECT 1 FROM munki_munkistate AS ms"
-            " WHERE ms.id::text = ws.subject_id"
+            f" WHERE {self._MATCH_SUBJECT}"
             "   AND ms.created_at < NOW() - interval '1 second' * %(min_age)s"
             f"   AND ({self._unhealthy()})"
         )
 
-    subject_alive = "SELECT 1 FROM munki_munkistate AS ms WHERE ms.id::text = ws.subject_id"
+    subject_alive = f"SELECT 1 FROM munki_munkistate AS ms WHERE {_MATCH_SUBJECT}"
 
     def get_query_kwargs(self):
         kwargs = super().get_query_kwargs()
