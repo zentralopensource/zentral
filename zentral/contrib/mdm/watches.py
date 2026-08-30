@@ -60,16 +60,20 @@ class PushCertificateExpiryWatch(BaseWatch):
             f"   AND pc.not_after <= NOW() + interval '1 second' * %({widest}_offset)s"
         )
 
+    # The cast goes on the ws side, never on pc.id. A handful of rows makes the direction free here,
+    # which is the reason to write it the same way as everywhere else rather than to decide it per watch.
+    _MATCH_SUBJECT = "pc.id = ws.subject_id::integer"
+
     @property
     def still_degraded(self):
         widest = self.ladder[-1][0]
         return (
             "SELECT 1 FROM mdm_pushcertificate AS pc"
-            " WHERE pc.id::text = ws.subject_id AND pc.not_after IS NOT NULL"
+            f" WHERE {self._MATCH_SUBJECT} AND pc.not_after IS NOT NULL"
             f"   AND pc.not_after <= NOW() + interval '1 second' * %({widest}_offset)s"
         )
 
-    subject_alive = "SELECT 1 FROM mdm_pushcertificate AS pc WHERE pc.id::text = ws.subject_id"
+    subject_alive = f"SELECT 1 FROM mdm_pushcertificate AS pc WHERE {_MATCH_SUBJECT}"
 
     def get_query_kwargs(self):
         kwargs = super().get_query_kwargs()
