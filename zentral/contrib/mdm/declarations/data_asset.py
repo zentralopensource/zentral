@@ -1,6 +1,6 @@
 import logging
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.mdm.models import Artifact, DataAsset
 from .exceptions import DeclarationError
 from .utils import (dump_artifact_version_token,
@@ -43,8 +43,8 @@ def build_data_asset(enrollment_session, target, declaration_identifier):
         "ServerToken": server_token,
         "Payload": {
             "Reference": {
-                "DataURL": "https://{}{}".format(
-                    settings["api"]["fqdn"],
+                "DataURL": "{}{}".format(
+                    api_base_url(),
                     reverse("mdm_public:data_asset_download_view",
                             args=(dump_data_asset_token(enrollment_session, target, artifact_version_pk),))
                 ),

@@ -19,7 +19,7 @@ from django.urls import reverse
 from django.utils.functional import cached_property
 from django.views.generic import View
 
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.inventory.utils import add_machine_tags
 from zentral.contrib.mdm.apps_books import ensure_target_asset_assignments
@@ -719,8 +719,8 @@ class PackageManifestView(DownloadView):
                                              Target(self.enrolled_device, self.enrolled_user),
                                              package.pk)
         asset = manifest["items"][0]["assets"][0]
-        asset["url"] = "https://{}{}".format(
-            settings["api"]["fqdn"],
+        asset["url"] = "{}{}".format(
+            api_base_url(),
             reverse("mdm_public:package_file", args=(file_token,)),
         )
         return HttpResponse(plistlib.dumps(manifest), content_type="application/x-plist")

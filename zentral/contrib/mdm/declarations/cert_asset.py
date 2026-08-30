@@ -1,6 +1,6 @@
 import logging
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.mdm.cert_issuer_backends import test_acme_payload
 from zentral.contrib.mdm.models import Artifact, CertAsset, Platform
 from .exceptions import DeclarationError
@@ -65,8 +65,8 @@ def build_cert_asset(enrollment_session, target, declaration_identifier):
         "ServerToken": server_token,
         "Payload": {
             "Reference": {
-                "DataURL": "https://{}{}".format(
-                    settings["api"]["fqdn"],
+                "DataURL": "{}{}".format(
+                    api_base_url(),
                     reverse(f"mdm_public:{url_name}",
                             args=(dump_cert_asset_token(enrollment_session, target, artifact_version_pk),))
                 ),

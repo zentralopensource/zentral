@@ -1,6 +1,6 @@
 import logging
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.mdm.models import Artifact, Declaration
 from zentral.contrib.mdm.payloads import substitute_variables
 from .exceptions import DeclarationError
@@ -39,8 +39,8 @@ def build_declaration(enrollment_session, target, declaration_identifier):
                   for ref in declaration.declarationref_set.all()}
     # substitute ManifestURL package references with signed package_manifest URLs
     manifest_url_refs = {
-        tuple(ref.key): "https://{}{}".format(
-            settings["api"]["fqdn"],
+        tuple(ref.key): "{}{}".format(
+            api_base_url(),
             reverse(
                 "mdm_public:package_manifest",
                 args=(dump_package_manifest_token(enrollment_session, target, ref.package.pk),),

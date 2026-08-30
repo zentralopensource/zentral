@@ -3,7 +3,7 @@ from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import View
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
 from zentral.contrib.inventory.utils import verify_enrollment_secret
 from zentral.contrib.mdm.events import UserEnrollmentRequestEvent
@@ -24,8 +24,8 @@ class UserEnrollmentServiceDiscoveryView(View):
         return JsonResponse({
             "Servers": [
                 {"Version": "mdm-byod",
-                 "BaseURL": "https://{}{}".format(
-                     settings["api"]["fqdn"],
+                 "BaseURL": "{}{}".format(
+                     api_base_url(),
                      reverse("mdm_public:enroll_user", args=(user_enrollment.enrollment_secret.secret,)))}
             ]
         })
@@ -53,8 +53,8 @@ class EnrollUserView(PostEventMixin, View):
         authorization = request.headers.get("Authorization")
         if not authorization:
             user_enrollment_session = UserEnrollmentSession.objects.create_from_user_enrollment(self.user_enrollment)
-            url = "https://{}{}".format(
-                settings["api"]["fqdn"],
+            url = "{}{}".format(
+                api_base_url(),
                 reverse("mdm_public:authenticate_user", args=(user_enrollment_session.enrollment_secret.secret,))
             )
             response = HttpResponse("Unauthorized", status=401)

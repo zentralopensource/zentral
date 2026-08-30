@@ -1,6 +1,6 @@
 import logging
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.mdm.models import Artifact, Profile
 from .utils import (dump_artifact_version_token,
                     load_artifact_version_token,
@@ -37,8 +37,8 @@ def build_legacy_profile(enrollment_session, target, declaration_identifier):
         "Identifier": declaration_identifier,
         "ServerToken": server_token,
         "Payload": {
-            "ProfileURL": "https://{}{}".format(
-                settings["api"]["fqdn"],
+            "ProfileURL": "{}{}".format(
+                api_base_url(),
                 reverse("mdm_public:profile_download_view",
                         args=(dump_legacy_profile_token(enrollment_session, target, artifact_version_pk),))
             )

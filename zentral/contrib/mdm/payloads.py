@@ -219,13 +219,12 @@ def build_mdm_configuration_profile(enrollment_session, machine_info=None):
                                "com.apple.mdm.per-user-connections"],
         "CheckOutWhenRemoved": True,
     }
-    if settings["apps"]["zentral.contrib.mdm"].get("mtls_proxy", True):
-        fqdn_key = "fqdn_mtls"
-    else:
+    mtls_proxy = settings["apps"]["zentral.contrib.mdm"].get("mtls_proxy", True)
+    if not mtls_proxy:
         mdm_config["SignMessage"] = True
-        fqdn_key = "fqdn"
-    mdm_config["ServerURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm_public:connect"))
-    mdm_config["CheckInURL"] = "https://{}{}".format(settings["api"][fqdn_key], reverse("mdm_public:checkin"))
+    base_url = api_base_url(mtls_proxy)
+    mdm_config["ServerURL"] = f'{base_url}{reverse("mdm_public:connect")}'
+    mdm_config["CheckInURL"] = f'{base_url}{reverse("mdm_public:checkin")}'
     managed_apple_id = getattr(enrollment_session, "managed_apple_id", None)
     if managed_apple_id:
         # account-driven user enrollment

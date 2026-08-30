@@ -17,6 +17,7 @@ from realms.models import (
     RoleMapping,
 )
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.conf import settings
 from .utils import (
     force_group,
     force_realm,
@@ -284,6 +285,27 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.login()
         response = self.client.get(reverse("realms:view", args=(realm.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    def test_view_realm_scim_root_url(self):
+        realm = force_realm()
+        realm.scim_enabled = True
+        realm.save()
+        self.login("realms.view_realm")
+        response = self.client.get(reverse("realms:view", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        # the operator copies this URL into the IdP, it needs the scheme
+        self.assertEqual(
+            response.context["scim_root_url"],
+            f'https://{settings["api"]["fqdn"]}'
+            + reverse("realms_public:scim_resource_types", args=(realm.pk,)).replace("/ResourceTypes", "/")
+        )
+
+    def test_view_realm_no_scim_root_url(self):
+        realm = force_realm()
+        self.login("realms.view_realm")
+        response = self.client.get(reverse("realms:view", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("scim_root_url", response.context)
 
     def test_view_realm_no_link(self):
         realm = force_realm()

@@ -1,6 +1,6 @@
 from django.urls import reverse
 from rest_framework import serializers
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .conf import monolith_conf
@@ -131,9 +131,8 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         return obj.enrolledmachine_set.count()
 
     def get_download_url(self, fmt, obj):
-        fqdn = settings["api"]["fqdn"]
         path = reverse(f"monolith_api:enrollment_{fmt}", args=(obj.pk,))
-        return f'https://{fqdn}{path}'
+        return f"{api_base_url()}{path}"
 
     def get_configuration_profile_download_url(self, obj):
         return self.get_download_url("configuration_profile", obj)

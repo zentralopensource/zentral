@@ -1,6 +1,6 @@
 import logging
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.mdm.models import Artifact, Channel, Platform, TargetArtifact
 from zentral.contrib.mdm.payloads import substitute_variables
 from .base import register_command, Command
@@ -21,9 +21,8 @@ class InstallEnterpriseApplication(Command):
     def build_command(self):
         enterprise_app = self.artifact_version.enterprise_app
         manifest = enterprise_app.manifest
-        manifest["items"][0]["assets"][0]["url"] = "https://{}{}".format(settings["api"]["fqdn"],
-                                                                         reverse("mdm_public:enterprise_app_download",
-                                                                                 args=(self.db_command.uuid,)))
+        download_path = reverse("mdm_public:enterprise_app_download", args=(self.db_command.uuid,))
+        manifest["items"][0]["assets"][0]["url"] = f"{api_base_url()}{download_path}"
         cmd = {"Manifest": manifest}
         configuration = enterprise_app.get_configuration()
         if configuration:

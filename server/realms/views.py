@@ -9,7 +9,7 @@ from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
-from zentral.conf import settings as zentral_settings
+from zentral.conf import api_base_url
 from zentral.utils.views import UserPaginationListView
 from .backends.registry import backend_classes
 from .forms import AddRealmUserToGroupForm, RealmGroupSearchForm, RealmUserSearchForm
@@ -99,10 +99,10 @@ class RealmView(PermissionRequiredMixin, DetailView):
         )
         ctx["realm"] = self.object
         if self.object.scim_enabled:
-            ctx["scim_root_url"] = 'https://{}{}'.format(
-                zentral_settings["api"]["fqdn"],
-                reverse("realms_public:scim_resource_types", args=(self.object.pk,)).replace("/ResourceTypes", "/")
-            )
+            scim_root_path = reverse(
+                "realms_public:scim_resource_types", args=(self.object.pk,)
+            ).replace("/ResourceTypes", "/")
+            ctx["scim_root_url"] = f"{api_base_url()}{scim_root_path}"
         # realm group mappings
         ctx["realm_group_mappings"] = realm_group_mappings
         ctx["realm_group_mapping_count"] = realm_group_mappings.count()

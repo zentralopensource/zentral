@@ -26,7 +26,7 @@ from django.utils.timesince import timesince
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmGroup, RealmUser
 
-from zentral.conf import api_base_url, settings
+from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import (
     EnrollmentSecret,
     EnrollmentSecretRequest,
@@ -2431,8 +2431,8 @@ class UserEnrollment(MDMEnrollment):
 
     def get_service_discovery_full_url(self):
         if self.realm:
-            return "https://{}{}".format(
-                settings["api"]["fqdn"],
+            return "{}{}".format(
+                api_base_url(),
                 reverse("mdm_public:user_enrollment_service_discovery", args=(self.enrollment_secret.secret,))
             )
 

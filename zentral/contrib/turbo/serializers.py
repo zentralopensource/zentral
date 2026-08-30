@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework import serializers
 
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 
@@ -45,7 +45,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
     def get_artifact_download_url(self, view_name, obj):
         path = reverse(f"turbo_api:{view_name}", args=(obj.pk,))
-        return f'https://{settings["api"]["fqdn"]}{path}'
+        return f"{api_base_url()}{path}"
 
     def get_configuration_profile_download_url(self, obj):
         return self.get_artifact_download_url("enrollment_configuration_profile", obj)

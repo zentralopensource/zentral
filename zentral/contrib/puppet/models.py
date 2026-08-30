@@ -10,7 +10,7 @@ from django.db.models import F
 from django.db.models.signals import post_delete, post_save
 from django.urls import reverse
 from django.utils.crypto import constant_time_compare
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
 from zentral.utils.certificates import iter_cert_trees
 
@@ -85,7 +85,7 @@ class Instance(models.Model):
         return reverse("puppet:instance", args=(self.pk,))
 
     def get_post_report_full_url(self):
-        return "https://{}{}".format(settings["api"]["fqdn"], reverse("puppet:post_report", args=(self.pk,)))
+        return f'{api_base_url()}{reverse("puppet:post_report", args=(self.pk,))}'
 
     def save(self, *args, **kwargs):
         if not self.pk:

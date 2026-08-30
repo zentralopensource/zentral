@@ -25,14 +25,13 @@ def build_santa_enrollment_configuration(enrollment):
     })
     realm = configuration.voting_realm
     if realm and realm.user_portal and settings["apps"]["zentral.contrib.santa"].get("user_portal"):
-        fqdn = settings["api"]["fqdn"]
         path = reverse("realms_public:santa_up:event_detail", args=(realm.pk,))
         params = (
             "bofid=%bundle_or_file_identifier%&fid=%file_identifier%"
             "&mid=%machine_id%&tid=%team_id%&sid=%signing_id%&cdh=%cdhash%"
         )
         config["EventDetailText"] = "More info"
-        config["EventDetailURL"] = f"https://{fqdn}{path}?{params}"
+        config["EventDetailURL"] = f"{api_base_url()}{path}?{params}"
     return config
 
 

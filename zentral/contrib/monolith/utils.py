@@ -4,7 +4,7 @@ import plistlib
 
 from django.core.files.base import ContentFile
 
-from zentral.utils.osx_package import get_api_fqdn
+from zentral.conf import api_base_url
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier
 from zentral.utils.text import shard as compute_shard
 from zentral.utils.time import naive_utc_fromisoformat
@@ -81,7 +81,7 @@ def build_configuration(enrollment):
     # TODO: hardcoded
     config = {
         "ClientIdentifier": "$SERIALNUMBER",
-        "SoftwareRepoURL": f"https://{get_api_fqdn()}/public/monolith/munki_repo",
+        "SoftwareRepoURL": f"{api_base_url()}/public/monolith/munki_repo",
         "FollowHTTPRedirects": "all",
         # "ManifestURL": None,  # no special Manifest URL with monolith
         # force redirect via monolith for Icon and Client Resource

@@ -11,7 +11,7 @@ from rest_framework.utils.encoders import JSONEncoder
 from rest_framework.views import APIView, exception_handler
 from accounts.api_authentication import APITokenAuthentication
 from realms.models import Realm, RealmGroup, RealmUser
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.utils.drf import DefaultDjangoModelPermissions
 from .models import realm_group_members_updated
 from .scim import SCIMUser, SCIMException, SCIMGroup
@@ -116,7 +116,7 @@ class SCIMView(APIView):
         return reverse(full_url_name, args=all_args)
 
     def get_location(self, url_name, *args):
-        return "https://{}{}".format(settings["api"]["fqdn"], self.get_path(url_name, *args))
+        return f"{api_base_url()}{self.get_path(url_name, *args)}"
 
     @staticmethod
     def build_response(data, status):

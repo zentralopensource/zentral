@@ -2,7 +2,7 @@ from django.db.models import F
 from django.urls import reverse
 from rest_framework import serializers
 
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.core.compliance_checks.models import ComplianceCheck
@@ -45,7 +45,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
     def get_package_download_url(self, obj):
         path = reverse("munki_api:enrollment_package", args=(obj.pk,))
-        return f'https://{settings["api"]["fqdn"]}{path}'
+        return f"{api_base_url()}{path}"
 
     def create(self, validated_data):
         secret_data = validated_data.pop('secret')

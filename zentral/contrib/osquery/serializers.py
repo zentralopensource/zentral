@@ -2,7 +2,7 @@ from django.db.models import F
 from django.urls import reverse
 from django.utils.text import slugify
 from rest_framework import serializers
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .compliance_checks import sync_query_compliance_check
@@ -43,7 +43,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
 
     def get_artifact_download_url(self, view_name, obj):
         path = reverse(f"osquery_api:{view_name}", args=(obj.pk,))
-        return f'https://{settings["api"]["fqdn"]}{path}'
+        return f"{api_base_url()}{path}"
 
     def get_package_download_url(self, obj):
         return self.get_artifact_download_url("enrollment_package", obj)

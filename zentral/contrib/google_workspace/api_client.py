@@ -10,7 +10,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from .models import Connection
 
 
@@ -103,7 +103,7 @@ class _AdminSDKClient(APIClient):
         return InstalledAppFlow.from_client_config(
             self.client_config,
             scopes=self.scopes,
-            redirect_uri="https://{}{}".format(settings["api"]["fqdn"], reverse("google_workspace:redirect")),
+            redirect_uri=f'{api_base_url()}{reverse("google_workspace:redirect")}',
         )
 
     def _dir_svc(self):

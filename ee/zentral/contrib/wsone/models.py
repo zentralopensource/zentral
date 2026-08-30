@@ -5,7 +5,7 @@ from django.core.validators import MinLengthValidator
 from django.db import models
 from django.db.models import F
 from django.urls import reverse
-from zentral.conf import settings
+from zentral.conf import api_base_url
 from zentral.core.secret_engines import decrypt_str, encrypt_str, rewrap
 
 
@@ -46,7 +46,7 @@ class Instance(models.Model):
         return reverse("wsone:instance", args=(self.pk,))
 
     def get_event_notifications_full_url(self):
-        return "https://{}{}".format(settings["api"]["fqdn"], reverse("wsone:event_notifications", args=(self.pk,)))
+        return f'{api_base_url()}{reverse("wsone:event_notifications", args=(self.pk,))}'
 
     def save(self, *args, **kwargs):
         if not self.pk:
