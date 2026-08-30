@@ -174,7 +174,7 @@ class GetWorkersTestCase(_RegistryMixin, TestCase):
     def test_single_catch_all_worker_by_default(self):
         workers = list(get_workers())
         self.assertEqual(len(workers), 1)
-        self.assertEqual(workers[0].name, "Watch worker")
+        self.assertEqual(workers[0].name, "watch worker")
         self.assertIsNone(workers[0].watch_names)
 
     def _get_workers(self, conf):
@@ -185,7 +185,7 @@ class GetWorkersTestCase(_RegistryMixin, TestCase):
     def test_worker_groups(self):
         conf = {"worker_groups": [{"name": "slow", "watches": ["_stub_b"]}]}
         workers = self._get_workers(conf)
-        self.assertEqual([w.name for w in workers], ["Watch worker slow", "Watch worker"])
+        self.assertEqual([w.name for w in workers], ["watch worker slow", "watch worker"])
         self.assertEqual(workers[0].watch_names, ["_stub_b"])
         # the catch-all excludes what the group claimed, so nothing runs twice and nothing is dropped
         self.assertIsNone(workers[1].watch_names)
