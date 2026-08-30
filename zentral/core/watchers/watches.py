@@ -178,9 +178,11 @@ class BaseWatch:
 
     def run_once(self):
         kwargs = self.get_query_kwargs()
-        # ONE transaction, and events posted on commit. The statements write state before iter_events()
-        # runs: without this, a post that failed after the write would leave the row saying "already
-        # fired" and the alert would be lost with nothing to notice it.
+        # ONE transaction, with the events built from the RETURNING rows and posted on commit: posting
+        # them inside would alert about transitions that a rollback then takes back. The price is
+        # at-most-once delivery — a publish that fails after the commit loses the transition, and the
+        # row already says fired, so nothing emits about that subject again until its reasons change.
+        # The worker logs the failure and counts it, which is all that keeps the loss from being silent.
         with transaction.atomic():
             changed = self._fetch(
                 DEGRADED_TEMPLATE.format(degraded_select=self.degraded_select), kwargs
