@@ -12,7 +12,7 @@ A subject can leave a watch while it is still degraded: a machine is archived, a
 
 Every watch event carries the same attributes: the `status` (`degraded`, `recovered` or `unwatched`), the name of the `watch`, the `reasons` and the `previous_reasons`, and `degraded_for`, the number of seconds since the first report. All of them have the `watch` tag. Use it to route the alerts and their resolutions together.
 
-The new *Watch worker* evaluates the watches. It runs all of them by default. To give a heavy watch a process of its own, declare a worker group in the configuration of the `zentral.core.watchers` app:
+The new watch worker evaluates the watches. It runs all of them by default. To give a heavy watch a process of its own, declare a worker group in the configuration of the `zentral.core.watchers` app:
 
 ```json
 {

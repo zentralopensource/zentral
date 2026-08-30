@@ -19,7 +19,7 @@ class WatchWorker:
     """
     counter_name = "watch_transitions"
 
-    def __init__(self, name="Watch worker", watch_names=None, exclude=None):
+    def __init__(self, name="watch worker", watch_names=None, exclude=None):
         self.name = name
         self.watch_names = watch_names
         self.exclude = exclude
@@ -79,5 +79,5 @@ def get_workers():
     for group in groups:
         watch_names = list(group["watches"])
         assigned.update(watch_names)
-        yield WatchWorker(name=f"Watch worker {group['name']}", watch_names=watch_names)
+        yield WatchWorker(name=f"watch worker {group['name']}", watch_names=watch_names)
     yield WatchWorker(exclude=assigned)
