@@ -78,6 +78,52 @@ class RemoveExpiredAPITokenCmdTestCase(TestCase, EventAssertions):
             expected_event_payload, {"accounts_api_token": [str(token.pk)]}, post_event
         )
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_remove_two_tokens(self, post_event):
+        user = User.objects.create_user("yolo", "fomo@example.com")
+        expired_days = 3
+        expired_date = datetime.today() - timedelta(days=(expired_days + 1))
+        # the command removes the tokens in creation order
+        token1, _ = APIToken.objects.create_for_user(
+            user, expiry=expired_date, name="api--token1"
+        )
+        token2, _ = APIToken.objects.create_for_user(
+            user, expiry=expired_date, name="api--token2"
+        )
+
+        def expected_event_payload(token):
+            return {
+                "action": "deleted",
+                "object": {
+                    "model": "accounts.apitoken",
+                    "pk": str(token.pk),
+                    "prev_value": token.serialize_for_event(),
+                },
+            }
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            stdout, stderr = self.call_command("--after-days", expired_days)
+        self.assertIn("Tokens to remove:", stdout)
+        self.assertEqual(stderr, "")
+        self.assertFalse(
+            APIToken.objects.filter(id__in=(token1.id, token2.id)).exists()
+        )
+
+        # the callbacks can run after the loop, so each one must carry its own token
+        self.assert_events_published(2, callbacks, post_event)
+        self.assert_is_audit_event(
+            expected_event_payload(token1),
+            {"accounts_api_token": [str(token1.pk)]},
+            post_event,
+            expected_order=0,
+        )
+        self.assert_is_audit_event(
+            expected_event_payload(token2),
+            {"accounts_api_token": [str(token2.pk)]},
+            post_event,
+            expected_order=1,
+        )
+
     def test_remove_token_by_user(self):
         self.maxDiff = None
         user = User.objects.create_user("yolo", "fomo@example.com")

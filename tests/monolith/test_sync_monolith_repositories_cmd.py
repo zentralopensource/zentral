@@ -1,8 +1,9 @@
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import call, patch
 from django.core.management import call_command
 from django.db import connections
 from django.test import TestCase
+from zentral.contrib.monolith.models import Repository
 from zentral.contrib.monolith.tasks import SYNC_REPOSITORY_LOCK_ID
 from .utils import force_repository
 
@@ -44,6 +45,30 @@ class SyncMonolithRepositoriesTestCase(TestCase):
         sync_catalogs.assert_called_once()
         self.assertEqual(len(callbacks), 1)
         send_notification.assert_called_once_with("monolith.repository", str(repository.pk))
+
+    @patch("zentral.contrib.monolith.management.commands.sync_monolith_repositories.notifier.send_notification")
+    @patch("zentral.contrib.monolith.repository_backends.base.BaseRepository.sync_catalogs")
+    def test_sync_two_repositories_ok(self, sync_catalogs, send_notification):
+        force_repository()
+        force_repository()
+        # the names are random, and the database collation orders them, not python. read the
+        # order of the sync from the queryset the command iterates.
+        repository1, repository2 = Repository.objects.all()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            stdout, stderr = self.call_command()
+        self.assertEqual(
+            stdout,
+            f"Sync {repository1.name} repository\nOK\nSync {repository2.name} repository\nOK\n"
+        )
+        self.assertEqual(stderr, "")
+        self.assertEqual(sync_catalogs.call_count, 2)
+        self.assertEqual(len(callbacks), 2)
+        # the callbacks run after the loop, so each one must carry the pk of its own repository
+        self.assertEqual(
+            send_notification.call_args_list,
+            [call("monolith.repository", str(repository1.pk)),
+             call("monolith.repository", str(repository2.pk))]
+        )
 
     @patch("zentral.contrib.monolith.management.commands.sync_monolith_repositories.notifier.send_notification")
     @patch("zentral.contrib.monolith.repository_backends.base.BaseRepository.sync_catalogs")
