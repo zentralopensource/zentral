@@ -1,3 +1,5 @@
+from functools import partial
+
 from django.db import transaction
 from django.core.management.base import BaseCommand
 from base.notifier import notifier
@@ -16,22 +18,22 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         self.verbosity = kwargs.get("verbosity", 1)
-        with transaction.atomic():
-            for db_repository in Repository.objects.all():
-                repository = load_repository_backend(db_repository)
-                self.write(f"Sync {repository.name} repository")
-                if not try_lock_repository_sync(db_repository.pk):
-                    self.stderr.write(f"Could not sync {repository.name}: a sync is already running")
-                    continue
-                try:
+        for db_repository in Repository.objects.all():
+            repository = load_repository_backend(db_repository)
+            self.write(f"Sync {repository.name} repository")
+            # the try must stay outside the atomic block: the exception has to reach __exit__ to
+            # roll this repository back and to release its transaction scoped advisory lock
+            try:
+                with transaction.atomic():
+                    if not try_lock_repository_sync(db_repository.pk):
+                        self.stderr.write(f"Could not sync {repository.name}: a sync is already running")
+                        continue
                     repository.sync_catalogs()
-                except Exception as e:
-                    self.stderr.write(f"Could not sync {repository.name}: {e}")
-                else:
-                    self.write("OK")
-
-                    def notify(pk=str(db_repository.pk)):
-                        notifier.send_notification("monolith.repository", pk)
-
-                    transaction.on_commit(notify)
+            except Exception as e:
+                self.stderr.write(f"Could not sync {repository.name}: {e}")
+            else:
+                self.write("OK")
+                transaction.on_commit(
+                    partial(notifier.send_notification, "monolith.repository", str(db_repository.pk))
+                )
         queues.stop()

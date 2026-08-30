@@ -209,6 +209,8 @@ The `rebuild_manifest_enrollment_packages` command takes a `--manifest` option w
 
 Fixed the links of the Santa cdhash event store redirect, which had the Signing ID target type. The view sends the user back to the events page of the target when the store gives no event URL. It sent them to the Signing ID events page instead, with a cdhash identifier that this page cannot find. The events the view read were the correct ones.
 
+The `sync_monolith_repositories` command uses one transaction for each repository now, and releases the lock of a repository at the end of its own synchronization. With one transaction for all of them, a database error stopped the command and rolled back the repositories already synchronized, and a failed synchronization kept its partial changes.
+
 
 ## 2026.5
 
