@@ -109,7 +109,9 @@ class WatchProtocolTestCase(TestCase):
 
     def _run(self):
         with self.captureOnCommitCallbacks(execute=True):
-            return self.watch.run_once()
+            result = self.watch.run_once()
+        # the three counts these tests are about, so a new one does not rewrite every assertion below
+        return result.changed, result.recovered, result.events
 
     # a first crossing
 
@@ -238,10 +240,10 @@ class WatchProtocolTestCase(TestCase):
         WatchState.objects.filter(watch="_subjects", subject_id=subject_id).delete()
         with patch.object(SubjectUnwatchedEvent, "post") as post:
             with self.captureOnCommitCallbacks(execute=True):
-                changed, recovered, events = watch.run_once()
+                result = watch.run_once()
         # not a recovery — nothing was fixed — but an event IS emitted, because an incident can only be
         # closed by one, and after this tick the state row is gone for good
-        self.assertEqual((changed, recovered, events), (0, 0, 1))
+        self.assertEqual((result.changed, result.recovered, result.events), (0, 0, 1))
         self.assertEqual(post.call_count, 1)
         self.assertFalse(
             WatchState.objects.filter(watch=watch.name, subject_id=subject_id).exists()

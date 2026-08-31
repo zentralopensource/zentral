@@ -5,7 +5,7 @@ from django.test import TestCase
 from zentral.core.exceptions import ImproperlyConfigured
 from zentral.core.watchers import iter_watches, register_watch, watch_classes
 from zentral.core.watchers.models import WatchState
-from zentral.core.watchers.watches import BaseWatch
+from zentral.core.watchers.watches import BaseWatch, WatchRunResult
 from zentral.core.watchers.workers import WatchWorker, get_workers
 from zentral.utils.time import naive_utcnow
 
@@ -18,7 +18,7 @@ class _StubWatch(BaseWatch):
         return []
 
     def run_once(self):
-        return 1, 2, 0
+        return WatchRunResult(changed=1, recovered=2, unwatched=0, reconciled=3, closed=4, events=0)
 
 
 class _OtherStubWatch(_StubWatch):
@@ -101,7 +101,8 @@ class WatchWorkerTestCase(_RegistryMixin, TestCase):
         worker = WatchWorker(watch_names=["_stub_boom", "_stub_a"])
         watches = list(iter_watches(["_stub_boom", "_stub_a"]))
         next_run_at = {"_stub_boom": 0, "_stub_a": 0}
-        with patch.object(_StubWatch, "run_once", return_value=(1, 2, 0)) as run_once:
+        result = WatchRunResult(changed=1, recovered=2, unwatched=0, reconciled=0, closed=0, events=0)
+        with patch.object(_StubWatch, "run_once", return_value=result) as run_once:
             worker.run_once(watches, next_run_at)
         # the exception was contained, and the healthy watch still ran
         self.assertEqual(run_once.call_count, 1)
@@ -128,6 +129,9 @@ class WatchWorkerTestCase(_RegistryMixin, TestCase):
         exporter.add_counter.assert_called_once_with("watch_transitions", ["watch", "kind"])
         exporter.inc.assert_any_call("watch_transitions", "_stub_a", "degraded", 1)
         exporter.inc.assert_any_call("watch_transitions", "_stub_a", "recovered", 2)
+        # apart from the transitions they repeat: these two count the events that never reached the pipeline
+        exporter.inc.assert_any_call("watch_transitions", "_stub_a", "reconciled", 3)
+        exporter.inc.assert_any_call("watch_transitions", "_stub_a", "closed", 4)
 
     def test_metrics_error_counter(self):
         exporter = Mock()

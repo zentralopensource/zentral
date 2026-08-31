@@ -26,6 +26,7 @@ class MunkiAgentUnhealthyWatch(BaseWatch):
     interval = 900
     incident_class = MunkiAgentUnhealthyIncident
     event_class = MunkiAgentHealthEvent
+    machine_scoped = True
 
     # Blunt, and in the days range: a threshold that must survive weekends, holidays and travel cannot be
     # derived from a reporting cadence. It filters for PERSISTENCE, which is what separates a wedged agent

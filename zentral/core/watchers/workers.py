@@ -35,15 +35,19 @@ class WatchWorker:
         for watch in due:
             next_run_at[watch.name] = time.monotonic() + watch.interval
             try:
-                changed, recovered, _ = watch.run_once()
+                result = watch.run_once()
             except Exception:
                 # one broken watch must not take the others down with it: it will be retried on its next
                 # interval, and convergence means the transition it missed is still there to find
                 logger.exception("Watch %s: runtime error", watch.name)
                 self.inc_counter(watch.name, "error", 1)
                 continue
-            self.inc_counter(watch.name, "degraded", changed)
-            self.inc_counter(watch.name, "recovered", recovered)
+            self.inc_counter(watch.name, "degraded", result.changed)
+            self.inc_counter(watch.name, "recovered", result.recovered)
+            # counted apart from the transitions they repeat: these two measure how often an event did not
+            # reach the pipeline, which is a property of the deployment and not of the watch
+            self.inc_counter(watch.name, "reconciled", result.reconciled)
+            self.inc_counter(watch.name, "closed", result.closed)
 
     def run(self, metrics_exporter=None, only_once=False):
         self.metrics_exporter = metrics_exporter
