@@ -10,6 +10,8 @@ Zentral watches for the things that stop happening. A watch runs on its own sche
 
 A subject can leave a watch while it is still degraded: a machine is archived, a certificate is deleted. Zentral posts a `subject_unwatched` event for it. This is not a recovery, and it closes the incident, because no later evaluation reports that subject again.
 
+A watch repairs itself. If the event of a transition does not reach the event pipeline, the incident never opens, and the state of the watch already says that it reported the subject. Zentral compares the state of the watch with the incidents and posts the missing event again. It also closes an incident that has no state left to close it, which keeps an alert from staying open forever. The repair waits 15 minutes, so that it does not repeat an event that is still on its way, and it never touches an incident that a user closed or is working on. A watch that opens no incident keeps no record of what it owed, so it does not repair.
+
 Every watch event carries the same attributes: the `status` (`degraded`, `recovered` or `unwatched`), the name of the `watch`, the `reasons` and the `previous_reasons`, and `degraded_for`, the number of seconds since the first report. All of them have the `watch` tag. Use it to route the alerts and their resolutions together.
 
 The new watch worker evaluates the watches. It runs all of them by default. To give a heavy watch a process of its own, declare a worker group in the configuration of the `zentral.core.watchers` app:

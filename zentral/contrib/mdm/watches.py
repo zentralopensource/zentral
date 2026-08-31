@@ -22,6 +22,9 @@ class PushCertificateExpiryWatch(BaseWatch):
     interval = 3600   # a handful of rows and deadlines measured in days: hourly is ample
     incident_class = PushCertificateExpiryIncident
     event_class = PushCertificateHealthEvent
+    # one certificate serves the whole fleet, so the incident is not a machine's — see the class
+    # docstring. Left explicit because the other two watches are machine scoped.
+    machine_scoped = False
 
     # ONE source of truth for the ladder, most urgent first — both SQL CASEs are generated from it, so a
     # reason and its severity cannot drift apart. Severity only ever ratchets up (open_incident never

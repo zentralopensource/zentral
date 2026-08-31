@@ -28,6 +28,7 @@ class InventorySourceStaleWatch(BaseWatch):
     severities = {"stale": Severity.MAJOR.value}
     incident_class = InventorySourceStaleIncident
     event_class = InventorySourceHealthEvent
+    machine_scoped = True
 
     # The cast goes on the ws side, never on cms.id: casting the indexed column instead turns both of
     # these into a hash join over every current snapshot in the fleet, on every tick.

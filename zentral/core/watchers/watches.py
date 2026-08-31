@@ -5,7 +5,7 @@ from collections import namedtuple
 from django.db import connection, transaction
 
 from zentral.core.events.base import EventMetadata
-from zentral.core.incidents.models import IncidentUpdate, Severity
+from zentral.core.incidents.models import IncidentUpdate, Severity, Status
 from zentral.utils.time import naive_utcnow
 
 from .events import SubjectUnwatchedEvent, WatchStatus
@@ -45,12 +45,100 @@ DELETED_TEMPLATE = (
 )
 
 
+# The repair statements. Both read the incidents of the watch and emit what the incidents say is missing,
+# and neither writes an incident: opening and closing stay on the events, where the pipeline applies them.
+# The two apps are core, and the semantics needed here are already first class in the incidents one — an
+# incident that is open, and a close that a human made after the fact.
+
+UNREPORTED_TEMPLATE = (
+    "SELECT ws.* FROM watchers_watchstate AS ws "
+    "WHERE ws.watch = %(watch)s "
+    # a row with no key cannot be matched against an incident, and re-emitting it every tick would never
+    # converge. _incident_updates already logs that gap where it happens.
+    "  AND ws.incident_key IS NOT NULL "
+    # every transition moves fired_at, so this one window covers both the tick that wrote the row — whose
+    # events are posted only after the commit — and the ticks after it, while the pipeline catches up.
+    # Nothing else holds the repair back, so a grace of zero re-emits every transition one interval later.
+    "  AND ws.fired_at < NOW() - interval '1 second' * %(reconcile_grace)s "
+    "  AND NOT EXISTS ({reported})"
+)
+
+# `status_time > ws.fired_at` is the whole discriminator: a close that came AFTER this transition was
+# somebody's decision, and a watch must not undo it. A close that came before it belongs to an earlier
+# degradation, so this transition was never reported. open_values() covers IN_PROGRESS and REOPENED, which
+# are reported too — an operator working an incident does not need it re-announced.
+REPORTED_INCIDENT = (
+    "SELECT 1 FROM incidents_incident AS i"
+    " WHERE i.incident_type = %(incident_type)s AND i.key = ws.incident_key"
+    "   AND (i.status = ANY(%(open_statuses)s) OR i.status_time > ws.fired_at)"
+)
+
+REPORTED_MACHINE_INCIDENT = (
+    "SELECT 1 FROM incidents_incident AS i"
+    " JOIN incidents_machineincident AS mi ON (mi.incident_id = i.id)"
+    " WHERE i.incident_type = %(incident_type)s AND i.key = ws.incident_key"
+    "   AND mi.serial_number = ws.serial_number"
+    "   AND (mi.status = ANY(%(open_statuses)s) OR mi.status_time > ws.fired_at)"
+)
+
+# The other direction, and the one the sparse table cannot answer on its own: the row is deleted, so a lost
+# close leaves an incident that no later tick will ever emit about again — the failure iter_unwatched_events
+# exists to prevent, reintroduced by a publish that did not land.
+#
+# Only status = OPEN, and never the other open values: close_open_incident and close_open_machine_incident
+# refuse to close anything else, so widening this would emit events that change nothing. The columns are the
+# ones _metadata and _status_fields read; the state is gone, so reasons and subject_id cannot be recovered
+# and are not invented.
+_ORPHANED_COLUMNS = (
+    "SELECT %(watch)s AS watch, NULL AS subject_id, {serial_number} AS serial_number,"
+    "       ARRAY[]::varchar[] AS reasons, ARRAY[]::varchar[] AS previous_reasons,"
+    "       i.key AS incident_key, {first_fired_at} AS first_fired_at "
+)
+
+ORPHANED_TEMPLATE = (
+    _ORPHANED_COLUMNS.format(serial_number="NULL", first_fired_at="i.created_at") +
+    "  FROM incidents_incident AS i"
+    " WHERE i.incident_type = %(incident_type)s AND i.status = %(open_status)s"
+    "   AND i.status_time < NOW() - interval '1 second' * %(reconcile_grace)s"
+    "   AND NOT EXISTS (SELECT 1 FROM watchers_watchstate AS ws"
+    "                    WHERE ws.watch = %(watch)s AND ws.incident_key = i.key)"
+)
+
+ORPHANED_MACHINE_TEMPLATE = (
+    _ORPHANED_COLUMNS.format(serial_number="mi.serial_number", first_fired_at="mi.created_at") +
+    "  FROM incidents_machineincident AS mi"
+    "  JOIN incidents_incident AS i ON (i.id = mi.incident_id)"
+    " WHERE i.incident_type = %(incident_type)s AND mi.status = %(open_status)s"
+    "   AND mi.status_time < NOW() - interval '1 second' * %(reconcile_grace)s"
+    # one event per orphaned machine incident and none for the parent: close_open_incident holds the parent
+    # open while any machine incident is, and closes it with the last one
+    "   AND NOT EXISTS (SELECT 1 FROM watchers_watchstate AS ws"
+    "                    WHERE ws.watch = %(watch)s AND ws.incident_key = i.key"
+    "                      AND ws.serial_number = mi.serial_number)"
+)
+
+
+WatchRunResult = namedtuple(
+    "WatchRunResult", ["changed", "recovered", "unwatched", "reconciled", "closed", "events"]
+)
+
+
 class BaseWatch:
     name = None            # registered slug: the `watch` column value and the metrics label
     interval = 300         # seconds between evaluations; the only pacing knob
     severities = {}        # reason -> Severity value. Leave empty for a watch that opens no incident.
     incident_class = None  # set it and core opens, escalates and closes the incident
     event_class = None     # the watch's own event type, covering every status
+
+    # Whether the subject IS a machine, which is what decides MachineIncident vs Incident. The
+    # degraded_select already says it by writing a serial or NULL, but the repair statements start from the
+    # incidents and have no row to read it off, so it is declared rather than inferred.
+    machine_scoped = False
+
+    # How long an unreported transition, or an unclosed incident, has to stand before the repair speaks.
+    # It absorbs the pipeline: the events of this tick are posted after the commit, so everything is
+    # briefly unreported, and a back-pressured pipeline makes brief mean minutes. None disables the repair.
+    reconcile_grace = 900
 
     # supplied by the subclass — the predicates, and nothing else
     degraded_select = None    # SELECT producing the 9 insert columns, in order
@@ -156,6 +244,37 @@ class BaseWatch:
                 self._status_fields(row, WatchStatus.UNWATCHED, now),
             )
 
+    # the repair — the same emission, over the rows the incidents say were never reported
+
+    def _reconcile(self, kwargs, deleted):
+        """Transitions with no incident to show for them, and incidents with no transition left to close.
+
+        Nothing to reconcile against without an incident class: an events-only watch leaves no record that
+        an event was owed, so a lost one cannot be found. Its own table cannot answer the question either —
+        the row says fired whether or not the post landed.
+        """
+        if self.incident_class is None or self.reconcile_grace is None:
+            return [], []
+        kwargs = dict(kwargs,
+                      incident_type=self.incident_class.incident_type,
+                      open_statuses=list(Status.open_values()),
+                      open_status=Status.OPEN.value,
+                      reconcile_grace=self.reconcile_grace)
+        reported = REPORTED_MACHINE_INCIDENT if self.machine_scoped else REPORTED_INCIDENT
+        unreported = self._fetch(UNREPORTED_TEMPLATE.format(reported=reported), kwargs)
+        orphaned = self._fetch(
+            ORPHANED_MACHINE_TEMPLATE if self.machine_scoped else ORPHANED_TEMPLATE, kwargs
+        )
+        # The rows deleted on this tick have a close event in flight, so their incidents still read open —
+        # and status_time is the time the incident was OPENED, which the grace window does not reach. They
+        # have to be excluded by identity. The forward direction needs no equivalent: fired_at moved with
+        # the transition, so the window already covers it.
+        just_closed = {self._close_key(row) for row in deleted}
+        return unreported, [row for row in orphaned if self._close_key(row) not in just_closed]
+
+    def _close_key(self, row):
+        return json.dumps(self._incident_key(row), sort_keys=True), row.serial_number
+
     # execution
 
     @staticmethod
@@ -178,11 +297,11 @@ class BaseWatch:
 
     def run_once(self):
         kwargs = self.get_query_kwargs()
-        # ONE transaction, with the events built from the RETURNING rows and posted on commit: posting
-        # them inside would alert about transitions that a rollback then takes back. The price is
-        # at-most-once delivery — a publish that fails after the commit loses the transition, and the
-        # row already says fired, so nothing emits about that subject again until its reasons change.
-        # The worker logs the failure and counts it, which is all that keeps the loss from being silent.
+        # ONE transaction, with the events built from the RETURNING rows and posted on commit: posting them
+        # inside would alert about transitions that a rollback then takes back. A publish that fails after
+        # the commit therefore loses its event, and the row already says fired — which is what _reconcile
+        # finds on a later tick, reading the incidents rather than this table. A watch that opens no
+        # incident keeps the original at-most-once behaviour, because nothing records what it owed.
         with transaction.atomic():
             changed = self._fetch(
                 DEGRADED_TEMPLATE.format(degraded_select=self.degraded_select), kwargs
@@ -196,8 +315,20 @@ class BaseWatch:
             unwatched = [row for row in deleted if not row.still_watched]
             events = list(self.iter_events(changed, recovered))
             events.extend(self.iter_unwatched_events(unwatched))
+            # after the DELETE, never before it: a row recovering on this tick is already gone, so the
+            # repair cannot announce it degraded and then recovered, and every row it does find has passed
+            # still_degraded — there is no predicate left for it to re-check
+            unreported, orphaned = self._reconcile(kwargs, deleted)
+            events.extend(self.iter_events(unreported, []))
+            events.extend(self.iter_unwatched_events(orphaned))
             if events:
                 transaction.on_commit(lambda: [event.post() for event in events])
         logger.debug("Watch %s: %d changed, %d recovered, %d unwatched, %d event(s)",
                      self.name, len(changed), len(recovered), len(unwatched), len(events))
-        return len(changed), len(recovered), len(events)
+        if unreported or orphaned:
+            # not debug: every one of these is an event that was owed and never arrived, so a rate that is
+            # anything but zero is the interesting signal here, not the repair itself
+            logger.warning("Watch %s: re-emitted %d transition(s), closed %d incident(s)",
+                           self.name, len(unreported), len(orphaned))
+        return WatchRunResult(len(changed), len(recovered), len(unwatched),
+                              len(unreported), len(orphaned), len(events))

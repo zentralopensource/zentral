@@ -41,7 +41,9 @@ class PushCertificateExpiryWatchTestCase(TestCase):
 
     def _run(self):
         with self.captureOnCommitCallbacks(execute=True):
-            return self.watch.run_once()
+            result = self.watch.run_once()
+        # the three counts these tests are about, so a new one does not rewrite every assertion below
+        return result.changed, result.recovered, result.events
 
     def _collect(self, event_cls=PushCertificateHealthEvent):
         events = []
