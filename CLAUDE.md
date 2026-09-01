@@ -4,7 +4,7 @@ Zentral is a Django application for managing Apple devices. It orchestrates Appl
 
 ## Stack
 
-- **Python 3.10** / **Django** (settings: [server/server/settings.py](server/server/settings.py))
+- **Python 3.14** / **Django** (settings: [server/server/settings.py](server/server/settings.py))
 - **PostgreSQL** for the primary database
 - **Celery** for background tasks (app: [server/server/celery.py](server/server/celery.py))
 - **Message broker / event queue**: RabbitMQ is the dev default so everything fits in a single docker compose setup; production uses **AWS SQS** when available, otherwise **GCP Pub/Sub**
