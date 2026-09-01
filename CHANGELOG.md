@@ -99,6 +99,13 @@ The list endpoints of the Osquery API answer with a page and not with an array. 
 The `version` attribute of an Osquery query in an event payload is the version of the query again. It was the minimum Osquery version of the query, which replaced the query version when the query had one. The minimum Osquery version has its own `minimum_osquery_version` attribute now. The query payload also has the `pk`, `name` and `tag` attributes, and the compliance check of the query. This payload is a part of the `osquery_pack_query_update` events.
 
 
+#### 🧨 Osquery query SQL
+
+Zentral parses the SQL of a query with [sqlglot](https://github.com/tobymao/sqlglot) to find the Osquery tables that the query reads, and refuses a query with SQL that it cannot parse. The web console gives an error for the `sql` field, and the API answers `400` with an error for the `sql` attribute.
+
+An import of a standard Osquery pack fails if one of its queries has SQL that Zentral cannot parse. The errors give the name of every query that does not parse. A pack is imported as a unit, so no query of that pack is created or updated. Correct the SQL and import the pack again.
+
+
 #### 🧨 PATCH on the Monolith API
 
 `PATCH` gives a `405 Method Not Allowed` on the Monolith catalog, condition, enrollment and manifest enrollment package endpoints. Use `PUT`, and send all the attributes of the object.

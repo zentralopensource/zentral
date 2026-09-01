@@ -6,6 +6,14 @@
 
 To activate the osquery module, you need to add a `zentral.contrib.osquery` section to the `apps` section in `base.json`.
 
+## Query tables
+
+Zentral parses the SQL of a query to find the osquery tables that the query reads. The names are in lower case, and sorted. A query that reads no table, a compliance check that only returns a status, has an empty list of tables.
+
+The query page and the query list of the web console show the tables. The run list shows them too, and Zentral finds them in the SQL that the run froze when it started, so a later change to the query does not change them. Zentral computes the tables when it shows them, and does not store them.
+
+Zentral refuses a query with SQL that it cannot parse, and gives an error for the `sql` attribute. The error gives the position of the problem in the SQL when sqlglot reports one. An import of a standard pack fails if it has such a query, and the errors give the name of every query that does not parse. Correct the SQL and import the pack again.
+
 ## Audit events
 
 Zentral publishes a `zentral_audit` event when a user creates, updates or deletes an Osquery object from the web console or from the API: automatic table constructions, configurations, configuration packs, enrollments, file categories, packs, pack queries, queries, and distributed query runs. Each event carries the value of the object before and after the change, with the user, the source IP and the request that made it.
