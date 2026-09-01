@@ -1,5 +1,7 @@
+from unittest.mock import patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+from opensearchpy import RequestsHttpConnection
 from accounts.models import Group
 from zentral.core.stores.backends.all import StoreBackend
 from zentral.core.stores.backends.opensearch import OpenSearchStore, OpenSearchStoreSerializer
@@ -122,6 +124,37 @@ class TestOpenSearchStore(TestCase):
              'provisioning_uid': store.instance.provisioning_uid,
              'updated_at': store.instance.updated_at.isoformat()}
         )
+
+    # client kwargs
+
+    def test_client_kwargs_no_aws_auth(self):
+        store = self.get_store(aws_auth=None)
+        self.assertEqual(
+            store._get_client_kwargs(),
+            {"hosts": ["http://opensearch:9200"],
+             "verify_certs": True,
+             "ssl_show_warn": True}
+        )
+
+    @patch("zentral.core.stores.backends.opensearch.AWSV4SignerAuth")
+    @patch("zentral.core.stores.backends.opensearch.boto3.Session")
+    def test_client_kwargs_aws_auth_static_credentials(self, session, signer_auth):
+        store = self.get_store()
+        client_kwargs = store._get_client_kwargs()
+        session.assert_called_once_with(aws_access_key_id="yolo", aws_secret_access_key="fomo")
+        signer_auth.assert_called_once_with(session.return_value.get_credentials.return_value, "eu-central-1")
+        self.assertEqual(client_kwargs["http_auth"], signer_auth.return_value)
+        self.assertEqual(client_kwargs["connection_class"], RequestsHttpConnection)
+
+    @patch("zentral.core.stores.backends.opensearch.AWSV4SignerAuth")
+    @patch("zentral.core.stores.backends.opensearch.boto3.Session")
+    def test_client_kwargs_aws_auth_default_credentials(self, session, signer_auth):
+        store = self.get_store(aws_auth={"region_name": "us-east-1"})
+        client_kwargs = store._get_client_kwargs()
+        session.assert_called_once_with()
+        signer_auth.assert_called_once_with(session.return_value.get_credentials.return_value, "us-east-1")
+        self.assertEqual(client_kwargs["http_auth"], signer_auth.return_value)
+        self.assertEqual(client_kwargs["connection_class"], RequestsHttpConnection)
 
     # serializer
 
