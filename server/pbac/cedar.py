@@ -79,7 +79,7 @@ policies_cache = PoliciesCache(with_sync=zentral_policies_sync)
 
 
 def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
-    key = (entity.type, entity.id)
+    key = (entity.full_type, entity.id)
     if key not in collected_entities:
         serialized_entity = {
             "uid": {"type": entity.full_type, "id": entity.id},

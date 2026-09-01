@@ -4,9 +4,10 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
-from pbac.cedar import authorize_request, authorize_requests, PoliciesCache, policies_cache
+from pbac.cedar import (_serialize_requests_entities, authorize_request, authorize_requests,
+                        PoliciesCache, policies_cache)
 from pbac.engine import engine
-from pbac.entities import Principal, Request
+from pbac.entities import Action, Namespace, Principal, Request, Resource
 from .utils import force_policy
 
 
@@ -145,3 +146,56 @@ class HasLegacyPermTestCase(TestCase):
 
     def test_has_legacy_perm_unknown_perm_denies(self):
         self.assertFalse(engine.has_legacy_perm(self.user, "foo.bar_baz"))
+
+
+class SerializeRequestsEntitiesTestCase(TestCase):
+    """Cedar scopes entity types and action ids to their namespace, so the
+    entities of a batch are collected per namespaced type."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            get_random_string(12),
+            f"{get_random_string(12)}@zentral.com",
+            is_superuser=False,
+        )
+
+    def _serialize(self, requests):
+        entities = _serialize_requests_entities(requests)
+        uids = [(e["uid"]["type"], e["uid"]["id"]) for e in entities]
+        self.assertEqual(len(uids), len(set(uids)))
+        # a parent that is missing from the array is an entity without attributes
+        # and without parents of its own, and cedar reports no error for it
+        for entity in entities:
+            for parent in entity["parents"]:
+                self.assertIn((parent["type"], parent["id"]), uids)
+        return dict(zip(uids, entities))
+
+    def test_same_type_name_in_two_namespaces(self):
+        principal = Principal.from_user(self.user)
+        requests = []
+        for namespace_id in ("NsOne", "NsTwo"):
+            namespace = Namespace(namespace_id)
+            requests.append(Request(
+                principal,
+                Action("look", namespace),
+                Resource("Widget", "5", namespace, [Resource("Container", "7", namespace)]),
+            ))
+        entities = self._serialize(requests)
+        for namespace_id in ("NsOne", "NsTwo"):
+            self.assertIn((f"{namespace_id}::Action", "look"), entities)
+            self.assertEqual(
+                entities[(f"{namespace_id}::Widget", "5")]["parents"],
+                [{"type": f"{namespace_id}::Container", "id": "7"}],
+            )
+
+    def test_action_groups_of_two_namespaces(self):
+        principal = Principal.from_user(self.user)
+        entities = self._serialize([
+            Request(principal, engine.legacy_perm_actions[perm], engine.system_any_resource)
+            for perm in ("accounts.view_user", "inventory.add_machinetag")
+        ])
+        # every namespace registers its own action groups, under the same ids
+        self.assertIn(("Accounts::Action", "AdminActions"), entities)
+        self.assertIn(("Inventory::Action", "AdminActions"), entities)
+        self.assertIn(("Action", "GlobalAdminActions"), entities)
