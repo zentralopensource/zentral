@@ -36,6 +36,7 @@ pyyaml
 requests
 requests_oauthlib               # MDM DEP
 snowflake-connector-python
+sqlglot                         # SQL parsing
 tqdm
 typing_extensions
 XlsxWriter
