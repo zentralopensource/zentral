@@ -28,7 +28,6 @@ The configuration can be loaded from a file or an environment variable. To load 
 
  * [`api`](api/)
  * [`django`](django/)
- * [`stores`](stores/)
  * [`notifier`](notifier/)
  * [`password_reset_handler`](password_reset_handler/)
  * [`secret_engines`](secret_engines/)
@@ -37,3 +36,5 @@ The configuration can be loaded from a file or an environment variable. To load 
  * `actions`
  * `apps`
  * `extra_links`
+
+The `apps` section holds the configuration of each Zentral app, keyed by the app module name. The [event stores](stores/) are configured there, under `apps.zentral.core.stores`.
