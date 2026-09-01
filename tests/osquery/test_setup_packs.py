@@ -211,6 +211,28 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
                          ["osquery.query", "osquery.packquery"])
         self.assertTrue(all(e.metadata.uuid == report.metadata.uuid for e in audit_events))
 
+    def test_upload_pack_invalid_sql(self):
+        pack = self._force_pack()
+        self.login("osquery.change_pack", "osquery.view_pack")
+        pack_file = BytesIO(
+            b'{"queries": {"BadQuery": {"query": "changed sql line;", "interval": 3600},'
+            b'             "WorseQuery": {"query": "not sql at all", "interval": 3600}}}'
+        )
+        pack_file.name = get_random_string(12)
+        response = self.client.post(reverse("osquery:upload_pack", args=(pack.pk,)),
+                                    {"file": pack_file,
+                                     "update_and_create_only": "on"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/pack_upload.html")
+        # the serializer errors are flattened into one readable line, not a dict
+        self.assertFormError(
+            response.context["form"], "file",
+            "queries: Query BadQuery: Could not parse the SQL query at line 1, column 16., "
+            "Query WorseQuery: Could not parse the SQL query at line 1, column 14."
+        )
+        self.assertEqual(pack.packquery_set.count(), 0)
+
     def test_upload_bad_file(self):
         pack = self._force_pack()
         self.login("osquery.change_pack", "osquery.view_pack")

@@ -7,8 +7,8 @@ from django.db import connection
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
-from zentral.utils.sql import tables_in_query
 from django.views.generic import DetailView, TemplateView
+from zentral.utils.sql import extract_tables_or_empty
 from zentral.contrib.osquery.forms import DistributedQueryForm, DistributedQueryMachineSearchForm
 from zentral.contrib.osquery.models import (DistributedQuery, DistributedQueryMachine, DistributedQueryResult,
                                             FileCarvingSession, Query)
@@ -44,7 +44,7 @@ class DistributedQueryListView(PermissionRequiredMixin, UserPaginationMixin, Tem
             columns = [col.name for col in c.description]
             for row in c.fetchall():
                 dq = dict(zip(columns, row))
-                dq["tables"] = sorted(tables_in_query(dq["sql"]))
+                dq["tables"] = extract_tables_or_empty(dq["sql"])
                 yield dq
 
     def get_context_data(self, **kwargs):

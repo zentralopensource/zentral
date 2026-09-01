@@ -310,6 +310,17 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "osquery/distributedquery_list.html")
         self.assertContains(response, distributed_query.query.name)
 
+    # the tables of a run are derived from the SQL it froze, not from the query as it is now
+    def test_distributed_queries_get_tables(self):
+        distributed_query = self._force_distributed_query()
+        distributed_query.query.sql = "select * from carves;"
+        distributed_query.query.save()
+        self.login("osquery.view_distributedquery", "osquery.view_query")
+        response = self.client.get(reverse("osquery:distributed_queries"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<code>processes</code>")
+        self.assertNotContains(response, "<code>carves</code>")
+
     # distributed query
 
     def test_distributed_query_redirect(self):

@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from zentral.conf import settings
 from zentral.contrib.inventory.models import BaseEnrollment, Tag
-from zentral.utils.sql import tables_in_query, format_sql
+from zentral.utils.sql import extract_tables_or_empty, format_sql
 from zentral.utils.text import shard
 from zentral.utils.time import naive_utcnow
 from .specs import cli_only_flags
@@ -115,7 +115,7 @@ class Query(models.Model):
 
     @cached_property
     def tables(self):
-        return sorted(tables_in_query(self.sql))
+        return extract_tables_or_empty(self.sql)
 
     @property
     def type(self):
@@ -747,9 +747,12 @@ class DistributedQuery(models.Model):
     def get_sql_html(self):
         return format_sql(self.sql)
 
-    @cached_property
-    def tables(self):
-        return sorted(tables_in_query(self.sql))
+    def snapshot_query(self, query):
+        self.query = query
+        self.query_version = query.version
+        self.sql = query.sql
+        self.platforms = query.platforms
+        self.minimum_osquery_version = query.minimum_osquery_version
 
     def is_active(self):
         now = timezone.now()

@@ -5,6 +5,7 @@ from rest_framework import serializers
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.utils.sql import SQLParseError, extract_tables, validate_sql
 from .compliance_checks import sync_query_compliance_check
 from .models import (Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory,
                      ConfigurationPack, PackQuery)
@@ -146,6 +147,17 @@ class OsqueryPackSerializer(serializers.Serializer):
     def validate_queries(self, value):
         if isinstance(value, dict) and "" in value:
             raise serializers.ValidationError("Query name cannot be empty")
+        # a pack is imported as a unit, so all the queries are reported in one pass. the messages
+        # must name the queries, because the operator has to find them in a file that can carry
+        # hundreds of them.
+        errors = []
+        for query_name, query_data in value.items():
+            try:
+                extract_tables(query_data["query"])
+            except SQLParseError as e:
+                errors.append(f"Query {query_name}: {e}")
+        if errors:
+            raise serializers.ValidationError(errors)
         return value
 
     def get_pack_defaults(self, slug):
@@ -205,6 +217,8 @@ class QuerySerializer(serializers.ModelSerializer):
     class Meta:
         model = Query
         exclude = ("compliance_check",)
+        # the model field carries no validator, so that it needs no migration
+        extra_kwargs = {"sql": {"validators": [validate_sql]}}
 
     def validate(self, data):
         compliance_check_enabled = data.get("compliance_check_enabled")

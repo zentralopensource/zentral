@@ -7,6 +7,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework_yaml.parsers import YAMLParser
 
 from zentral.core.events.base import AuditEvent
+from zentral.utils.sql import validate_sql
 from zentral.utils.time import naive_utcnow
 from zentral.utils.views import post_audit_event
 
@@ -134,11 +135,7 @@ class DistributedQueryForm(forms.ModelForm):
 
         # default values
         if self.query:
-            self.instance.query = self.query
-            self.instance.sql = self.query.sql
-            self.instance.query_version = self.query.version
-            self.instance.platforms = self.query.platforms
-            self.instance.minimum_osquery_version = self.query.minimum_osquery_version
+            self.instance.snapshot_query(self.query)
 
     def save(self, *args, **kwargs):
         if not self.instance.pk and self.cleaned_data.get("halt_current_runs"):
@@ -372,6 +369,8 @@ class QueryForm(forms.ModelForm):
 
     def clean_sql(self):
         sql = self.cleaned_data.get("sql")
+        if sql:
+            validate_sql(sql)
         if self.instance.pk:
             if sql and sql != self.instance.sql:
                 self.instance.version = F("version") + 1

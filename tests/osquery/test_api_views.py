@@ -2056,6 +2056,26 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                                          'query': ['This field may not be blank.']}}}
         )
 
+    def test_put_query_invalid_sql(self):
+        self.set_pack_endpoint_put_permissions()
+        url = reverse("osquery_api:pack", args=(get_random_string(12),))
+        response = self.put(
+            url,
+            {"queries": {"first_query": {"query": "select * from users;", "interval": 10},
+                         "second_query": {"query": "changed sql line;", "interval": 10},
+                         "third_query": {"query": "select * from users where name = 'zen", "interval": 10}}},
+        )
+        self.assertEqual(response.status_code, 400)
+        # every query that does not parse is reported, not only the first one
+        self.assertEqual(
+            response.json(),
+            {"queries": ["Query second_query: Could not parse the SQL query at line 1, column 16.",
+                         "Query third_query: Could not parse the SQL query."]}
+        )
+        # the import is a unit: the query that parses is not created either
+        self.assertEqual(Pack.objects.count(), 0)
+        self.assertEqual(Query.objects.count(), 0)
+
     def test_put_removed_and_snapshot_query(self):
         self.set_pack_endpoint_put_permissions()
         url = reverse("osquery_api:pack", args=(get_random_string(12),))
@@ -2831,6 +2851,33 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
 
+    def test_create_query_invalid_sql(self):
+        data = {
+            "name": get_random_string(12),
+            "sql": "changed sql line;",
+            "compliance_check_enabled": False
+        }
+        self.set_permissions("osquery.add_query")
+        response = self.post(reverse("osquery_api:queries"), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"sql": ["Could not parse the SQL query at line 1, column 16."]}
+        )
+
+    def test_update_query_invalid_sql(self):
+        query = self.force_query()
+        data = {"name": query.name, "sql": "changed sql line;"}
+        self.set_permissions("osquery.change_query")
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"sql": ["Could not parse the SQL query at line 1, column 16."]}
+        )
+        query.refresh_from_db()
+        self.assertEqual(query.tables, ["osquery_schedule"])
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_query(self, post_event):
         data = {
@@ -3437,7 +3484,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_update_query_increment_version(self):
         query = self.force_query()
         self.assertEqual(query.version, 1)
-        new_sql = "changed sql line;"
+        new_sql = "select 1 from processes;"
         data = {"name": query.name, "sql": new_sql}
         self.set_permissions("osquery.change_query")
         response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
@@ -3445,7 +3492,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.json()["version"], 2)
         query.refresh_from_db()
         self.assertEqual(query.version, 2)
-        self.assertEqual(query.sql, "changed sql line;")
+        self.assertEqual(query.sql, "select 1 from processes;")
+        self.assertEqual(query.tables, ["processes"])
 
     def test_update_query_with_pack_query_snapshot_mode_validate_success(self):
         query = self.force_query(pack_query_mode="snapshot", compliance_check=False)

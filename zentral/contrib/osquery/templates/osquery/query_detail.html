@@ -56,6 +56,10 @@
             <td>{{ object.get_sql_html|safe }}</td>
         </tr>
         <tr>
+            <td>Table{{ object.tables|length|pluralize }}</td>
+            <td>{% for table in object.tables %}<code>{{ table }}</code> {% empty %}-{% endfor %}</td>
+        </tr>
+        <tr>
             <td>Platform{{ object.platforms|length|pluralize }}</td>
             <td>{{ object.platforms|join:", "|default:"-" }}</td>
         </tr>

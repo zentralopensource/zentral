@@ -133,6 +133,35 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"osquery_query": [str(query.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
+    def test_create_query_invalid_sql_post(self):
+        self.login("osquery.add_query", "osquery.view_query")
+        response = self.client.post(reverse("osquery:create_query"),
+                                    {"name": get_random_string(12),
+                                     "sql": "changed sql line;"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/query_form.html")
+        self.assertFormError(
+            response.context["form"], "sql",
+            "Could not parse the SQL query at line 1, column 16."
+        )
+        self.assertEqual(Query.objects.count(), 0)
+
+    def test_update_query_invalid_sql_post(self):
+        query = self._force_query()
+        self.login("osquery.change_query", "osquery.view_query")
+        response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
+                                    {"name": query.name,
+                                     "sql": "changed sql line;"}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/query_form.html")
+        self.assertFormError(
+            response.context["form"], "sql",
+            "Could not parse the SQL query at line 1, column 16."
+        )
+        query.refresh_from_db()
+        self.assertEqual(query.sql, "select 1 from processes;")
+        self.assertEqual(query.tables, ["processes"])
+
     def test_create_query_with_compliance_check_and_tag_error(self):
         self.login("osquery.add_query", "osquery.view_query")
         tag = Tag.objects.create(name=get_random_string(12))
@@ -387,6 +416,26 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(Query.objects.filter(pk=query.pk).count(), 0)
         self.assertNotContains(response, query.name)
 
+    # query detail
+
+    def test_query_displays_the_tables(self):
+        query = self._force_query()
+        self.login("osquery.view_query")
+        response = self.client.get(query.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "osquery/query_detail.html")
+        self.assertContains(response, "<td>Table</td>")
+        self.assertContains(response, "<code>processes</code>")
+
+    def test_query_without_table(self):
+        query = self._force_query(force_compliance_check=True)
+        self.assertEqual(query.tables, [])
+        self.login("osquery.view_query")
+        response = self.client.get(query.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<td>Tables</td>")
+        self.assertNotContains(response, "<code></code>")
+
     # query events
 
     def test_query_events_redirect(self):
@@ -448,6 +497,14 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertIn(query2, response.context["object_list"])
         self.assertContains(response, query.name)
         self.assertContains(response, query2.name)
+
+    def test_query_list_displays_the_tables(self):
+        query = self._force_query()
+        self.login("osquery.view_query")
+        response = self.client.get(reverse("osquery:queries"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<code>processes</code>")
+        self.assertEqual(query.tables, ["processes"])
 
     def test_filtered_query_list(self):
         self.login("osquery.view_query")
