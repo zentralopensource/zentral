@@ -4,9 +4,34 @@
 ### Features
 
 
+#### Core
+
+Zentral watches for the things that stop happening. A watch runs on its own schedule, finds the subjects in a bad state, and posts one event when a subject becomes degraded and one more when it recovers. It also opens an incident for the subject, raises the severity when the state gets worse, and closes the incident on the recovery.
+
+A subject can leave a watch while it is still degraded: a machine is archived, a certificate is deleted. Zentral posts a `subject_unwatched` event for it. This is not a recovery, and it closes the incident, because no later evaluation reports that subject again.
+
+A watch repairs itself. If the event of a transition does not reach the event pipeline, the incident never opens, and the state of the watch already says that it reported the subject. Zentral compares the state of the watch with the incidents and posts the missing event again. It also closes an incident that has no state left to close it, which keeps an alert from staying open forever. The repair waits 15 minutes, so that it does not repeat an event that is still on its way, and it never touches an incident that a user closed or is working on. A watch that opens no incident keeps no record of what it owed, so it does not repair.
+
+Every watch event carries the same attributes: the `status` (`degraded`, `recovered` or `unwatched`), the name of the `watch`, the `reasons` and the `previous_reasons`, and `degraded_for`, the number of seconds since the first report. All of them have the `watch` tag. Use it to route the alerts and their resolutions together.
+
+The new watch worker evaluates the watches. It runs all of them by default. To give a heavy watch a process of its own, declare a worker group in the configuration of the `zentral.core.watchers` app:
+
+```json
+{
+  "worker_groups": [
+    {"name": "inventory", "watches": ["inventory_source_stale"]}
+  ]
+}
+```
+
+The default worker runs the watches that no group claims. A new watch always has a worker, and this configuration is not necessary to get one.
+
+
 #### Inventory
 
 The inventory JMESPath compliance check publishes the same `zentral_audit` events as the other objects now, from the web console and from the API.
+
+The new `inventory_source_stale` watch reports an inventory source that stops updating a machine. Zentral posts an `inventory_source_health` event for each machine and source with no update for 7 days. The incident is on the source, with one machine incident for each machine it stopped updating. The watch is on the pair, and not on the machine: a machine can be up to date from one source and out of date from another, and the second is the more interesting failure.
 
 
 #### MDM
@@ -27,6 +52,8 @@ New paginated API endpoints list the target artifacts of the enrolled devices an
 
 The `target_artifact_update` events carry two new attributes: `force_install_requested_at`, set while a forced install is pending, and `retries_exhausted`, `true` on the failure of the final install attempt of an artifact, when no automatic retry will follow. The event of a forced install request carries the full request context of the operator.
 
+The new `mdm_push_certificate_expiry` watch reports an APNs push certificate that comes to its expiry date. Zentral posts an `mdm_push_certificate_health` event and opens an incident 90 days before the date. The severity rises 30 days before it, and again 7 days before it. A new event reports the expiry itself. The renewal of the certificate closes the incident. An expired push certificate makes every device unmanageable at the same time, and the renewal needs a certificate signing request and access to the Apple portal, so the first report is early.
+
 
 #### Monolith
 
@@ -46,6 +73,8 @@ The Munki API publishes the same `zentral_audit` events as the web console now, 
 The Munki web console publishes a `zentral_audit` event when a user creates an enrollment, deletes an enrollment, or increases the version of an enrollment. These three changes had no record.
 
 The audit events of a Munki enrollment are also on the page of its configuration now, like the Osquery, Santa and Turbo enrollments. The Munki enrollment gave no link to its configuration, so its events were only on the enrollment.
+
+The new `munki_agent_unhealthy` watch reports a Munki agent that does not complete its runs. Zentral posts a `munki_agent_health` event and opens an incident with one of four reasons, the most specific one first: the machine never polled (`never_onboarded`), it stopped polling (`gone`), it polls but never completed a run (`never_completed`), or it polls and stopped completing runs (`stopped_completing`). The last two are new: a machine that starts a run and never finishes it looks healthy from every other signal. A machine reports again to recover. The watch waits 7 days before a report, and it does not report a machine that Zentral met less than 24 hours ago.
 
 
 #### Osquery

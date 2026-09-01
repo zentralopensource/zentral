@@ -163,6 +163,15 @@ class Source(AbstractMTObject):
     def __str__(self):
         return self.name
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        # a source is identified by (module, name), not by name alone. config is left out: it carries
+        # per-deployment connection settings, which do not belong in every event that names a source.
+        d["module"] = self.module
+        return d
+
     def get_display_name(self):
         # TODO: better. see also zentral.inventory.utils
         dn = [self.name]
@@ -801,6 +810,11 @@ class CurrentMachineSnapshot(models.Model):
 
     class Meta:
         unique_together = ('serial_number', 'source')
+        indexes = [
+            # InventorySourceStaleWatch re-scans this table on every interval looking for rows past their
+            # deadline; without this it is a seq scan of the fleet, forever.
+            models.Index(fields=["last_seen"], name="inventory_cms_last_seen"),
+        ]
 
 
 class Taxonomy(models.Model):
