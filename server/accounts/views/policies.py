@@ -132,12 +132,18 @@ class PoliciesView(PermissionRequiredMixin, UserPaginationListView):
 
 
 def _attr_rows(attrs):
-    """Flatten a {name: AttrSpec} record for the template, sorted by name."""
+    """Flatten a {name: AttrSpec} record for the template, sorted by name.
+
+    The label carries the optional marker, instead of the template spelling
+    it out of ``required``. A template that tests ``required`` itself prints
+    a marker for every attribute the moment it renders against a different
+    shape — and whether an attribute is optional is what tells a policy
+    author if a ``has`` guard is mandatory, so it must not be guessed.
+    """
     return [
         {
             "name": name,
-            "type": format_type(spec.type),
-            "required": spec.required,
+            "label": f"{name}{'' if spec.required else '?'}: {format_type(spec.type)}",
             "help_text": spec.help_text,
             "values": list(spec.values),
         }

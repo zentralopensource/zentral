@@ -5,6 +5,8 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase
 
 from accounts.models import Policy, User
+from accounts.views.policies import _attr_rows
+from pbac.types import AttrSpec
 from realms.models import Realm, RealmUser
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
@@ -207,6 +209,20 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         response = self.client.get(self.build_url("policies_schema"))
         self.assertContains(response, "<code>is_superuser: Bool</code>", html=True)
         self.assertNotContains(response, "AttrSpec(")
+
+    def test_policies_schema_attribute_label_comes_from_the_view(self):
+        # The template must not spell the optional marker: against a different
+        # shape it would mark every attribute optional, and a policy author
+        # reads that marker to know if a "has" guard is mandatory.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        rows = _attr_rows({"tagName": AttrSpec(str, required=False), "count": AttrSpec(int)})
+        self.assertEqual([r["label"] for r in rows], ["count: Long", "tagName?: String"])
+        body = response.content.decode()
+        self.assertNotIn("attr.required", body)
+        # a required and an optional attribute of the same action
+        self.assertIn("<code>tagName?: String</code>", body)
+        self.assertIn("<code>configurationID: Long</code>", body)
 
     def test_policies_schema_filter_controls_present(self):
         self.login("accounts.view_policy")

@@ -74,7 +74,7 @@
                       {% if et.attrs %}
                         {% for attr in et.attrs %}
                           <div>
-                            <code>{{ attr.name }}{% if not attr.required %}?{% endif %}: {{ attr.type }}</code>
+                            <code>{{ attr.label }}</code>
                             {% if attr.help_text %}<span class="text-secondary small">{{ attr.help_text }}</span>{% endif %}
                           </div>
                         {% endfor %}
@@ -118,7 +118,7 @@
                           <dl class="row g-0 small mt-1 mb-0 d-none schema-context" id="{{ context_id }}">
                             {% for attr in action.context %}
                               <dt class="col-sm-5 fw-normal text-truncate pe-3">
-                                <code>{{ attr.name }}{% if not attr.required %}?{% endif %}: {{ attr.type }}</code>
+                                <code>{{ attr.label }}</code>
                               </dt>
                               <dd class="col-sm-7 mb-1 text-secondary">
                                 {{ attr.help_text }}
