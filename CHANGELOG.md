@@ -148,6 +148,7 @@ The `mdm_asset_created` and `mdm_asset_updated` events put the asset in an `asse
 
 ### Bug fixes
 
+The OpenSearch event store signs its requests with the access key and secret configured in aws_auth now. It read them under the wrong names and used them in the wrong branch, so it always fell back to the default AWS credential chain, and a store configured with an access key gave no sign that the key was unused.
 
 The task that pushes an updated DEP profile to Apple Business Manager belongs to the user who saved the enrollment now. It was the only task that a user launched with no record of the user, so it was not in the task list of that user, and only a superuser saw its result.
 

@@ -29,15 +29,15 @@ class OpenSearchStore(ESOSStore):
             logger.info("No AWS authentication")
             return client_kwargs
 
-        access_key_id = self.aws_auth.get("access_key_id")
-        secret_access_key = self.aws_auth.get("secret_access_key")
+        access_key_id = self.aws_auth.get("aws_access_key_id")
+        secret_access_key = self.aws_auth.get("aws_secret_access_key")
         if access_key_id and secret_access_key:
-            credentials = boto3.Session().get_credentials()
-        else:
             credentials = boto3.Session(
                 aws_access_key_id=access_key_id,
                 aws_secret_access_key=secret_access_key
             ).get_credentials()
+        else:
+            credentials = boto3.Session().get_credentials()
         client_kwargs["http_auth"] = AWSV4SignerAuth(credentials, self.aws_auth["region_name"])
         client_kwargs["connection_class"] = RequestsHttpConnection
         logger.info("AWS authentication configured")

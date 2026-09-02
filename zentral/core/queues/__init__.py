@@ -14,9 +14,7 @@ def get_queues_instance(queue_settings):
 
 
 def get_queues(settings):
-    queues_settings = settings.get('queues', {}).copy()
-    queues_settings['stores'] = list(settings.get('stores', {}).keys())
-    return get_queues_instance(queues_settings)
+    return get_queues_instance(settings.get('queues', {}))
 
 
 queues = get_queues(settings)
