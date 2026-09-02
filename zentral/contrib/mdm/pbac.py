@@ -11,6 +11,8 @@ from pbac.types import (
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
 
+from .models import Artifact, Channel
+
 
 # namespace
 
@@ -38,6 +40,7 @@ disown_dep_device_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="mdm.disown_depdevice",
+    help_text="Disown a DEP device. Apple removes the device from the organization.",
 )
 
 
@@ -47,6 +50,7 @@ view_admin_password_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="mdm.view_admin_password",
+    help_text="See the password of the local administrator account that Zentral created on a device.",
 )
 
 
@@ -56,6 +60,7 @@ view_device_lock_pin_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="mdm.view_device_lock_pin",
+    help_text="See the PIN that unlocks a device that Zentral locked.",
 )
 
 
@@ -65,6 +70,7 @@ view_filevaul_prk_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="mdm.view_filevault_prk",
+    help_text="See the FileVault personal recovery key of a device. The key can rotate after it is seen.",
 )
 
 
@@ -74,6 +80,8 @@ view_recovery_password_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="mdm.view_recovery_password",
+    help_text="See the recovery lock or firmware password of a device. The password can rotate after it "
+              "is seen.",
 )
 
 
@@ -88,12 +96,27 @@ force_install_artifact_action = engine.register_action(
         principals=(USER, SERVICE_ACCOUNT),
         resources=(MACHINE_RESOURCE_TYPE,),
         context={
-            "artifactType": AttrSpec(str),
-            "artifactID": AttrSpec(str),
-            "artifactName": AttrSpec(str),
-            "channel": AttrSpec(str),
+            "artifactType": AttrSpec(
+                str,
+                help_text="The type of the artifact.",
+                values=Artifact.Type.values,
+            ),
+            "artifactID": AttrSpec(
+                str,
+                help_text="The primary key of the artifact, as a UUID string.",
+            ),
+            "artifactName": AttrSpec(
+                str,
+                help_text="The name of the artifact.",
+            ),
+            "channel": AttrSpec(
+                str,
+                help_text="The channel of the target the artifact installs on.",
+                values=Channel.values,
+            ),
         },
     ),
+    help_text="Force a new install attempt of an artifact on a machine.",
 )
 
 

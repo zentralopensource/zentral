@@ -26,4 +26,5 @@ sync_repository_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="monolith.sync_repository",
+    help_text="Synchronize a Munki repository, and update the catalogs and the manifests.",
 )

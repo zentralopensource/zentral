@@ -46,10 +46,24 @@ _MACHINE_TAG_APPLIES_TO = AppliesTo(
     principals=(USER, SERVICE_ACCOUNT),
     resources=(MACHINE_RESOURCE_TYPE, SYSTEM),
     context={
-        "tagName": AttrSpec(str, required=False),
-        "tagID": AttrSpec(int, required=False),
-        "taxonomyName": AttrSpec(str, required=False),
-        "taxonomyID": AttrSpec(int, required=False),
+        "tagName": AttrSpec(
+            str, required=False,
+            help_text="The name of the tag. It is absent if the request does not identify a tag.",
+        ),
+        "tagID": AttrSpec(
+            int, required=False,
+            help_text="The primary key of the tag. It is absent if the request does not identify a tag.",
+        ),
+        "taxonomyName": AttrSpec(
+            str, required=False,
+            help_text="The name of the taxonomy of the tag. It is absent if the tag has no taxonomy, "
+                      "or if the request does not identify a tag.",
+        ),
+        "taxonomyID": AttrSpec(
+            int, required=False,
+            help_text="The primary key of the taxonomy of the tag. It is absent if the tag has no taxonomy, "
+                      "or if the request does not identify a tag.",
+        ),
     },
 )
 
@@ -60,6 +74,7 @@ create_machine_tag_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=_MACHINE_TAG_APPLIES_TO,
     legacy_perm="inventory.add_machinetag",
+    help_text="Add a tag to a machine.",
 )
 
 
@@ -69,6 +84,7 @@ delete_machine_tag_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=_MACHINE_TAG_APPLIES_TO,
     legacy_perm="inventory.delete_machinetag",
+    help_text="Remove a tag from a machine.",
 )
 
 
@@ -81,6 +97,7 @@ view_machine_tag_action = engine.register_action(
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
     applies_to=LEGACY_PERM_APPLIES_TO,
     legacy_perm="inventory.view_machinetag",
+    help_text="See the tags of a machine.",
 )
 
 

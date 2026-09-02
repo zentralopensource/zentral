@@ -11,6 +11,8 @@ from pbac.types import (
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
 
+from .models import EnrolledMachine
+
 
 # namespace
 
@@ -45,6 +47,7 @@ view_enrolled_machine_action = engine.register_action(
         resources=(SYSTEM,),
         context={},
     ),
+    help_text="See the machines that are enrolled in Santa. The decision is not scoped to a machine.",
 )
 
 
@@ -59,11 +62,26 @@ force_clean_sync_action = engine.register_action(
         principals=(USER, SERVICE_ACCOUNT),
         resources=(MACHINE_RESOURCE_TYPE,),
         context={
-            "syncType": AttrSpec(str),
-            "configurationName": AttrSpec(str),
-            "configurationID": AttrSpec(int),
+            "syncType": AttrSpec(
+                str,
+                help_text="The type of clean sync. A cancellation carries the type of the sync "
+                          "that it takes back.",
+                # NORMAL never reaches the context: a queued normal sync would mean nothing,
+                # so both entry points reject it before the decision is made
+                values=sorted(EnrolledMachine.SyncType.clean_values()),
+            ),
+            "configurationName": AttrSpec(
+                str,
+                help_text="The name of the Santa configuration of the machine.",
+            ),
+            "configurationID": AttrSpec(
+                int,
+                help_text="The primary key of the Santa configuration of the machine.",
+            ),
         },
     ),
+    help_text="Queue a clean sync for the next Santa preflight of a machine. It also authorizes "
+              "the cancellation of a queued clean sync.",
 )
 
 
