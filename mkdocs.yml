@@ -9,6 +9,9 @@ site_dir: build/
 extra_css:
   - theme/zentral.css
 
+markdown_extensions:
+    - attr_list
+
 nav:
   - Introduction:
       - Welcome to Zentral: index.md
