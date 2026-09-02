@@ -1,47 +1,77 @@
 import logging
 from urllib.parse import urlencode
+
+from base.notifier import notifier
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.urls import reverse_lazy
+from django.db.models import Prefetch
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.template.loader import render_to_string
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import DeleteView, FormView
-from base.notifier import notifier
+from pbac.engine import engine
+
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine, Tag
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
-from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
+from zentral.core.stores.views import EventsStoreRedirectView, EventsView, FetchEventsView
 from zentral.utils.terraform import build_config_response
-from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+from zentral.utils.text import encode_args, get_version_sort_key
+from zentral.utils.text import shard as compute_shard
+from zentral.utils.views import (
+    CreateViewWithAudit,
+    DeleteViewWithAudit,
+    PBACViewMixin,
+    UpdateViewWithAudit,
+    UserPaginationListView,
+)
+
 from .conf import monolith_conf
-from .forms import (AddManifestCatalogForm, EditManifestCatalogForm, DeleteManifestCatalogForm,
-                    AddManifestEnrollmentPackageForm,
-                    AddManifestSubManifestForm, EditManifestSubManifestForm, DeleteManifestSubManifestForm,
-                    CatalogForm,
-                    EnrollmentForm,
-                    ManifestForm, ManifestSearchForm,
-                    PackageForm, PkgInfoSearchForm,
-                    RepositoryForm,
-                    SubManifestForm, SubManifestSearchForm,
-                    SubManifestPkgInfoForm)
-from .models import (Catalog, CacheServer,
-                     EnrolledMachine,
-                     Manifest, ManifestEnrollmentPackage, PkgInfo, PkgInfoName,
-                     Condition, ManifestCatalog, ManifestSubManifest,
-                     Repository,
-                     SUB_MANIFEST_PKG_INFO_KEY_CHOICES, SubManifest, SubManifestPkgInfo)
+from .forms import (
+    AddManifestCatalogForm,
+    AddManifestEnrollmentPackageForm,
+    AddManifestSubManifestForm,
+    CatalogForm,
+    DeleteManifestCatalogForm,
+    DeleteManifestSubManifestForm,
+    EditManifestCatalogForm,
+    EditManifestSubManifestForm,
+    EnrollmentForm,
+    ManifestForm,
+    ManifestSearchForm,
+    PackageForm,
+    PkgInfoSearchForm,
+    RepositoryForm,
+    SubManifestForm,
+    SubManifestPkgInfoForm,
+    SubManifestSearchForm,
+)
+from .models import (
+    SUB_MANIFEST_PKG_INFO_KEY_CHOICES,
+    CacheServer,
+    Catalog,
+    Condition,
+    EnrolledMachine,
+    Manifest,
+    ManifestCatalog,
+    ManifestEnrollmentPackage,
+    ManifestSubManifest,
+    PkgInfo,
+    PkgInfoName,
+    Repository,
+    SubManifest,
+    SubManifestPkgInfo,
+)
+from .pbac import ViewPkgInfoDataRequest
 from .repository_backends import RepositoryBackend
 from .repository_backends.azure import AzureRepositoryForm
 from .repository_backends.s3 import S3RepositoryForm
 from .terraform import iter_resources
 from .utils import test_monolith_object_inclusion, test_pkginfo_catalog_inclusion
-
 
 logger = logging.getLogger('zentral.contrib.monolith.views')
 
@@ -284,6 +314,35 @@ class DeleteRepositoryView(PermissionRequiredMixin, DeleteView):
 # pkg infos
 
 
+def add_view_data_pbac_requests(pkg_infos, user):
+    """Attach the batch-authorized view data PBAC requests to the serialized pkg infos.
+
+    The resource of viewPkgInfoData is the pkginfo, with its repository and its active
+    catalogs as parents, so a decision is taken for each pkginfo. The catalogs are read
+    from the DB, and not from the serialized pkg infos, which only carry the catalog the
+    list was filtered on.
+    """
+    pkg_info_objects = (
+        PkgInfo.objects.filter(pk__in=[pkg_info["pk"] for pkg_info in pkg_infos])
+                       .defer("data")
+                       .select_related("repository")
+                       .prefetch_related(Prefetch("catalogs",
+                                                  queryset=Catalog.objects.filter(archived_at__isnull=True)
+                                                                          .select_related("repository"),
+                                                  to_attr="pbac_catalogs"))
+                       .in_bulk()
+    )
+    pbac_requests = []
+    for pkg_info in pkg_infos:
+        pkg_info_object = pkg_info_objects.get(pkg_info["pk"])
+        if pkg_info_object is None:
+            continue
+        pbac_request = ViewPkgInfoDataRequest(user, pkg_info_object, pkg_info_object.pbac_catalogs)
+        pbac_requests.append(pbac_request)
+        pkg_info["view_data_request"] = pbac_request
+    engine.authorize_requests(pbac_requests)
+
+
 class PkgInfosView(PermissionRequiredMixin, TemplateView):
     permission_required = "monolith.view_pkginfo"
     template_name = "monolith/pkginfo_list.html"
@@ -297,12 +356,49 @@ class PkgInfosView(PermissionRequiredMixin, TemplateView):
             include_empty_names=True,
             **form.cleaned_data
         )
+        add_view_data_pbac_requests(
+            [pkg_info for pkg_name in ctx['pkg_names'] for pkg_info in pkg_name['pkg_infos']],
+            self.request.user
+        )
         if not form.is_initial():
             bc = [(reverse("monolith:pkg_infos"), "PkgInfos"),
                   (None, "Search")]
         else:
             bc = [(None, "PkgInfos")]
         ctx["breadcrumbs"] = bc
+        return ctx
+
+
+class PkgInfoDataView(PBACViewMixin, DetailView):
+    pbac_request_class = ViewPkgInfoDataRequest
+    template_name = "monolith/pkginfo_data.html"
+    context_object_name = "pkg_info"
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.pkg_info = get_object_or_404(
+            PkgInfo.objects.select_related("name", "repository"),
+            pk=kwargs["pk"]
+        )
+        return {"pkg_info": self.pkg_info,
+                "catalogs": self.pkg_info.active_catalogs().select_related("repository")}
+
+    def get_object(self, queryset=None):
+        return self.pkg_info
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # the pkginfo as served in the catalogs, to make the monolith rewrites visible
+        served_pkg_info = self.object.get_pkg_info()
+        ctx["served_pkg_info"] = served_pkg_info
+        # compared key by key, because get_pkg_info() re-adds the keys it rewrites, which moves them
+        # to the end of the dict and would show up as differences in a line by line comparison
+        ctx["rewrites"] = [
+            {"key": key,
+             "stored": self.object.data.get(key),
+             "served": served_pkg_info.get(key)}
+            for key in sorted(set(self.object.data) | set(served_pkg_info))
+            if self.object.data.get(key) != served_pkg_info.get(key)
+        ]
         return ctx
 
 
@@ -392,6 +488,7 @@ class PkgInfoNameView(PermissionRequiredMixin, DetailView):
             # should never happen
             logger.error("Could not get pkg infos for name ID %d", pkg_info_name.pk)
             ctx["pkg_infos"] = []
+        add_view_data_pbac_requests(ctx["pkg_infos"], self.request.user)
         return ctx
 
 

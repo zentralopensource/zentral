@@ -1,5 +1,4 @@
 from django.test import TestCase
-
 from pbac.engine import (
     ActionGroupBasename,
     ActionRegistrationConflict,
@@ -8,14 +7,14 @@ from pbac.engine import (
     engine,
 )
 from pbac.types import (
-    AppliesTo,
-    AttrSpec,
     LEGACY_PERM_APPLIES_TO,
-    ResourceType,
     ROLE,
     SERVICE_ACCOUNT,
     SYSTEM,
     USER,
+    AppliesTo,
+    AttrSpec,
+    ResourceType,
 )
 
 
