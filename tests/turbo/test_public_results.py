@@ -6,12 +6,13 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineTag, Tag
+from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.events import (TurboMSCPCheckComplianceCheckStatusUpdated, TurboRequestEvent,
                                           TurboResultEvent, TurboScriptComplianceCheckStatusUpdated)
 from zentral.contrib.turbo.models import OneTimeJob, OneTimeJobMachine, RecurringJobMachine
 from zentral.core.compliance_checks.events import MachineComplianceChangeEvent
 from zentral.core.compliance_checks.models import MachineStatus, Status
-from .utils import (TurboPublicTestCase, force_configuration, force_enrolled_machine,
+from .utils import (TurboPublicTestCase, force_command, force_configuration, force_enrolled_machine,
                     force_mscp_check, force_one_time_job, force_recurring_job, force_script)
 
 
@@ -697,6 +698,43 @@ class TurboResultsPublicTestCase(TurboPublicTestCase):
             metadata = event.metadata.serialize()
             self.assertEqual(metadata["objects"]["turbo_job"], [str(recurring_job.job.pk)])
             self.assertEqual(metadata["objects"]["turbo_recurring_job"], [str(recurring_job.pk)])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_results_command_result_event(self, post_event):
+        # config serves command jobs, so a command result can already arrive. Its outcome rides the
+        # open result dict untouched — no verdict, no tagging — and the definition block names the
+        # backend so a store consumer can tell one command from another without a lookup.
+        configuration, _, serial_number, token = self._enrolled()
+        command = force_command(backend=CommandBackend.FILE_EXPORT)
+        one_time_job = force_one_time_job(configuration=configuration, job=command.job)
+        entry = self._result(one_time_job, exit_code=0)
+        entry["result"]["uploads"] = [{"artifact": "manifest", "key": "turbo/uploads/x/manifest.json"}]
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._results(token, {"results": [entry]})
+        self.assertEqual(response.status_code, 200)
+        result_events = [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], TurboResultEvent)]
+        self.assertEqual(len(result_events), 1)
+        event = result_events[0]
+        self.assertEqual(event.payload["kind"], "file_export")
+        self.assertEqual(event.payload["command"],
+                         {"pk": str(command.pk), "name": command.name, "backend": "file_export"})
+        # the outcome is echoed verbatim, uploads included
+        self.assertEqual(event.payload["result"]["uploads"],
+                         [{"artifact": "manifest", "key": "turbo/uploads/x/manifest.json"}])
+        objects = event.metadata.serialize()["objects"]
+        self.assertEqual(objects["turbo_command"], [str(command.pk)])
+        self.assertEqual(objects["turbo_one_time_job"], [str(one_time_job.pk)])
+        # a command carries no compliance role, so nothing was scored
+        self.assertFalse(MachineStatus.objects.filter(serial_number=serial_number).exists())
+
+    def test_results_command_closes_the_gate(self):
+        configuration, _, serial_number, token = self._enrolled()
+        command = force_command()
+        one_time_job = force_one_time_job(configuration=configuration, job=command.job)
+        self.assertEqual(self._results(token, {"results": [self._result(one_time_job, exit_code=0)]}).status_code,
+                         200)
+        job_machine = OneTimeJobMachine.objects.get(one_time_job=one_time_job, serial_number=serial_number)
+        self.assertIsNotNone(job_machine.last_result_at)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_results_per_check_mscp_status_event(self, post_event):

@@ -6,7 +6,9 @@ from django.views.generic import TemplateView
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.views import CreateViewWithAudit
 from ..forms import EnrolledMachineSearchForm, MachineOneTimeJobForm
-from ..models import EnrolledMachine, Job, OneTimeJob, OneTimeJobMachine, RecurringJobMachine
+from ..models import (EnrolledMachine, Job, OneTimeJob, OneTimeJobMachine, RecurringJobMachine,
+                      ScheduleMode)
+from ..pbac import check_schedule_command
 from .base import SearchFormListView
 
 
@@ -46,13 +48,13 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         one_time = (
             OneTimeJobMachine.objects
             .filter(serial_number=serial_number)
-            .select_related("one_time_job__job__script", "one_time_job__job__mscp_check")
+            .select_related(*Job.definition_relations("one_time_job__job__"))
             .order_by(*order)
         )
         recurring = (
             RecurringJobMachine.objects
             .filter(serial_number=serial_number)
-            .select_related("recurring_job__job__script", "recurring_job__job__mscp_check")
+            .select_related(*Job.definition_relations("recurring_job__job__"))
             .order_by(*order)
         )
         kind = self.request.GET.get("kind") or ""
@@ -99,6 +101,13 @@ class ScheduleMachineOneTimeJobView(PermissionRequiredMixin, CreateViewWithAudit
         ctx["urlsafe_serial_number"] = MetaMachine.make_urlsafe_serial_number(self.serial_number)
         ctx["configuration"] = self.configuration
         return ctx
+
+    def form_valid(self, form):
+        # the kind is only known once the form validates, so this cannot ride a dispatch-time mixin.
+        # This flow has the machine, so the policy can scope the collection by its MBUs.
+        check_schedule_command(self.request, form.cleaned_data["job"], ScheduleMode.ONE_TIME,
+                               MetaMachine(self.serial_number))
+        return super().form_valid(form)
 
     def get_success_url(self):
         return reverse("turbo:enrolled_machine",

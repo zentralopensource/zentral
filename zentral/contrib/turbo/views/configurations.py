@@ -6,7 +6,7 @@ from django.views.generic import DetailView
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
                                  UserPaginationListView)
 from ..forms import ConfigurationForm
-from ..models import Configuration
+from ..models import Configuration, Job
 
 
 class ConfigurationListView(PermissionRequiredMixin, UserPaginationListView):
@@ -51,7 +51,7 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
             ctx["enrollment_count"] = enrollment_count
         recurring_jobs = (
             self.object.recurringjob_set
-            .select_related("job__script", "job__mscp_check")
+            .select_related(*Job.definition_relations("job__"))
             .prefetch_related("tags", "excluded_tags")
             .annotate(job_name=Coalesce("job__script__name", "job__mscp_check__rule_id",
                                         output_field=TextField()))
@@ -62,7 +62,7 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         ctx["recurring_job_count"] = len(recurring_jobs)
         one_time_job_qs = (
             self.object.onetimejob_set
-            .select_related("job__script", "job__mscp_check")
+            .select_related(*Job.definition_relations("job__"))
             .prefetch_related("tags", "excluded_tags")
             .order_by(F("not_before").desc(nulls_last=True), "-created_at")
         )

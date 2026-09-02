@@ -1,5 +1,6 @@
 from ..forms import OneTimeJobForm, OneTimeJobSearchForm
-from ..models import OneTimeJob
+from ..models import OneTimeJob, ScheduleMode
+from ..pbac import check_schedule_command
 from .base import (BaseCreateConfigurationScopedJobView, BaseDeleteConfigurationScopedJobView,
                    BaseUpdateConfigurationScopedJobView, SearchFormListView)
 
@@ -15,6 +16,13 @@ class CreateOneTimeJobView(BaseCreateConfigurationScopedJobView):
     model = OneTimeJob
     form_class = OneTimeJobForm
     anchor = "one-time-jobs"
+
+    def form_valid(self, form):
+        # no machine here: this flow targets a scope expression (tags and serial arrays), so a policy
+        # keyed on a machine or an MBU cannot apply. The kind is still policeable, which is why the
+        # action is an additional gate rather than a replacement for turbo.add_onetimejob.
+        check_schedule_command(self.request, form.cleaned_data["job"], ScheduleMode.ONE_TIME)
+        return super().form_valid(form)
 
 
 class UpdateOneTimeJobView(BaseUpdateConfigurationScopedJobView):

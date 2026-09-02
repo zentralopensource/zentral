@@ -317,6 +317,14 @@ Recurring and one-time job schedules on a job anchor, with a per-machine result 
 
 Management UI and API for the configurations, enrollments, scripts, mSCP checks and jobs, the agent protocol endpoints, the script and mSCP compliance checks, and the agent request and result events.
 
+New **commands**, the third kind of job: a command collects something from a machine instead of producing a verdict. Two kinds are available. `sysdiagnose` collects a `sysdiagnose` archive and takes no options. `file_export` collects the files that match a list of path patterns, plus a manifest of what it collected, and takes `patterns` and an uncompressed `max_size`.
+
+A command is created with the `/api/turbo/commands/` endpoint, and *Turbo > Commands* lists them. The kind cannot be changed after the command is created. A change to the options bumps the version of the job, and the agent runs the command again.
+
+A command runs one time only: the server refuses to attach one to a recurring job.
+
+The new `Turbo::Action::"scheduleCommand"` action carries the kind of the command and the machine, so a policy can permit one kind and refuse another. It is applied in addition to `turbo.add_onetimejob`, which does not distinguish the kinds. The upload of the collected files comes in a later release.
+
 
 ### Backward incompatibilities
 

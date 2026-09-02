@@ -6,9 +6,10 @@ from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.compliance_checks import sync_script_compliance_check
-from zentral.contrib.turbo.models import (Configuration, EnrolledMachine, Enrollment, MSCPCheck,
-                                          OneTimeJob, RecurringJob, Script)
+from zentral.contrib.turbo.models import (Command, Configuration, EnrolledMachine, Enrollment,
+                                          MSCPCheck, OneTimeJob, RecurringJob, Script)
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
@@ -34,6 +35,19 @@ def force_mscp_check(rule_id=None, baseline="", odv_int=None, odv_string=None, o
         odv_string=odv_string,
         odv_bool=odv_bool,
     )
+
+
+def force_command(backend=CommandBackend.SYSDIAGNOSE, name=None, backend_kwargs=None):
+    # the Job (kind == backend) is auto-minted in Command.save()
+    if backend_kwargs is None:
+        backend_kwargs = (
+            {"patterns": ["/var/log/install.log*"], "max_size": 1048576}
+            if backend == CommandBackend.FILE_EXPORT else {}
+        )
+    command = Command.objects.create(name=name or get_random_string(12), backend=backend)
+    command.set_backend_kwargs(backend_kwargs)
+    command.save()
+    return command
 
 
 def force_recurring_job(configuration=None, job=None, interval=None, tags=None, serial_numbers=None):

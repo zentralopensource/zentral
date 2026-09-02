@@ -494,6 +494,7 @@ class PBACEngineTestCase(TestCase):
                 "terraform.change_state",
                 "terraform.delete_state",
                 "terraform.view_state",
+                "turbo.add_command",
                 "turbo.add_configuration",
                 "turbo.add_enrolledmachine",
                 "turbo.add_enrollment",
@@ -501,6 +502,7 @@ class PBACEngineTestCase(TestCase):
                 "turbo.add_onetimejob",
                 "turbo.add_recurringjob",
                 "turbo.add_script",
+                "turbo.change_command",
                 "turbo.change_configuration",
                 "turbo.change_enrolledmachine",
                 "turbo.change_enrollment",
@@ -508,6 +510,7 @@ class PBACEngineTestCase(TestCase):
                 "turbo.change_onetimejob",
                 "turbo.change_recurringjob",
                 "turbo.change_script",
+                "turbo.delete_command",
                 "turbo.delete_configuration",
                 "turbo.delete_enrolledmachine",
                 "turbo.delete_enrollment",
@@ -515,6 +518,7 @@ class PBACEngineTestCase(TestCase):
                 "turbo.delete_onetimejob",
                 "turbo.delete_recurringjob",
                 "turbo.delete_script",
+                "turbo.view_command",
                 "turbo.view_configuration",
                 "turbo.view_enrolledmachine",
                 "turbo.view_enrollment",
@@ -542,6 +546,7 @@ class PBACEngineTestCase(TestCase):
             ("viewRecoveryPassword", "MDM"),
             ("syncRepository", "Monolith"),
             ("forceCleanSync", "Santa"),
+            ("scheduleCommand", "Turbo"),
         )
         found_user_only_actions = 0
         global_user_action_group = engine.get_action_group(ActionGroupBasename.USER)

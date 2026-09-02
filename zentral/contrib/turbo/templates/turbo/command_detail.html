@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:commands' %}">Commands</a></li>
+  <li class="breadcrumb-item active">{{ object }}</li>
+</ol>
+
+<div class="object-details">
+    <div class="d-flex align-items-center mb-3">
+        <h2 class="m-0">{{ object }}</h2>
+    </div>
+
+    <div class="table-responsive mb-3">
+    <table class="table-object-properties table-fixed-scrolleable">
+    <thead>
+        <th style="width:30vw">Attribute</th>
+        <th>Value</th>
+    </thead>
+    <tbody>
+        <tr><td>Name</td><td>{{ object.name }}</td></tr>
+        <tr><td>Description</td><td>{{ object.description|default:"-"|linebreaksbr }}</td></tr>
+        <tr><td>Kind</td><td>{{ object.get_backend_display }}</td></tr>
+        <tr><td>Version</td><td>{{ object.job.version }}</td></tr>
+        {% for key, value in backend_kwargs %}
+        <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+        {% endfor %}
+        <tr>
+            <td>Artifact{{ artifacts|length|pluralize }}</td>
+            <td>
+                {% for artifact in artifacts %}
+                {{ artifact.name }} ({{ artifact.extension }}){% if artifact.optional %} — optional{% endif %}<br>
+                {% endfor %}
+            </td>
+        </tr>
+    </tbody>
+    </table>
+    </div>
+
+    {% created_updated_at object %}
+
+    {% include "turbo/_object_jobs.html" %}
+
+</div>
+{% endblock %}
