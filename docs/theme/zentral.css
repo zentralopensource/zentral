@@ -37,6 +37,7 @@ hr {
 
 .wy-nav-content {
   background-color: #fafafa;
+  max-width: 1200px;
 }
 
 .wy-grid-for-nav nav {
@@ -53,6 +54,11 @@ hr {
 
 .wy-menu-vertical li.toctree-l3.current li.toctree-l4>a {
   background-color: #fafafa;
+}
+
+/* mobile nav */
+.wy-nav-top {
+  color:  #2b2a36;
 }
 
 /* left menu hover Foggy Blue */
