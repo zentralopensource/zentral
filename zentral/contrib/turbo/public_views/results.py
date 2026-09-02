@@ -24,6 +24,13 @@ class ResultsView(BaseEnrolledMachinePostView):
         accepted, skipped = self._process(serializer.validated_data["results"], batch)
         batch.commit(self.request)
         self.request_event_payload = {"result_counts": batch.result_counts}
+        if skipped:
+            # a set-aside entry produces no turbo_result event, so without this a consumed-but-discarded
+            # shot leaves nothing in the event stream to find it by
+            counts = {}
+            for entry in skipped:
+                counts[entry["reason"]] = counts.get(entry["reason"], 0) + 1
+            self.request_event_payload["skipped_counts"] = counts
         post_turbo_result_events(self.request, self.serial_number, self.enrollment, batch.event_results)
         # acknowledge every processed entry; the agent deduces the rejected ones from what is missing
         return {"accepted": accepted, "skipped": skipped}
@@ -58,6 +65,10 @@ class ResultsView(BaseEnrolledMachinePostView):
             elif kind != job.kind:
                 logger.warning("Turbo results from %s: kind %r does not match schedule %s",
                                serial_number, kind, schedule_pk)
+                # the outcome is unusable, but the run happened: record it so the shot is consumed. An
+                # entry set aside without recording leaves a one-time job's gate open, and config
+                # re-serves it on the next refresh — forever, since not_after is nullable.
+                batch.record_run(job_machine, job, entry["version"], ran_at)
                 skipped.append({**ack, "reason": "kind_mismatch"})
                 continue
             kind = job.kind

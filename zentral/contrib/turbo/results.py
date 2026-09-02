@@ -32,7 +32,7 @@ class ResultsBatch:
         self._tag_decisions = {}     # Tag -> (sort_key, add)
 
     def add(self, parsed):
-        self._record_job_status(parsed)
+        self.record_run(parsed.job_machine, parsed.job, parsed.version, parsed.ran_at)
         # compliance + tagging only when the result matches the current definition version; the agent may
         # report a job several times in one batch (each is still an event), so the latest run wins for both
         if parsed.version == parsed.job.version:
@@ -58,26 +58,30 @@ class ResultsBatch:
 
     # accumulation
 
-    def _record_job_status(self, parsed):
-        row = parsed.job_machine
+    def record_run(self, job_machine, job, version, ran_at):
+        # A run of a resolved schedule is recorded whether or not its outcome can be used. The view calls
+        # this directly for an entry it sets aside: last_result_at is what stops config re-serving a
+        # one-time job, so an entry that is discarded without consuming the shot leaves the job to be run
+        # and discarded again on every refresh — cheap for a script, a repeated collection for a command.
+        row = job_machine
         key = (type(row), row.pk)   # int pks are per-table, so qualify by model
         # last_result_version records the version that produced the LATEST result — follow the latest run,
         # not receipt order, since a drained backlog can arrive out of chronological order (a stale-version
         # run still updates it, hence this is not gated on the version match below)
-        if key not in self._result_version_at or parsed.ran_at > self._result_version_at[key]:
-            row.last_result_version = parsed.version
-            self._result_version_at[key] = parsed.ran_at
+        if key not in self._result_version_at or ran_at > self._result_version_at[key]:
+            row.last_result_version = version
+            self._result_version_at[key] = ran_at
         # only a current-version run counts as a completed run: last_result_at is what closes a one-time
         # job (config gates on it), so a stale-version result records last_result_version but must not set
         # it — otherwise editing a one-time job's definition after an old run would close it before the new
         # version ever runs
-        if parsed.version == parsed.job.version:
+        if version == job.version:
             # a batch may carry runs out of chronological order (a drained backlog); keep the earliest as
             # first_result_at and the latest as last_result_at rather than whatever arrived last
-            if row.first_result_at is None or parsed.ran_at < row.first_result_at:
-                row.first_result_at = parsed.ran_at
-            if row.last_result_at is None or parsed.ran_at > row.last_result_at:
-                row.last_result_at = parsed.ran_at
+            if row.first_result_at is None or ran_at < row.first_result_at:
+                row.first_result_at = ran_at
+            if row.last_result_at is None or ran_at > row.last_result_at:
+                row.last_result_at = ran_at
         self._job_statuses[key] = row
 
     def _record_verdict(self, parsed):

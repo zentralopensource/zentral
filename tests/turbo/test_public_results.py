@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 from unittest.mock import patch
 from django.db import connection
@@ -380,6 +381,80 @@ class TurboResultsPublicTestCase(TurboPublicTestCase):
             compliance_check=mscp_check.compliance_check, serial_number=serial_number).exists())
         self.assertTrue(MachineStatus.objects.filter(
             compliance_check=good.compliance_check, serial_number=serial_number).exists())
+
+    def test_results_kind_mismatch_records_the_run(self):
+        # a skipped entry whose schedule resolved still records the run: the outcome is discarded, the
+        # shot is consumed. Otherwise the one-time gate stays open and config re-serves the job forever.
+        configuration, _, serial_number, token = self._enrolled()
+        mscp_check = force_mscp_check()
+        one_time_job = force_one_time_job(configuration=configuration, job=mscp_check.job)
+        bad = self._result(one_time_job, status=300)
+        bad["kind"] = "script"
+        response = self._results(token, {"results": [bad]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["skipped"], [
+            {"schedule_pk": str(one_time_job.pk), "at": "2026-06-22T10:00:00+00:00",
+             "reason": "kind_mismatch"},
+        ])
+        # the gate closed
+        job_machine = OneTimeJobMachine.objects.get(one_time_job=one_time_job, serial_number=serial_number)
+        ran_at = datetime(2026, 6, 22, 10, 0)   # USE_TZ is False, so the ledger keeps naive UTC
+        self.assertEqual(job_machine.first_result_at, ran_at)
+        self.assertEqual(job_machine.last_result_at, ran_at)
+        self.assertEqual(job_machine.last_result_version, mscp_check.job.version)
+        # but the outcome was not acted on
+        self.assertFalse(MachineStatus.objects.filter(
+            compliance_check=mscp_check.compliance_check, serial_number=serial_number).exists())
+
+    def test_results_kind_mismatch_stale_version_does_not_close_the_gate(self):
+        # recording the run is not the same as consuming the shot: a stale-version entry records
+        # last_result_version and leaves last_result_at unset, skipped or not
+        configuration, _, serial_number, token = self._enrolled()
+        mscp_check = force_mscp_check()
+        one_time_job = force_one_time_job(configuration=configuration, job=mscp_check.job)
+        bad = self._result(one_time_job, version=999, status=300)
+        bad["kind"] = "script"
+        self.assertEqual(self._results(token, {"results": [bad]}).status_code, 200)
+        job_machine = OneTimeJobMachine.objects.get(one_time_job=one_time_job, serial_number=serial_number)
+        self.assertIsNone(job_machine.last_result_at)
+        self.assertEqual(job_machine.last_result_version, 999)
+
+    def test_results_unknown_schedule_records_nothing(self):
+        # the exception to the rule above: there is no row to record against, and the job is not being
+        # served either, so nothing is created
+        _, _, serial_number, token = self._enrolled()
+        configuration = force_configuration()
+        foreign = force_one_time_job(configuration=configuration)
+        self.assertEqual(self._results(token, {"results": [self._result(foreign, status=0)]}).status_code, 200)
+        self.assertFalse(OneTimeJobMachine.objects.filter(serial_number=serial_number).exists())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_results_skipped_counts_in_request_event(self, post_event):
+        # a set-aside entry produces no TurboResultEvent, so the request event carries the tally
+        configuration, _, _, token = self._enrolled()
+        mscp_check = force_mscp_check()
+        recurring_job = force_recurring_job(configuration=configuration, job=mscp_check.job)
+        bad = self._result(recurring_job, status=300)
+        bad["kind"] = "script"
+        unknown = self._result(recurring_job, status=0, at="2026-06-22T11:00:00Z")
+        unknown["run"]["schedule_pk"] = "1c1cc264-63c7-4aad-b6df-c5be1d5d6adc"
+        with self.captureOnCommitCallbacks(execute=True):
+            self._results(token, {"results": [bad, unknown, self._result(recurring_job, status=0)]})
+        request_events = [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], TurboRequestEvent)]
+        self.assertEqual(len(request_events), 1)
+        payload = request_events[0].payload
+        self.assertEqual(payload["result_counts"], {"mscp_check": 1})
+        self.assertEqual(payload["skipped_counts"], {"kind_mismatch": 1, "unknown_schedule": 1})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_results_no_skipped_counts_when_all_accepted(self, post_event):
+        configuration, _, _, token = self._enrolled()
+        mscp_check = force_mscp_check()
+        recurring_job = force_recurring_job(configuration=configuration, job=mscp_check.job)
+        with self.captureOnCommitCallbacks(execute=True):
+            self._results(token, {"results": [self._result(recurring_job, status=0)]})
+        request_events = [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], TurboRequestEvent)]
+        self.assertNotIn("skipped_counts", request_events[0].payload)
 
     def test_results_kind_mismatch_no_spoofed_script_status(self):
         # kind "mscp_check" on a script job must not let the agent write a self-declared status,
