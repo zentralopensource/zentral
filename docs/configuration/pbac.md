@@ -96,11 +96,7 @@ Three features worth pointing out:
 * **Action groups.** `Inventory::Action::"ViewerActions"` is the per-namespace aggregator covering every view-type action the inventory app declares — granting one action group is shorter and more future-proof than enumerating every individual action.
 * **Context conditions.** The `when { ... }` clause restricts the second block to requests whose context carries `tagName == "YOLO"`. The `has` guard is mandatory here: `tagName` is declared optional in the inventory action's schema, so writing `context.tagName == "YOLO"` without first checking `context has tagName` makes the Policy form reject the save with *"unable to guarantee safety of access to optional attribute"*.
 
-Whether the `has` guard is needed depends on the action: an attribute an action always sets is declared required, and can be read directly. The Schema browser lists the principals and resources of each action but not its context, so the way to tell the two apart is the human-readable schema, where an optional attribute carries a `?` after its name:
-
-```bash
-python server/manage.py pbac_dump_schema --format=human
-```
+Whether the `has` guard is needed depends on the action: an attribute an action always sets is declared required, and can be read directly. The Schema browser shows the context of each action, and puts a `?` after the name of the optional attributes. When an attribute accepts a closed set of values, the browser lists them.
 
 ```
 // Santa::Action::"forceCleanSync" always sets syncType, so no guard is needed.
@@ -113,13 +109,20 @@ permit (
 
 Note what the two halves do here: the `resource in` clause restricts *which machines* the role may act on, and the `when` clause restricts *what it may do to them* — this role can rebuild the rule database of the machines in one meta business unit, but never drop the transitive rules a machine created on its own.
 
+The `resource in` clause works because membership is transitive: the action applies to `Inventory::Machine`, and a machine is a member of the meta business units it belongs to. The Schema browser shows the types a principal or a resource is a member of, after the word *in*. A clause can name the type the action declares, or any of those.
+
 ## Finding the action you need
 
-Three options, in order of usefulness:
+Four options, in order of usefulness:
 
-1. **The Schema browser.** Open *Policies* in the platform-settings menu and click *Schema*. It lists every action Zentral knows about, grouped by namespace, with the entity types each action applies to. This is the canonical reference — it always matches the running engine.
+1. **The Schema browser.** Open *Policies* in the platform-settings menu and click *Schema*. It lists every action Zentral knows about, grouped by namespace. Each action shows what it authorizes, the entity types it applies to, the types those are members of, and the context attributes a `when` clause can read. This is the canonical reference — it always matches the running engine.
 2. **The app docs.** Every API endpoint in [`docs/apps/`](../apps/) lists its `PBAC action(s):` directly under the HTTP method.
 3. **The Policy edit form.** Cedar validation rejects unknown action ids with a clear error naming the offending reference, so a save attempt against `Inventory::Action::"crteateMachineTag"` returns *"unrecognized action `Inventory::Action::"crteateMachineTag"`"*.
+4. **The `pbac_dump_schema` management command.** It prints the schema of the running engine as one document, in the Cedar human-readable syntax or in the Cedar JSON syntax. Use it to compare two versions of Zentral. It does not include the help text of the Schema browser.
+
+```bash
+python server/manage.py pbac_dump_schema --format=human
+```
 
 ## Existing roles after the migration
 

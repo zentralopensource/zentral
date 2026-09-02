@@ -129,6 +129,51 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         self.assertNotIn("updatePolicy", body)
         self.assertNotIn("deletePolicy", body)
 
+    def test_policies_schema_action_help_text(self):
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        self.assertContains(response, "Add a tag to a machine.")
+        # The NOOP actions are auto-registered by the engine, not by a contrib
+        # pbac module.
+        self.assertContains(response, "See the module in the navigation.")
+
+    def test_policies_schema_action_context(self):
+        # The context shape of an action, with a "?" on the optional attributes.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        self.assertContains(response, "<code>tagName?: String</code>", html=True)
+        self.assertContains(response, "<code>configurationID: Long</code>", html=True)
+        self.assertContains(response, "The name of the Santa configuration of the machine.")
+
+    def test_policies_schema_context_attribute_values(self):
+        # syncType accepts a closed set of values, and NORMAL is not one of
+        # them: a queued normal sync would mean nothing.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        body = response.content.decode()
+        self.assertIn("One of <code>CLEAN</code>, <code>CLEAN_ALL</code>.", body)
+        self.assertNotIn("<code>NORMAL</code>", body)
+
+    def test_policies_schema_resource_ancestors(self):
+        # A policy can scope a Machine resource to a meta business unit, so the
+        # action rows have to name the ancestors of the types they apply to.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        self.assertContains(
+            response,
+            '<div class="text-secondary small">in <code>Inventory::MetaBusinessUnit</code></div>',
+            html=True,
+        )
+        self.assertContains(response, '<div class="text-secondary small">in <code>Role</code></div>', html=True)
+
+    def test_policies_schema_entity_type_attribute_types(self):
+        # The attributes of an entity type render as a type expression, not as
+        # an AttrSpec repr.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        self.assertContains(response, "<code>is_superuser: Bool</code>", html=True)
+        self.assertNotContains(response, "AttrSpec(")
+
     def test_policies_schema_filter_controls_present(self):
         self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policies_schema"))

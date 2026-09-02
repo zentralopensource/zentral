@@ -4,6 +4,11 @@
 ### Features
 
 
+#### Core
+
+The PBAC Schema browser documents each action now. It shows what the action authorizes, the context attributes a `when` clause can read, and the values an attribute accepts when the set is closed — for example the artifact types of `MDM::Action::"forceInstallArtifact"`. An optional attribute carries a `?` after its name, which tells you if a `has` guard is necessary. The principals and the resources show the types they are members of, so you can see what a `resource in` clause can name: a `forceCleanSync` policy can be scoped to a machine, or to one of its meta business units.
+
+
 #### Inventory
 
 The inventory JMESPath compliance check publishes the same `zentral_audit` events as the other objects now, from the web console and from the API.

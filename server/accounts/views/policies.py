@@ -12,6 +12,7 @@ from accounts.forms import PolicyForm
 from accounts.models import Policy, User
 from pbac.engine import ActionGroupBasename, engine
 from pbac.schema import build_schema_ir
+from pbac.types import format_type
 from pbac.utils import signal_policy_change
 from zentral.utils.views import (
     CreateViewWithAudit,
@@ -130,6 +131,37 @@ class PoliciesView(PermissionRequiredMixin, UserPaginationListView):
         return ctx
 
 
+def _attr_rows(attrs):
+    """Flatten a {name: AttrSpec} record for the template, sorted by name."""
+    return [
+        {
+            "name": name,
+            "type": format_type(spec.type),
+            "required": spec.required,
+            "help_text": spec.help_text,
+            "values": list(spec.values),
+        }
+        for name, spec in sorted(attrs.items())
+    ]
+
+
+def _entity_type_rows(ir, qualified_names):
+    """Pair each entity type an action applies to with its ancestors.
+
+    Membership is transitive, so the ancestors are the other types a policy
+    can scope the clause to — the reason a Machine resource accepts
+    ``resource in Inventory::MetaBusinessUnit::"3"``.
+    """
+    rows = []
+    for qualified_name in qualified_names:
+        entity_type = ir.get_entity_type(qualified_name)
+        rows.append({
+            "qualified_name": qualified_name,
+            "ancestors": list(entity_type.ancestors) if entity_type else [],
+        })
+    return rows
+
+
 class PoliciesSchemaView(PermissionRequiredMixin, TemplateView):
     permission_required = 'accounts.view_policy'
     template_name = "accounts/policies_schema.html"
@@ -150,7 +182,7 @@ class PoliciesSchemaView(PermissionRequiredMixin, TemplateView):
                     "name": et.name,
                     "qualified_name": et.qualified_name,
                     "parents": list(et.parents),
-                    "attrs": [(name, str(spec)) for name, spec in sorted(et.attrs.items())],
+                    "attrs": _attr_rows(et.attrs),
                 }
                 for _, et in sorted(ns.entity_types.items())
             ]
@@ -167,13 +199,11 @@ class PoliciesSchemaView(PermissionRequiredMixin, TemplateView):
                 actions.append({
                     "id": action_id,
                     "qualified_id": f'{ns_id}::Action::"{action_id}"' if ns_id else f'Action::"{action_id}"',
+                    "help_text": action.help_text,
                     "group_basenames": basenames,
-                    "principals": list(action.applies_to.principals),
-                    "resources": list(action.applies_to.resources),
-                    "context": (
-                        sorted((name, str(spec)) for name, spec in action.applies_to.context.items())
-                        if action.applies_to.context else []
-                    ),
+                    "principals": _entity_type_rows(ir, action.applies_to.principals),
+                    "resources": _entity_type_rows(ir, action.applies_to.resources),
+                    "context": _attr_rows(action.applies_to.context or {}),
                 })
             if not entity_types and not actions:
                 continue
