@@ -94,11 +94,13 @@ class Action(Entity):
         namespace: Optional[Namespace],
         parents: Optional[list[ActionGroup]] = None,
         applies_to=None,
+        help_text: str = "",
     ) -> None:
         super().__init__(ACTION_ENTITY_TYPE, id, namespace, parents)
         # applies_to is a pbac.types.AppliesTo or None. Imported lazily by
         # callers to keep entities.py free of type-IR dependencies.
         self.applies_to = applies_to
+        self.help_text = help_text
 
 
 class Request:

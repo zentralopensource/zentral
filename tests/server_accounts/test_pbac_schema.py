@@ -6,6 +6,8 @@ like. The Cedar JSON renderer is then round-tripped through cedarpy
 (validate_policies) to confirm the schema is actually accepted and gives
 useful errors for typos.
 """
+import json
+
 from cedarpy import validate_policies
 from django.test import SimpleTestCase, TestCase
 
@@ -126,6 +128,100 @@ class BuildSchemaIRTestCase(SimpleTestCase):
         ir = build_schema_ir(self.engine)
         machine_ir = ir.namespaces["Inventory"].entity_types["Machine"]
         self.assertEqual(machine_ir.parents, ("Inventory::MetaBusinessUnit",))
+
+    def test_action_help_text(self):
+        ns = self.engine.get_namespace("Inventory")
+        self.engine.register_action(
+            "createMachineTag", ns, [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
+            help_text="Add a tag to a machine.",
+        )
+        ir = build_schema_ir(self.engine)
+        self.assertEqual(
+            ir.namespaces["Inventory"].actions["createMachineTag"].help_text,
+            "Add a tag to a machine.",
+        )
+
+    def test_action_group_has_no_help_text(self):
+        ns = self.engine.get_namespace("Inventory")
+        self.engine.register_action(
+            "createMachineTag", ns, [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
+            help_text="Add a tag to a machine.",
+        )
+        ir = build_schema_ir(self.engine)
+        self.assertEqual(ir.namespaces["Inventory"].actions["AdminActions"].help_text, "")
+
+
+class EntityTypeAncestorsTestCase(SimpleTestCase):
+    def setUp(self):
+        self.engine = Engine()
+
+    def test_root_type_has_no_ancestor(self):
+        ir = build_schema_ir(self.engine)
+        self.assertEqual(ir.namespaces[None].entity_types["Role"].ancestors, ())
+
+    def test_direct_parent(self):
+        ir = build_schema_ir(self.engine)
+        self.assertEqual(ir.namespaces[None].entity_types["User"].ancestors, ("Role",))
+
+    def test_closure_is_transitive(self):
+        ns = self.engine.get_namespace("Inventory")
+        realm = ResourceType("Realm", ns)
+        mbu = ResourceType("MetaBusinessUnit", ns, parents=(realm,))
+        machine = ResourceType("Machine", ns, parents=(mbu,))
+        self.engine.register_action(
+            "yolo", ns, [ActionGroupBasename.ADMIN],
+            applies_to=AppliesTo(principals=(USER,), resources=(machine,)),
+        )
+        ir = build_schema_ir(self.engine)
+        self.assertEqual(
+            ir.namespaces["Inventory"].entity_types["Machine"].ancestors,
+            ("Inventory::MetaBusinessUnit", "Inventory::Realm"),
+        )
+
+    def test_closure_is_deduplicated(self):
+        # A diamond: both parents of Machine lead back to Realm.
+        ns = self.engine.get_namespace("Inventory")
+        realm = ResourceType("Realm", ns)
+        mbu = ResourceType("MetaBusinessUnit", ns, parents=(realm,))
+        group = ResourceType("MachineGroup", ns, parents=(realm,))
+        machine = ResourceType("Machine", ns, parents=(mbu, group))
+        self.engine.register_action(
+            "yolo", ns, [ActionGroupBasename.ADMIN],
+            applies_to=AppliesTo(principals=(USER,), resources=(machine,)),
+        )
+        ir = build_schema_ir(self.engine)
+        self.assertEqual(
+            ir.namespaces["Inventory"].entity_types["Machine"].ancestors,
+            ("Inventory::MetaBusinessUnit", "Inventory::MachineGroup", "Inventory::Realm"),
+        )
+
+
+class SchemaIRGetEntityTypeTestCase(SimpleTestCase):
+    def setUp(self):
+        self.engine = Engine()
+        ns = self.engine.get_namespace("Inventory")
+        mbu = ResourceType("MetaBusinessUnit", ns)
+        self.engine.register_action(
+            "yolo", ns, [ActionGroupBasename.ADMIN],
+            applies_to=AppliesTo(principals=(USER,), resources=(ResourceType("Machine", ns, parents=(mbu,)),)),
+        )
+        self.ir = build_schema_ir(self.engine)
+
+    def test_global_entity_type(self):
+        self.assertEqual(self.ir.get_entity_type("Role").name, "Role")
+
+    def test_namespaced_entity_type(self):
+        entity_type = self.ir.get_entity_type("Inventory::Machine")
+        self.assertEqual(entity_type.name, "Machine")
+        self.assertEqual(entity_type.ancestors, ("Inventory::MetaBusinessUnit",))
+
+    def test_unknown_name(self):
+        self.assertIsNone(self.ir.get_entity_type("Inventory::Yolo"))
+
+    def test_unknown_namespace(self):
+        self.assertIsNone(self.ir.get_entity_type("Yolo::Machine"))
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +369,23 @@ class CedarpyRoundTripTestCase(SimpleTestCase):
         )
         self.assertFalse(r.validation_passed)
 
+    def test_documentation_fields_are_not_rendered(self):
+        # Cedar rejects an attribute record that carries a key it does not
+        # know, so help_text and values must never reach the JSON schema. The
+        # production schema has both, on Santa::Action::"forceCleanSync".
+        blob = json.dumps(self.schema)
+        self.assertNotIn("help_text", blob)
+        self.assertNotIn("helpText", blob)
+        self.assertNotIn("CLEAN_ALL", blob)
+
+    def test_schema_validates_a_context_condition_on_a_documented_value(self):
+        r = validate_policies(
+            'permit (principal, action == Santa::Action::"forceCleanSync", resource)'
+            ' when { context.syncType == "CLEAN_ALL" };',
+            self.schema,
+        )
+        self.assertTrue(r.validation_passed, msg=[str(e) for e in r.errors])
+
 
 # ---------------------------------------------------------------------------
 # Human-readable renderer (smoke)
@@ -305,6 +418,23 @@ class RenderSchemaHumanTestCase(SimpleTestCase):
         # The per-namespace one is referenced bare ("AdminActions"); the
         # global one needs the explicit Action::"…" form.
         self.assertIn('in ["AdminActions", Action::"GlobalAdminActions"]', out)
+
+    def test_documentation_fields_are_not_rendered(self):
+        ns = self.engine.get_namespace("Santa")
+        self.engine.register_action(
+            "forceCleanSync", ns, [ActionGroupBasename.ADMIN],
+            applies_to=AppliesTo(
+                principals=(USER,),
+                resources=(SYSTEM,),
+                context={"syncType": AttrSpec(str, help_text="Yolo.", values=["CLEAN"])},
+            ),
+            help_text="Queue a clean sync.",
+        )
+        out = render_schema_human(build_schema_ir(self.engine))
+        self.assertIn("syncType: String", out)
+        self.assertNotIn("Yolo.", out)
+        self.assertNotIn("CLEAN", out)
+        self.assertNotIn("Queue a clean sync.", out)
 
     def test_human_uses_bool_not_boolean(self):
         out = render_schema_human(build_schema_ir(self.engine))

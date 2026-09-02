@@ -23,6 +23,9 @@ class EntityTypeIR:
     parents: tuple
     # Attribute name -> AttrSpec
     attrs: dict
+    # Transitive closure of ``parents``, breadth-first. Membership is
+    # transitive, so an entity of this type can be scoped to any of them.
+    ancestors: tuple = ()
 
     @property
     def qualified_name(self) -> str:
@@ -56,6 +59,7 @@ class ActionIR:
     # Optional AppliesToIR. ``None`` means this is an action group, not a
     # concrete action.
     applies_to: Optional[AppliesToIR]
+    help_text: str = ""
 
 
 @dataclass
@@ -71,6 +75,37 @@ class NamespaceIR:
 class SchemaIR:
     # namespace_id (or None for the global namespace) -> NamespaceIR
     namespaces: dict = field(default_factory=dict)
+
+    def get_entity_type(self, qualified_name: str) -> Optional[EntityTypeIR]:
+        """Resolve a qualified name ("Role", "Inventory::Machine") to its IR.
+
+        Splits the name instead of indexing the namespaces, so a lookup
+        cannot go stale while the IR is being built.
+        """
+        namespace_id, _, name = qualified_name.rpartition("::")
+        namespace = self.namespaces.get(namespace_id or None)
+        if namespace is None:
+            return None
+        return namespace.entity_types.get(name)
+
+
+def _ancestors(et) -> tuple:
+    """Transitive closure of an EntityType's parents, breadth-first.
+
+    Deduplicated, so a type reached through two different parents is
+    listed once.
+    """
+    ancestors = []
+    seen = {et.qualified_name}
+    queue = list(et.parents)
+    while queue:
+        parent = queue.pop(0)
+        if parent.qualified_name in seen:
+            continue
+        seen.add(parent.qualified_name)
+        ancestors.append(parent.qualified_name)
+        queue.extend(parent.parents)
+    return tuple(ancestors)
 
 
 def build_schema_ir(engine) -> SchemaIR:
@@ -99,6 +134,7 @@ def build_schema_ir(engine) -> SchemaIR:
             namespace_id=ns_id,
             parents=tuple(p.qualified_name for p in et.parents),
             attrs=dict(et.attrs),
+            ancestors=_ancestors(et),
         )
 
     # Action groups (Cedar Actions with no appliesTo)
@@ -126,6 +162,7 @@ def build_schema_ir(engine) -> SchemaIR:
                 resources=tuple(r.qualified_name for r in applies_to.resources),
                 context=dict(applies_to.context) if applies_to.context is not None else None,
             ),
+            help_text=action.help_text,
         )
 
     return ir

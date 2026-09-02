@@ -10,7 +10,7 @@ from cedarpy import is_authorized, is_authorized_batch, PolicySet
 from base.notifier import notifier
 from .entities import Entity, Request
 from .schema import ActionIR, AppliesToIR, EntityTypeIR, SchemaIR
-from .types import AttrSpec, EntityType, ExtensionType, PrimitiveType, RecordOf, SetOf
+from .types import AttrSpec, EntityType, ExtensionType, PrimitiveType, RecordOf, SetOf, format_type
 
 
 logger = logging.getLogger("zentral.pbac.cedar")
@@ -159,16 +159,12 @@ def authorize_requests(requests: list[Request]) -> None:
 #       "principal"/"resource", explicit "namespace X { ... }" blocks.
 
 
-# Primitive type spellings.
+# The JSON form is the only place Cedar's spelling of the primitives
+# differs from the IR's own; everything else goes through
+# pbac.types.format_type.
 
 _JSON_PRIMITIVES = {
     PrimitiveType.BOOL: "Boolean",
-    PrimitiveType.LONG: "Long",
-    PrimitiveType.STRING: "String",
-}
-
-_HUMAN_PRIMITIVES = {
-    PrimitiveType.BOOL: "Bool",
     PrimitiveType.LONG: "Long",
     PrimitiveType.STRING: "String",
 }
@@ -254,25 +250,6 @@ def render_schema_json(ir: SchemaIR) -> dict:
 
 # Human-readable rendering.
 
-def _attr_to_human(attr: AttrSpec) -> str:
-    t = attr.type
-    if isinstance(t, PrimitiveType):
-        return _HUMAN_PRIMITIVES[t]
-    if isinstance(t, ExtensionType):
-        return t.value
-    if isinstance(t, EntityType):
-        return t.qualified_name
-    if isinstance(t, SetOf):
-        return f"Set<{_attr_to_human(AttrSpec(t.inner))}>"
-    if isinstance(t, RecordOf):
-        body = ", ".join(
-            f"{n}{_optional_marker(a)}: {_attr_to_human(a)}"
-            for n, a in t.fields.items()
-        )
-        return "{" + body + "}"
-    raise TypeError(f"Unsupported attribute type {t!r}")
-
-
 def _optional_marker(attr: AttrSpec) -> str:
     return "" if attr.required else "?"
 
@@ -283,7 +260,7 @@ def _format_attr_record(record: dict, indent: str) -> str:
         return "{}"
     lines = []
     for name, attr in record.items():
-        lines.append(f'{indent}  {name}{_optional_marker(attr)}: {_attr_to_human(attr)}')
+        lines.append(f'{indent}  {name}{_optional_marker(attr)}: {format_type(attr.type)}')
     return "{\n" + ",\n".join(lines) + f"\n{indent}}}"
 
 

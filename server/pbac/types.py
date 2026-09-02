@@ -117,11 +117,45 @@ def _coerce_type(t):
 class AttrSpec:
     type: TypeRef
     required: bool = True
+    # Documentation only. Neither field reaches the authorization backend:
+    # the JSON schema renderer builds its output key by key, and Cedar
+    # rejects an attribute record that carries a key it does not know.
+    help_text: str = ""
+    # The literal values a policy can compare the attribute against, when
+    # the set is closed. A Django ``Choices`` class exposes them as
+    # ``.values``, which is what the request builders put in the context,
+    # so the two cannot drift.
+    values: tuple = ()
 
-    def __init__(self, type, required=True):
+    def __init__(self, type, required=True, help_text="", values=()):
         # Frozen dataclass; coerce via object.__setattr__.
         object.__setattr__(self, "type", _coerce_type(type))
         object.__setattr__(self, "required", required)
+        object.__setattr__(self, "help_text", help_text)
+        object.__setattr__(self, "values", tuple(values))
+
+
+def format_type(t: TypeRef) -> str:
+    """Format a TypeRef as a short type expression.
+
+    Uses the IR's own spelling (``Bool``/``Long``/``String``), which the
+    Cedar human-readable schema syntax happens to share. The Cedar JSON
+    renderer spells the primitives differently and does not come through
+    here.
+    """
+    if isinstance(t, (PrimitiveType, ExtensionType)):
+        return t.value
+    if isinstance(t, EntityType):
+        return t.qualified_name
+    if isinstance(t, SetOf):
+        return f"Set<{format_type(t.inner)}>"
+    if isinstance(t, RecordOf):
+        body = ", ".join(
+            f"{n}{'' if a.required else '?'}: {format_type(a.type)}"
+            for n, a in t.fields.items()
+        )
+        return "{" + body + "}"
+    raise TypeError(f"Unsupported attribute type {t!r}")
 
 
 # AppliesTo

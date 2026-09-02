@@ -16,6 +16,7 @@ from pbac.types import (
     SetOf,
     SYSTEM,
     USER,
+    format_type,
 )
 
 
@@ -79,14 +80,69 @@ class AttrSpecCoercionTestCase(SimpleTestCase):
             s.required = False
 
 
+class AttrSpecDocumentationTestCase(SimpleTestCase):
+    def test_help_text_defaults_empty(self):
+        self.assertEqual(AttrSpec(str).help_text, "")
+
+    def test_help_text_kept(self):
+        self.assertEqual(AttrSpec(str, help_text="The name of the tag.").help_text, "The name of the tag.")
+
+    def test_values_default_empty_tuple(self):
+        self.assertEqual(AttrSpec(str).values, ())
+
+    def test_values_normalised_to_tuple(self):
+        # A Django Choices class exposes .values as a list.
+        self.assertEqual(AttrSpec(str, values=["CLEAN", "CLEAN_ALL"]).values, ("CLEAN", "CLEAN_ALL"))
+
+    def test_documentation_fields_do_not_change_the_type(self):
+        spec = AttrSpec(str, help_text="Yolo.", values=["A"])
+        self.assertIs(spec.type, PrimitiveType.STRING)
+        self.assertTrue(spec.required)
+
+
 class AttrSpecEqualityTestCase(SimpleTestCase):
     def test_equal_specs_compare_equal(self):
         self.assertEqual(AttrSpec(str), AttrSpec(str))
         self.assertEqual(AttrSpec(str, required=False), AttrSpec(str, required=False))
+        self.assertEqual(
+            AttrSpec(str, help_text="Yolo.", values=["A", "B"]),
+            AttrSpec(str, help_text="Yolo.", values=("A", "B")),
+        )
 
     def test_different_specs_compare_unequal(self):
         self.assertNotEqual(AttrSpec(str), AttrSpec(int))
         self.assertNotEqual(AttrSpec(str), AttrSpec(str, required=False))
+        self.assertNotEqual(AttrSpec(str), AttrSpec(str, help_text="Yolo."))
+        self.assertNotEqual(AttrSpec(str), AttrSpec(str, values=["A"]))
+
+
+class FormatTypeTestCase(SimpleTestCase):
+    def test_primitive(self):
+        self.assertEqual(format_type(PrimitiveType.BOOL), "Bool")
+        self.assertEqual(format_type(PrimitiveType.LONG), "Long")
+        self.assertEqual(format_type(PrimitiveType.STRING), "String")
+
+    def test_extension(self):
+        self.assertEqual(format_type(ExtensionType.IPADDR), "ipaddr")
+
+    def test_entity_type_uses_qualified_name(self):
+        self.assertEqual(format_type(ResourceType("Machine", Namespace("Inventory"))), "Inventory::Machine")
+
+    def test_set_of(self):
+        self.assertEqual(format_type(SetOf(PrimitiveType.STRING)), "Set<String>")
+
+    def test_nested_set_of(self):
+        self.assertEqual(format_type(SetOf(SetOf(PrimitiveType.LONG))), "Set<Set<Long>>")
+
+    def test_record_of_marks_the_optional_fields(self):
+        self.assertEqual(
+            format_type(RecordOf({"name": AttrSpec(str), "count": AttrSpec(int, required=False)})),
+            "{name: String, count?: Long}",
+        )
+
+    def test_unsupported_type_raises(self):
+        with self.assertRaises(TypeError):
+            format_type(object())
 
 
 class EntityTypeTestCase(SimpleTestCase):

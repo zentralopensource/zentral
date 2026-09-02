@@ -646,6 +646,38 @@ class PBACEngineRegistrationTestCase(TestCase):
         )
         self.assertIs(first, second)
 
+    def test_register_action_stores_help_text(self):
+        action = self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
+            help_text="Add a tag to a machine.",
+        )
+        self.assertEqual(action.help_text, "Add a tag to a machine.")
+
+    def test_register_action_help_text_defaults_empty(self):
+        action = self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
+        )
+        self.assertEqual(action.help_text, "")
+
+    def test_register_action_re_register_with_different_help_text_conflicts(self):
+        self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+            applies_to=LEGACY_PERM_APPLIES_TO,
+            help_text="Add a tag to a machine.",
+        )
+        with self.assertRaises(ActionRegistrationConflict):
+            self.engine.register_action(
+                "createMachineTag", self.namespace,
+                [ActionGroupBasename.ADMIN],
+                applies_to=LEGACY_PERM_APPLIES_TO,
+                help_text="Remove a tag from a machine.",
+            )
+
     def test_register_action_conflicting_groups(self):
         self.engine.register_action(
             "createMachineTag", self.namespace,
@@ -825,6 +857,12 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
                 action.applies_to, LEGACY_PERM_APPLIES_TO,
                 f"{app_label!r} -> {action!r} missing LEGACY_PERM_APPLIES_TO",
             )
+
+    def test_every_module_legacy_perm_action_has_help_text(self):
+        # The NOOP actions are the only ones an operator cannot guess from
+        # their id, so they must carry the prose.
+        for app_label, action in engine.module_legacy_perm_actions.items():
+            self.assertTrue(action.help_text, f"{app_label!r} -> {action!r} missing help_text")
 
     def test_noop_action_belongs_to_admin_user_and_viewer_groups(self):
         # has_module_perms only grants when the user matches the NOOP

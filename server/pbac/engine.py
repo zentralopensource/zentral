@@ -136,6 +136,7 @@ class Engine:
         group_basenames: list[ActionGroupBasename],
         applies_to: AppliesTo,
         legacy_perm: Optional[str] = None,
+        help_text: str = "",
     ) -> Action:
         """Register (or idempotently re-register) an Action.
 
@@ -149,9 +150,14 @@ class Engine:
         ``ZentralBackend.has_perm``. It's intended to be retired once every
         view uses PBACViewMixin directly.
 
+        ``help_text`` describes what the action authorizes, for the schema
+        browser. Documentation only — it never reaches the authorization
+        backend.
+
         Raises ActionRegistrationConflict if (id, namespace) is already
-        registered with different action groups, a different applies_to, or
-        if ``legacy_perm`` is already mapped to a different action.
+        registered with different action groups, a different applies_to, a
+        different help_text, or if ``legacy_perm`` is already mapped to a
+        different action.
 
         Any EntityType referenced in ``applies_to`` is auto-registered.
         """
@@ -159,7 +165,7 @@ class Engine:
         new_groups = self._build_action_groups(namespace, group_basenames)
         action = self.actions.get(key)
         if action is None:
-            action = Action(id, namespace, new_groups, applies_to=applies_to)
+            action = Action(id, namespace, new_groups, applies_to=applies_to, help_text=help_text)
             self.actions[key] = action
         else:
             if action.parents != new_groups:
@@ -171,6 +177,11 @@ class Engine:
                 raise ActionRegistrationConflict(
                     f"Action {action} already registered with applies_to {action.applies_to!r}; "
                     f"refusing to re-register with {applies_to!r}"
+                )
+            if action.help_text != help_text:
+                raise ActionRegistrationConflict(
+                    f"Action {action} already registered with help_text {action.help_text!r}; "
+                    f"refusing to re-register with {help_text!r}"
                 )
         if legacy_perm:
             previous = self.legacy_perm_actions.get(legacy_perm)
@@ -212,6 +223,8 @@ class Engine:
             action_id, namespace,
             [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
             LEGACY_PERM_APPLIES_TO,
+            help_text=("See the module in the navigation. Grant it together with the actions on the "
+                       "objects of the module."),
         )
 
     def _register_model_default_legacy_perm_actions(self, app_config: AppConfig, model: ModelBase) -> None:
