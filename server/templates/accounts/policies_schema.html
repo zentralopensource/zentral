@@ -103,24 +103,32 @@
                 {% for action in ns.actions %}
                   <tr class="schema-action"
                       data-groups="{{ action.group_basenames|join:' ' }}"
-                      data-search="{{ action.id|lower }} {{ action.qualified_id|lower }} {{ action.help_text|lower }} {% for p in action.principals %}{{ p.qualified_name|lower }} {% endfor %}{% for r in action.resources %}{{ r.qualified_name|lower }} {% endfor %}{% for attr in action.context %}{{ attr.name|lower }} {{ attr.help_text|lower }} {% for value in attr.values %}{{ value|lower }} {% endfor %}{% endfor %}">
+                      data-search="{{ action.id|lower }} {{ action.qualified_id|lower }} {{ action.help_text|lower }} {% for p in action.principals %}{{ p.qualified_name|lower }} {% endfor %}{% for r in action.resources %}{{ r.qualified_name|lower }} {% endfor %}"
+                      data-context-search="{% for attr in action.context %}{{ attr.name|lower }} {{ attr.help_text|lower }} {% for value in attr.values %}{{ value|lower }} {% endfor %}{% endfor %}">
                     <td class="align-top">
                       <code>{{ action.id }}</code>
                       {% if action.help_text %}<div class="small text-secondary">{{ action.help_text }}</div>{% endif %}
                       {% if action.context %}
-                        <dl class="row g-0 small mt-2 mb-0">
-                          {% for attr in action.context %}
-                            <dt class="col-sm-5 fw-normal text-truncate pe-3">
-                              <code>{{ attr.name }}{% if not attr.required %}?{% endif %}: {{ attr.type }}</code>
-                            </dt>
-                            <dd class="col-sm-7 mb-1 text-secondary">
-                              {{ attr.help_text }}
-                              {% if attr.values %}
-                                <div>One of {% for value in attr.values %}<code>{{ value }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.</div>
-                              {% endif %}
-                            </dd>
-                          {% endfor %}
-                        </dl>
+                        {% with context_id="schema-context-"|add:action.qualified_id|slugify %}
+                          <button type="button" class="btn btn-link btn-sm p-0 mt-1 small text-decoration-none schema-context-toggle"
+                                  aria-expanded="false" aria-controls="{{ context_id }}">
+                            <i class="bi bi-chevron-right"></i>
+                            Context ({{ action.context|length }})
+                          </button>
+                          <dl class="row g-0 small mt-1 mb-0 d-none schema-context" id="{{ context_id }}">
+                            {% for attr in action.context %}
+                              <dt class="col-sm-5 fw-normal text-truncate pe-3">
+                                <code>{{ attr.name }}{% if not attr.required %}?{% endif %}: {{ attr.type }}</code>
+                              </dt>
+                              <dd class="col-sm-7 mb-1 text-secondary">
+                                {{ attr.help_text }}
+                                {% if attr.values %}
+                                  <div>One of {% for value in attr.values %}<code>{{ value }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.</div>
+                                {% endif %}
+                              </dd>
+                            {% endfor %}
+                          </dl>
+                        {% endwith %}
                       {% endif %}
                     </td>
                     <td class="align-top">
@@ -176,6 +184,21 @@
       const namespaces = document.querySelectorAll(".schema-namespace");
       const emptyState = document.getElementById("schema-empty-state");
 
+      function setContextExpanded(toggle, expanded) {
+        toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+        toggle.querySelector(".bi").className = expanded ? "bi bi-chevron-down" : "bi bi-chevron-right";
+        document.getElementById(toggle.getAttribute("aria-controls")).classList.toggle("d-none", !expanded);
+      }
+
+      document.querySelectorAll(".schema-context-toggle").forEach(function (toggle) {
+        toggle.addEventListener("click", function () {
+          setContextExpanded(toggle, toggle.getAttribute("aria-expanded") !== "true");
+          // The reader decided for this action, so the search filter stops
+          // managing it — in both directions.
+          toggle.dataset.manual = "1";
+        });
+      });
+
       function applyFilters() {
         const ns = nsSelect.value;
         const group = groupSelect.value;
@@ -196,14 +219,21 @@
             if (matches) nsHasVisibleRows = true;
           });
 
-          // Actions: namespace + group + search.
+          // Actions: namespace + group + search. The search also covers the
+          // context, which is collapsed, so a row that matches there reveals
+          // it — otherwise the match would be invisible.
           nsEl.querySelectorAll(".schema-action").forEach(function (row) {
             const groupTokens = (row.dataset.groups || "").split(/\s+/);
+            const contextMatches = !!search && (row.dataset.contextSearch || "").indexOf(search) !== -1;
             const matches = nsMatches
               && (!group || groupTokens.indexOf(group) !== -1)
-              && (!search || row.dataset.search.indexOf(search) !== -1);
+              && (!search || row.dataset.search.indexOf(search) !== -1 || contextMatches);
             row.style.display = matches ? "" : "none";
             if (matches) nsHasVisibleRows = true;
+            const toggle = row.querySelector(".schema-context-toggle");
+            if (toggle && !toggle.dataset.manual) {
+              setContextExpanded(toggle, matches && contextMatches);
+            }
           });
 
           // Hide each table whose tbody has no visible rows, and the section

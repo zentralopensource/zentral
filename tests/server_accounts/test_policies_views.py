@@ -145,6 +145,40 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "<code>configurationID: Long</code>", html=True)
         self.assertContains(response, "The name of the Santa configuration of the machine.")
 
+    def test_policies_schema_action_context_is_collapsed(self):
+        # The context ships in the page but hidden, behind a toggle. Without it
+        # the four actions that have a context crowd out the rest of the table.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        body = response.content.decode()
+        context_id = "schema-context-santaactionforcecleansync"
+        self.assertIn(f'aria-expanded="false" aria-controls="{context_id}"', body)
+        self.assertIn(f'class="row g-0 small mt-1 mb-0 d-none schema-context" id="{context_id}"', body)
+        self.assertIn("Context (3)", body)
+
+    def test_policies_schema_action_without_context_has_no_toggle(self):
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        body = response.content.decode()
+        # viewMachineTag is reachable through the legacy perm path only, so it
+        # has no context and must not offer a toggle.
+        row = body.split("<code>viewMachineTag</code>", 1)[1].split("</tr>", 1)[0]
+        self.assertNotIn("schema-context-toggle", row)
+
+    def test_policies_schema_context_is_searchable_on_its_own(self):
+        # The search filter reveals a collapsed context when the term matches
+        # there, so the context text goes in its own attribute.
+        self.login("accounts.view_policy")
+        response = self.client.get(self.build_url("policies_schema"))
+        body = response.content.decode()
+        row = body.split("<code>forceCleanSync</code>", 1)[0].rsplit("<tr ", 1)[1]
+        self.assertIn("data-context-search=", row)
+        context_search = row.split('data-context-search="', 1)[1].split('"', 1)[0]
+        self.assertIn("clean_all", context_search)
+        # and not in the plain action blob, or the filter could not tell the two apart
+        action_search = row.split('data-search="', 1)[1].split('"', 1)[0]
+        self.assertNotIn("clean_all", action_search)
+
     def test_policies_schema_context_attribute_values(self):
         # syncType accepts a closed set of values, and NORMAL is not one of
         # them: a queued normal sync would mean nothing.
