@@ -172,11 +172,79 @@ The agent matches the patterns with `fnmatch`, which macOS provides. The syntax 
 
 A `file_export` run produces two files: a manifest, which lists what was matched, collected, skipped and unreadable, and an archive of the collected files. The manifest is a separate file so an operator can read what a run collected without downloading the archive. A run that matched nothing uploads the manifest and no archive.
 
-**A command runs one time only.** It cannot be attached to a recurring job — collecting the same files every hour is a log shipper, not a job. Schedule it with a one-time job, or with the *Schedule one-time job* action on a machine page.
+**A command runs one time only.** It cannot be attached to a recurring job — collecting the same files every hour is a log shipper, not a job. Schedule it with a one-time job, or with the *Schedule one-time job* action on a machine page. That second path also requires `turbo.view_enrolledmachine`: the configuration a policy is evaluated against is only known once the serial number resolves, so it cannot be the first gate, and the response must not reveal whether a serial number is enrolled.
 
 Every command carries the *changing the version re-runs the job* behaviour of the other kinds: editing the options bumps the version, and the agent runs the command again. Renaming it does not.
 
 A command cannot be deleted while it is scheduled in a configuration.
+
+Collecting a `sysdiagnose` archive, and even more so collecting arbitrary files, reads user data. Use a [policy](../configuration/pbac.md) to say which kinds a role may schedule.
+
+Three actions authorize the scheduling of a one-time job:
+
+|Action|Resource|
+|---|---|
+|`Turbo::Action::"createOneTimeJob"`|The **configuration**. The schedule does not exist yet, so the resource is the configuration it will be created in.|
+|`Turbo::Action::"updateOneTimeJob"`|The **schedule**.|
+|`Turbo::Action::"deleteOneTimeJob"`|The **schedule**.|
+
+A schedule is a member of its configuration, so a policy scoped to a configuration covers all three. All three carry the job in `context.job`, so one policy can name all three — refuse a kind with a `forbid`:
+
+```
+forbid (
+  principal,
+  action in [Turbo::Action::"createOneTimeJob",
+             Turbo::Action::"updateOneTimeJob",
+             Turbo::Action::"deleteOneTimeJob"],
+  resource
+) when { context.job.kind == "file_export" };
+```
+
+The kinds are `script`, `mscp_check`, `sysdiagnose` and `file_export`. Every kind is covered, not only the commands, so the same policy shape restricts a script.
+
+A grant can name the kind directly, and needs no companion `forbid`:
+
+```
+permit (
+  principal in Role::"<role id>",
+  action == Turbo::Action::"createOneTimeJob",
+  resource
+) when { context.job.kind == "sysdiagnose" };
+```
+
+That role can schedule a `sysdiagnose` and nothing else. It still reaches the *Schedule one-time job* page, because Zentral only refuses to offer an action when **no** kind could be permitted.
+
+Because the resource is the configuration, a grant can be scoped to one:
+
+```
+permit (
+  principal in Role::"<role id>",
+  action == Turbo::Action::"createOneTimeJob",
+  resource == Turbo::Configuration::"<configuration id>"
+);
+```
+
+`updateOneTimeJob` is included in the refusal above because the job of a schedule cannot be changed, but its tags, its serial numbers and its window can. Widening the reach of a `file_export` schedule is a scheduling act.
+
+`deleteOneTimeJob` is in the list because removing a schedule stops it being served to the machines that have not run it yet. A policy that governs a kind governs its removal too.
+
+An update or delete policy can also read the schedule itself, which a create policy cannot — there is no schedule yet when one is created:
+
+```
+forbid (
+  principal,
+  action == Turbo::Action::"updateOneTimeJob",
+  resource
+) when { resource.job.kind == "file_export" };
+```
+
+Use `context.job` when one policy should cover several actions, and `resource` when a policy needs the schedule — to name one, or to read more of it than the job.
+
+The machines are not the resource. A schedule targets tags and serial numbers, and tag membership changes after the schedule is written, so there is no machine for a policy to name.
+
+**These three actions replace the `turbo.add_onetimejob`, `turbo.change_onetimejob` and `turbo.delete_onetimejob` permissions**, which no longer authorize anything. A role that scheduled jobs before needs a policy that grants the actions. A policy that came from the automatic conversion of a role already does, because it names the actions and leaves the resource open.
+
+`turbo.view_onetimejob` is unchanged. Seeing the one-time jobs is still a permission, not a typed action: scoping a list means filtering it by policy rather than deciding one request, which is a separate piece of work.
 
 ### Recurring jobs
 

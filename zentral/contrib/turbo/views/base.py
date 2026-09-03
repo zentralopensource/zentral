@@ -1,3 +1,5 @@
+from functools import cached_property
+
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.shortcuts import get_object_or_404
 from django.db.models import F
@@ -5,25 +7,29 @@ from django.urls import reverse
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
                                  UserPaginationListView)
 from ..models import Configuration
+from ..pbac import authorize_one_time_job_rows
 
 
 class BaseConfigurationScopedJobView:
     # shared by the recurring/one-time create/update/delete views: both are managed on the
-    # configuration page and redirect back to it. Subclasses set model, form_class, permission_required
-    # and anchor (the configuration-page fragment the success URL jumps to).
+    # configuration page and redirect back to it. Subclasses set model, form_class, anchor (the
+    # configuration-page fragment the success URL jumps to) and their own authorization mixin —
+    # PermissionRequiredMixin for the recurring views, PBACViewMixin for the one-time ones.
     anchor = None
+
+    @cached_property
+    def configuration(self):
+        # lazy, so that nothing is read from the database before the authorization mixin has run: an
+        # anonymous request for an unknown pk gets the login redirect, not a 404. PBACViewMixin calls
+        # get_pbac_request_kwargs() after its is_authenticated check, so that is the first reader.
+        return get_object_or_404(Configuration, pk=self.kwargs["configuration_pk"])
 
     def get_success_url(self):
         return "{}#{}".format(
             reverse("turbo:configuration", args=(self.kwargs["configuration_pk"],)), self.anchor)
 
 
-class BaseCreateConfigurationScopedJobView(BaseConfigurationScopedJobView, PermissionRequiredMixin,
-                                           CreateViewWithAudit):
-    def dispatch(self, request, *args, **kwargs):
-        self.configuration = get_object_or_404(Configuration, pk=kwargs["configuration_pk"])
-        return super().dispatch(request, *args, **kwargs)
-
+class BaseCreateConfigurationScopedJobView(BaseConfigurationScopedJobView, CreateViewWithAudit):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["configuration"] = self.configuration
@@ -35,7 +41,7 @@ class BaseCreateConfigurationScopedJobView(BaseConfigurationScopedJobView, Permi
         return ctx
 
 
-class BaseConfigurationScopedJobEditView(BaseConfigurationScopedJobView, PermissionRequiredMixin):
+class BaseConfigurationScopedJobEditView(BaseConfigurationScopedJobView):
     # update + delete: scope the queryset to the configuration in the URL, expose it to the template
     def get_queryset(self):
         return self.model.objects.filter(configuration__pk=self.kwargs["configuration_pk"])
@@ -87,9 +93,13 @@ class JobDetailMixin:
             .prefetch_related("tags", "excluded_tags")
             .order_by("configuration__name", "pk")
         )
-        ctx["one_time_jobs"] = (
+        one_time_jobs = authorize_one_time_job_rows(
+            self.request.user,
             job.onetimejob_set.select_related("configuration")
             .prefetch_related("tags", "excluded_tags")
             .order_by(F("not_before").desc(nulls_last=True), "-created_at")
         )
+        ctx["one_time_jobs"] = one_time_jobs
+        ctx["can_edit_one_time_job"] = any(otj.can_update or otj.can_delete
+                                           for otj in one_time_jobs)
         return ctx
