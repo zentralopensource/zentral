@@ -2,14 +2,19 @@ import base64
 import hashlib
 from urllib.parse import parse_qs, urlparse
 
+from unittest.mock import patch
+
 from botocore.exceptions import ClientError
 from botocore.stub import Stubber
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.test import SimpleTestCase, TestCase, override_settings
-from zentral.utils.storage import (_stat_client, file_storage_has_presigned_uploads,
-                                   file_storage_has_signed_urls, generate_presigned_put,
-                                   select_dist_storage, sha256_object, stat_object)
+from zentral.utils.storage import (_assembly_client, _request_client, abort_multipart_upload,
+                                   complete_multipart_upload, create_multipart_upload,
+                                   file_storage_has_presigned_uploads, file_storage_has_signed_urls,
+                                   generate_presigned_part, generate_presigned_put,
+                                   list_multipart_parts, select_dist_storage, sha256_object,
+                                   stat_object)
 
 
 S3_STORAGE = {"default": {"BACKEND": "storages.backends.s3.S3Storage",
@@ -109,18 +114,25 @@ class StatObjectS3TestCase(SimpleTestCase):
     """The S3 branch, stubbed against the real service model — so a parameter S3 does not have, or a
     response member that is not one, fails here instead of in production."""
 
-    def _stubbed(self):
+    def _stubbed(self, builder="_request_client"):
+        """A storage whose S3 client is a stub, by replacing the builder rather than its cache.
+
+        Priming the cached attribute worked until the attribute was renamed, and then the calls went
+        to the real endpoint and failed with a 403 — a test that reaches past the seam it is testing
+        breaks in a way that says nothing about what changed.
+        """
         storage = storages.create_storage(S3_STORAGE["default"])
-        # the client stat_object caches on the storage, primed with a stub before it can build one
         client = storage.connection.meta.client
-        storage._zentral_stat_client = client
+        patcher = patch(f"zentral.utils.storage.{builder}", return_value=client)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         return storage, Stubber(client)
 
-    def test_the_stat_client_carries_its_own_ceiling(self):
+    def test_the_request_client_carries_its_own_ceiling(self):
         # the only test that builds the real client: everything below primes the cache with a stub,
         # so a typo in these kwargs would surface in production as an exception verify_upload
         # swallows into "undecided", with one log line to find it by
-        client = _stat_client(storages.create_storage(S3_STORAGE["default"]))
+        client = _request_client(storages.create_storage(S3_STORAGE["default"]))
         self.assertEqual(client.meta.config.connect_timeout, 2)
         self.assertEqual(client.meta.config.read_timeout, 5)
         # botocore stores retries as a TOTAL: asking for max_attempts=1 would have meant two
@@ -136,7 +148,7 @@ class StatObjectS3TestCase(SimpleTestCase):
         storage = storages.create_storage(
             dict(S3_STORAGE["default"],
                  OPTIONS=dict(S3_STORAGE["default"]["OPTIONS"], location="zentral")))
-        storage._zentral_stat_client = storage.connection.meta.client
+        storage._zentral_request_client = storage.connection.meta.client
         stub = Stubber(storage.connection.meta.client)
         stub.add_response("head_object", {"ContentLength": 4},
                           {"Bucket": "zentral-tests", "Key": "zentral/turbo/uploads/test",
@@ -223,3 +235,123 @@ class StatObjectLocalTestCase(TestCase):
         storage = self._store("turbo/uploads/hash-test", b"yolo" * 1024)
         self.assertEqual(sha256_object("turbo/uploads/hash-test", storage=storage),
                          hashlib.sha256(b"yolo" * 1024).hexdigest())
+
+
+class MultipartUploadTestCase(SimpleTestCase):
+    """The multipart control plane, stubbed against the real service model.
+
+    Every expected parameter here is validated by the stub, which is the point: the declaration this
+    design rests on is one S3 accepts silently when it is absent, so the test that it is sent has to
+    be a test that S3 would recognise.
+    """
+
+    def _stubbed(self, builder):
+        storage = storages.create_storage(S3_STORAGE["default"])
+        client = storage.connection.meta.client
+        patcher = patch(f"zentral.utils.storage.{builder}", return_value=client)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return storage, Stubber(client)
+
+    def test_create_declares_the_checksum_algorithm(self):
+        # the one line of the multipart design that must not be dropped. Without the declaration S3
+        # accepts a WRONG whole-object checksum at completion, and the object afterwards reports a
+        # perfectly correct one because S3 computed its own — it looks verified and is not.
+        storage, stub = self._stubbed("_request_client")
+        stub.add_response(
+            "create_multipart_upload", {"UploadId": "mpu-1"},
+            {"Bucket": "zentral-tests", "Key": "turbo/uploads/test",
+             "ContentType": "application/gzip",
+             "ChecksumAlgorithm": "CRC64NVME", "ChecksumType": "FULL_OBJECT"},
+        )
+        with stub:
+            upload_id = create_multipart_upload("turbo/uploads/test", "application/gzip",
+                                                storage=storage)
+        self.assertEqual(upload_id, "mpu-1")
+
+    def test_list_parts_paginates(self):
+        # a truncated first page read as the whole list would assemble a partial object and call it
+        # done
+        storage, stub = self._stubbed("_assembly_client")
+        stub.add_response(
+            "list_parts",
+            {"Parts": [{"PartNumber": 2, "ETag": '"e2"'}], "IsTruncated": True,
+             "NextPartNumberMarker": 2},
+            {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1"},
+        )
+        stub.add_response(
+            "list_parts",
+            {"Parts": [{"PartNumber": 1, "ETag": '"e1"'}], "IsTruncated": False},
+            {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1", "PartNumberMarker": 2},
+        )
+        with stub:
+            parts = list_multipart_parts("k", "mpu-1", storage=storage)
+        # both pages, and in part order whatever order they arrived in
+        self.assertEqual(parts, [{"PartNumber": 1, "ETag": '"e1"'},
+                                 {"PartNumber": 2, "ETag": '"e2"'}])
+
+    def test_complete_supplies_the_whole_object_checksum(self):
+        storage, stub = self._stubbed("_assembly_client")
+        parts = [{"PartNumber": 1, "ETag": '"e1"'}, {"PartNumber": 2, "ETag": '"e2"'}]
+        stub.add_response(
+            "complete_multipart_upload",
+            {"ETag": '"final"', "ChecksumCRC64NVME": "nD+hB17SSLE="},
+            {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1",
+             "MultipartUpload": {"Parts": parts},
+             "ChecksumCRC64NVME": "nD+hB17SSLE=", "ChecksumType": "FULL_OBJECT",
+             "MpuObjectSize": 200},
+        )
+        with stub:
+            response = complete_multipart_upload("k", "mpu-1", parts, "nD+hB17SSLE=", 200,
+                                                 storage=storage)
+        self.assertEqual(response["ETag"], '"final"')
+
+    def test_abort(self):
+        storage, stub = self._stubbed("_request_client")
+        stub.add_response("abort_multipart_upload", {},
+                          {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1"})
+        with stub:
+            abort_multipart_upload("k", "mpu-1", storage=storage)
+
+    @override_settings(STORAGES=S3_STORAGE)
+    def test_generate_presigned_part_signs_the_length_with_sigv4(self):
+        # the part carries no checksum on either storage, so the length is the entire contract — and
+        # the legacy V2 presign signs no header at all, which would leave a part free to be any size
+        url, headers = generate_presigned_part("k", "mpu-1", 3, 67108864, 900,
+                                               storages["default"])
+        self.assertEqual(headers, {"Content-Length": "67108864"})
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["X-Amz-Algorithm"], ["AWS4-HMAC-SHA256"])
+        self.assertEqual(query["partNumber"], ["3"])
+        self.assertEqual(query["uploadId"], ["mpu-1"])
+        self.assertIn("content-length", query["X-Amz-SignedHeaders"][0].split(";"))
+
+
+class AssemblyClientTestCase(SimpleTestCase):
+    """The second ceiling. The request client's is covered where it is built for real, above.
+
+    A call inside a device request holds a web worker and a database connection while it waits, so it
+    gets seconds. Assembling a multipart upload is documented as taking several minutes, which is why
+    it runs in a worker — and why the request ceiling there would abandon every large artifact.
+    """
+
+    def _storage(self):
+        return storages.create_storage(S3_STORAGE["default"])
+
+    def test_the_assembly_ceiling_is_minutes(self):
+        config = _assembly_client(self._storage()).meta.config
+        self.assertEqual(config.connect_timeout, 5)
+        self.assertEqual(config.read_timeout, 600)
+        # one attempt here too: the retrying is the completion task's, with backoff, and a second
+        # botocore attempt would sit for another ten minutes before the task ever heard about it
+        self.assertEqual(config.retries["total_max_attempts"], 1)
+
+    def test_each_client_is_built_once_and_the_two_are_not_the_same(self):
+        storage = self._storage()
+        self.assertIs(_assembly_client(storage), _assembly_client(storage))
+        self.assertIsNot(_request_client(storage), _assembly_client(storage))
+
+    def test_the_assembly_client_signs_with_sigv4(self):
+        # only the PRESIGN needed forcing; a real request resolves to v4 on its own. Asserted so a
+        # future change to the shared builder cannot quietly take that away.
+        self.assertEqual(_assembly_client(self._storage()).meta.config.signature_version, "s3v4")
