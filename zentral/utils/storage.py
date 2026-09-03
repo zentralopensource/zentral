@@ -311,6 +311,17 @@ def abort_multipart_upload(key, upload_id, storage):
         Bucket=storage.bucket_name, Key=_object_key(storage, key), UploadId=upload_id)
 
 
+def generate_presigned_get(key, filename, storage):
+    """A signed GET that saves the object instead of rendering it.
+
+    The key already ends in the artifact's filename, so a browser saves the right name from the path
+    alone — but a small manifest.json would open in the tab rather than be saved, and the disposition
+    is what settles that. It is signed with the URL, so it cannot be stripped off on the way.
+    """
+    return storage.url(key, parameters={
+        "ResponseContentDisposition": f'attachment; filename="{filename}"'})
+
+
 def select_dist_storage():
     try:
         return storages["dist"]

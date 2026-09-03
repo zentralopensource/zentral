@@ -128,4 +128,68 @@
     <p class="text-secondary">No recurring jobs reported yet.</p>
     {% endif %}
 </div>
+
+<div class="d-flex align-items-center mb-1 mt-4">
+  <h3 class="fs-5 text-secondary m-0">Collected artifacts ({{ job_uploads|length }})</h3>
+</div>
+
+{% if job_uploads %}
+<table class="table table-object-properties">
+  <thead>
+    <tr>
+      <th>Job</th>
+      <th>Artifact</th>
+      <th>Size</th>
+      <th>Status</th>
+      <th>Verification</th>
+      <th>Collected</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for upload in job_uploads %}
+    <tr class="data-row">
+      <td>{{ upload.job.get_kind_display }}</td>
+      <td>
+        {{ upload.artifact }}
+        {% if upload.truncated %}
+        <span class="badge text-bg-warning" title="The job hit a limit before it finished collecting">truncated</span>
+        {% endif %}
+      </td>
+      <td>{{ upload.size|filesizeformat }}</td>
+      <td>
+        {% if upload.status == "uploaded" %}
+        <span class="badge text-bg-success">{{ upload.get_status_display }}</span>
+        {% elif upload.status == "failed" %}
+        <span class="badge text-bg-danger" {% if upload.error_reason %}title="{{ upload.get_error_reason_display }}"{% endif %}>{{ upload.get_status_display }}</span>
+        {% else %}
+        <span class="badge text-bg-secondary">{{ upload.get_status_display }}</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if upload.verification == "verified" %}
+        <span class="badge text-bg-success">{{ upload.get_verification_display }}</span>
+        {% elif upload.verification == "pending" %}
+        <span class="badge text-bg-secondary">{{ upload.get_verification_display }}</span>
+        {% else %}
+        <span class="badge text-bg-danger">{{ upload.get_verification_display }}</span>
+        {% endif %}
+      </td>
+      <td>{{ upload.completed_at|default:upload.created_at }}</td>
+      <td class="text-end py-0">
+        {% if upload.can_download and upload.status == "uploaded" %}
+        <a class="btn btn-link btn-sm" href="{% url 'turbo:download_job_upload' upload.pk %}"
+           data-bs-toggle="tooltip" data-bs-title="Download">
+          <i class="bi bi-download"></i>
+        </a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-secondary">No artifacts collected from this machine.</p>
+{% endif %}
+
 {% endblock %}
