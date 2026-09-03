@@ -966,6 +966,29 @@ def get_machine_schedule(configuration, serial_number, schedule_pk):
     return None
 
 
+def resolve_upload_schedules(uploads):
+    """The configuration and the job behind each upload, keyed by schedule pk.
+
+    The rows are keyed like the wire and hold no foreign key to either scheduling model, so the
+    schedule is resolved polymorphically — and one lookup yields both things the console needs: the
+    configuration the artifact was collected by, and the job whose run produced it. Those are exactly
+    the two an authorization decision needs as well, which is why this is one query and not three.
+
+    A schedule that has since been deleted resolves to nothing. Its row survives — the artifact is
+    still in the bucket — so the caller decides what to do with an upload it cannot place.
+    """
+    schedule_pks = {upload.schedule_pk for upload in uploads}
+    if not schedule_pks:
+        return {}
+    related = Job.definition_relations("job__")
+    resolved = {}
+    for model in (OneTimeJob, RecurringJob):
+        for schedule in (model.objects.filter(pk__in=schedule_pks)
+                                      .select_related("configuration", *related)):
+            resolved[schedule.pk] = (schedule.configuration, schedule.job)
+    return resolved
+
+
 def one_time_gate_closed(one_time_job, serial_number):
     # the shot is spent: a current-version result came back and ConfigView stopped serving the job.
     # A mint after that would write an object nothing can ever reference, because the result that
