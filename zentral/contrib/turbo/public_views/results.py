@@ -1,10 +1,12 @@
 import logging
 
+from django.core.files.storage import storages
 from django.utils import timezone
 
 from ..events import post_turbo_result_events
 from ..models import JobUpload, UploadErrorReason, UploadStatus, resolve_machine_schedules
 from ..results import ParsedResult, ResultsBatch
+from ..uploads import verify_upload
 from ..wire import WireResultsSerializer
 from .base import BaseEnrolledMachinePostView, WireError
 
@@ -85,6 +87,10 @@ class ResultsView(BaseEnrolledMachinePostView):
                 continue
             kind = job.kind
             outcome = entry["result"]
+            # before the wire ref is built, not after: the verification verdict rides the echoed
+            # upload entry into the event, and enriching `outcome` in place afterwards would only
+            # work by aliasing a dict two callers hold
+            uploads_ref = self._close_uploads(schedule_pk, run.get("id"), outcome)
             batch.add(ParsedResult(
                 job=job,
                 definition=job.definition,
@@ -95,32 +101,39 @@ class ResultsView(BaseEnrolledMachinePostView):
                 exit_code=outcome.get("exit_code"),
                 ran_at=ran_at,
                 sort_key=(ran_at, index),
-                wire_ref=self._wire_ref(job, kind, entry["version"], run, ran_at, outcome),
+                wire_ref=self._wire_ref(job, kind, entry["version"], run, ran_at, outcome,
+                                        uploads_ref),
             ))
-            self._close_uploads(schedule_pk, run.get("id"), outcome)
             accepted.append(ack)
         return accepted, skipped
 
     def _close_uploads(self, schedule_pk, run_id, outcome):
-        """Move this run's upload rows out of `pending`, on the agent's word.
+        """Move this run's upload rows out of `pending`, on the agent's word, then ask the storage.
 
-        The gate closes here and nowhere else: whether the storage agrees is a *second* axis, decided
-        later and never able to reopen a spent shot. Tolerant, like the rest of ingest — a row that
-        cannot be matched is logged and skipped, never a reason to fail the batch, because the run
-        did happen and the outcome is already recorded.
+        The gate closes here and nowhere else, and it closes on the agent's report alone. Whether the
+        storage agrees is a *second* axis: it is recorded next to the status, never instead of it, and
+        it cannot reopen a shot the report consumed. Tolerant, like the rest of ingest — a row that
+        cannot be matched is logged and skipped, never a reason to fail the batch, because the run did
+        happen and the outcome is already recorded.
+
+        Returns the echoed entries with the verdict added, for the result event, or None when there
+        was nothing to close.
         """
         uploads = outcome.get("uploads")
         if not uploads or not isinstance(uploads, list):
-            return
+            return None
         if run_id is None:
             # nothing to match on: the rows are keyed by run, and two runs of one schedule are
             # otherwise indistinguishable
             logger.warning("Turbo results from %s: uploads without a run id on schedule %s",
                            self.serial_number, schedule_pk)
-            return
+            return None
         rows = {row.artifact: row for row in JobUpload.objects.filter(
             schedule_pk=schedule_pk, serial_number=self.serial_number, run_id=run_id)}
+        storage = storages["default"]
+        uploads_ref = []
         for reported in uploads:
+            uploads_ref.append(reported)
             if not isinstance(reported, dict):
                 continue
             artifact = reported.get("artifact")
@@ -150,10 +163,20 @@ class ResultsView(BaseEnrolledMachinePostView):
                     row.status = UploadStatus.UPLOADED
                     row.truncated = bool(reported.get("truncated"))
             row.completed_at = timezone.now()
+            if row.status == UploadStatus.UPLOADED:
+                verification = verify_upload(row, reported, storage)
+                if verification is not None:
+                    row.verification = verification
+                    row.verified_at = timezone.now()
+                    # the verdict, not a boolean: `missing` and `mismatch` both answer "no" and
+                    # mean different things, and a consumer that has to tell them apart cannot go
+                    # to the database from an event
+                    uploads_ref[-1] = {**reported, "verification": verification}
             row.save()
+        return uploads_ref
 
     @staticmethod
-    def _wire_ref(job, kind, version, run, ran_at, outcome):
+    def _wire_ref(job, kind, version, run, ran_at, outcome, uploads_ref=None):
         # the result event payload: the validated wire entry, with the authoritative kind and
         # JSON-native values — the run time as aware ISO-8601 UTC, so EventMetadata parses it back
         # into the event's created_at. The definition block (script / mscp_check) carries the name /
@@ -163,6 +186,14 @@ class ResultsView(BaseEnrolledMachinePostView):
             run_ref["duration"] = run["duration"]
         if run.get("mode"):
             run_ref["mode"] = run["mode"]
+        if run.get("id"):
+            # what an upload row is keyed on, so a consumer of the event can find the artifact it
+            # describes
+            run_ref["id"] = str(run["id"])
+        result_ref = outcome
+        if uploads_ref is not None:
+            # a copy: `outcome` is also the ParsedResult's, and the verdict belongs to the event
+            result_ref = {**outcome, "uploads": uploads_ref}
         payload_key, definition_ref = job.definition_wire_ref()
         return {"kind": kind, "pk": str(job.pk), "version": version,
-                payload_key: definition_ref, "run": run_ref, "result": outcome}
+                payload_key: definition_ref, "run": run_ref, "result": result_ref}
