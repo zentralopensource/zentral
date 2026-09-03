@@ -1,0 +1,4 @@
+{{- /* The docs are the whole site in the local preview, and a section of
+       zentral.com when the website mounts them. Everything that needs to
+       address the docs root goes through here. */ -}}
+{{- return (or (site.GetPage "/docs") site.Home) -}}

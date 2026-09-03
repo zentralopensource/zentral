@@ -1,0 +1,9 @@
+{{- /* Source path of the page, relative to the docs content root: the mount
+       target prefixes .File.Path when the website mounts the docs. Takes the
+       page as its context. */ -}}
+{{- $root := partial "docs_root.html" . -}}
+{{- $p := .File.Path -}}
+{{- if ne $root.Path "/" -}}
+  {{- $p = strings.TrimPrefix (printf "%s/" (strings.TrimPrefix "/" $root.Path)) $p -}}
+{{- end -}}
+{{- return $p -}}
