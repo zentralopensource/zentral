@@ -690,6 +690,11 @@ class RecurringJob(JobScope):
 
 class OneTimeJob(JobScope):
     wire_mode = ScheduleMode.ONE_TIME
+    # pbac.py registers create, update and delete by hand, on the configuration or on the row.
+    # An auto-registered action takes System with no context, so a policy cannot refuse one
+    # kind. Only view stays auto-registered. A typed view action must scope a list, which
+    # means a policy filters a queryset instead of a decision on one request.
+    pbac_excluded_default_permissions = ("add", "change", "delete")
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job = models.ForeignKey(Job, on_delete=models.CASCADE)
