@@ -7,7 +7,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from zentral.conf import api_base_url
-from zentral.utils.storage import file_storage_has_presigned_uploads, generate_presigned_put
+from zentral.utils.storage import (file_storage_has_presigned_uploads, file_storage_recorded_digests,
+                                   generate_presigned_put, sha256_object, stat_object)
+
+from .models import UploadVerification
 
 
 logger = logging.getLogger("zentral.contrib.turbo.uploads")
@@ -45,13 +48,6 @@ def hosted_upload_max_size():
     return HOSTED_UPLOAD_MAX_SIZE_UNDECLARED if declared is None else declared
 
 
-# Storage-native digests to fold into the agent's single read pass, on top of sha256, which is always
-# computed because it is Zentral's own identity for the artifact. crc64nvme is published from the
-# start even though only multipart enforces it: the server picks the mode, so an agent that hashed
-# only for the mode it expected would need a re-read the day the threshold moves.
-PRESIGNED_UPLOAD_DIGESTS = ["crc64nvme"]
-HOSTED_UPLOAD_DIGESTS = []
-
 # Mints that handed out URLs, per row. The agent gives up at five of its own accord; this is the same
 # number enforced where it cannot be argued with.
 MAX_UPLOAD_ATTEMPTS = 5
@@ -69,9 +65,10 @@ _UNSAFE_KEY_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 # so the comparison at verification time has one form to consider.
 _SHA256 = re.compile(r"\A[0-9a-fA-F]{64}\Z")
 # The agent sends every digest as hex, like the sha256: an 8-byte CRC is 16 characters, a 4-byte one
-# 8. The storage layer converts to the base64 S3 wants, so one encoding crosses the wire and one form
-# is stored. An odd number of characters is not hex, and an over-long value would reach Postgres as a
-# DataError.
+# 8. A CRC is big-endian, the byte order in which S3 and GCS report it: the number with its leading
+# zeros. The storage layer converts to the base64 S3 wants, so one encoding crosses the wire and one
+# form is stored. An odd number of characters is not hex, and an over-long value would reach
+# Postgres as a DataError.
 _DIGEST = re.compile(r"\A(?:[0-9a-fA-F]{2}){4,16}\Z")
 
 _hosted_upload_signer = TimestampSigner(salt="zentral.contrib.turbo.uploads")
@@ -82,8 +79,12 @@ def upload_max_size(storage=None):
 
 
 def upload_digests(storage=None):
-    return list(PRESIGNED_UPLOAD_DIGESTS if file_storage_has_presigned_uploads(storage)
-                else HOSTED_UPLOAD_DIGESTS)
+    # The digests that the storage records, to fold into the agent's single read pass. With them,
+    # verification reads no byte of the object. Not the SHA-256, which the agent always computes,
+    # because it is Zentral's own identity for the artifact. On S3 this is crc64nvme, published from
+    # the start even though only multipart enforces it: the server picks the mode, so an agent that
+    # hashed only for the mode it expected would need a re-read the day the threshold moves.
+    return [digest for digest in file_storage_recorded_digests(storage) if digest != "sha256"]
 
 
 def parse_sha256(value):
@@ -153,6 +154,80 @@ def unsign_hosted_upload(token):
         return _hosted_upload_signer.unsign(token, max_age=UPLOAD_URL_EXPIRY)
     except BadSignature:
         return None
+
+
+def verify_upload(upload, reported, storage):
+    """Does the storage agree with what the agent reported? The SECOND axis.
+
+    It cannot reopen a spent shot. This runs after the gate has closed, and its whole output is the
+    row's verification field and the flag that rides into the result event — "the agent says it
+    uploaded" and "the storage agrees" stay two facts.
+
+    The size and the digest reach here by two independent paths. One went out at the mint: S3 refused
+    any body that did not match the values signed into the upload, and the hosted destination checks
+    the SHA-256 itself. It comes back as the digest that the storage recorded. The other came home in
+    the result. Verification is where the two copies meet, and on S3 and GCS Zentral reads no byte to
+    compare them.
+
+    Both legs are checked. An agent whose result contradicts its own mint is describing a different
+    file, and comparing the stored object against the mint alone would miss it — on a signing storage
+    that comparison is nearly tautological, since S3 enforced it on the way in.
+
+    Returns an UploadVerification value, or None when nothing could be decided: a storage that timed
+    out, a key we may not read, an object something else wrote without a checksum, or an upload with
+    no declared digest to compare. Undecided is a real answer and deliberately not `missing`. The row
+    stays pending, with a log entry, and nothing verifies it again later: a transient blip that
+    permanently marked artifacts missing would be worse than no answer at all.
+    """
+    if not _report_agrees_with_the_mint(upload, reported):
+        return UploadVerification.MISMATCH
+    try:
+        stored = stat_object(upload.key, storage=storage)
+    except Exception:
+        logger.exception("Could not stat turbo upload %s", upload.pk)
+        return None
+    if stored is None:
+        return UploadVerification.MISSING
+    if stored["size"] != upload.size:
+        return UploadVerification.MISMATCH
+    stored_digests = stored["digests"]
+    if not file_storage_recorded_digests(storage):
+        # the file system storage records no digest, so the only way to know is to read the object:
+        # a local read, under the small ceiling of the hosted destination
+        try:
+            stored_digests = {"sha256": sha256_object(upload.key, storage=storage)}
+        except Exception:
+            logger.exception("Could not hash turbo upload %s", upload.pk)
+            return None
+    declared_digests = {"sha256": upload.sha256, "crc64nvme": upload.crc64nvme, "crc32c": upload.crc32c}
+    pairs = [(stored_digest, declared_digests[name]) for name, stored_digest in stored_digests.items()
+             if stored_digest is not None and declared_digests.get(name)]
+    if not pairs:
+        # The storage records digests, and none of them can be compared: an object that something
+        # else wrote, or an agent that did not declare a published digest. Saying so is more useful
+        # than a verdict. Reading the object back is a download inside the request transaction.
+        logger.error("Turbo upload %s: no digest to compare at %s", upload.pk, upload.key)
+        return None
+    if all(stored_digest == declared_digest for stored_digest, declared_digest in pairs):
+        return UploadVerification.VERIFIED
+    return UploadVerification.MISMATCH
+
+
+def _report_agrees_with_the_mint(upload, reported):
+    # the result echoes the size and the digest a second time. Where it does, they have to be the
+    # ones the mint signed: an agent that asks for a destination for one file and reports another has
+    # told us about two files, and only one of them is at the key. Absent values are not a
+    # contradiction — the row is what was signed either way.
+    for attribute, declared in (("size", upload.size), ("sha256", upload.sha256)):
+        echoed = reported.get(attribute)
+        if isinstance(echoed, str):
+            # parse_sha256 stores the digest lowercase, so the echo is read the same way
+            echoed = echoed.lower()
+        if echoed is not None and echoed != declared:
+            logger.warning("Turbo upload %s: reported %s %r contradicts the minted %r",
+                           upload.pk, attribute, echoed, declared)
+            return False
+    return True
 
 
 def build_upload_destination(upload, artifact, storage):

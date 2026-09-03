@@ -1,17 +1,20 @@
 import hashlib
 import json
 import uuid
+from contextlib import contextmanager
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from zentral.contrib.turbo.command_backends import CommandBackend
-from zentral.contrib.turbo.events import TurboRequestEvent
-from zentral.contrib.turbo.models import Job, JobUpload, OneTimeJobMachine, UploadStatus
+from zentral.contrib.turbo.events import TurboRequestEvent, TurboResultEvent
+from zentral.contrib.turbo.models import (Job, JobUpload, OneTimeJobMachine, UploadStatus,
+                                          UploadVerification)
 from zentral.contrib.turbo.uploads import (MAX_PENDING_UPLOADS, MAX_UPLOAD_ATTEMPTS,
                                            sign_hosted_upload)
 
@@ -26,6 +29,9 @@ S3_STORAGE = {"default": {"BACKEND": "storages.backends.s3.S3Storage",
                                       "access_key": "AKIAIOSFODNN7EXAMPLE",
                                       "secret_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
                                       "region_name": "us-east-1"}}}
+GCS_STORAGE = {"default": {"BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+                           "OPTIONS": {"bucket_name": "zentral-tests"}}}
+CRC32C = "0a1b2c3d"
 
 
 class TurboUploadMintTestCase(TurboPublicTestCase):
@@ -712,6 +718,15 @@ class TurboUploadConfigTestCase(TurboPublicTestCase):
         # no part size: nothing the agent computes depends on the chunk geometry
         self.assertNotIn("upload_part_size", answer)
 
+    @override_settings(STORAGES=GCS_STORAGE)
+    def test_a_gcs_deployment_publishes_crc32c(self):
+        configuration = force_configuration()
+        _, serial_number, token = force_enrolled_machine(configuration=configuration,
+                                                         meta_business_unit=self.mbu)
+        answer = self.client.get(reverse("turbo_public:config"),
+                                 HTTP_AUTHORIZATION=f"TurboEnrolledMachine {token}").json()
+        self.assertEqual(answer["upload_digests"], ["crc32c"])
+
     def test_the_published_ceiling_is_the_one_the_deployment_enforces(self):
         # the published number is a promise the agent spends an artifact and five retries on. Without
         # a presigned storage the body comes through the workers, and the wall it meets there is
@@ -765,6 +780,287 @@ class TurboUploadConfigTestCase(TurboPublicTestCase):
         self.assertEqual(response.json(), {"error": "too_large"})
 
 
+class TurboUploadVerificationTestCase(TurboPublicTestCase):
+    """The second axis: does the storage agree with what the agent reported?
+
+    The test storage cannot presign an upload, so nothing signed these bodies on the way in and the
+    verifier reads the object to hash it — the fallback branch, end to end, with no mocking.
+    """
+
+    def _results(self, token, body):
+        return self.client.post(
+            reverse("turbo_public:results"),
+            data=json.dumps(body),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"TurboEnrolledMachine {token}",
+        )
+
+    def _minted(self, body=b"yolo", artifact="archive", digests=None):
+        """A run that asked for a destination, with `body` optionally already at the key."""
+        configuration = force_configuration()
+        _, serial_number, token = force_enrolled_machine(configuration=configuration,
+                                                         meta_business_unit=self.mbu)
+        command = force_command(backend=CommandBackend.SYSDIAGNOSE)
+        one_time_job = force_one_time_job(configuration=configuration, job=command.job,
+                                          serial_numbers=[serial_number])
+        run_id = uuid.uuid4()
+        minted = self.client.post(
+            reverse("turbo_public:uploads"),
+            data=json.dumps(mint_body(one_time_job.pk, run_id, artifact=artifact, size=len(body),
+                                      sha256=hashlib.sha256(body).hexdigest(), digests=digests)),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"TurboEnrolledMachine {token}",
+        ).json()
+        return token, one_time_job, run_id, minted
+
+    def _store(self, key, body):
+        storage = storages["default"]
+        storage.save(key, ContentFile(body))
+        self.addCleanup(storage.delete, key)
+
+    @staticmethod
+    def _result(one_time_job, run_id, uploads):
+        return {"results": [{"kind": one_time_job.job.kind, "pk": str(one_time_job.job.pk),
+                             "version": one_time_job.job.version,
+                             "run": {"at": "2026-09-03T10:00:00Z", "duration": 1.0,
+                                     "schedule_pk": str(one_time_job.pk), "id": str(run_id),
+                                     "mode": "one_time"},
+                             "result": {"exit_code": 0, "uploads": uploads}}]}
+
+    def _report(self, token, one_time_job, run_id, minted, body=b"yolo"):
+        return self._results(token, self._result(one_time_job, run_id, [
+            {"artifact": "archive", "key": minted["key"], "size": len(body),
+             "sha256": hashlib.sha256(body).hexdigest()}]))
+
+    @staticmethod
+    def _result_event(post_event):
+        return [c.args[0] for c in post_event.call_args_list
+                if isinstance(c.args[0], TurboResultEvent)][0]
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_an_object_that_matches_is_verified(self, post_event):
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        self._report(token, one_time_job, run_id, minted)
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.verification, UploadVerification.VERIFIED)
+        self.assertIsNotNone(upload.verified_at)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_the_verdict_rides_the_echoed_entry_into_the_event(self, post_event):
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        self._report(token, one_time_job, run_id, minted)
+        event = self._result_event(post_event)
+        entry = event.payload["result"]["uploads"][0]
+        self.assertEqual(entry["verification"], UploadVerification.VERIFIED)
+        # and the key the agent echoed is still there, next to the verdict
+        self.assertEqual(entry["key"], minted["key"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_the_run_id_rides_the_event(self, post_event):
+        # what an upload row is keyed on: without it the event describes an artifact nothing can find
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        self._report(token, one_time_job, run_id, minted)
+        event = self._result_event(post_event)
+        self.assertEqual(event.payload["run"]["id"], str(run_id))
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_missing_object_is_missing(self, post_event):
+        token, one_time_job, run_id, minted = self._minted()
+        self._report(token, one_time_job, run_id, minted)
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.verification, UploadVerification.MISSING)
+        # the verdict, not a boolean: a consumer can tell this apart from a mismatch
+        entry = self._result_event(post_event).payload["result"]["uploads"][0]
+        self.assertEqual(entry["verification"], UploadVerification.MISSING)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_different_size_is_a_mismatch(self, post_event):
+        # the size was signed into the destination, so a storage that can sign would have refused
+        # this body — the check earns its keep on the storage that cannot
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo-and-then-some")
+        self._report(token, one_time_job, run_id, minted)
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).verification,
+                         UploadVerification.MISMATCH)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_the_same_size_and_different_bytes_is_a_mismatch(self, post_event):
+        # the size check alone would pass this one
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"nope")
+        self._report(token, one_time_job, run_id, minted)
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).verification,
+                         UploadVerification.MISMATCH)
+        # and the event says which "no" it is: something is at the key, it is the wrong thing
+        entry = self._result_event(post_event).payload["result"]["uploads"][0]
+        self.assertEqual(entry["verification"], UploadVerification.MISMATCH)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_report_that_contradicts_its_own_mint_is_a_mismatch(self, post_event):
+        # the second leg. The object at the key is exactly what the mint signed, so comparing the
+        # storage against the mint alone would pass — but the agent asked for a destination for one
+        # file and reported another, and only one of the two is there.
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        with self.assertLogs("zentral.contrib.turbo.uploads", level="WARNING") as cm:
+            self._results(token, self._result(one_time_job, run_id, [
+                {"artifact": "archive", "key": minted["key"], "size": 4,
+                 "sha256": hashlib.sha256(b"something-else").hexdigest()}]))
+        self.assertIn("contradicts the minted", cm.output[0])
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.status, UploadStatus.UPLOADED)
+        self.assertEqual(upload.verification, UploadVerification.MISMATCH)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_reported_size_that_contradicts_the_mint_is_a_mismatch(self, post_event):
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        with self.assertLogs("zentral.contrib.turbo.uploads", level="WARNING"):
+            self._results(token, self._result(one_time_job, run_id, [
+                {"artifact": "archive", "key": minted["key"], "size": 9999,
+                 "sha256": hashlib.sha256(b"yolo").hexdigest()}]))
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).verification,
+                         UploadVerification.MISMATCH)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_report_that_echoes_nothing_but_the_key_still_verifies(self, post_event):
+        # the size and the digest are optional on the way back: the row holds what was signed either
+        # way, so their absence is not a contradiction
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        self._results(token, self._result(one_time_job, run_id, [
+            {"artifact": "archive", "key": minted["key"]}]))
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).verification,
+                         UploadVerification.VERIFIED)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_mismatch_does_not_reopen_the_gate(self, post_event):
+        # the whole point of two axes: the shot was consumed when the agent reported, whatever the
+        # storage says afterwards
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"nope")
+        self._report(token, one_time_job, run_id, minted)
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.verification, UploadVerification.MISMATCH)
+        self.assertEqual(upload.status, UploadStatus.UPLOADED)
+        response = self.client.post(
+            reverse("turbo_public:uploads"),
+            data=json.dumps(mint_body(one_time_job.pk, uuid.uuid4(), size=4, sha256=SHA256)),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"TurboEnrolledMachine {token}",
+        )
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(response.json(), {"error": "gate_closed"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_reported_failure_is_never_verified(self, post_event):
+        # there is nothing to ask the storage about, so the axis stays undecided and the entry
+        # carries no verdict
+        token, one_time_job, run_id, minted = self._minted()
+        self._results(token, self._result(one_time_job, run_id, [
+            {"artifact": "archive", "error": {"reason": "network"}}]))
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.status, UploadStatus.FAILED)
+        self.assertEqual(upload.verification, UploadVerification.PENDING)
+        self.assertIsNone(upload.verified_at)
+        entry = self._result_event(post_event).payload["result"]["uploads"][0]
+        self.assertNotIn("verification", entry)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_an_object_that_cannot_be_read_leaves_the_row_pending(self, post_event):
+        # the stat said it is there and the right size, and then the read failed. Same reasoning as a
+        # storage that never answered: not an answer, so not recorded.
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        with (patch("zentral.contrib.turbo.uploads.sha256_object",
+                    side_effect=OSError("the disk is having a day")),
+              self.assertLogs("zentral.contrib.turbo.uploads", level="ERROR")):
+            self._report(token, one_time_job, run_id, minted)
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.status, UploadStatus.UPLOADED)
+        self.assertEqual(upload.verification, UploadVerification.PENDING)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_storage_that_cannot_answer_leaves_the_row_pending(self, post_event):
+        # NOT missing: a transient blip that permanently marked artifacts missing would be worse than
+        # no answer at all. The status is still closed — the agent's word did that.
+        token, one_time_job, run_id, minted = self._minted()
+        self._store(minted["key"], b"yolo")
+        with (patch("zentral.contrib.turbo.uploads.stat_object",
+                    side_effect=Exception("the storage is having a day")),
+              self.assertLogs("zentral.contrib.turbo.uploads", level="ERROR")):
+            self._report(token, one_time_job, run_id, minted)
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.status, UploadStatus.UPLOADED)
+        self.assertEqual(upload.verification, UploadVerification.PENDING)
+        self.assertIsNone(upload.verified_at)
+        entry = self._result_event(post_event).payload["result"]["uploads"][0]
+        self.assertNotIn("verification", entry)
+
+    @contextmanager
+    def _recording_storage(self, recorded, stored_digests):
+        # S3 or GCS: a storage that records these digests. stat_object is tested in
+        # tests.utils.test_storage. Here it is patched, and a read of the object must never happen.
+        with (patch("zentral.contrib.turbo.uploads.file_storage_recorded_digests", return_value=recorded),
+              patch("zentral.contrib.turbo.uploads.stat_object",
+                    return_value={"size": 4, "digests": stored_digests}),
+              patch("zentral.contrib.turbo.uploads.sha256_object") as sha256_object):
+            yield
+        sha256_object.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_signing_storage_with_no_stored_digest_is_undecided(self, post_event):
+        # every object we PUT to a storage that signs carries the checksum we signed, so one that
+        # does not was written by something else. Saying so beats a verdict, and beats reading a
+        # 2 GiB artifact back to hash it.
+        token, one_time_job, run_id, minted = self._minted()
+        with (self._recording_storage(("sha256", "crc64nvme"), {"sha256": None, "crc64nvme": None}),
+              self.assertLogs("zentral.contrib.turbo.uploads", level="ERROR") as cm):
+            self._report(token, one_time_job, run_id, minted)
+        self.assertIn("no digest to compare", cm.output[0])
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.status, UploadStatus.UPLOADED)
+        self.assertEqual(upload.verification, UploadVerification.PENDING)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_every_recorded_digest_is_compared(self, post_event):
+        sha256 = hashlib.sha256(b"yolo").hexdigest()
+        for stored_crc64nvme, verification in (("00112233445566ff", UploadVerification.VERIFIED),
+                                               ("ffffffffffffffff", UploadVerification.MISMATCH)):
+            token, one_time_job, run_id, minted = self._minted(digests={"crc64nvme": "00112233445566ff"})
+            with self._recording_storage(("sha256", "crc64nvme"),
+                                         {"sha256": sha256, "crc64nvme": stored_crc64nvme}):
+                self._report(token, one_time_job, run_id, minted)
+            self.assertEqual(JobUpload.objects.get(run_id=run_id).verification, verification)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_gcs_compares_the_crc32c(self, post_event):
+        token, one_time_job, run_id, minted = self._minted(digests={"crc32c": CRC32C})
+        with self._recording_storage(("crc32c",), {"crc32c": CRC32C}):
+            self._report(token, one_time_job, run_id, minted)
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).verification, UploadVerification.VERIFIED)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_gcs_a_different_crc32c_is_a_mismatch(self, post_event):
+        token, one_time_job, run_id, minted = self._minted(digests={"crc32c": CRC32C})
+        with self._recording_storage(("crc32c",), {"crc32c": "ffffffff"}):
+            self._report(token, one_time_job, run_id, minted)
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).verification, UploadVerification.MISMATCH)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_gcs_without_a_declared_crc32c_is_undecided(self, post_event):
+        # an agent that did not send the published digest. Undecided, and no read of the object
+        token, one_time_job, run_id, minted = self._minted()
+        with (self._recording_storage(("crc32c",), {"crc32c": CRC32C}),
+              self.assertLogs("zentral.contrib.turbo.uploads", level="ERROR") as cm):
+            self._report(token, one_time_job, run_id, minted)
+        self.assertIn("no digest to compare", cm.output[0])
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).verification, UploadVerification.PENDING)
+
+
 class TurboUploadIngestTestCase(TurboPublicTestCase):
     """The other half of the round trip: result.uploads[] closes the row, on the agent's word.
 
@@ -815,8 +1111,9 @@ class TurboUploadIngestTestCase(TurboPublicTestCase):
         upload = JobUpload.objects.get(run_id=run_id)
         self.assertEqual(upload.status, UploadStatus.UPLOADED)
         self.assertIsNotNone(upload.completed_at)
-        # the second axis is untouched: nothing here asked the storage anything
-        self.assertEqual(upload.verification, "pending")
+        # nothing was ever written at that key, so the second axis says so — and the first one is
+        # unmoved by it
+        self.assertEqual(upload.verification, UploadVerification.MISSING)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_a_reported_failure_closes_the_row_as_failed(self, post_event):
