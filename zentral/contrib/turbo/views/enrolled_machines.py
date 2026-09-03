@@ -46,13 +46,13 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         one_time = (
             OneTimeJobMachine.objects
             .filter(serial_number=serial_number)
-            .select_related("one_time_job__job__script", "one_time_job__job__mscp_check")
+            .select_related(*Job.definition_relations("one_time_job__job__"))
             .order_by(*order)
         )
         recurring = (
             RecurringJobMachine.objects
             .filter(serial_number=serial_number)
-            .select_related("recurring_job__job__script", "recurring_job__job__mscp_check")
+            .select_related(*Job.definition_relations("recurring_job__job__"))
             .order_by(*order)
         )
         kind = self.request.GET.get("kind") or ""

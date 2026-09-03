@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.turbo.models import RecurringJob
-from .utils import (TurboSetupTestCase, force_configuration, force_mscp_check,
+from .utils import (TurboSetupTestCase, force_command, force_configuration, force_mscp_check,
                     force_recurring_job, force_script)
 
 
@@ -146,6 +146,24 @@ class TurboSetupRecurringJobsTestCase(TurboSetupTestCase):
         response = self.client.get(reverse("turbo:create_recurring_job", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/recurringjob_form.html")
+
+    def test_create_recurring_job_command_not_offered(self):
+        # narrowing the job queryset is the validation too: a ModelChoiceField refuses a pk outside it,
+        # so a command kind cannot be posted here even by hand
+        configuration = force_configuration()
+        command = force_command()
+        self.login("turbo.add_recurringjob", "turbo.view_configuration")
+        response = self.client.get(reverse("turbo:create_recurring_job", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(command.job, response.context["form"].fields["job"].queryset)
+        response = self.client.post(
+            reverse("turbo:create_recurring_job", args=(configuration.pk,)),
+            {"job": str(command.job.pk), "interval": 3600,
+             "serial_numbers": "", "excluded_serial_numbers": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context["form"], "job",
+                             "Select a valid choice. That choice is not one of the available choices.")
+        self.assertFalse(RecurringJob.objects.filter(job=command.job).exists())
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_recurring_job(self, post_event):

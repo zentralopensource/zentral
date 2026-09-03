@@ -77,6 +77,17 @@ New `/api/santa/enrolled_machines/` endpoint.
 The enrolled machine and sync state metrics are bucketed by the age of the last postflight now, like the active machine metric. A machine that stopped reporting kept its Santa version in the totals forever. The `le` label selects the machines that reported in the last 1, 7, 14, 30, 45 or 90 days, and `+Inf` counts all of them.
 
 
+#### Turbo
+
+New **commands**, the third kind of job: a command collects something from a machine instead of producing a verdict. Two kinds are available. `sysdiagnose` collects a `sysdiagnose` archive and takes no options. `file_export` collects the files that match a list of path patterns, plus a manifest of what it collected, and takes `patterns` and an uncompressed `max_size`.
+
+A command is created with the `/api/turbo/commands/` endpoint, and *Turbo > Commands* lists them. The kind cannot be changed after the command is created. A change to the options bumps the version of the job, and the agent runs the command again.
+
+A command runs one time only: the server refuses to attach one to a recurring job.
+
+The upload of the collected files comes in a later release.
+
+
 ### Backward incompatibilities
 
 

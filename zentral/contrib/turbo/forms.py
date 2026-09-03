@@ -4,9 +4,10 @@ from django.db.models import F, Q, TextField
 from django.db.models.functions import Coalesce
 
 from zentral.contrib.inventory.models import Tag
+from .command_backends import CommandBackend
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
-from .models import (Configuration, EnrolledMachine, Enrollment, Job, MSCPCheck, OneTimeJob,
-                     RecurringJob, Script)
+from .models import (Command, Configuration, EnrolledMachine, Enrollment, Job, MSCPCheck, OneTimeJob,
+                     RecurringJob, ScheduleMode, Script)
 
 
 class ConfigurationForm(forms.ModelForm):
@@ -95,6 +96,37 @@ class ScriptSearchForm(forms.Form):
         return qs
 
 
+class CommandSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
+    q = forms.CharField(
+        label="Name", required=False,
+        widget=forms.TextInput(attrs={"autofocus": True, "size": 36}),
+    )
+    backend = forms.ChoiceField(
+        label="Kind", choices=[("", "...")] + list(CommandBackend.choices), required=False,
+    )
+    configuration = forms.ModelChoiceField(
+        label="Scheduled in", queryset=Configuration.objects.all(), required=False, empty_label="...",
+    )
+
+    def get_queryset(self):
+        qs = Command.objects.select_related("job").order_by("name")
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+        backend = self.cleaned_data.get("backend")
+        if backend:
+            qs = qs.filter(backend=backend)
+        configuration = self.cleaned_data.get("configuration")
+        if configuration:
+            qs = qs.filter(
+                Q(job__recurringjob__configuration=configuration)
+                | Q(job__onetimejob__configuration=configuration)
+            ).distinct()
+        return qs
+
+
 class MSCPCheckForm(forms.ModelForm):
     class Meta:
         model = MSCPCheck
@@ -168,7 +200,7 @@ class BaseJobScopeForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # NB: the UUID PK default fills pk at construction, so use _state.adding (not pk) for create-vs-update
         self.configuration = configuration or (None if self.instance._state.adding else self.instance.configuration)
-        self.fields["job"].queryset = Job.objects.select_related("script", "mscp_check").all()
+        self.fields["job"].queryset = Job.objects.select_related(*Job.definition_relations()).all()
         if not self.instance._state.adding:
             # disabled keeps the initial value, whatever is posted
             self.fields["job"].disabled = True
@@ -206,6 +238,10 @@ class RecurringJobForm(BaseJobScopeForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # a kind that declares itself one-time only cannot be attached here. Narrowing the queryset is
+        # the validation too: a ModelChoiceField refuses a pk outside it.
+        self.fields["job"].queryset = self.fields["job"].queryset.filter(
+            kind__in=Job.kinds_for_schedule_mode(ScheduleMode.RECURRING))
         if self.configuration is not None and self.instance._state.adding:
             # a job can be scheduled at most once per configuration (unique constraint). Excluding the
             # scheduled jobs from the choices is enough now that an existing schedule keeps its job
@@ -230,7 +266,7 @@ class RecurringJobSearchForm(forms.Form):
     def get_queryset(self):
         qs = (
             RecurringJob.objects
-            .select_related("configuration", "job__script", "job__mscp_check")
+            .select_related("configuration", *Job.definition_relations("job__"))
             .prefetch_related("tags", "excluded_tags")
             .annotate(job_name=Coalesce("job__script__name", "job__mscp_check__rule_id",
                                         output_field=TextField()))
@@ -299,7 +335,7 @@ class OneTimeJobSearchForm(forms.Form):
     def get_queryset(self):
         qs = (
             OneTimeJob.objects
-            .select_related("configuration", "job__script", "job__mscp_check")
+            .select_related("configuration", *Job.definition_relations("job__"))
             .prefetch_related("tags", "excluded_tags")
             .order_by(F("not_before").desc(nulls_last=True), "-created_at")
         )
@@ -308,6 +344,7 @@ class OneTimeJobSearchForm(forms.Form):
             qs = qs.filter(
                 Q(job__script__name__icontains=q)
                 | Q(job__mscp_check__rule_id__icontains=q)
+                | Q(job__command__name__icontains=q)
                 | Q(configuration__name__icontains=q)
             )
         configuration = self.cleaned_data.get("configuration")
@@ -353,7 +390,7 @@ class MachineOneTimeJobForm(BaseOneTimeJobForm):
         super().__init__(*args, **kwargs)
         self.configuration = configuration
         self.serial_number = serial_number
-        self.fields["job"].queryset = Job.objects.select_related("script", "mscp_check").all()
+        self.fields["job"].queryset = Job.objects.select_related(*Job.definition_relations()).all()
 
     def save(self, *args, **kwargs):
         # locked to one machine: the view supplies the config + serial, no scope UI

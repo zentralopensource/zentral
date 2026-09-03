@@ -5,7 +5,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.turbo.events import TurboRequestEvent
-from zentral.contrib.turbo.models import OneTimeJob, OneTimeJobMachine, RecurringJobMachine
+from zentral.contrib.turbo.models import Job, OneTimeJob, OneTimeJobMachine, RecurringJobMachine
 from .utils import (TurboPublicTestCase, force_configuration, force_enrolled_machine,
                     force_one_time_job, force_recurring_job)
 
@@ -196,6 +196,25 @@ class TurboStatusPublicTestCase(TurboPublicTestCase):
         recurring_job.delete()
         self.assertEqual(self._status(token, {"jobs": [entry]}).status_code, 200)
         self.assertEqual(RecurringJobMachine.objects.filter(serial_number=serial_number).count(), 0)
+
+    def test_status_unknown_kind_holds_the_row_and_skips_the_entry(self):
+        # the third face of the rolling deploy: the machine holds a job a newer instance served and
+        # posts its status to an older one. definition_wire_ref() reads .pk on None, so the whole
+        # batch 500s. The tracker still has to be written, or the next sweep marks a job the agent is
+        # holding as removed. The entry names the kind, which the wire accepts as a short string so
+        # that a rollout does not drop it.
+        configuration, _, serial_number, token = self._enrolled()
+        future_job = Job.objects.create(kind="a_kind_from_the_future")
+        future = force_one_time_job(configuration=configuration, job=future_job)
+        entry = self._entry(future)
+        with self.assertLogs("zentral.contrib.turbo.public_views.status", level="WARNING") as cm:
+            response = self._status(token, {"jobs": [entry]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([s["reason"] for s in response.json()["skipped"]], ["unknown_job_kind"])
+        self.assertIn("a_kind_from_the_future", cm.output[0])
+        row = OneTimeJobMachine.objects.get(serial_number=serial_number, one_time_job=future)
+        self.assertIsNone(row.removed_at)
+        self.assertEqual(row.seen_version, future.job.version)
 
     def test_request_event_heartbeat_timeout_from_configuration(self):
         # the heartbeat timeout follows the machine's config_refresh_interval (2×), not a static value
