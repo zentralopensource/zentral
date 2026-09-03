@@ -2,7 +2,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.turbo.command_backends import CommandBackend
 from .utils import (TurboSetupTestCase, force_command, force_configuration, force_enrolled_machine,
-                    force_one_time_job, force_script)
+                    force_one_time_job, force_script, turbo_policy)
 
 
 class TurboSetupCommandsTestCase(TurboSetupTestCase):
@@ -134,7 +134,7 @@ class TurboSetupCommandsTestCase(TurboSetupTestCase):
         # the one-time paths must offer what the recurring path refuses
         command = force_command()
         _, serial_number, _ = force_enrolled_machine(meta_business_unit=self.mbu)
-        self.login("turbo.add_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
         response = self.client.get(
             reverse("turbo:schedule_machine_one_time_job", args=(serial_number,)))
         self.assertEqual(response.status_code, 200)

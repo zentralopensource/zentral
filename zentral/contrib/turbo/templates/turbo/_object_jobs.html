@@ -56,7 +56,7 @@ managed on the job's configuration, so the actions carry the job's configuration
       <th>Configuration</th>
       <th>Window</th>
       <th>Scope</th>
-      {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}<th></th>{% endif %}
+      {% if can_edit_one_time_job %}<th></th>{% endif %}
     </tr>
   </thead>
   <tbody>
@@ -69,13 +69,13 @@ managed on the job's configuration, so the actions carry the job's configuration
         {% else %}<span class="text-secondary">anytime</span>{% endif %}
       </td>
       <td>{% include "turbo/_job_scope.html" with job_scope=one_time_job %}</td>
-      {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}
+      {% if can_edit_one_time_job %}
       <td class="text-end py-0">
-        {% if perms.turbo.change_onetimejob %}
+        {% if one_time_job.can_update %}
           {% url 'turbo:update_one_time_job' one_time_job.configuration_id one_time_job.pk as url %}
           {% button 'UPDATE' url "Edit one-time job" %}
         {% endif %}
-        {% if perms.turbo.delete_onetimejob %}
+        {% if one_time_job.can_delete %}
           {% url 'turbo:delete_one_time_job' one_time_job.configuration_id one_time_job.pk as url %}
           {% button 'DELETE' url "Delete one-time job" %}
         {% endif %}

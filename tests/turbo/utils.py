@@ -13,6 +13,7 @@ from zentral.contrib.turbo.models import (Command, Configuration, EnrolledMachin
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
+from pbac.engine import engine
 
 
 def force_configuration(name=None):
@@ -196,3 +197,38 @@ class TurboAPITestCase(TestCase, LoginCase, RequestCase):
     def _audit_events(post_event):
         return [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], AuditEvent)]
 
+
+# PBAC helpers
+#
+# turbo.add_onetimejob and turbo.change_onetimejob are not mapped to an action any more, so
+# set_permissions() cannot grant scheduling. These build the policy instead: the legacy perms a test
+# still needs, plus the typed scheduling actions.
+
+SCHEDULE_ACTIONS = ('Turbo::Action::"createOneTimeJob"',
+                    'Turbo::Action::"updateOneTimeJob"',
+                    'Turbo::Action::"deleteOneTimeJob"')
+
+
+def turbo_policy(group, *legacy_perms, actions=SCHEDULE_ACTIONS, condition=None):
+    action_ids = [str(engine.legacy_perm_actions[perm]) for perm in legacy_perms]
+    action_ids.append(str(engine.module_legacy_perm_actions["turbo"]))
+    action_ids.extend(actions)
+    source = ("permit (\n"
+              f'  principal in Role::"{group.pk}",\n'
+              f"  action in [{', '.join(action_ids)}],\n"
+              "  resource\n"
+              ")")
+    if condition:
+        source += f" when {{ {condition} }}"
+    return source + ";\n"
+
+
+def forbid_job_kind_policy(kind):
+    # one policy for all three actions, keyed on the job in the context — the only thing create can
+    # supply, since it has no row. No has guard: the question asked before a job is picked is a
+    # preview, so the whole expression residualizes instead of failing.
+    return ("forbid (\n"
+            "  principal,\n"
+            f"  action in [{', '.join(SCHEDULE_ACTIONS)}],\n"
+            "  resource\n"
+            f') when {{ context.job.kind == "{kind}" }};\n')

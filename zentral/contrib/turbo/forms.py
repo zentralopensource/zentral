@@ -6,6 +6,7 @@ from django.db.models.functions import Coalesce
 from zentral.contrib.inventory.models import Tag
 from .command_backends import CommandBackend
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
+from .pbac import offerable_jobs
 from .models import (Command, Configuration, EnrolledMachine, Enrollment, Job, MSCPCheck, OneTimeJob,
                      RecurringJob, ScheduleMode, Script)
 
@@ -296,6 +297,16 @@ _DATETIME_LOCAL = {
 }
 
 
+class OfferAuthorizedJobsMixin:
+    # the choices a picker renders, not the queryset it validates against: a forged post still
+    # reaches the typed check, and is refused there rather than by a form error
+    def _offer_authorized_jobs(self, user):
+        field = self.fields["job"]
+        allowed = offerable_jobs(user, self.configuration, field.queryset)
+        field.choices = [("", field.empty_label)] + [(job.pk, field.label_from_instance(job))
+                                                     for job in allowed]
+
+
 class BaseOneTimeJobForm(forms.ModelForm):
     # the not_before / not_after window + its validation, shared by the scoped OneTimeJobForm and the
     # single-machine MachineOneTimeJobForm (no Meta here, like BaseJobScopeForm — subclasses set the model)
@@ -311,11 +322,18 @@ class BaseOneTimeJobForm(forms.ModelForm):
         return cleaned_data
 
 
-class OneTimeJobForm(BaseJobScopeForm, BaseOneTimeJobForm):
+class OneTimeJobForm(OfferAuthorizedJobsMixin, BaseJobScopeForm, BaseOneTimeJobForm):
     class Meta:
         model = OneTimeJob
         fields = ("job", "not_before", "not_after", "tags", "excluded_tags",
                   "serial_numbers", "excluded_serial_numbers")
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # only when creating: on an update the field is disabled and has to keep its current value,
+        # even if a policy would refuse that kind today
+        if user is not None and self.instance._state.adding:
+            self._offer_authorized_jobs(user)
 
 
 class OneTimeJobSearchForm(forms.Form):
@@ -379,18 +397,20 @@ class EnrolledMachineSearchForm(forms.Form):
         return qs
 
 
-class MachineOneTimeJobForm(BaseOneTimeJobForm):
+class MachineOneTimeJobForm(OfferAuthorizedJobsMixin, BaseOneTimeJobForm):
     job = JobChoiceField(queryset=Job.objects.all())
 
     class Meta:
         model = OneTimeJob
         fields = ("job", "not_before", "not_after")
 
-    def __init__(self, *args, configuration=None, serial_number=None, **kwargs):
+    def __init__(self, *args, configuration=None, serial_number=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.configuration = configuration
         self.serial_number = serial_number
         self.fields["job"].queryset = Job.objects.select_related(*Job.definition_relations()).all()
+        if user is not None:
+            self._offer_authorized_jobs(user)
 
     def save(self, *args, **kwargs):
         # locked to one machine: the view supplies the config + serial, no scope UI

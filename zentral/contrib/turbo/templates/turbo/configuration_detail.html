@@ -243,7 +243,7 @@
 <div class="d-flex justify-content-between mb-3">
     <h3 id="one-time-jobs">One-time job{{ one_time_job_count|pluralize }} ({{ one_time_job_count }})</h3>
     <div class="ms-auto">
-        {% if perms.turbo.add_onetimejob %}
+        {% if can_create_one_time_job %}
             {% url 'turbo:create_one_time_job' object.pk as url %}
             {% button 'CREATE' url "Add one-time job" %}
         {% endif %}
@@ -257,7 +257,7 @@
         <th>Job</th>
         <th>Window</th>
         <th>Scope</th>
-        {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}
+        {% if can_edit_one_time_job %}
         <th></th>
         {% endif %}
     </thead>
@@ -285,13 +285,13 @@
             <span class="text-secondary">all machines</span>
             {% endif %}
         </td>
-        {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}
+        {% if can_edit_one_time_job %}
         <td class="text-end py-0">
-            {% if perms.turbo.change_onetimejob %}
+            {% if one_time_job.can_update %}
                 {% url 'turbo:update_one_time_job' object.pk one_time_job.pk as url %}
                 {% button 'UPDATE' url "Edit one-time job" %}
             {% endif %}
-            {% if perms.turbo.delete_onetimejob %}
+            {% if one_time_job.can_delete %}
                 {% url 'turbo:delete_one_time_job' object.pk one_time_job.pk as url %}
                 {% button 'DELETE' url "Delete one-time job" %}
             {% endif %}
