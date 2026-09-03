@@ -7,7 +7,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from zentral.conf import api_base_url
-from zentral.utils.storage import file_storage_has_presigned_uploads, generate_presigned_put
+from zentral.utils.storage import (file_storage_has_presigned_uploads, generate_presigned_put,
+                                   sha256_object, stat_object)
+
+from .models import UploadVerification
 
 
 logger = logging.getLogger("zentral.contrib.turbo.uploads")
@@ -150,6 +153,73 @@ def unsign_hosted_upload(token):
         return _hosted_upload_signer.unsign(token, max_age=UPLOAD_URL_EXPIRY)
     except BadSignature:
         return None
+
+
+def verify_upload(upload, reported, storage):
+    """Does the storage agree with what the agent reported? The SECOND axis.
+
+    It cannot reopen a spent shot. This runs after the gate has closed, and its whole output is the
+    row's verification field and the flag that rides into the result event — "the agent says it
+    uploaded" and "the storage agrees" stay two facts.
+
+    The size and the digest reach here by two independent paths. One went out at the mint and was
+    SIGNED into the upload, so the storage refused any body that did not match it, and comes back as
+    the checksum the storage recorded. The other came home in the result. Verification is where the
+    two copies meet, and on a storage that signs, Zentral reads no byte to compare them.
+
+    Both legs are checked. An agent whose result contradicts its own mint is describing a different
+    file, and comparing the stored object against the mint alone would miss it — on a signing storage
+    that comparison is nearly tautological, since S3 enforced it on the way in.
+
+    Returns an UploadVerification value, or None when nothing could be decided. Undecided is a real
+    answer and deliberately not `missing`: a storage that timed out, a key we may not read, or an
+    object something else wrote without a checksum are all "ask again later", and a transient blip
+    that permanently marked artifacts missing would be worse than no answer at all.
+    """
+    if not _report_agrees_with_the_mint(upload, reported):
+        return UploadVerification.MISMATCH
+    try:
+        stored = stat_object(upload.key, storage=storage)
+    except Exception:
+        logger.exception("Could not stat turbo upload %s", upload.pk)
+        return None
+    if stored is None:
+        return UploadVerification.MISSING
+    if stored["size"] != upload.size:
+        return UploadVerification.MISMATCH
+    sha256 = stored["sha256"]
+    if sha256 is None and not file_storage_has_presigned_uploads(storage):
+        # nothing signed this body on the way in and the storage keeps no digest, so the only way to
+        # know is to read it — which is affordable exactly because a storage that cannot sign an
+        # upload has the small ceiling
+        try:
+            sha256 = sha256_object(upload.key, storage=storage)
+        except Exception:
+            logger.exception("Could not hash turbo upload %s", upload.pk)
+            return None
+    if sha256 is None:
+        # the storage can sign, so every object we put there carries the checksum we signed. One that
+        # does not was written by something else, and saying so is more useful than a verdict.
+        logger.error("Turbo upload %s: no stored sha256 at %s", upload.pk, upload.key)
+        return None
+    return UploadVerification.VERIFIED if sha256 == upload.sha256 else UploadVerification.MISMATCH
+
+
+def _report_agrees_with_the_mint(upload, reported):
+    # the result echoes the size and the digest a second time. Where it does, they have to be the
+    # ones the mint signed: an agent that asks for a destination for one file and reports another has
+    # told us about two files, and only one of them is at the key. Absent values are not a
+    # contradiction — the row is what was signed either way.
+    for attribute, declared in (("size", upload.size), ("sha256", upload.sha256)):
+        echoed = reported.get(attribute)
+        if isinstance(echoed, str):
+            # parse_sha256 stores the digest lowercase, so the echo is read the same way
+            echoed = echoed.lower()
+        if echoed is not None and echoed != declared:
+            logger.warning("Turbo upload %s: reported %s %r contradicts the minted %r",
+                           upload.pk, attribute, echoed, declared)
+            return False
+    return True
 
 
 def build_upload_destination(upload, artifact, storage):

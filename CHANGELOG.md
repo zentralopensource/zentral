@@ -93,7 +93,13 @@ When the storage backend is S3, the agent sends the file directly to the bucket 
 
 The configuration payload publishes `upload_max_size` and `upload_digests` now, so the agent can refuse a file that is too large before it collects it, and read the file one time to compute every digest.
 
-The result of a run that collects files carries a `run.id`, and one `result.uploads` entry for each artifact. The entry reports the upload, or the reason it failed. Zentral compares the key the agent echoes with the key it built, and refuses an echo that does not match. Partial success is a normal outcome: a `file_export` that sends its manifest and fails on its archive keeps the manifest. The report of the agent is the first axis; the verification against the storage is a second axis, and it comes later.
+The result of a run that collects files carries a `run.id`, and one `result.uploads` entry for each artifact. The entry reports the upload, or the reason it failed. Zentral compares the key the agent echoes with the key it built, and refuses an echo that does not match. Partial success is a normal outcome: a `file_export` that sends its manifest and fails on its archive keeps the manifest. The report of the agent is the first axis; whether the storage agrees is a second axis.
+
+Zentral verifies the upload. It compares the size and the SHA-256 of the stored object with the ones the agent declared when it asked for the destination. Those values were signed into the upload, so the storage refused any body that did not match them, and they came back a second time in the result: verification is where the two copies meet, and on a storage that signs, Zentral reads no part of the file to do it. Where the storage keeps no digest of its own, Zentral reads the object and hashes it, which is affordable because that is the storage with the low size limit. A result that echoes a size or a digest which is not the one it asked for is a mismatch too, whatever is at the key.
+
+The upload carries the outcome next to its status, and each `result.uploads` entry of the result event carries it too, as `verification`: `verified`, `mismatch` when something else is at the key, or `missing` when nothing is. A storage that times out, a key the deployment cannot read, and an object with no stored digest all leave the verification `pending` with a log entry, and no `verification` on the event: recording a transient failure as `missing` would make the row say for ever that a file which is very probably there is gone. A bucket policy without `s3:ListBucket` makes S3 answer 403 for a key that does not exist, so such a deployment never sees `missing` — the upload stays `pending`.
+
+Verification never reopens a one-time job. The job was done on that machine when the agent reported, whatever the storage says afterwards.
 
 
 ### Backward incompatibilities
