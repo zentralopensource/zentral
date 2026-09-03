@@ -1,0 +1,132 @@
+---
+title: PBAC
+weight: 120
+---
+
+Zentral uses Policy-Based Access Control to decide what users and service accounts can do in the Web Console and the API. Policies are written in [Cedar](https://www.cedarpolicy.com/), grant *actions* to *principals*, and are evaluated on every authorization check.
+
+## The model
+
+* **Principal**: an authenticated User or Service Account.
+* **Role**: a named bucket of access. Principals belong to zero or more Roles. Roles no longer carry permissions directly — they're labels that policies reference.
+* **Policy**: a Cedar source stored in the database. A policy grants one or more **actions** to principals matching some condition, typically *"principal is in some Role"*.
+* **Action**: the unit of authorization, e.g. `Inventory::Action::"createMachineTag"` or `Realms::Action::"viewRealmGroup"`. Every Zentral endpoint that requires auth declares the action it needs.
+
+Roles are managed under *Roles* in the platform-settings menu. A Role's detail / edit form no longer has a permissions checklist — access is granted by writing a policy that references the Role.
+
+Principals can be added to Roles manually (from the User or Service Account edit form) or automatically through the Realm → Realm Group → Role mapping path; see [SSO Setup](sso.md) for the latter.
+
+## Writing a policy
+
+Create a policy under *Policies* (in the same platform-settings menu as Roles). A policy has a name, a description, an active flag and a Cedar **source**. Policies that are active are evaluated for every authorization check; inactive policies are ignored.
+
+The source is one or more Cedar `permit` (or `forbid`) blocks. The most common shape:
+
+```
+permit (
+  principal in Role::"<role-pk>",
+  action in [<one or more actions>],
+  resource
+);
+```
+
+The `<role-pk>` is the numeric primary key of the Role you want to grant access to. The actions are Cedar action references; see [Finding the action you need](#finding-the-action-you-need) below.
+
+### Action lists must stay in one namespace
+
+Cedar rejects `action in [ ... ]` lists that mix namespaces. To grant actions from two apps (say Realms and Santa), use one `permit` block per namespace:
+
+```
+permit (
+  principal in Role::"7",
+  action in [
+    Realms::Action::"viewRealm",
+    Realms::Action::"viewRealmGroup"
+  ],
+  resource
+);
+
+permit (
+  principal in Role::"7",
+  action in [
+    Santa::Action::"viewConfiguration"
+  ],
+  resource
+);
+```
+
+### Action groups
+
+Each contrib app's actions are members of `<Namespace>::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` action groups. Globally, the same buckets exist as `Action::"GlobalAdminActions"`, `Action::"GlobalUserActions"` and `Action::"GlobalViewerActions"` — these aggregate the per-namespace groups so a single reference covers every app.
+
+The three groups are nested. `ViewerActions` contains the read actions. `UserActions` contains the same read actions, and adds the daily operations, for example a machine tag change or a Santa clean sync. `AdminActions` contains all of them, and adds the configuration changes. A role with `UserActions` can thus do all that a role with `ViewerActions` can do.
+
+A small number of actions read a secret — the MDM admin password, device lock PIN, FileVault PRK and recovery password. They have a `view` prefix, but they are members of `UserActions` and not of `ViewerActions`.
+
+```
+// Anyone in this Role can perform every "view" action across every Zentral app.
+permit (
+  principal in Role::"42",
+  action in Action::"GlobalViewerActions",
+  resource
+);
+```
+
+## Worked example
+
+The "Support" role (pk 6) should be able to view everything in the inventory app, and additionally be allowed to create or delete the `YOLO` tag on machines — but not any other tag.
+
+```
+permit (
+  principal in Role::"6", // Support
+  action in Inventory::Action::"ViewerActions",
+  resource
+);
+
+permit (
+  principal in Role::"6", // Support
+  action in
+    [Inventory::Action::"createMachineTag",
+     Inventory::Action::"deleteMachineTag"],
+  resource
+)
+when { context has tagName && context.tagName == "YOLO" };
+```
+
+Three features worth pointing out:
+
+* **Comments.** `//` opens a single-line Cedar comment — useful for naming the role inline since policies otherwise only carry the numeric pk.
+* **Action groups.** `Inventory::Action::"ViewerActions"` is the per-namespace aggregator covering every view-type action the inventory app declares — granting one action group is shorter and more future-proof than enumerating every individual action.
+* **Context conditions.** The `when { ... }` clause restricts the second block to requests whose context carries `tagName == "YOLO"`. The `has` guard is mandatory here: `tagName` is declared optional in the inventory action's schema, so writing `context.tagName == "YOLO"` without first checking `context has tagName` makes the Policy form reject the save with *"unable to guarantee safety of access to optional attribute"*.
+
+Whether the `has` guard is needed depends on the action: an attribute an action always sets is declared required, and can be read directly. The Schema browser shows the context of each action, and puts a `?` after the name of the optional attributes. When an attribute accepts a closed set of values, the browser lists them.
+
+```
+// Santa::Action::"forceCleanSync" always sets syncType, so no guard is needed.
+permit (
+  principal in Role::"6",
+  action == Santa::Action::"forceCleanSync",
+  resource in Inventory::MetaBusinessUnit::"3"
+) when { context.syncType == "CLEAN" };
+```
+
+Note what the two halves do here: the `resource in` clause restricts *which machines* the role may act on, and the `when` clause restricts *what it may do to them* — this role can rebuild the rule database of the machines in one meta business unit, but never drop the transitive rules a machine created on its own.
+
+The `resource in` clause works because membership is transitive: the action applies to `Inventory::Machine`, and a machine is a member of the meta business units it belongs to. The Schema browser shows the types a principal or a resource is a member of, after the word *in*. A clause can name the type the action declares, or any of those.
+
+## Finding the action you need
+
+Four options, in order of usefulness:
+
+1. **The Schema browser.** Open *Policies* in the platform-settings menu and click *Schema*. It lists every action Zentral knows about, grouped by namespace. Each action shows what it authorizes, the entity types it applies to, the types those are members of, and the context attributes a `when` clause can read. This is the canonical reference — it always matches the running engine.
+2. **The app docs.** Every API endpoint in [`docs/apps/`](../apps/_index.md) lists its `PBAC action(s):` directly under the HTTP method.
+3. **The Policy edit form.** Cedar validation rejects unknown action ids with a clear error naming the offending reference, so a save attempt against `Inventory::Action::"crteateMachineTag"` returns *"unrecognized action `Inventory::Action::"crteateMachineTag"`"*.
+4. **The `pbac_dump_schema` management command.** It prints the schema of the running engine as one document, in the Cedar human-readable syntax or in the Cedar JSON syntax. Use it to compare two versions of Zentral. It does not include the help text of the Schema browser.
+
+```bash
+python server/manage.py pbac_dump_schema --format=human
+```
+
+## Existing roles after the migration
+
+When the PBAC engine was introduced, every Role that previously carried Django permissions was auto-converted into a Policy named `Role <role-name>`. That policy lists every action the role had legacy access to, grouped one `permit` block per namespace. Roles created or edited since are blank slates — you grant access by writing a policy that references them.
