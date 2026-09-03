@@ -397,7 +397,22 @@ The completion runs in the background because both storages document that it can
 
 A multipart upload is verified by its completion and not by a later question to the storage. The whole-object CRC-64/NVME the agent declared when it asked for the destination is supplied at completion, and the storage computes the assembled object's own and refuses a mismatch. A failure there is `assembly_failed`. This is why the config asks for that digest, and why an artifact large enough for multipart is refused without it: the SHA-256 cannot do the same work on a multipart upload.
 
-When the agent gives up on a multipart upload and says so in its result, Zentral drops the parts. Configure the `AbortIncompleteMultipartUpload` lifecycle rule on the bucket as well: it is the only thing that removes the parts of an upload the agent never reports, and parts are stored, and billed, until something removes them.
+When the agent gives up on a multipart upload and says so in its result, Zentral drops the parts. That report can be a day behind, though, and it may never arrive at all — so the bucket needs a lifecycle rule as well. See [Bucket lifecycle](#bucket-lifecycle).
+
+#### Bucket lifecycle
+
+Zentral writes the artifacts and never removes them, and a bucket collects other things that only the bucket itself can clean up. Set these rules on the bucket if you manage your own deployment.
+
+|Rule|Scope|Why|
+|---|---|---|
+|`Expiration`|`turbo/uploads/`|Zentral keeps no expiry of its own, so nothing removes a collected artifact. They hold the data of the person who uses the machine, and they are collected to answer one question: keep them for as long as answering it takes. 14 days is a good default.|
+|`AbortIncompleteMultipartUpload`|the bucket|The parts of a [multipart](#multipart) upload that never completes are stored, and billed, until something aborts it. No expiration rule reaches them, because the object they would have made never appears. 7 days leaves room for an agent that retries a large artifact over several of its cycles.|
+
+Set the abort rule on the whole bucket and not only on `turbo/uploads/`. Any client can start a multipart upload — the AWS SDK does it by itself above its transfer threshold — and an upload that is abandoned leaves its parts wherever it was going. The rule only removes the parts of an upload that never completed, so it cannot touch an object that is finished.
+
+If the bucket has versioning enabled, add a rule with `ExpiredObjectDeleteMarker`. Expiring an object writes a delete marker and makes the version noncurrent; a noncurrent-version rule removes the version and leaves the marker, and nothing else removes that. It must be a rule of its own, because one `Expiration` cannot carry both `ExpiredObjectDeleteMarker` and a number of days.
+
+Expect a `404` from a download of an artifact that a rule has removed. The row stays on the machine page, because it records that the job collected something; the object it points to is gone.
 
 [Config](#configuration) publishes `upload_max_size` and `upload_digests`. The agent can then refuse a file that is too large before it collects it, and compute the digests the storage wants in the same pass as the SHA-256.
 
