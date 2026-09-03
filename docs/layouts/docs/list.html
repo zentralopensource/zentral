@@ -1,0 +1,22 @@
+{{ define "main" }}
+<article class="docs-page">
+  {{- with .Ancestors.Reverse }}
+  <nav class="docs-crumbs" aria-label="Breadcrumb">
+    {{- range . }}<a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>{{ end }}
+  </nav>
+  {{- end }}
+  <h1>{{ .Title }}</h1>
+  {{- with .TableOfContents }}
+    {{- if gt (len .) 100 }}
+  <details class="docs-toc" open>
+    <summary>On this page</summary>
+    {{ . }}
+  </details>
+    {{- end }}
+  {{- end }}
+  {{ .Content }}
+  <footer class="docs-pagefoot">
+    <a href="https://github.com/zentralopensource/zentral/edit/main/docs/content/{{ partial "docs_rel_path.html" . }}">Edit this page on GitHub</a>
+  </footer>
+</article>
+{{ end }}

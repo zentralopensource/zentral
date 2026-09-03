@@ -1,0 +1,23 @@
+{{- /* mkdocs rewrote .md link targets to their output url. Hugo passes them
+       through untouched, so they are resolved here against the page tree
+       instead: one source then serves both the local preview at the site root
+       and the website at /docs/.
+
+       The target is built as an absolute logical path, and not handed to
+       GetPage as written: a relative lookup that misses falls back to a search
+       by name, which resolves links in the preview that break once the website
+       mounts the docs one level down. An unresolved target fails the build. */ -}}
+{{- $d := .Destination -}}
+{{- $u := urls.Parse $d -}}
+{{- $href := $d -}}
+{{- if not (or $u.IsAbs (hasPrefix $d "#") (hasPrefix $d "mailto:")) -}}
+  {{- $root := partial "docs_root.html" . -}}
+  {{- $dir := path.Dir (partial "docs_rel_path.html" .Page) -}}
+  {{- $abs := path.Join $root.Path $dir $u.Path -}}
+  {{- with site.GetPage $abs -}}
+    {{- $href = printf "%s%s" .RelPermalink (cond (ne $u.Fragment "") (printf "#%s" $u.Fragment) "") -}}
+  {{- else -}}
+    {{- errorf "unresolved link %q (looked for %q) in %s" $d $abs $.Page.File.Path -}}
+  {{- end -}}
+{{- end -}}
+<a href="{{ $href }}"{{ with .Title }} title="{{ . }}"{{ end }}>{{ .Text }}</a>

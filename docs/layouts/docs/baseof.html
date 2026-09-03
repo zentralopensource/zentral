@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ with .Title }}{{ . }} — {{ end }}{{ site.Title }}</title>
+  <link rel="stylesheet" href="{{ "css/docs.css" | relURL }}">
+  <link rel="stylesheet" href="{{ "css/chroma.css" | relURL }}">
+</head>
+<body>
+  <div class="docs">
+    <aside class="docs-side">
+      {{- $root := partial "docs_root.html" . }}
+      <a class="docs-brand" href="{{ $root.RelPermalink }}">Zentral <span>docs</span></a>
+      {{- partial "docs_nav.html" (dict "page" $root "current" .) }}
+    </aside>
+    <main class="docs-main">
+      {{- block "main" . }}{{ end }}
+    </main>
+  </div>
+</body>
+</html>

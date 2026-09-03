@@ -1,0 +1,23 @@
+---
+title: Zentral documentation
+enableRobotsTXT: false
+disableKinds:
+  - taxonomy
+  - term
+  - rss
+  - sitemap
+
+# This configuration only serves the local preview. The website build reads its
+# own configuration and mounts docs/content and docs/layouts into it, so every
+# markup option below has to mirror the one in zentral.com/config.yaml — a
+# mismatch makes the preview render differently from the published site.
+markup:
+  goldmark:
+    parser:
+      attribute:
+        block: true
+  highlight:
+    noClasses: false
+  tableOfContents:
+    startLevel: 2
+    endLevel: 3

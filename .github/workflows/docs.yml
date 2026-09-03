@@ -1,0 +1,37 @@
+---
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'conf/start/docker/hugo/**'
+      - 'docker-compose.docs.yml'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'conf/start/docker/hugo/**'
+      - 'docker-compose.docs.yml'
+      - '.github/workflows/docs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build_docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The link render hook raises an error on a target it cannot resolve, and
+      # --panicOnWarning catches the rest, raw HTML that goldmark drops included.
+      - name: build the documentation
+        run: docker compose -f docker-compose.docs.yml run --quiet-pull --quiet-build --rm docs hugo --panicOnWarning
+        env:
+          COMPOSE_DOCKER_CLI_BUILD: 1
+          DOCKER_BUILDKIT: 1
