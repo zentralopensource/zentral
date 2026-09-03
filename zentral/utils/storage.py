@@ -1,20 +1,43 @@
 import base64
 import hashlib
+from contextlib import contextmanager
 from datetime import timedelta
 
 from django.core.files.storage import storages, InvalidStorageError
 
 
-# One metadata read (a HEAD on S3, a blob GET on GCS) is a single small round trip — tens of
-# milliseconds — but it happens on a device endpoint, inside the request transaction, so it gets an
-# explicit ceiling instead of the minute-scale defaults of botocore and of the GCS client: an
-# unbounded call to a storage that has gone quiet holds a web worker AND a database connection. One
-# attempt, deliberately: a retry would double how long that transaction stays open to buy an answer
-# that was never urgent, and the caller treats "could not tell" as a normal outcome, which leaves the
-# upload pending. Each storage applies the ceiling in its own way: see _s3_stat_client and
-# _gcs_stat_object.
-_STAT_CONNECT_TIMEOUT = 2
-_STAT_READ_TIMEOUT = 5
+# The limits of a storage call inside a device request: a metadata read, or the start of a multipart upload.
+# While the call waits, it holds a web worker and a database connection. The default limits of botocore and
+# of the GCS client are some minutes, and a retry doubles the wait, so one short attempt only.
+# See _s3_request_client and _gcs_stat_object.
+_REQUEST_CONNECT_TIMEOUT = 2
+_REQUEST_READ_TIMEOUT = 5
+
+# The limits of a storage call in a Celery task, which can wait. S3 documents that the completion of a
+# multipart upload can take some minutes. Some attempts are for an outage of some seconds. After a longer
+# outage, the call raises StorageUnavailable, and the caller must ask again later.
+_TASK_CONNECT_TIMEOUT = 5
+_TASK_READ_TIMEOUT = 600
+_TASK_ATTEMPTS = 3
+
+
+# Errors. The operations raise only these, never an exception of a storage library.
+
+
+class StorageError(Exception):
+    """A storage call failed, and no subclass gives the cause."""
+
+
+class StorageUnavailable(StorageError):
+    """The storage did not answer, or it asked for fewer requests. The same call can succeed later."""
+
+
+class MultipartUploadNotFound(StorageError):
+    """The storage has no multipart upload with this id. The upload is complete, or it was aborted."""
+
+
+class MultipartUploadRefused(StorageError):
+    """The storage refuses to assemble the parts. The same call cannot succeed later."""
 
 
 def select_dist_storage():
@@ -62,6 +85,17 @@ def file_storage_has_presigned_uploads(storage=None):
     return _is_s3_storage(storage)
 
 
+def file_storage_has_multipart_uploads(storage=None):
+    """True if a client can upload parts to presigned URLs, and the storage can assemble them.
+
+    This is not file_storage_has_presigned_uploads(). GCS can presign a single PUT, but Zentral does not
+    use the GCS multipart API.
+    """
+    if storage is None:
+        storage = storages["default"]
+    return _is_s3_storage(storage)
+
+
 def file_storage_recorded_digests(storage=None):
     """The whole-object digests that the storage records, and that stat_object() returns.
 
@@ -96,7 +130,7 @@ def generate_presigned_put(key, size, content_type, sha256_hex, expires_in, stor
         storage = storages["default"]
     if _is_s3_storage(storage):
         return _s3_presigned_put(storage, key, size, content_type, sha256_hex, expires_in)
-    raise ValueError(f"{storage.__class__.__name__} cannot presign an upload")
+    _refuse(storage, "presign an upload")
 
 
 def stat_object(key, storage=None):
@@ -106,9 +140,8 @@ def stat_object(key, storage=None):
     None when the storage has no value of that digest for this object. Reads metadata only, never the
     object.
 
-    Returns None when there is nothing at the key — and only then. Every other failure raises, so a
-    storage that is unreachable or a key we may not read is never mistaken for an object that is not
-    there.
+    Returns None only when no object is at the key. All other failures raise a StorageError, so that an
+    unavailable storage or a refused read never looks like a missing object.
     """
     if storage is None:
         storage = storages["default"]
@@ -137,7 +170,63 @@ def sha256_object(key, storage=None):
     return digest.hexdigest()
 
 
+def create_multipart_upload(key, content_type, storage):
+    """Start a multipart upload with a declared whole-object checksum, and return its id.
+
+    Call file_storage_has_multipart_uploads() first. Raises a StorageError if the call fails.
+    """
+    if _is_s3_storage(storage):
+        return _s3_create_multipart_upload(storage, key, content_type)
+    _refuse(storage, "upload in parts")
+
+
+def generate_presigned_part(key, upload_id, part_number, size, expires_in, storage):
+    """A presigned URL for one part, and the headers that the client must send without change."""
+    if _is_s3_storage(storage):
+        return _s3_presigned_part(storage, key, upload_id, part_number, size, expires_in)
+    _refuse(storage, "upload in parts")
+
+
+def list_multipart_parts(key, upload_id, storage):
+    """The parts that the storage has for an upload, in the order and format of the completion.
+
+    Raises MultipartUploadNotFound if the upload is complete or aborted, and a StorageError for other failures.
+    """
+    if _is_s3_storage(storage):
+        return _s3_list_multipart_parts(storage, key, upload_id)
+    _refuse(storage, "upload in parts")
+
+
+def complete_multipart_upload(key, upload_id, parts, crc64nvme, object_size, storage):
+    """Assemble the object. The storage refuses the bytes if they do not agree with the declared checksum.
+
+    Raises MultipartUploadRefused if the parts cannot make the declared object, MultipartUploadNotFound if
+    the upload is complete or aborted, and a StorageError for other failures.
+    """
+    if _is_s3_storage(storage):
+        return _s3_complete_multipart_upload(storage, key, upload_id, parts, crc64nvme, object_size)
+    _refuse(storage, "upload in parts")
+
+
+def abort_multipart_upload(key, upload_id, storage):
+    """Delete the parts of an upload that will not complete.
+
+    The storage keeps the parts, and the deployment pays for them, until something deletes them. A bucket
+    rule deletes them after some days. This call deletes them immediately.
+
+    Raises MultipartUploadNotFound if the upload is gone, and a StorageError for other failures.
+    """
+    if _is_s3_storage(storage):
+        return _s3_abort_multipart_upload(storage, key, upload_id)
+    _refuse(storage, "upload in parts")
+
+
 # Shared by the implementations
+
+
+def _refuse(storage, operation):
+    # a clear error, not an AttributeError in an implementation
+    raise ValueError(f"{storage.__class__.__name__} cannot {operation}")
 
 
 # TODO better detection! These two compare class names, so a subclass with another name is not
@@ -221,20 +310,68 @@ def _s3_presigning_client(storage):
     return _s3_client(storage, "_zentral_s3_presigning_client", signature_version="s3v4")
 
 
-def _s3_stat_client(storage):
-    """A client for the S3 metadata read, with the ceiling of the _STAT constants.
+# total_max_attempts and not max_attempts: botocore adds 1 to max_attempts, because it is a number of retries.
+# The standard mode retries the throttling errors, the 5xx errors and the connection errors.
+_S3_ONE_ATTEMPT = {"mode": "standard", "total_max_attempts": 1}
+_S3_TASK_ATTEMPTS = {"mode": "standard", "total_max_attempts": _TASK_ATTEMPTS}
 
-    botocore binds the timeouts and the retries to a client, so the ceiling needs a client of its
-    own. The deployment's config cannot lift it, because ours is merged over it.
+# The CompleteMultipartUpload errors that a second call cannot change
+_S3_REFUSED_COMPLETION_CODES = frozenset((
+    "BadDigest",              # the bytes do not agree with the declared checksum
+    "EntityTooSmall",         # a part is smaller than the minimum size
+    "InvalidPart",            # a part is missing, or its ETag changed
+    "InvalidPartOrder",
+    "InvalidRequest",         # MpuObjectSize is not the total size of the parts
+))
+
+# Do not remove. S3 validates the checksum of the completion only if CreateMultipartUpload declares the algorithm. If
+# not, S3 accepts an incorrect checksum and records the checksum that it calculates: the object looks verified, but it
+# is not. CRC64NVME and not SHA-256: S3 gives a full-object checksum of a multipart upload only for the CRC algorithms.
+_S3_MULTIPART_CHECKSUM_ALGORITHM = "CRC64NVME"
+
+
+def _s3_request_client(storage):
+    """The client for the S3 calls inside a device request, with the _REQUEST limits.
+
+    botocore sets the timeouts and the retries on the client, so each set of limits has its own client.
+    Our config is merged over the config of the deployment, so the deployment cannot change these limits.
     """
-    return _s3_client(storage, "_zentral_s3_stat_client",
-                      connect_timeout=_STAT_CONNECT_TIMEOUT,
-                      read_timeout=_STAT_READ_TIMEOUT,
-                      # one attempt. Total, not retries: botocore reads `max_attempts` as the number of
-                      # RETRIES and stores max_attempts + 1, so the obvious spelling of "once" asks for
-                      # twice and doubles the worst case this ceiling exists to bound.
-                      # total_max_attempts is the key it keeps, and it means what it says.
-                      retries={"mode": "standard", "total_max_attempts": 1})
+    return _s3_client(storage, "_zentral_s3_request_client",
+                      connect_timeout=_REQUEST_CONNECT_TIMEOUT,
+                      read_timeout=_REQUEST_READ_TIMEOUT,
+                      retries=_S3_ONE_ATTEMPT)
+
+
+def _s3_task_client(storage):
+    """The client for the S3 calls in a Celery task, with the _TASK limits."""
+    return _s3_client(storage, "_zentral_s3_task_client",
+                      connect_timeout=_TASK_CONNECT_TIMEOUT,
+                      read_timeout=_TASK_READ_TIMEOUT,
+                      retries=_S3_TASK_ATTEMPTS)
+
+
+@contextmanager
+def _s3_errors(refused_codes=frozenset()):
+    from botocore.exceptions import BotoCoreError, ClientError, HTTPClientError
+    from botocore.exceptions import ConnectionError as BotocoreConnectionError
+    try:
+        yield
+    except (BotocoreConnectionError, HTTPClientError) as error:
+        # no answer: a connection error, or a timeout
+        raise StorageUnavailable(str(error)) from error
+    except BotoCoreError as error:
+        # a missing credential or region, or an incorrect parameter: not an outage
+        raise StorageError(str(error)) from error
+    except ClientError as error:
+        code = error.response.get("Error", {}).get("Code", "")
+        status = error.response.get("ResponseMetadata", {}).get("HTTPStatusCode") or 0
+        if code == "NoSuchUpload":
+            raise MultipartUploadNotFound(code) from error
+        if code in refused_codes:
+            raise MultipartUploadRefused(code) from error
+        if code in ("SlowDown", "RequestTimeout") or status == 429 or status >= 500:
+            raise StorageUnavailable(code or str(status)) from error
+        raise StorageError(code or str(error)) from error
 
 
 def _s3_presigned_put(storage, key, size, content_type, sha256_hex, expires_in):
@@ -264,28 +401,108 @@ def _s3_stat_object(storage, key):
     # any object at all. And a missing key surfaces as the bare status 404, not NoSuchKey — HeadObject
     # has no body to carry an error code — so an `except NoSuchKey` would never fire.
     from botocore.exceptions import ClientError
-    try:
-        response = _s3_stat_client(storage).head_object(Bucket=storage.bucket_name,
-                                                        Key=_object_key(storage, key), ChecksumMode="ENABLED")
-    except ClientError as error:
-        if error.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
-            return None
-        raise
+    with _s3_errors():
+        try:
+            response = _s3_request_client(storage).head_object(
+                Bucket=storage.bucket_name, Key=_object_key(storage, key), ChecksumMode="ENABLED")
+        except ClientError as error:
+            if error.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+                return None
+            raise
     return {"size": response["ContentLength"],
             "digests": {"sha256": _base64_to_hex(response.get("ChecksumSHA256")),
                         "crc64nvme": _base64_to_hex(response.get("ChecksumCRC64NVME"))}}
+
+
+def _s3_create_multipart_upload(storage, key, content_type):
+    # All the multipart calls use _object_key. With a `location` set, a bare key names an object that the
+    # storage does not read. ChecksumType is optional, because CRC64NVME is full-object by default.
+    # ChecksumAlgorithm is necessary: see _S3_MULTIPART_CHECKSUM_ALGORITHM.
+    with _s3_errors():
+        response = _s3_request_client(storage).create_multipart_upload(
+            Bucket=storage.bucket_name,
+            Key=_object_key(storage, key),
+            ContentType=content_type,
+            ChecksumAlgorithm=_S3_MULTIPART_CHECKSUM_ALGORITHM,
+            ChecksumType="FULL_OBJECT",
+        )
+    return response["UploadId"]
+
+
+def _s3_presigned_part(storage, key, upload_id, part_number, size, expires_in):
+    # A part has no checksum. Its only control is the Content-Length, and only a SigV4 signature includes it.
+    url = _s3_presigning_client(storage).generate_presigned_url(
+        "upload_part",
+        Params={"Bucket": storage.bucket_name, "Key": _object_key(storage, key),
+                "UploadId": upload_id, "PartNumber": part_number, "ContentLength": size},
+        ExpiresIn=expires_in,
+    )
+    return url, {"Content-Length": str(size)}
+
+
+def _s3_list_multipart_parts(storage, key, upload_id):
+    # all the pages: a completion with a partial list assembles a partial object
+    paginator = _s3_task_client(storage).get_paginator("list_parts")
+    parts = []
+    with _s3_errors():
+        for page in paginator.paginate(Bucket=storage.bucket_name, Key=_object_key(storage, key),
+                                       UploadId=upload_id):
+            for part in page.get("Parts", ()):
+                parts.append({"PartNumber": part["PartNumber"], "ETag": part["ETag"]})
+    parts.sort(key=lambda part: part["PartNumber"])
+    return parts
+
+
+def _s3_complete_multipart_upload(storage, key, upload_id, parts, crc64nvme, object_size):
+    # The caller gets the parts from the storage, never from the agent. S3 calculates the checksum of the
+    # assembled object, and answers BadDigest if it is not the declared checksum.
+    with _s3_errors(_S3_REFUSED_COMPLETION_CODES):
+        return _s3_task_client(storage).complete_multipart_upload(
+            Bucket=storage.bucket_name,
+            Key=_object_key(storage, key),
+            UploadId=upload_id,
+            MultipartUpload={"Parts": parts},
+            ChecksumCRC64NVME=_hex_to_base64(crc64nvme),
+            ChecksumType="FULL_OBJECT",
+            MpuObjectSize=object_size,
+        )
+
+
+def _s3_abort_multipart_upload(storage, key, upload_id):
+    with _s3_errors():
+        _s3_task_client(storage).abort_multipart_upload(
+            Bucket=storage.bucket_name, Key=_object_key(storage, key), UploadId=upload_id)
 
 
 # GCS
 
 
 def _gcs_stat_object(storage, key):
-    # get_blob() is one GET of the JSON resource of the object: its metadata, not its content. It
-    # returns None for a missing blob and raises for the rest. The GCS library takes the timeouts and
-    # the retry policy on each call. Its defaults are a 60 second timeout and a retry policy with a
-    # 120 second deadline: the _STAT constants replace the first, and retry=None is the one attempt.
-    blob = storage.bucket.get_blob(_object_key(storage, key),
-                                   timeout=(_STAT_CONNECT_TIMEOUT, _STAT_READ_TIMEOUT), retry=None)
+    # get_blob() reads the metadata, not the content, and returns None for a missing object. The GCS client
+    # takes the limits on each call. By default, it waits 60 seconds, and it retries for 120 seconds.
+    with _gcs_errors():
+        blob = storage.bucket.get_blob(_object_key(storage, key),
+                                       timeout=(_REQUEST_CONNECT_TIMEOUT, _REQUEST_READ_TIMEOUT), retry=None)
     if blob is None:
         return None
     return {"size": blob.size, "digests": {"crc32c": _base64_to_hex(blob.crc32c)}}
+
+
+@contextmanager
+def _gcs_errors():
+    from google.api_core.exceptions import GoogleAPICallError
+    from google.auth.exceptions import GoogleAuthError, TransportError
+    from requests.exceptions import ConnectionError as RequestsConnectionError, Timeout as RequestsTimeout
+    try:
+        yield
+    except (RequestsConnectionError, RequestsTimeout, TransportError) as error:
+        # no answer: a connection error, or a timeout
+        raise StorageUnavailable(str(error)) from error
+    except GoogleAuthError as error:
+        # a missing or expired credential: not an outage. After TransportError, which is also a GoogleAuthError.
+        raise StorageError(str(error)) from error
+    except GoogleAPICallError as error:
+        status = error.code or 0
+        if status == 429 or status >= 500:
+            raise StorageUnavailable(str(status)) from error
+        raise StorageError(str(status or error)) from error

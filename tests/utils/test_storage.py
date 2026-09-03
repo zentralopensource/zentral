@@ -3,19 +3,26 @@ import hashlib
 from datetime import timedelta
 from urllib.parse import parse_qs, urlparse
 
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
-from botocore.exceptions import ClientError
+from botocore.exceptions import (ConnectionClosedError, EndpointConnectionError, NoCredentialsError, NoRegionError,
+                                 ParamValidationError, PartialCredentialsError, ReadTimeoutError)
 from botocore.stub import Stubber
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.test import SimpleTestCase, TestCase, override_settings
-from google.api_core.exceptions import Forbidden
+from google.api_core.exceptions import Forbidden, ServiceUnavailable
+from google.auth.exceptions import DefaultCredentialsError, RefreshError, TransportError
 from google.cloud.storage import Blob
-from zentral.utils.storage import (_s3_stat_client, file_storage_has_presigned_uploads,
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from zentral.utils.storage import (MultipartUploadNotFound, MultipartUploadRefused, StorageError,
+                                   StorageUnavailable, _s3_request_client, _s3_task_client,
+                                   abort_multipart_upload, complete_multipart_upload, create_multipart_upload,
+                                   file_storage_has_multipart_uploads, file_storage_has_presigned_uploads,
                                    file_storage_has_signed_urls, file_storage_recorded_digests,
-                                   file_storage_signed_url_expiration, generate_presigned_put,
-                                   select_dist_storage, sha256_object, stat_object)
+                                   file_storage_signed_url_expiration, generate_presigned_part,
+                                   generate_presigned_put, list_multipart_parts, select_dist_storage,
+                                   sha256_object, stat_object)
 
 
 S3_STORAGE = {"default": {"BACKEND": "storages.backends.s3.S3Storage",
@@ -77,6 +84,12 @@ SHA256 = hashlib.sha256(b"yolo").hexdigest()
 class PresignedUploadTestCase(SimpleTestCase):
     def test_default_storage_cannot_presign_uploads(self):
         self.assertFalse(file_storage_has_presigned_uploads())
+
+    def test_only_s3_uploads_in_parts(self):
+        self.assertTrue(file_storage_has_multipart_uploads(storages.create_storage(S3_STORAGE["default"])))
+        self.assertFalse(file_storage_has_multipart_uploads(storages.create_storage(
+            {"BACKEND": "storages.backends.gcloud.GoogleCloudStorage", "OPTIONS": {"bucket_name": "zentral-tests"}})))
+        self.assertFalse(file_storage_has_multipart_uploads())
 
     def test_a_storage_that_cannot_presign_refuses_to(self):
         # instead of an AttributeError from deep inside the S3 implementation
@@ -153,18 +166,25 @@ class StatObjectS3TestCase(SimpleTestCase):
     """The S3 branch, stubbed against the real service model — so a parameter S3 does not have, or a
     response member that is not one, fails here instead of in production."""
 
-    def _stubbed(self):
-        storage = storages.create_storage(S3_STORAGE["default"])
-        # the client stat_object caches on the storage, primed with a stub before it can build one
+    def _stubbed(self, storage=None):
+        """A storage with a stub S3 client. The test replaces the client builder, not the cached client.
+
+        With a cached client, a rename of its attribute sends the calls to the real endpoint, and the test
+        fails with a 403 that does not show the cause.
+        """
+        if storage is None:
+            storage = storages.create_storage(S3_STORAGE["default"])
         client = storage.connection.meta.client
-        storage._zentral_s3_stat_client = client
+        patcher = patch("zentral.utils.storage._s3_request_client", return_value=client)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         return storage, Stubber(client)
 
-    def test_the_s3_stat_client_carries_its_own_ceiling(self):
+    def test_the_s3_request_client_carries_its_own_ceiling(self):
         # the only test that builds the real client: everything below primes the cache with a stub,
         # so a typo in these kwargs would surface in production as an exception verify_upload
         # swallows into "undecided", with one log line to find it by
-        client = _s3_stat_client(storages.create_storage(S3_STORAGE["default"]))
+        client = _s3_request_client(storages.create_storage(S3_STORAGE["default"]))
         self.assertEqual(client.meta.config.connect_timeout, 2)
         self.assertEqual(client.meta.config.read_timeout, 5)
         # botocore stores retries as a TOTAL: asking for max_attempts=1 would have meant two
@@ -177,11 +197,9 @@ class StatObjectS3TestCase(SimpleTestCase):
         # the same normalisation the presigned PUT signs. Without it the agent writes under the
         # prefix, this HEAD looks at the bucket root, S3 answers 404 — and `missing` is a verdict,
         # not an undecided answer, so it sticks.
-        storage = storages.create_storage(
+        storage, stub = self._stubbed(storages.create_storage(
             dict(S3_STORAGE["default"],
-                 OPTIONS=dict(S3_STORAGE["default"]["OPTIONS"], location="zentral")))
-        storage._zentral_s3_stat_client = storage.connection.meta.client
-        stub = Stubber(storage.connection.meta.client)
+                 OPTIONS=dict(S3_STORAGE["default"]["OPTIONS"], location="zentral"))))
         stub.add_response("head_object", {"ContentLength": 4},
                           {"Bucket": "zentral-tests", "Key": "zentral/turbo/uploads/test",
                            "ChecksumMode": "ENABLED"})
@@ -216,7 +234,14 @@ class StatObjectS3TestCase(SimpleTestCase):
         # blame the agent for a bucket policy
         storage, stub = self._stubbed()
         stub.add_client_error("head_object", service_error_code="403", http_status_code=403)
-        with stub, self.assertRaises(ClientError):
+        with stub, self.assertRaises(StorageError) as cm:
+            stat_object("turbo/uploads/test", storage=storage)
+        self.assertNotIsInstance(cm.exception, StorageUnavailable)
+
+    def test_stat_object_of_a_storage_in_trouble_is_unavailable(self):
+        storage, stub = self._stubbed()
+        stub.add_client_error("head_object", service_error_code="500", http_status_code=500)
+        with stub, self.assertRaises(StorageUnavailable):
             stat_object("turbo/uploads/test", storage=storage)
 
     def test_stat_object_without_a_stored_checksum(self):
@@ -290,8 +315,25 @@ class StatObjectGCSTestCase(SimpleTestCase):
 
     def test_stat_object_forbidden_is_not_missing(self):
         storage, _ = self._storage(error=Forbidden("no"))
-        with self.assertRaises(Forbidden):
+        with self.assertRaises(StorageError) as cm:
             stat_object("turbo/uploads/test", storage=storage)
+        self.assertNotIsInstance(cm.exception, StorageUnavailable)
+
+    def test_stat_object_with_a_credential_problem_is_not_an_outage(self):
+        for error in (RefreshError("invalid_grant"), DefaultCredentialsError("no credentials")):
+            with self.subTest(error=type(error).__name__):
+                storage, _ = self._storage(error=error)
+                with self.assertRaises(StorageError) as cm:
+                    stat_object("turbo/uploads/test", storage=storage)
+                self.assertIs(type(cm.exception), StorageError)
+
+    def test_stat_object_of_a_storage_in_trouble_is_unavailable(self):
+        for error in (ServiceUnavailable("busy"), RequestsConnectionError("no route to host"),
+                      TransportError("connection reset")):
+            with self.subTest(error=type(error).__name__):
+                storage, _ = self._storage(error=error)
+                with self.assertRaises(StorageUnavailable):
+                    stat_object("turbo/uploads/test", storage=storage)
 
 
 class StatObjectLocalTestCase(TestCase):
@@ -322,3 +364,182 @@ class StatObjectLocalTestCase(TestCase):
         storage = self._store("turbo/uploads/hash-test", b"yolo" * 1024)
         self.assertEqual(sha256_object("turbo/uploads/hash-test", storage=storage),
                          hashlib.sha256(b"yolo" * 1024).hexdigest())
+
+
+class MultipartUploadTestCase(SimpleTestCase):
+    """The multipart calls, with a stub of the real service model.
+
+    The stub validates all the expected parameters. S3 accepts a CreateMultipartUpload without the checksum
+    declaration, so only a stub of the real model can show that the call sends it.
+    """
+
+    def _stubbed(self, builder):
+        storage = storages.create_storage(S3_STORAGE["default"])
+        client = storage.connection.meta.client
+        patcher = patch(f"zentral.utils.storage.{builder}", return_value=client)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return storage, Stubber(client)
+
+    def test_create_declares_the_checksum_algorithm(self):
+        # do not remove: without the declaration, S3 accepts an incorrect checksum at completion, and the object looks
+        # verified
+        storage, stub = self._stubbed("_s3_request_client")
+        stub.add_response(
+            "create_multipart_upload", {"UploadId": "mpu-1"},
+            {"Bucket": "zentral-tests", "Key": "turbo/uploads/test",
+             "ContentType": "application/gzip",
+             "ChecksumAlgorithm": "CRC64NVME", "ChecksumType": "FULL_OBJECT"},
+        )
+        with stub:
+            upload_id = create_multipart_upload("turbo/uploads/test", "application/gzip",
+                                                storage=storage)
+        self.assertEqual(upload_id, "mpu-1")
+
+    def test_list_parts_paginates(self):
+        # a completion with only the first page assembles a partial object
+        storage, stub = self._stubbed("_s3_task_client")
+        stub.add_response(
+            "list_parts",
+            {"Parts": [{"PartNumber": 2, "ETag": '"e2"'}], "IsTruncated": True,
+             "NextPartNumberMarker": 2},
+            {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1"},
+        )
+        stub.add_response(
+            "list_parts",
+            {"Parts": [{"PartNumber": 1, "ETag": '"e1"'}], "IsTruncated": False},
+            {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1", "PartNumberMarker": 2},
+        )
+        with stub:
+            parts = list_multipart_parts("k", "mpu-1", storage=storage)
+        # both pages, in part order
+        self.assertEqual(parts, [{"PartNumber": 1, "ETag": '"e1"'},
+                                 {"PartNumber": 2, "ETag": '"e2"'}])
+
+    def test_complete_supplies_the_whole_object_checksum(self):
+        # the row has the CRC as hex, and S3 wants base64: without the conversion, the stub fails the call
+        storage, stub = self._stubbed("_s3_task_client")
+        parts = [{"PartNumber": 1, "ETag": '"e1"'}, {"PartNumber": 2, "ETag": '"e2"'}]
+        stub.add_response(
+            "complete_multipart_upload",
+            {"ETag": '"final"', "ChecksumCRC64NVME": "nD+hB17SSLE="},
+            {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1",
+             "MultipartUpload": {"Parts": parts},
+             "ChecksumCRC64NVME": "nD+hB17SSLE=", "ChecksumType": "FULL_OBJECT",
+             "MpuObjectSize": 200},
+        )
+        with stub:
+            response = complete_multipart_upload("k", "mpu-1", parts, "9c3fa1075ed248b1", 200,
+                                                 storage=storage)
+        self.assertEqual(response["ETag"], '"final"')
+
+    def test_abort(self):
+        storage, stub = self._stubbed("_s3_task_client")
+        stub.add_response("abort_multipart_upload", {},
+                          {"Bucket": "zentral-tests", "Key": "k", "UploadId": "mpu-1"})
+        with stub:
+            abort_multipart_upload("k", "mpu-1", storage=storage)
+
+    @override_settings(STORAGES=S3_STORAGE)
+    def test_generate_presigned_part_signs_the_length_with_sigv4(self):
+        # a part has no checksum, so the signed Content-Length is its only control. A V2 signature signs no header.
+        url, headers = generate_presigned_part("k", "mpu-1", 3, 67108864, 900,
+                                               storages["default"])
+        self.assertEqual(headers, {"Content-Length": "67108864"})
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["X-Amz-Algorithm"], ["AWS4-HMAC-SHA256"])
+        self.assertEqual(query["partNumber"], ["3"])
+        self.assertEqual(query["uploadId"], ["mpu-1"])
+        self.assertIn("content-length", query["X-Amz-SignedHeaders"][0].split(";"))
+
+    def test_the_s3_errors_are_translated(self):
+        # the caller gets a StorageError, never an exception of botocore
+        parts = [{"PartNumber": 1, "ETag": '"e1"'}]
+        for builder, method, call_args, code, status, expected in (
+            ("_s3_task_client", "list_parts", (list_multipart_parts, ("k", "mpu-1")),
+             "NoSuchUpload", 404, MultipartUploadNotFound),
+            ("_s3_task_client", "complete_multipart_upload",
+             (complete_multipart_upload, ("k", "mpu-1", parts, "9c3fa1075ed248b1", 200)),
+             "BadDigest", 400, MultipartUploadRefused),
+            ("_s3_task_client", "complete_multipart_upload",
+             (complete_multipart_upload, ("k", "mpu-1", parts, "9c3fa1075ed248b1", 200)),
+             "SlowDown", 503, StorageUnavailable),
+            ("_s3_task_client", "abort_multipart_upload", (abort_multipart_upload, ("k", "mpu-1")),
+             "AccessDenied", 403, StorageError),
+            ("_s3_request_client", "create_multipart_upload",
+             (create_multipart_upload, ("k", "application/gzip")), "InternalError", 500, StorageUnavailable),
+        ):
+            with self.subTest(method=method, code=code):
+                storage, stub = self._stubbed(builder)
+                stub.add_client_error(method, service_error_code=code, http_status_code=status)
+                operation, args = call_args
+                with stub, self.assertRaises(expected) as cm:
+                    operation(*args, storage=storage)
+                self.assertIs(type(cm.exception), expected)
+                self.assertEqual(str(cm.exception), code)
+
+    def _create_raising(self, error):
+        client = Mock()
+        client.create_multipart_upload.side_effect = error
+        with patch("zentral.utils.storage._s3_request_client", return_value=client):
+            create_multipart_upload("k", "application/gzip", storage=storages.create_storage(S3_STORAGE["default"]))
+
+    def test_no_answer_is_unavailable(self):
+        # a connection error or a timeout: botocore raises these without a response
+        for error in (EndpointConnectionError(endpoint_url="https://s3.example.com"),
+                      ReadTimeoutError(endpoint_url="https://s3.example.com"),
+                      ConnectionClosedError(endpoint_url="https://s3.example.com")):
+            with self.subTest(error=type(error).__name__), self.assertRaises(StorageUnavailable):
+                self._create_raising(error)
+
+    def test_a_configuration_error_is_not_an_outage(self):
+        # also without a response, but these are configuration or code errors, not outages: the caller logs them as
+        # errors
+        for error in (NoCredentialsError(),
+                      PartialCredentialsError(provider="env", cred_var="AWS_SECRET_ACCESS_KEY"),
+                      NoRegionError(),
+                      ParamValidationError(report="Invalid type for parameter Key")):
+            with self.subTest(error=type(error).__name__):
+                with self.assertRaises(StorageError) as cm:
+                    self._create_raising(error)
+                self.assertIs(type(cm.exception), StorageError)
+
+    def test_a_storage_that_cannot_upload_in_parts_refuses_to(self):
+        storage = storages["default"]
+        for operation, args in ((create_multipart_upload, ("k", "application/gzip")),
+                                (generate_presigned_part, ("k", "mpu-1", 1, 4, 60)),
+                                (list_multipart_parts, ("k", "mpu-1")),
+                                (complete_multipart_upload, ("k", "mpu-1", [], "00" * 8, 4)),
+                                (abort_multipart_upload, ("k", "mpu-1"))):
+            with self.subTest(operation=operation.__name__), \
+                 self.assertRaisesRegex(ValueError, "FileSystemStorage cannot upload in parts"):
+                operation(*args, storage)
+
+
+class TaskClientTestCase(SimpleTestCase):
+    """The limits of the task client. The tests above cover the limits of the request client.
+
+    A call in a Celery task can wait: the completion of a multipart upload can take some minutes, and some
+    attempts are for a short outage.
+    """
+
+    def _storage(self):
+        return storages.create_storage(S3_STORAGE["default"])
+
+    def test_the_task_ceiling_is_minutes_and_a_few_attempts(self):
+        config = _s3_task_client(self._storage()).meta.config
+        self.assertEqual(config.connect_timeout, 5)
+        self.assertEqual(config.read_timeout, 600)
+        # the standard mode retries the throttling errors, the 5xx errors and the connection errors. The task makes no
+        # retries.
+        self.assertEqual(config.retries, {"mode": "standard", "total_max_attempts": 3})
+
+    def test_each_client_is_built_once_and_the_two_are_not_the_same(self):
+        storage = self._storage()
+        self.assertIs(_s3_task_client(storage), _s3_task_client(storage))
+        self.assertIsNot(_s3_request_client(storage), _s3_task_client(storage))
+
+    def test_the_task_client_signs_with_sigv4(self):
+        # only a presign must set SigV4, because a request uses it by default. This test finds a change of the shared
+        # builder that removes it.
+        self.assertEqual(_s3_task_client(self._storage()).meta.config.signature_version, "s3v4")
