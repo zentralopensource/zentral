@@ -80,13 +80,17 @@ docker compose -f docker-compose.yml -f docker-compose.tests.yml run --rm \
 
 ## Docs
 
-User-facing docs live in [docs/](docs/), built with [mkdocs](https://www.mkdocs.org/) (config: [mkdocs.yml](mkdocs.yml)). After editing anything under `docs/`, validate with:
+User-facing docs live in [docs/](docs/), which is a **Hugo** site (config: [docs/hugo.yaml](docs/hugo.yaml), pages in `docs/content/`). They are published at https://www.zentral.com/docs/: the website build clones this repository and mounts `docs/content/` and `docs/layouts/` into its own Hugo site.
+
+Preview with `docker compose -f docker-compose.docs.yml up`, then open http://localhost:1314. After editing anything under `docs/`, run the check CI runs:
 
 ```
-mkdocs build --strict
+docker compose -f docker-compose.docs.yml run --rm docs hugo --panicOnWarning
 ```
 
-`--strict` promotes warnings (broken anchors, missing image paths, missing files) to errors. Plain `mkdocs build` reports the same issues as INFO/WARNING but still writes to `build/` (note: this project sets `site_dir: build/`, not the default `site/`). `mkdocs serve` gives a live preview at http://localhost:8000.
+Internal links carry the `.md` extension and are resolved against the page tree by a render hook, which **errors on a target it cannot resolve** — so a broken link fails the build instead of reaching the site. Raw HTML in markdown is dropped: this repository takes public pull requests and the output is served from the company website.
+
+Because the website supplies the configuration for the published build, the Hugo version and every markup option have to match on both sides. [docs/README.md](docs/README.md) says what is pinned where.
 
 ## Style & linting
 
