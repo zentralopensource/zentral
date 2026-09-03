@@ -136,6 +136,17 @@ The rules of a Santa configuration are a table now, with one row for each rule a
 The rules of a Santa target use the same two cells, with the configuration of the rule in the place of the target. The tab needs the `santa.view_rule` permission now. It is a list of rules, and the page asks for `santa.view_target` only: a user with the permission to add a rule, but not to view one, had the `Create a rule` menu on that page, and does not have it anymore.
 
 
+#### Turbo
+
+New **commands**, the third kind of job: a command collects something from a machine instead of producing a verdict. Two kinds are available. `sysdiagnose` collects a `sysdiagnose` archive and takes no options. `file_export` collects the files that match a list of path patterns, plus a manifest of what it collected, and takes `patterns` and an uncompressed `max_size`.
+
+A command is created with the `/api/turbo/commands/` endpoint, and *Turbo > Commands* lists them. The kind cannot be changed after the command is created. A change to the options bumps the version of the job, and the agent runs the command again.
+
+A command runs one time only: the server refuses to attach one to a recurring job.
+
+The upload of the collected files comes in a later release.
+
+
 ### Backward incompatibilities
 
 

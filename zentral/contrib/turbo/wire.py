@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Job, ScheduleMode
+from .models import ScheduleMode
 
 # The agent ↔ server wire contract, as declarative serializers. Validation is strict per entry,
 # tolerant per batch: a body that does not match its envelope is a 400, but a results/status entry
@@ -58,7 +58,14 @@ class WireRunSerializer(serializers.Serializer):
 class WireResultSerializer(serializers.Serializer):
     # one results[] entry: the §5 identity block + run + outcome. kind/pk/version are declarative —
     # the resolved schedule stays authoritative — so they only need to be well-formed when present.
-    kind = serializers.ChoiceField(choices=Job.Kind.values, required=False, allow_null=True, default=None)
+    #
+    # kind is a short string, not a choice over Job.Kind. During a rolling upgrade the instances
+    # have different sets of kinds. An entry with a kind that this instance does not know is a
+    # correct report of a run, not a malformed entry. A rejection drops the whole entry, the agent
+    # gets no acknowledgment, and the one-time job stays open. The entry reaches the view instead,
+    # and the resolved job decides: unknown_job_kind or kind_mismatch. max_length is the length of
+    # the Job.kind column.
+    kind = serializers.CharField(max_length=32, required=False, allow_null=True, default=None)
     pk = serializers.UUIDField(required=False, allow_null=True, default=None)
     version = serializers.IntegerField(required=False, allow_null=True, default=None,
                                        min_value=0, max_value=UINT_MAX)
@@ -83,7 +90,12 @@ class WireResultSerializer(serializers.Serializer):
 class WireStatusEntrySerializer(serializers.Serializer):
     # one status jobs[] entry: the identity block + the held schedule + last_run (event-only, so it
     # stays an open dict)
-    kind = serializers.ChoiceField(choices=Job.Kind.values, required=False, allow_null=True, default=None)
+    #
+    # kind is a short string, for the reason that WireResultSerializer gives. Here it is
+    # declarative: no code reads it, and the resolved job holds the kind. A choice only dropped
+    # the entry, and with it the tracker update. The next sweep then marks a job that the agent
+    # still holds as removed.
+    kind = serializers.CharField(max_length=32, required=False, allow_null=True, default=None)
     pk = serializers.UUIDField(required=False, allow_null=True, default=None)
     version = serializers.IntegerField(required=False, allow_null=True, default=None,
                                        min_value=0, max_value=UINT_MAX)

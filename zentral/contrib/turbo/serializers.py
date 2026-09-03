@@ -5,8 +5,10 @@ from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 
+from .command_backends import CommandBackend, get_command_backend_class
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
-from .models import Configuration, Enrollment, MSCPCheck, OneTimeJob, RecurringJob, Script
+from .models import (Command, Configuration, Enrollment, Job, MSCPCheck, OneTimeJob, RecurringJob,
+                     ScheduleMode, Script)
 
 
 class ConfigurationSerializer(serializers.ModelSerializer):
@@ -153,6 +155,66 @@ class MSCPCheckSerializer(serializers.ModelSerializer):
         return instance
 
 
+class CommandSerializer(serializers.ModelSerializer):
+    # One <backend>_kwargs field for each backend, like stores and probes. The sub-serializer
+    # belongs to the backend, so the API, the console and a future TF schema use one declaration.
+    sysdiagnose_kwargs = get_command_backend_class(CommandBackend.SYSDIAGNOSE).kwargs_serializer(
+        source="get_sysdiagnose_kwargs", required=False, allow_null=True)
+    file_export_kwargs = get_command_backend_class(CommandBackend.FILE_EXPORT).kwargs_serializer(
+        source="get_file_export_kwargs", required=False, allow_null=True)
+    version = serializers.IntegerField(source="job.version", read_only=True)
+    job_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = Command
+        fields = ("id", "backend", "name", "description",
+                  "sysdiagnose_kwargs", "file_export_kwargs",
+                  "version", "job_id", "created_at", "updated_at")
+
+    def validate(self, data):
+        data = super().validate(data)
+        backend = data.get("backend")
+        # The backend is the kind, and the kind is part of the wire identity of this definition.
+        # A new backend changes what the agent runs under the same pk and version. A different
+        # behaviour is a different command.
+        if self.instance is not None:
+            if backend is not None and backend != self.instance.backend:
+                raise serializers.ValidationError({"backend": "This field cannot be changed"})
+            backend = self.instance.backend
+        kwargs_field = f"{backend.lower()}_kwargs"
+        data["backend_kwargs"] = kwargs = data.pop(f"get_{backend.lower()}_kwargs", None)
+        # A kind with no options has nothing to send, so an absent block is normal. A kind with
+        # options must send them.
+        if not kwargs and get_command_backend_class(backend).kwargs_serializer().fields:
+            raise serializers.ValidationError({kwargs_field: "This field is required."})
+        data["backend_kwargs"] = kwargs or {}
+        for key in list(data):
+            if key.startswith("get_") and key.endswith("_kwargs"):
+                data.pop(key)
+        return data
+
+    def create(self, validated_data):
+        backend_kwargs = validated_data.pop("backend_kwargs")
+        command = Command.objects.create(**validated_data)   # mints the Job with kind == backend
+        command.set_backend_kwargs(backend_kwargs)
+        command.save()
+        return command
+
+    def update(self, instance, validated_data):
+        backend_kwargs = validated_data.pop("backend_kwargs")
+        # The version is on the Job, and a new version starts a new run. It changes only when the
+        # work of the agent changes. A new name or description does not change it.
+        bump = backend_kwargs != instance.get_backend_kwargs()
+        validated_data.pop("backend", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.set_backend_kwargs(backend_kwargs)
+        instance.save()
+        if bump:
+            instance.job.bump_version()
+        return instance
+
+
 class JobScopeSerializerMixin:
     def _scope_conflicts(self, data):
         def current(field, many):
@@ -192,6 +254,16 @@ class RecurringJobSerializer(JobScopeSerializerMixin, serializers.ModelSerialize
         fields = ("id", "configuration", "job", "interval",
                   "tags", "excluded_tags", "serial_numbers", "excluded_serial_numbers",
                   "created_at", "updated_at")
+
+    def validate(self, data):
+        data = super().validate(data)
+        # A kind for the one-time mode only cannot use a recurring schedule. The console removes
+        # it from the choices. The API must give the error.
+        job = data.get("job") or getattr(self.instance, "job", None)
+        if job is not None and ScheduleMode.RECURRING not in Job.allowed_schedule_modes(job.kind):
+            raise serializers.ValidationError(
+                {"job": f"A {job.get_kind_display()} job cannot be scheduled to run repeatedly"})
+        return data
 
 
 class OneTimeJobSerializer(JobScopeSerializerMixin, serializers.ModelSerializer):

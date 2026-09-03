@@ -78,7 +78,7 @@ class SearchFormListView(PermissionRequiredMixin, UserPaginationListView):
 
 
 class JobDetailMixin:
-    # shared by ScriptView / MSCPCheckView: the scheduled and one-time jobs that run this definition
+    # the recurring and one-time jobs that run this Script / MSCPCheck / Command
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         job = self.object.job

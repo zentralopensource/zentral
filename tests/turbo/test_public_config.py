@@ -5,9 +5,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineTag, Tag
+from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.events import TurboRequestEvent
-from zentral.contrib.turbo.models import EnrolledMachine, OneTimeJobMachine
-from .utils import (TurboPublicTestCase, force_configuration, force_enrolled_machine,
+from zentral.contrib.turbo.models import EnrolledMachine, Job, OneTimeJobMachine
+from .utils import (TurboPublicTestCase, force_command, force_configuration, force_enrolled_machine,
                     force_mscp_check, force_one_time_job, force_recurring_job, force_script)
 
 
@@ -93,6 +94,48 @@ class TurboConfigPublicTestCase(TurboPublicTestCase):
         jobs = self._config(token).json()["jobs"]
         self.assertEqual(jobs[0]["kind"], "mscp_check")
         self.assertEqual(jobs[0]["payload"], {"rule_id": mscp_check.rule_id, "baseline": "cis_lvl1"})
+
+    def test_config_sysdiagnose_payload_is_empty(self):
+        # A kind with no options also gets a payload key. The envelope is the same for every
+        # kind, so the agent decodes one shape.
+        configuration = force_configuration()
+        _, _, token = force_enrolled_machine(configuration=configuration, meta_business_unit=self.mbu)
+        command = force_command(backend=CommandBackend.SYSDIAGNOSE)
+        one_time_job = force_one_time_job(configuration=configuration, job=command.job)
+        jobs = self._config(token).json()["jobs"]
+        self.assertEqual(jobs, [{
+            "kind": "sysdiagnose",
+            "pk": str(command.job_id),
+            "version": 1,
+            "schedule": {"mode": "one_time", "pk": str(one_time_job.pk)},
+            "payload": {},
+        }])
+
+    def test_config_file_export_payload(self):
+        configuration = force_configuration()
+        _, _, token = force_enrolled_machine(configuration=configuration, meta_business_unit=self.mbu)
+        command = force_command(backend=CommandBackend.FILE_EXPORT,
+                                backend_kwargs={"patterns": ["/var/log/install.log*"], "max_size": 2048})
+        force_one_time_job(configuration=configuration, job=command.job)
+        jobs = self._config(token).json()["jobs"]
+        self.assertEqual(jobs[0]["kind"], "file_export")
+        self.assertEqual(jobs[0]["payload"],
+                         {"patterns": ["/var/log/install.log*"], "max_size": 2048})
+
+    def test_config_unknown_kind_skipped(self):
+        # During a rolling upgrade an older instance reads a Job that a newer instance wrote.
+        # It has no definition, so the endpoint skips the job. A dereference gives a 500 to
+        # every machine that holds the job, until the end of the upgrade.
+        configuration = force_configuration()
+        _, _, token = force_enrolled_machine(configuration=configuration, meta_business_unit=self.mbu)
+        script = force_script()
+        force_recurring_job(configuration=configuration, job=script.job)
+        future_job = Job.objects.create(kind="a_kind_from_the_future")
+        force_one_time_job(configuration=configuration, job=future_job)
+        with self.assertLogs("zentral.contrib.turbo.public_views.config", level="ERROR") as cm:
+            jobs = self._config(token).json()["jobs"]
+        self.assertEqual([job["kind"] for job in jobs], ["script"])
+        self.assertIn("a_kind_from_the_future", cm.output[0])
 
     # scope
 
