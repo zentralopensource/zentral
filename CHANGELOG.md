@@ -139,6 +139,17 @@ The rules of a Santa target use the same two cells, with the configuration of th
 The page of a Santa configuration has four tabs now: Overview, Rules, Scoped client modes and Scoped path regexes. The Overview gives the attributes of the configuration, its voting groups and its enrollments. The three other tabs are paginated, and each one has a search: the rule search for the rules, the mode for the scoped client modes, and the policy and a text for the scoped path regexes. The title of each of these tabs gives its number of items. A link to a scoped client mode or to a scoped path regex opens its tab with a search that finds it, as the link to a rule does. Before, the scoped client modes and the scoped path regexes were all on the page of the configuration, and the rules were on a page of their own.
 
 
+#### Turbo
+
+New **commands**, the third kind of job: a command collects something from a machine instead of producing a verdict. Two kinds are available. `sysdiagnose` collects a `sysdiagnose` archive and takes no options. `file_export` collects the files that match a list of path patterns, plus a manifest of what it collected, and takes `patterns` and an uncompressed `max_size`.
+
+A command is created with the `/api/turbo/commands/` endpoint, and *Turbo > Commands* lists them. The kind cannot be changed after the command is created. A change to the options bumps the version of the job, and the agent runs the command again.
+
+A command runs one time only: the server refuses to attach one to a recurring job.
+
+The upload of the collected files comes in a later release.
+
+
 ### Backward incompatibilities
 
 

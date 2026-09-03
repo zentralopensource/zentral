@@ -1,5 +1,6 @@
 from django.urls import path
-from .api_views import (ConfigurationList, ConfigurationDetail,
+from .api_views import (CommandList, CommandDetail,
+                        ConfigurationList, ConfigurationDetail,
                         EnrollmentList, EnrollmentDetail,
                         EnrollmentPlist, EnrollmentConfigurationProfile,
                         MSCPCheckList, MSCPCheckDetail,
@@ -17,6 +18,8 @@ urlpatterns = [
     path('enrollments/<int:pk>/plist/', EnrollmentPlist.as_view(), name="enrollment_plist"),
     path('enrollments/<int:pk>/configuration_profile/', EnrollmentConfigurationProfile.as_view(),
          name="enrollment_configuration_profile"),
+    path('commands/', CommandList.as_view(), name="commands"),
+    path('commands/<uuid:pk>/', CommandDetail.as_view(), name="command"),
     path('scripts/', ScriptList.as_view(), name="scripts"),
     path('scripts/<uuid:pk>/', ScriptDetail.as_view(), name="script"),
     path('mscp_checks/', MSCPCheckList.as_view(), name="mscp_checks"),
