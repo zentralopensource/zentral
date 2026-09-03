@@ -5,7 +5,7 @@ import time
 from typing import Optional
 import weakref
 
-from cedarpy import is_authorized, is_authorized_batch, PolicySet
+from cedarpy import Decision, is_authorized, is_authorized_batch, is_authorized_partial, PolicySet
 
 from base.notifier import notifier
 from .entities import Entity, Request
@@ -78,15 +78,38 @@ zentral_policies_sync = os.environ.get("ZENTRAL_POLICIES_SYNC", "1") == "1"
 policies_cache = PoliciesCache(with_sync=zentral_policies_sync)
 
 
+def _serialize_value(value, collected_entities: dict):
+    """Render a value for Cedar, collecting every entity it points at, however deeply.
+
+    An entity attribute or a context key may itself be an Entity — a one-time job pointing at the job
+    it runs, a create request naming the job it is about — which Cedar reads as a reference. The
+    referenced entity has to be in the slice as well: Cedar resolves ``context.job.kind`` against the
+    store, and an entity that is not there fails the dereference. That failure turns a forbid into an
+    allow with nothing but a diagnostic to show for it, so the walk is what keeps an entity-valued
+    declaration from being quietly unenforceable.
+    """
+    if isinstance(value, Entity):
+        _serialize_entity(value, collected_entities)
+        return {"__entity": {"type": value.full_type, "id": value.id}}
+    if isinstance(value, dict):
+        return {k: _serialize_value(v, collected_entities) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_serialize_value(v, collected_entities) for v in value]
+    return value
+
+
 def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
     key = (entity.full_type, entity.id)
     if key not in collected_entities:
         serialized_entity = {
             "uid": {"type": entity.full_type, "id": entity.id},
-            "attrs": dict(entity.attrs),
+            "attrs": {},
             "parents": []
         }
+        # in the dict before the attributes are walked, so an entity that points back at this one
+        # does not recurse forever
         collected_entities[key] = serialized_entity
+        serialized_entity["attrs"] = _serialize_value(entity.attrs, collected_entities)
         for parent in entity.parents:
             _serialize_entity(parent, collected_entities)
             serialized_entity["parents"].append({"type": parent.full_type, "id": parent.id})
@@ -97,6 +120,8 @@ def _serialize_requests_entities(requests: list[Request]) -> list:
     for request in requests:
         for entity in (request.principal, request.action, request.resource):
             _serialize_entity(entity, collected_entities)
+        # the context too: an entity named there is dereferenced against the same store
+        _serialize_value(request.context, collected_entities)
     return list(collected_entities.values())
 
 
@@ -105,7 +130,11 @@ def _serialize_request(request: Request, correlation_id: Optional[str] = None) -
         "principal": str(request.principal),
         "action": str(request.action),
         "resource": str(request.resource),
-        "context": request.context,
+        # None, not {}: is_authorized_partial reads an absent context as unknown and residualizes,
+        # where an empty one is a record with no attributes and a policy reading one fails on it.
+        # The collector is thrown away here — _serialize_requests_entities does the collecting — but
+        # the rendering is the same, so an Entity in the context reaches Cedar as a reference.
+        "context": None if request.unknown_context else _serialize_value(request.context, {}),
     }
     if correlation_id:
         data["correlation_id"] = correlation_id
@@ -128,6 +157,23 @@ def authorize_request(request: Request) -> None:
         _serialize_requests_entities([request]),
     )
     request.is_authorized = cedar_result.allowed
+
+
+def authorize_request_preview(request: Request) -> None:
+    """Answer a request whose context is not complete yet, by partial evaluation.
+
+    This is NOT a final authorization decision, and cedarpy says so itself: an Allow here holds only
+    for the unknowns that were supplied. Only Deny is definitive — no policy can permit the request
+    whatever the missing context turns out to be. Allow and NoDecision both mean "could be permitted",
+    which is the right answer for a view asking whether to offer an action at all; the real decision
+    is made later, on a request that carries the whole context.
+    """
+    cedar_result = is_authorized_partial(
+        _serialize_request(request),
+        policies_cache.policy_set,
+        _serialize_requests_entities([request]),
+    )
+    request.is_authorized = cedar_result.decision != Decision.Deny
 
 
 def authorize_requests(requests: list[Request]) -> None:
