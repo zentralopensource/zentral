@@ -109,7 +109,7 @@ The page of an enrolled machine lists the artifacts its jobs collected — one r
 
 The resource of both actions is the upload, and it is a member of two containers: the `Inventory::Machine` it came from, which brings meta business unit scoping with it, and the `Turbo::Configuration` that collected it. One `forbid` on the configuration therefore covers the whole lifecycle, the scheduling and the artifacts together. The upload carries the artifact name and the job as an entity, so a policy can also read `resource.job.kind`.
 
-Configure the `AbortIncompleteMultipartUpload` lifecycle rule on the bucket. Zentral drops the parts when an agent reports that it gave up, but the rule is the only thing that removes the parts of an upload the agent never reports, and parts are stored, and billed, until something removes them.
+If you manage your own deployment, configure the lifecycle rules of the bucket. Zentral writes the collected artifacts and never removes them, so an `Expiration` rule on the `turbo/uploads/` prefix is what decides how long they are kept — 14 days is a good default for files that hold the data of the person who uses the machine. An `AbortIncompleteMultipartUpload` rule on the whole bucket removes the parts of an upload that never completed: Zentral drops them when an agent reports that it gave up, but that report can be a day behind and may never arrive, and parts are stored, and billed, until something removes them. On a bucket with versioning, add a rule with `ExpiredObjectDeleteMarker` too.
 
 
 ### Backward incompatibilities
