@@ -311,6 +311,24 @@ def abort_multipart_upload(key, upload_id, storage):
         Bucket=storage.bucket_name, Key=_object_key(storage, key), UploadId=upload_id)
 
 
+def generate_presigned_get(key, filename, storage):
+    """A signed GET, asking the storage to hand the object over rather than render it.
+
+    The key already ends in the artifact's filename, so a browser saves the right name from the path
+    alone — but a small manifest.json would open in the tab rather than be saved, and the disposition
+    is what settles that. It is signed with the URL, so it cannot be stripped off on the way.
+
+    S3 only. The two storages spell the option differently — GCS calls it response_disposition, on
+    generate_signed_url — and the subclass Zentral uses to sign through IAM signBlob overrides url()
+    without the parameters argument at all, so passing one there is a TypeError rather than a wrong
+    header. A GCS deployment gets a plain signed URL and a manifest that opens in the tab.
+    """
+    if not file_storage_has_presigned_uploads(storage):
+        return storage.url(key)
+    return storage.url(key, parameters={
+        "ResponseContentDisposition": f'attachment; filename="{filename}"'})
+
+
 def select_dist_storage():
     try:
         return storages["dist"]
