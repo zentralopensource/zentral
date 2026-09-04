@@ -4,10 +4,10 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
-from pbac.cedar import (_serialize_requests_entities, authorize_request, authorize_requests,
-                        PoliciesCache, policies_cache)
+from pbac.cedar import (_serialize_request, _serialize_requests_entities, authorize_request,
+                        authorize_requests, PoliciesCache, policies_cache)
 from pbac.engine import engine
-from pbac.entities import Action, Namespace, Principal, Request, Resource
+from pbac.entities import Action, Entity, Namespace, Principal, Request, Resource
 from .utils import force_policy
 
 
@@ -199,3 +199,176 @@ class SerializeRequestsEntitiesTestCase(TestCase):
         self.assertIn(("Accounts::Action", "AdminActions"), entities)
         self.assertIn(("Inventory::Action", "AdminActions"), entities)
         self.assertIn(("Action", "GlobalAdminActions"), entities)
+
+
+class PBACCedarPreviewTestCase(TestCase):
+    """authorize_request_preview: the partial evaluation behind an unknown context.
+
+    A view that has to decide whether to offer an action cannot always fill in the context — the user
+    has not picked the object that would complete it yet. Answering that with a full evaluation would
+    force every context attribute to be declared optional and every policy to carry a `has` guard, so
+    the request is marked unknown_context and answered by partial evaluation instead.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            get_random_string(12),
+            f"{get_random_string(12)}@zentral.com",
+            is_superuser=False,
+        )
+        cls.group = Group.objects.create(name=get_random_string(12))
+        cls.user.groups.add(cls.group)
+
+    def setUp(self):
+        policies_cache.clear()
+        if hasattr(self.user, "_pbac_principal"):
+            del self.user._pbac_principal
+
+    def _policy(self, source):
+        Policy.objects.update_or_create(name="Tests", defaults={"source": format_policies(source)})
+        policies_cache.clear()
+
+    def _request(self, unknown_context, context=None):
+        return Request(
+            Principal.from_user(self.user),
+            engine.legacy_perm_actions["inventory.add_machinetag"],
+            engine.system_any_resource,
+            context,
+            unknown_context=unknown_context,
+        )
+
+    def test_preview_is_not_refused_by_a_condition_it_cannot_evaluate(self):
+        # the point: a policy reading an attribute the request cannot supply yet must not turn the
+        # preview into a refusal
+        self._policy(f'permit (principal in Role::"{self.group.pk}", '
+                     f'action == Inventory::Action::"createMachineTag", resource) '
+                     'when { context.tagName == "yolo" };')
+        request = self._request(unknown_context=True)
+        engine.authorize_request(request)
+        self.assertTrue(request.is_authorized)
+
+    def test_the_same_condition_refuses_a_full_request_that_does_not_match(self):
+        self._policy(f'permit (principal in Role::"{self.group.pk}", '
+                     f'action == Inventory::Action::"createMachineTag", resource) '
+                     'when { context.tagName == "yolo" };')
+        request = self._request(unknown_context=False, context={"tagName": "fomo"})
+        engine.authorize_request(request)
+        self.assertFalse(request.is_authorized)
+
+    def test_preview_is_refused_when_no_policy_matches_at_all(self):
+        # Deny is the one definitive answer a preview gives
+        self._policy(f'permit (principal in Role::"{self.group.pk}", '
+                     f'action == Inventory::Action::"deleteMachineTag", resource);')
+        request = self._request(unknown_context=True)
+        engine.authorize_request(request)
+        self.assertFalse(request.is_authorized)
+
+    def test_preview_is_granted_by_an_unconditional_policy(self):
+        self._policy(f'permit (principal in Role::"{self.group.pk}", '
+                     f'action == Inventory::Action::"createMachineTag", resource);')
+        request = self._request(unknown_context=True)
+        engine.authorize_request(request)
+        self.assertTrue(request.is_authorized)
+
+    def test_a_full_request_with_an_empty_context_is_refused_by_the_same_policy(self):
+        # what a preview is NOT: an empty context is a record with no attributes, and reading one
+        # fails, which is why the coarse question cannot ride the full evaluator
+        self._policy(f'permit (principal in Role::"{self.group.pk}", '
+                     f'action == Inventory::Action::"createMachineTag", resource) '
+                     'when { context.tagName == "yolo" };')
+        request = self._request(unknown_context=False, context={})
+        engine.authorize_request(request)
+        self.assertFalse(request.is_authorized)
+
+    def test_batch_mixes_previews_and_full_requests(self):
+        self._policy(f'permit (principal in Role::"{self.group.pk}", '
+                     f'action == Inventory::Action::"createMachineTag", resource) '
+                     'when { context.tagName == "yolo" };')
+        preview = self._request(unknown_context=True)
+        matching = self._request(unknown_context=False, context={"tagName": "yolo"})
+        other = self._request(unknown_context=False, context={"tagName": "fomo"})
+        engine.authorize_requests([preview, matching, other])
+        self.assertEqual([preview.is_authorized, matching.is_authorized, other.is_authorized],
+                         [True, True, False])
+
+    def test_a_superuser_short_circuits_before_either_evaluator(self):
+        superuser = User.objects.create_user(
+            get_random_string(12), f"{get_random_string(12)}@zentral.com", is_superuser=True)
+        request = Request(
+            Principal.from_user(superuser),
+            engine.legacy_perm_actions["inventory.add_machinetag"],
+            engine.system_any_resource,
+            unknown_context=True,
+        )
+        self.assertFalse(request.is_pending)
+        self.assertTrue(request.is_authorized)
+
+
+class PBACCedarContextEntityTestCase(TestCase):
+    """An entity named in a context or an attribute has to reach the entity slice.
+
+    Cedar dereferences ``context.job.kind`` against the store it is given. An entity that is not
+    there fails the dereference, which turns a forbid into an allow with nothing but a diagnostic —
+    so the walk that collects them is load-bearing, not a convenience.
+    """
+
+    def _entity(self, type_name, id, attrs=None, parents=None):
+        return Entity(type_name, id, attrs=attrs or {}, parents=parents or [])
+
+    def _request(self, context):
+        return Request(
+            Principal.from_user(User(username="u", pk=1)),
+            engine.legacy_perm_actions["inventory.add_machinetag"],
+            engine.system_any_resource,
+            context,
+        )
+
+    def _slice(self, request):
+        return {(e["uid"]["type"], e["uid"]["id"]) for e in _serialize_requests_entities([request])}
+
+    def test_an_entity_in_the_context_reaches_the_slice(self):
+        job = self._entity("Job", "j1", attrs={"kind": "file_export"})
+        self.assertIn(("Job", "j1"), self._slice(self._request({"job": job})))
+
+    def test_an_entity_nested_in_a_context_record_reaches_the_slice(self):
+        job = self._entity("Job", "j1")
+        self.assertIn(("Job", "j1"), self._slice(self._request({"scope": {"job": job}})))
+
+    def test_entities_in_a_context_list_reach_the_slice(self):
+        tags = [self._entity("Tag", "t1"), self._entity("Tag", "t2")]
+        found = self._slice(self._request({"tags": tags}))
+        self.assertIn(("Tag", "t1"), found)
+        self.assertIn(("Tag", "t2"), found)
+
+    def test_an_entity_attribute_of_an_entity_reaches_the_slice(self):
+        job = self._entity("Job", "j1")
+        row = self._entity("OneTimeJob", "o1", attrs={"job": job})
+        self.assertIn(("Job", "j1"), self._slice(self._request({"row": row})))
+
+    def test_a_context_entity_is_rendered_as_a_reference(self):
+        job = self._entity("Job", "j1")
+        serialized = _serialize_request(self._request({"job": job}))
+        self.assertEqual(serialized["context"],
+                         {"job": {"__entity": {"type": "Job", "id": "j1"}}})
+
+    def test_a_context_without_entities_is_unchanged(self):
+        serialized = _serialize_request(self._request({"tagName": "yolo", "n": 3}))
+        self.assertEqual(serialized["context"], {"tagName": "yolo", "n": 3})
+
+    def test_a_preview_sends_no_context_even_when_one_was_built(self):
+        request = Request(
+            Principal.from_user(User(username="u", pk=1)),
+            engine.legacy_perm_actions["inventory.add_machinetag"],
+            engine.system_any_resource,
+            unknown_context=True,
+        )
+        self.assertIsNone(_serialize_request(request)["context"])
+
+    def test_a_cycle_between_two_entities_terminates(self):
+        left = self._entity("Job", "left")
+        right = self._entity("Job", "right", attrs={"other": left})
+        left.attrs["other"] = right
+        found = self._slice(self._request({"job": left}))
+        self.assertIn(("Job", "left"), found)
+        self.assertIn(("Job", "right"), found)

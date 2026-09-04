@@ -4,9 +4,12 @@ import uuid
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaMachine
+from accounts.models import Policy
+from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.models import OneTimeJob, RecurringJobMachine
-from .utils import (TurboSetupTestCase, force_configuration, force_enrolled_machine, force_enrollment,
-                    force_mscp_check, force_recurring_job, force_script)
+from .utils import (TurboSetupTestCase, forbid_job_kind_policy, force_command,
+                    force_configuration, force_enrolled_machine, force_enrollment,
+                    force_mscp_check, force_recurring_job, force_script, turbo_policy)
 
 
 class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
@@ -152,7 +155,7 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
         self.assertEqual(response.content.decode("utf-8").count('aria-label="Page navigation"'), 2)
 
     def test_schedule_machine_one_time_job_not_found(self):
-        self.login("turbo.add_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
         response = self.client.get(
             reverse("turbo:schedule_machine_one_time_job", args=(get_random_string(12),)))
         self.assertEqual(response.status_code, 404)
@@ -161,7 +164,7 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         _, serial_number, _ = force_enrolled_machine(configuration=configuration, meta_business_unit=self.mbu)
         script = force_script()
-        self.login("turbo.add_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
         response = self.client.post(
             reverse("turbo:schedule_machine_one_time_job", args=(serial_number,)),
             {"job": str(script.job.pk), "not_before": "2026-07-02 10:00", "not_after": "2026-07-01 10:00"})
@@ -171,22 +174,33 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
     # schedule one-time job
 
     def test_schedule_machine_one_time_job_permission_denied(self):
+        # can see enrolled machines, but nothing grants the scheduling action
         _, serial_number, _ = force_enrolled_machine(meta_business_unit=self.mbu)
-        self.login("turbo.view_enrolledmachine")  # missing turbo.add_onetimejob
+        self.login("turbo.view_enrolledmachine")
         response = self.client.get(reverse("turbo:schedule_machine_one_time_job", args=(serial_number,)))
         self.assertEqual(response.status_code, 403)
 
     def test_schedule_machine_one_time_job_permission_checked_before_lookup(self):
-        # without the permission, an unknown serial returns 403 (not 404) — the response must not reveal
-        # whether the serial is enrolled
-        self.login("turbo.view_enrolledmachine")  # missing turbo.add_onetimejob
+        # for someone who cannot see enrolled machines at all, an unknown serial returns 403 and not
+        # 404: the response must not reveal whether the serial is enrolled. The scheduling action
+        # cannot be the gate that runs first — its resource is the configuration, and that is only
+        # known once the serial resolves — so turbo.view_enrolledmachine is.
+        self.login()
         response = self.client.get(
             reverse("turbo:schedule_machine_one_time_job", args=(get_random_string(12),)))
         self.assertEqual(response.status_code, 403)
 
+    def test_schedule_machine_one_time_job_unknown_serial(self):
+        # with access to enrolled machines an unknown serial is an honest 404: someone holding
+        # view_enrolledmachine can already list them, so there is nothing left to hide
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
+        response = self.client.get(
+            reverse("turbo:schedule_machine_one_time_job", args=(get_random_string(12),)))
+        self.assertEqual(response.status_code, 404)
+
     def test_schedule_machine_one_time_job_get(self):
         _, serial_number, _ = force_enrolled_machine(meta_business_unit=self.mbu)
-        self.login("turbo.add_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
         response = self.client.get(reverse("turbo:schedule_machine_one_time_job", args=(serial_number,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/machineonetimejob_form.html")
@@ -195,7 +209,7 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         _, serial_number, _ = force_enrolled_machine(configuration=configuration, meta_business_unit=self.mbu)
         script = force_script()
-        self.login("turbo.add_onetimejob", "turbo.view_enrolledmachine")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
         response = self.client.post(
             reverse("turbo:schedule_machine_one_time_job", args=(serial_number,)),
             {"job": str(script.job.pk)}, follow=True)
@@ -204,3 +218,32 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
         one_time_job = OneTimeJob.objects.get(job=script.job, configuration=configuration)
         self.assertEqual(one_time_job.serial_numbers, [serial_number])
         self.assertEqual(one_time_job.tags.count(), 0)
+
+    # PBAC: a forbid keyed on the job's kind refuses the schedule even though the role is granted
+    # the action. The forbid rides on top of the broad grant turbo_policy() writes — one of two
+    # shapes that work, the other being a kind-scoped permit on its own (pinned in test_pbac).
+
+    def _forbid_kind(self, kind):
+        Policy.objects.create(name="Turbo kind forbid", source=forbid_job_kind_policy(kind))
+
+    def test_schedule_machine_one_time_job_refused_by_a_forbidden_kind(self):
+        _, serial_number, _ = force_enrolled_machine(meta_business_unit=self.mbu)
+        command = force_command(backend=CommandBackend.FILE_EXPORT)
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
+        self._forbid_kind("file_export")
+        response = self.client.post(
+            reverse("turbo:schedule_machine_one_time_job", args=(serial_number,)),
+            {"job": str(command.job.pk)})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(OneTimeJob.objects.filter(job=command.job).count(), 0)
+
+    def test_schedule_machine_one_time_job_allowed_for_another_kind(self):
+        _, serial_number, _ = force_enrolled_machine(meta_business_unit=self.mbu)
+        command = force_command(backend=CommandBackend.SYSDIAGNOSE)
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
+        self._forbid_kind("file_export")
+        response = self.client.post(
+            reverse("turbo:schedule_machine_one_time_job", args=(serial_number,)),
+            {"job": str(command.job.pk)}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(OneTimeJob.objects.filter(job=command.job).count(), 1)
