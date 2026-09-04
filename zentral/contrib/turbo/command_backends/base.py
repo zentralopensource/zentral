@@ -35,6 +35,10 @@ class BaseCommand(Backend):
     allowed_modes = frozenset()
     artifacts = ()
     requires_upload = False
+    # The upload limit of the kind, under the limit of the deployment. None means the limit of the
+    # deployment. Without this default, Command.max_upload_size raises an AttributeError for a kind
+    # that does not set it, and the mint gives a 500.
+    max_upload_size = None
 
     def wire_payload(self):
         raise NotImplementedError
