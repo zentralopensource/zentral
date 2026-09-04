@@ -95,11 +95,13 @@ def get_one_time_job_resource(one_time_job) -> Resource:
                     attrs={"job": get_job_resource(one_time_job.job)})
 
 
-def get_job_upload_resource(upload, configuration, job) -> Resource:
+def get_job_upload_resource(upload, machine, configuration, job) -> Resource:
+    # the machine comes from the caller: get_meta_machine_resource caches its parents on the object,
+    # so one MetaMachine per serial is one query, and a new one per row is a query per row on a page
+    # where every row carries the same serial
     return Resource(
         "JobUpload", str(upload.pk), get_namespace(),
-        [get_meta_machine_resource(MetaMachine(upload.serial_number)),
-         get_configuration_resource(configuration)],
+        [get_meta_machine_resource(machine), get_configuration_resource(configuration)],
         attrs={"artifact": upload.artifact, "job": get_job_resource(job)},
     )
 
@@ -268,11 +270,11 @@ class BaseJobUploadRequest(Request):
     # the upload exists and the caller holds it, so there is nothing to preview and no unknown context
     pbac_action = None
 
-    def __init__(self, user_obj, upload, configuration, job) -> None:
+    def __init__(self, user_obj, upload, machine, configuration, job) -> None:
         super().__init__(
             Principal.from_user(user_obj),
             self.pbac_action,
-            get_job_upload_resource(upload, configuration, job),
+            get_job_upload_resource(upload, machine, configuration, job),
         )
 
 
@@ -332,8 +334,10 @@ def offerable_jobs(user_obj, configuration, queryset):
     engine.authorize_requests(requests)
     return [job for job, pbac_request in zip(jobs, requests) if pbac_request.is_authorized]
 
+
 def check_download_job_upload(request, upload, configuration, job):
-    _check(request, DownloadJobUploadRequest(request.user, upload, configuration, job))
+    _check(request, DownloadJobUploadRequest(
+        request.user, upload, MetaMachine(upload.serial_number), configuration, job))
 
 
 def authorize_job_upload_rows(user_obj, uploads):
@@ -349,6 +353,7 @@ def authorize_job_upload_rows(user_obj, uploads):
     """
     uploads = list(uploads)
     schedules = resolve_upload_schedules(uploads)
+    machines = {}
     placed = []
     requests = []
     for upload in uploads:
@@ -357,10 +362,11 @@ def authorize_job_upload_rows(user_obj, uploads):
             logger.warning("Turbo upload %s: no schedule %s", upload.pk, upload.schedule_pk)
             continue
         configuration, job = resolved
+        machine = machines.setdefault(upload.serial_number, MetaMachine(upload.serial_number))
         upload.job = job
         placed.append(upload)
-        requests.append(ViewJobUploadRequest(user_obj, upload, configuration, job))
-        requests.append(DownloadJobUploadRequest(user_obj, upload, configuration, job))
+        requests.append(ViewJobUploadRequest(user_obj, upload, machine, configuration, job))
+        requests.append(DownloadJobUploadRequest(user_obj, upload, machine, configuration, job))
     engine.authorize_requests(requests)
     visible = []
     for index, upload in enumerate(placed):

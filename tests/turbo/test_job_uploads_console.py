@@ -26,6 +26,16 @@ S3_STORAGE = {"default": {"BACKEND": "storages.backends.s3.S3Storage",
                                       "region_name": "us-east-1"}},
               "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
 
+# a deployment with a SEPARATE dist storage: the upload plane writes to `default` throughout, so a
+# download reaching for the dist one would point at a bucket the artifact was never written to
+SPLIT_STORAGE = {"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+                 "dist": {"BACKEND": "storages.backends.s3.S3Storage",
+                          "OPTIONS": {"bucket_name": "zentral-dist-tests",
+                                      "access_key": "AKIAIOSFODNN7EXAMPLE",
+                                      "secret_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                                      "region_name": "us-east-1"}},
+                 "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
+
 ARTIFACT_ACTIONS = ('Turbo::Action::"viewJobUpload"', 'Turbo::Action::"downloadJobUpload"')
 
 
@@ -208,6 +218,22 @@ class TurboJobUploadConsoleTestCase(TurboSetupTestCase):
         # saved, not rendered, and under the name the key already ends in
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertIn(upload.key.rsplit("/", 1)[-1], response["Content-Disposition"])
+
+    @override_settings(STORAGES=SPLIT_STORAGE)
+    def test_the_download_reads_the_storage_the_plane_writes_to(self):
+        # the whole plane writes to `default`: the mint presigns against it, the hosted PUT saves to
+        # it, the verification reads it. A deployment with a separate dist storage would otherwise
+        # send every download to a bucket that never held the artifact, and answer a 404 after the
+        # redirect.
+        _, _, _, upload = self._machine_with_upload()
+        storage = storages["default"]
+        storage.save(upload.key, ContentFile(b"a sysdiagnose"))
+        self.addCleanup(storage.delete, upload.key)
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine",
+                                            actions=ARTIFACT_ACTIONS))
+        response = self.client.get(reverse("turbo:download_job_upload", args=(upload.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"a sysdiagnose")
 
     @override_settings(STORAGES=S3_STORAGE)
     def test_a_signing_storage_redirects_with_the_disposition_signed(self):
