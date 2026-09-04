@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from zentral.contrib.inventory.models import MachineTag
 from ..models import Job, OneTimeJob, OneTimeJobMachine, RecurringJob
+from ..uploads import upload_digests, upload_max_size
 from .base import BaseEnrolledMachineView
 
 logger = logging.getLogger("zentral.contrib.turbo.public_views.config")
@@ -74,4 +75,12 @@ class ConfigView(BaseEnrolledMachineView):
                              # inventory is not a job in v1 — tell the agent whether/how often to post it
                              "collect_inventory": configuration.collect_inventory,
                              "inventory_interval": configuration.inventory_interval,
+                             # what the DEPLOYMENT can take, so the agent fails fast instead of
+                             # compressing an artifact it will not be allowed to send, and hashes
+                             # once instead of probing. The per-kind maxima clamp below the ceiling,
+                             # server-side at mint. No part size: nothing the agent computes depends
+                             # on the chunk geometry, so the server picks the mode and returns the
+                             # geometry with the URLs.
+                             "upload_max_size": upload_max_size(),
+                             "upload_digests": upload_digests(),
                              "jobs": jobs})
