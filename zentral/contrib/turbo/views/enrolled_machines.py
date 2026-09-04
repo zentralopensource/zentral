@@ -2,14 +2,14 @@ import os.path
 from functools import cached_property
 
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.files.storage import storages
 from django.db.models import F
 from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import TemplateView, View
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.utils.storage import (file_storage_has_signed_urls, generate_presigned_get,
-                                   select_dist_storage)
+from zentral.utils.storage import file_storage_has_signed_urls, generate_presigned_get
 from zentral.utils.views import CreateViewWithAudit
 from ..forms import EnrolledMachineSearchForm, MachineOneTimeJobForm
 from ..models import (EnrolledMachine, Job, JobUpload, OneTimeJob, OneTimeJobMachine,
@@ -80,14 +80,14 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         ctx["selected_kind"] = kind
         # the artifacts this machine has been asked for, newest first. Filtered by policy rather than
         # merely unlinked: an upload the user may not see is absent from the page.
-        uploads = (JobUpload.objects.filter(serial_number=serial_number)
-                                    .order_by("-created_at"))
+        uploads = authorize_job_upload_rows(
+            self.request.user,
+            JobUpload.objects.filter(serial_number=serial_number).order_by("-created_at"))
         if kind:
-            schedules = resolve_upload_schedules(uploads)
-            uploads = [upload for upload in uploads
-                       if (schedules.get(upload.schedule_pk) or (None, None))[1]
-                       and schedules[upload.schedule_pk][1].kind == kind]
-        ctx["job_uploads"] = authorize_job_upload_rows(self.request.user, uploads)
+            # after the decision, on the job it already resolved: filtering first would resolve every
+            # schedule a second time
+            uploads = [upload for upload in uploads if upload.job.kind == kind]
+        ctx["job_uploads"] = uploads
         return ctx
 
 
@@ -102,7 +102,11 @@ class DownloadJobUploadView(PermissionRequiredMixin, View):
 
     @cached_property
     def _file_storage(self):
-        return select_dist_storage()
+        # the storage the plane WRITES to: the mint presigns against it, the hosted PUT saves to it,
+        # and the verification reads it. select_dist_storage() is for the MDM artifacts, and a
+        # deployment that configures a separate dist storage would send every download to a bucket
+        # the artifact was never written to.
+        return storages["default"]
 
     def get(self, request, **kwargs):
         upload = get_object_or_404(JobUpload, pk=kwargs["pk"])
