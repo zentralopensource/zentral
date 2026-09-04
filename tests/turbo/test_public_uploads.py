@@ -7,16 +7,18 @@ from unittest.mock import patch
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.events import TurboRequestEvent, TurboResultEvent
-from zentral.contrib.turbo.models import (Job, JobUpload, OneTimeJobMachine, UploadStatus,
-                                          UploadVerification)
+from zentral.contrib.turbo.models import (Job, JobUpload, OneTimeJobMachine, UploadMode,
+                                          UploadStatus, UploadVerification)
 from zentral.contrib.turbo.uploads import (MAX_PENDING_UPLOADS, MAX_UPLOAD_ATTEMPTS,
+                                           MULTIPART_PART_SIZE, MULTIPART_THRESHOLD, part_lengths,
                                            sign_hosted_upload)
+from zentral.utils.storage import StorageError, StorageUnavailable
 
 from .utils import (TurboPublicTestCase, force_command, force_configuration, force_enrolled_machine,
                     force_one_time_job, force_recurring_job, force_script, mint_body)
@@ -328,7 +330,10 @@ class TurboUploadMintTestCase(TurboPublicTestCase):
     # requests the agent should abandon silently
 
     @override_settings(STORAGES=S3_STORAGE)
-    def test_the_kind_cap_applies_under_the_deployment_ceiling(self):
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload", return_value="mpu-1")
+    def test_the_kind_cap_applies_under_the_deployment_ceiling(self, create_multipart_upload):
+        # both sizes are above the multipart threshold, so the accepted size starts a multipart upload. This test is
+        # about the maximum size.
         # file_export caps at 500 MiB, well under the 2 GiB an S3 deployment would take. Read off the
         # model with getattr() the cap was always None and only the deployment ceiling applied, so a
         # 600 MiB export minted fine — the old test used 10 GiB and could not see it.
@@ -1301,3 +1306,349 @@ class TurboUploadIngestTestCase(TurboPublicTestCase):
         self.assertEqual(response.status_code, 410)
         self.assertEqual(response.json(), {"error": "already_failed"})
         self.assertEqual(JobUpload.objects.get(run_id=run_id).attempts, 1)
+
+
+class TurboPartGeometryTestCase(SimpleTestCase):
+    """The part lengths. The mint response gives them, so the agent does not calculate them."""
+
+    def test_an_exact_multiple_has_no_tail(self):
+        self.assertEqual(part_lengths(200, 100), [100, 100])
+
+    def test_a_remainder_is_the_last_part(self):
+        self.assertEqual(part_lengths(250, 100), [100, 100, 50])
+
+    def test_the_lengths_add_up_to_the_artifact(self):
+        for size in (MULTIPART_THRESHOLD, MULTIPART_THRESHOLD + 1, 5 * MULTIPART_PART_SIZE - 1):
+            with self.subTest(size=size):
+                lengths = part_lengths(size, MULTIPART_PART_SIZE)
+                self.assertEqual(sum(lengths), size)
+                # all the parts, but the last, have the part size, so a resumed part agrees with the uploaded parts
+                self.assertTrue(all(length == MULTIPART_PART_SIZE for length in lengths[:-1]))
+                self.assertLessEqual(lengths[-1], MULTIPART_PART_SIZE)
+
+    def test_the_threshold_is_two_part_sizes(self):
+        # at one part size, an artifact of part_size + 1 bytes has a second part of one byte, and a resume saves
+        # nothing
+        self.assertEqual(MULTIPART_THRESHOLD, 2 * MULTIPART_PART_SIZE)
+        self.assertEqual(len(part_lengths(MULTIPART_THRESHOLD, MULTIPART_PART_SIZE)), 2)
+
+
+@override_settings(STORAGES=S3_STORAGE)
+class TurboMultipartMintTestCase(TurboPublicTestCase):
+    """The mint with a storage that can presign. The server decides the mode."""
+
+    CRC = "9c3fa1075ed248b1"
+
+    def _mint(self, token, body):
+        return self.client.post(
+            reverse("turbo_public:uploads"),
+            data=json.dumps(body),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"TurboEnrolledMachine {token}",
+        )
+
+    def _scheduled(self):
+        configuration = force_configuration()
+        _, serial_number, token = force_enrolled_machine(configuration=configuration,
+                                                         meta_business_unit=self.mbu)
+        command = force_command(backend=CommandBackend.SYSDIAGNOSE)
+        one_time_job = force_one_time_job(configuration=configuration, job=command.job,
+                                          serial_numbers=[serial_number])
+        return token, one_time_job
+
+    def _body(self, one_time_job, size, run_id=None, missing_parts=None):
+        body = mint_body(one_time_job.pk, run_id or uuid.uuid4(), size=size, sha256=SHA256,
+                         digests={"crc64nvme": self.CRC})
+        if missing_parts is not None:
+            # not in the upload block, because a result entry does not have it
+            body["missing_parts"] = missing_parts
+        return body
+
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_below_the_threshold_is_a_single_put(self, post_event, create):
+        token, one_time_job = self._scheduled()
+        response = self._mint(token, self._body(one_time_job, MULTIPART_THRESHOLD - 1))
+        self.assertEqual(response.status_code, 200)
+        answer = response.json()
+        self.assertEqual(answer["mode"], "put")
+        self.assertIn("url", answer)
+        self.assertNotIn("parts", answer)
+        create.assert_not_called()
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_at_the_threshold_the_geometry_comes_back_with_the_urls(self, post_event, create, part):
+        # the geometry comes with the URLs, so the configuration does not publish it
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        answer = self._mint(token, self._body(one_time_job, MULTIPART_THRESHOLD,
+                                              run_id=run_id)).json()
+        self.assertEqual(answer["mode"], "multipart")
+        self.assertEqual(answer["upload_id"], "mpu-1")
+        self.assertEqual(answer["part_size"], MULTIPART_PART_SIZE)
+        self.assertEqual([p["n"] for p in answer["parts"]], [1, 2])
+        self.assertEqual([p["headers"]["Content-Length"] for p in answer["parts"]],
+                         [str(MULTIPART_PART_SIZE)] * 2)
+        # no URL at the top level: the parts are the destination
+        self.assertNotIn("url", answer)
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.mode, UploadMode.MULTIPART)
+        self.assertEqual(upload.part_size, MULTIPART_PART_SIZE)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_multipart_without_the_whole_object_crc_is_refused(self, post_event):
+        # S3 does not calculate a whole-object SHA-256 of a multipart upload. Without the CRC, the completion accepts
+        # all bytes.
+        token, one_time_job = self._scheduled()
+        body = self._body(one_time_job, MULTIPART_THRESHOLD)
+        del body["upload"]["digests"]
+        response = self._mint(token, body)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "missing_digest"})
+        self.assertEqual(JobUpload.objects.count(), 0)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_single_put_needs_no_crc(self, post_event):
+        # the SHA-256 validates a single PUT
+        token, one_time_job = self._scheduled()
+        body = self._body(one_time_job, 1024)
+        del body["upload"]["digests"]
+        self.assertEqual(self._mint(token, body).status_code, 200)
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_signs_only_the_missing_parts(self, post_event, create, part):
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        size = 3 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=run_id))
+        # the request has nothing that the server minted: the run and the artifact identify the row
+        answer = self._mint(token, self._body(one_time_job, size, run_id=run_id, missing_parts=[2])).json()
+        self.assertEqual([p["n"] for p in answer["parts"]], [2])
+        # the same multipart upload: the parts of a resume must agree with the uploaded parts
+        self.assertEqual(answer["upload_id"], "mpu-1")
+        self.assertEqual(create.call_count, 1)
+        events = [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], TurboRequestEvent)]
+        self.assertEqual(events[-1].payload["missing_parts"], [2])
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_mint_without_missing_parts_re_signs_every_part_of_the_same_upload(
+            self, post_event, create, part):
+        # a new start after a lost record or a refused resume: the row keeps its multipart upload, so the mint signs
+        # all the parts again, and creates nothing
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{upload_id}/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        size = 3 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=run_id))
+        answer = self._mint(token, self._body(one_time_job, size, run_id=run_id)).json()
+        self.assertEqual([p["n"] for p in answer["parts"]], [1, 2, 3])
+        self.assertTrue(all("/mpu-1/" in p["url"] for p in answer["parts"]))
+        self.assertEqual(create.call_count, 1)
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_of_an_unknown_run_is_refused(self, post_event, create, part):
+        # a resume with a new run id: no row. A new multipart upload with only the missing parts cannot assemble. The
+        # refusal comes before a write, so no empty pending row stays. The agent asks again without the list, and
+        # uploads all the parts.
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        size = 4 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=uuid.uuid4()))
+        self.assertEqual(create.call_count, 1)
+        response = self._mint(token, self._body(one_time_job, size, run_id=uuid.uuid4(), missing_parts=[2]))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"error": "no_upload_in_flight"})
+        self.assertEqual(JobUpload.objects.count(), 1)
+        self.assertEqual(create.call_count, 1)
+
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_of_a_run_without_a_row_is_refused(self, post_event, create):
+        token, one_time_job = self._scheduled()
+        response = self._mint(token, self._body(one_time_job, 3 * MULTIPART_PART_SIZE, missing_parts=[2]))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"error": "no_upload_in_flight"})
+        self.assertEqual(JobUpload.objects.count(), 0)
+        create.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_of_a_single_put_is_refused(self, post_event):
+        # a single PUT has no parts to resume
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        self.assertEqual(self._mint(token, self._body(one_time_job, 1024, run_id=run_id)).status_code, 200)
+        response = self._mint(token, self._body(one_time_job, 1024, run_id=run_id, missing_parts=[1]))
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"error": "no_upload_in_flight"})
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).attempts, 1)
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_cannot_ask_for_a_part_that_does_not_exist(self, post_event, create, part):
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        size = 2 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=run_id))
+        response = self._mint(token, self._body(one_time_job, size, run_id=run_id, missing_parts=[2, 99]))
+        # the geometry does not have this part: the record of the agent is for another upload
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "invalid_missing_parts"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_missing_parts_must_be_part_numbers(self, post_event):
+        token, one_time_job = self._scheduled()
+        for value in ([], [0], ["1"], [True], 3, [1, -2]):
+            with self.subTest(missing_parts=value):
+                response = self._mint(token, self._body(one_time_job, MULTIPART_THRESHOLD, missing_parts=value))
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json(), {"error": "invalid_missing_parts"})
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_of_a_different_artifact_is_refused(self, post_event, create, part):
+        # the uploaded parts and the geometry are for the size of the row. Parts for a new size do not agree with the
+        # uploaded parts.
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        self._mint(token, self._body(one_time_job, 3 * MULTIPART_PART_SIZE, run_id=run_id))
+        response = self._mint(token, self._body(one_time_job, 4 * MULTIPART_PART_SIZE, run_id=run_id,
+                                                missing_parts=[2]))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "artifact_changed"})
+        # the row did not change
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.size, 3 * MULTIPART_PART_SIZE)
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_of_a_different_digest_is_refused(self, post_event, create, part):
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        size = 3 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=run_id))
+        body = self._body(one_time_job, size, run_id=run_id, missing_parts=[2])
+        body["upload"]["sha256"] = "b" * 64
+        response = self._mint(token, body)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "artifact_changed"})
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_an_upload_with_a_verdict_is_not_minted_again(self, post_event, create, part):
+        # the completion is decided, but the result did not arrive yet: the agent restarted after its complete call. S3
+        # does not have this upload id now.
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        size = 3 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=run_id))
+        part.reset_mock()
+        for verification in (UploadVerification.VERIFIED, UploadVerification.ASSEMBLY_FAILED):
+            JobUpload.objects.filter(run_id=run_id).update(verification=verification)
+            for missing_parts in (None, [2]):
+                with self.subTest(verification=verification, missing_parts=missing_parts):
+                    response = self._mint(token, self._body(one_time_job, size, run_id=run_id,
+                                                            missing_parts=missing_parts))
+                    self.assertEqual(response.status_code, 410)
+                    self.assertEqual(response.json(), {"error": "already_uploaded"})
+        part.assert_not_called()
+        self.assertEqual(JobUpload.objects.get(run_id=run_id).attempts, 1)
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_mint_does_not_write_over_a_verdict_recorded_meanwhile(self, post_event, create, part):
+        # this mint read the row before the completion task recorded its verification. Its save must not write pending
+        # over it.
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        size = 3 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=run_id))
+
+        def the_task_records_its_verdict(*args):
+            JobUpload.objects.filter(run_id=run_id).update(verification=UploadVerification.VERIFIED)
+            return part_lengths(*args)
+
+        with patch("zentral.contrib.turbo.public_views.uploads.part_lengths",
+                   side_effect=the_task_records_its_verdict):
+            response = self._mint(token, self._body(one_time_job, size, run_id=run_id, missing_parts=[2]))
+        self.assertEqual(response.status_code, 200)
+        upload = JobUpload.objects.get(run_id=run_id)
+        self.assertEqual(upload.verification, UploadVerification.VERIFIED)
+        self.assertEqual(upload.attempts, 2)
+
+    @patch("zentral.contrib.turbo.public_views.uploads.start_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_storage_that_does_not_answer_is_a_retry_later(self, post_event, start):
+        # the only storage call of this endpoint: a JSON 503, not an HTML 500, so the agent mints again later
+        start.side_effect = StorageUnavailable("Could not connect to the endpoint URL")
+        token, one_time_job = self._scheduled()
+        with self.assertLogs("zentral.contrib.turbo.public_views.uploads", level="ERROR"):
+            response = self._mint(token, self._body(one_time_job, MULTIPART_THRESHOLD))
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"error": "storage_unavailable"})
+
+    @patch("zentral.contrib.turbo.public_views.uploads.start_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_storage_that_refuses_is_a_retry_later_too(self, post_event, start):
+        start.side_effect = StorageError("AccessDenied")
+        token, one_time_job = self._scheduled()
+        with self.assertLogs("zentral.contrib.turbo.public_views.uploads", level="ERROR"):
+            response = self._mint(token, self._body(one_time_job, MULTIPART_THRESHOLD))
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {"error": "storage_unavailable"})
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_an_echoed_upload_id_is_not_read(self, post_event, create, part):
+        # the old resume format: the mint ignores an upload_id with missing_parts. The row of the run and the artifact
+        # has the multipart upload.
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{upload_id}/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        run_id = uuid.uuid4()
+        size = 3 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=run_id))
+        body = self._body(one_time_job, size, run_id=run_id, missing_parts=[2])
+        body["upload_id"] = "mpu-somebody-else"
+        answer = self._mint(token, body).json()
+        self.assertEqual(answer["upload_id"], "mpu-1")
+        self.assertEqual([p["url"] for p in answer["parts"]], ["https://example.com/mpu-1/2"])

@@ -169,6 +169,14 @@ The upload carries the outcome next to its status, and each `result.uploads` ent
 
 Verification never reopens a one-time job. The job was done on that machine when the agent reported, whatever the storage says afterwards.
 
+With an S3 storage backend, an artifact of 128 MiB or more goes up in parts of 64 MiB. A failed part is sent again alone, and the agent can ask for new URLs for the missing parts only. Zentral decides the mode, and its answer gives the URL of each part.
+
+When all the parts are sent, the agent calls the new `/public/turbo/uploads/complete/` endpoint, and Zentral assembles the file in the background. The storage refuses the file if its CRC-64/NVME is not the one that the agent declared, so a large artifact needs a `crc64nvme`. A file that the storage cannot assemble gets the new `assembly_failed` verification.
+
+If the storage does not answer, the upload stays `pending`. Run the new `sweep_turbo_uploads` command every hour to try again. You can run it on more than one server at the same time.
+
+Add an `AbortIncompleteMultipartUpload` rule to the bucket. Zentral deletes the parts of a failed upload, but only this rule deletes the parts of an upload that the agent never reports.
+
 
 ### Backward incompatibilities
 

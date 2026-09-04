@@ -1,12 +1,15 @@
 import logging
 
 from django.core.files.storage import storages
+from django.db import transaction
 from django.utils import timezone
 
 from ..events import post_turbo_result_events
-from ..models import JobUpload, UploadErrorReason, UploadStatus, resolve_machine_schedules
+from ..models import (JobUpload, UploadErrorReason, UploadMode, UploadStatus, UploadVerification,
+                      resolve_machine_schedules)
 from ..results import ParsedResult, ResultsBatch
-from ..uploads import verify_upload
+from ..tasks import abort_multipart_upload_task, complete_multipart_upload_task
+from ..uploads import report_agrees_with_the_mint, verify_upload
 from ..wire import WireResultsSerializer
 from .base import BaseEnrolledMachinePostView, WireError
 
@@ -163,17 +166,48 @@ class ResultsView(BaseEnrolledMachinePostView):
                     row.status = UploadStatus.UPLOADED
                     row.truncated = bool(reported.get("truncated"))
             row.completed_at = timezone.now()
-            if row.status == UploadStatus.UPLOADED:
+            # the status fields: only the ingest writes them
+            written = ["status", "error_reason", "truncated", "completed_at", "updated_at"]
+            if row.mode == UploadMode.MULTIPART:
+                # The completion task verifies a multipart object, so the ingest does not read the
+                # metadata. The result can arrive first: the complete call of the agent can be lost.
+                drop_parts = False
+                if row.status == UploadStatus.UPLOADED and not report_agrees_with_the_mint(row, reported):
+                    # Only the ingest compares the result with the mint. A result with another size or SHA-256 is for
+                    # another file, so it is a mismatch, also after the completion. The task writes only over a pending
+                    # verification, so the mismatch stays. When the verification is pending, no completion follows, so
+                    # delete the parts now.
+                    drop_parts = row.verification == UploadVerification.PENDING
+                    row.verification = UploadVerification.MISMATCH
+                    row.verified_at = timezone.now()
+                    written += ["verification", "verified_at"]
+                self._settle_multipart(row, uploads_ref, drop_parts)
+            elif row.status == UploadStatus.UPLOADED:
                 verification = verify_upload(row, reported, storage)
                 if verification is not None:
                     row.verification = verification
                     row.verified_at = timezone.now()
+                    written += ["verification", "verified_at"]
                     # the verdict, not a boolean: `missing` and `mismatch` both answer "no" and
                     # mean different things, and a consumer that has to tell them apart cannot go
                     # to the database from an event
                     uploads_ref[-1] = {**reported, "verification": verification}
-            row.save()
+            # named fields: a full save can write an old verification over the one of the completion task
+            row.save(update_fields=written)
         return uploads_ref
+
+    def _settle_multipart(self, row, uploads_ref, drop_parts):
+        # on_commit: a task that starts before the commit reads the old row
+        if row.status == UploadStatus.FAILED or drop_parts:
+            transaction.on_commit(lambda: abort_multipart_upload_task.apply_async((str(row.pk),)))
+        if row.status == UploadStatus.FAILED:
+            return
+        if row.verification == UploadVerification.PENDING:
+            transaction.on_commit(
+                lambda: complete_multipart_upload_task.apply_async((str(row.pk),)))
+            return
+        # the verification, as on the single-PUT path above
+        uploads_ref[-1] = {**uploads_ref[-1], "verification": row.verification}
 
     @staticmethod
     def _wire_ref(job, kind, version, run, ran_at, outcome, uploads_ref=None):

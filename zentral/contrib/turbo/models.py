@@ -953,6 +953,9 @@ class JobUpload(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True)   # when the agent reported, not when it verified
+    # when sweep_turbo_uploads last asked for the completion. Several worker instances run the command,
+    # and this prevents a second request in the same window.
+    last_swept_at = models.DateTimeField(null=True)
 
     class Meta:
         default_permissions = ()   # the agent writes these rows, never an operator
