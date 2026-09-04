@@ -368,6 +368,29 @@ When `collect_inventory` is enabled, the agent posts a full machine inventory sn
 
 Zentral always attributes the snapshot to the authenticated machine: a serial number in the body is ignored.
 
+### Uploads
+
+Some jobs produce a file: a sysdiagnose archive, or a set of exported files. The file does not travel in the result. The agent asks Zentral for a destination, sends the file there, and reports what it did in the result.
+
+The agent asks for a destination just in time, once for each artifact of each run. Upload URLs are never in the config payload. That payload is a pure function of the definition and its version, it is cached, and it is served again to every machine in scope. A URL in it would be expired for the machines that need it, and a live write credential for the machines that do not. See [`/public/turbo/uploads/`](#publicturbouploads).
+
+Zentral builds the object key, and the key is stable for the life of the upload. A retry signs the same key again and replaces the object, so a failed attempt never leaves a partial twin behind. The file name is built at the first request, from the artifact declaration, the serial number and the time.
+
+Where the bytes go depends on the storage backend:
+
+ * When the default storage can sign a `PUT` – S3 – the agent sends the file directly to the bucket. Zentral reads none of it, and the size and the digest are signed into the destination, so the storage itself refuses a body that does not match.
+ * When the storage cannot sign a `PUT`, Zentral hosts the destination and the bytes go through the web workers. Only S3 can sign a `PUT` today, so this is the path a Google Cloud Storage deployment takes, and it cannot choose otherwise. Use it in development, or for a small on-premises installation. The size limit is then the body limit of the deployment itself, `DATA_UPLOAD_MAX_MEMORY_SIZE`, which is 10 MiB by default. Raise it only together with the `client_max_body_size` of your reverse proxy: the smaller of the two is what the agent meets, and the published limit only knows about the first.
+
+The agent sees the same `mode: "put"` shape in both cases, and does not know which storage is behind it.
+
+[Config](#configuration) publishes `upload_max_size` and `upload_digests`. The agent can then refuse a file that is too large before it collects it, and compute the digests the storage wants in the same pass as the SHA-256.
+
+The result closes the upload. It carries a `run.id`, and one entry in `result.uploads` for each declared artifact. The entry reports the upload, or the reason it failed. Zentral compares the key the agent echoes with the key it minted, and refuses an echo that does not match: the key never comes from the wire.
+
+Partial success is a normal outcome. A `file_export` that sends its manifest and fails on its archive keeps the manifest: the two artifacts are two rows, and they close one at a time.
+
+The agent's report is the first axis, and Zentral records it immediately. Verification against the storage is a second axis, and it comes later. Verification never reopens a one-time job: a one-time job that reported an upload does not get another destination.
+
 ### Tolerant batches
 
 The results and status endpoints validate strictly per entry, and tolerantly per batch. A body that does not match its envelope – `results` or `jobs` not being a list – is a `400`. But a single malformed entry inside a well-formed batch does not fail the request: it is set aside, and the valid entries are processed. Rejecting the whole batch would just make the agent retry the same poisoned outbox forever.
@@ -1811,6 +1834,8 @@ Response:
     "results_batch_size": 100,
     "collect_inventory": true,
     "inventory_interval": 86400,
+    "upload_max_size": 2147483648,
+    "upload_digests": ["crc64nvme"],
     "jobs": [
         {
             "kind": "script",
@@ -1861,6 +1886,10 @@ Each entry in `jobs` carries:
 
 A recurring job is served for as long as it is in scope. A one-time job is served while it is inside its delivery window and until a result for the current version comes back.
 
+`upload_max_size` and `upload_digests` describe the [upload](#uploads) plane, and depend on the storage backend of the deployment. `upload_max_size` is the largest artifact the deployment accepts, in bytes; a job kind can be lower, and the server says so when the agent asks for a destination. `upload_digests` lists the digests to compute on top of the SHA-256, so the agent reads the file once.
+
+`upload_max_size` is 2 GiB with an S3 storage backend, and the `DATA_UPLOAD_MAX_MEMORY_SIZE` of the deployment without one. The endpoint that mints destinations refuses the same limit, so an artifact that is too large is refused before the agent sends a byte.
+
 ### /public/turbo/results/
 
 Upload the results of the runs the agent has accumulated.
@@ -1901,6 +1930,29 @@ Request:
             "result": {
                 "status": 300
             }
+        },
+        {
+            "kind": "sysdiagnose",
+            "pk": "1c0a5a30-1cf6-4a2f-8c1e-7d0c2d4c9a11",
+            "version": 1,
+            "run": {
+                "at": "2026-08-20T09:15:41Z",
+                "duration": 96.4,
+                "schedule_pk": "b1d1a1f0-8b2a-4a76-9a4a-3a1f1d3b6f22",
+                "id": "0f3b06d2-3f4e-4c2a-90c7-4d6c9dbb3d4c",
+                "mode": "one_time"
+            },
+            "result": {
+                "exit_code": 0,
+                "uploads": [
+                    {
+                        "artifact": "archive",
+                        "key": "turbo/uploads/C02ZXXXXXXXX/b1d1a1f0-.../7/sysdiagnose_C02ZXXXXXXXX_20260820-091541.tar.gz",
+                        "size": 41264128,
+                        "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+                    }
+                ]
+            }
         }
     ]
 }
@@ -1911,11 +1963,25 @@ Request:
 |`run.schedule_pk`|**Required.** The schedule the run belongs to. This is what correlates the result.|
 |`run.at`|**Required.** When the job ran on the device. It becomes the event's `created_at`.|
 |`run.duration`|Optional. How long the run took, in seconds.|
+|`run.id`|The run identity, chosen by the agent. Required for a job that uploads: it is what tells two runs of one schedule apart, and it must be the same value the agent used to ask for a destination.|
 |`run.mode`|Optional, informational – the correlation is on `schedule_pk` alone.|
 |`kind`|The job kind. Optional, but expected: when present it must agree with the resolved schedule, or the entry is skipped. A kind this Zentral does not know is *not* rejected – during a rolling upgrade the instances do not share a set of kinds, and a report of a run that happened must not be dropped. It is skipped with `unknown_job_kind`, and the schedule still records the run.|
 |`pk`, `version`|Declarative. The resolved schedule stays authoritative.|
 |`result.exit_code`|Scripts – the process exit code, or `null` when the script could not run.|
 |`result.status`|mSCP checks – the compliance status code. See [Compliance checks](#compliance-checks).|
+|`result.uploads`|One entry for each artifact the run was asked to collect. See [Uploads](#uploads).|
+
+Each entry in `result.uploads` reports one artifact, and it is what closes that upload:
+
+|Attribute|Description|
+|---|---|
+|`artifact`|**Required.** The artifact name, the same one the agent asked a destination for.|
+|`key`|The object key the server minted, echoed back. Zentral compares it with what it minted, and does not accept the upload when the two differ.|
+|`size`, `sha256`|What the agent sent. Declarative – the same values were signed into the destination.|
+|`truncated`|`true` when the artifact is incomplete because the job hit a limit, for example the `max_size` of a `file_export`.|
+|`error`|Present instead of `key` when the artifact did not go up. `error.reason` is one of `expired`, `http_status`, `network`, `too_large` or `mint_rejected`; `error.attempts` and `error.last_http_status` are informational. A reason this release does not know still closes the upload as failed – the artifact is not coming either way.|
+
+An entry that reports an artifact Zentral never minted a destination for is logged and ignored. It never fails the batch: the run happened, and its result is worth keeping.
 
 Response:
 
@@ -2033,3 +2099,89 @@ Response:
 ```json
 {}
 ```
+
+### /public/turbo/uploads/
+
+Ask for a destination for one artifact of one run. See [Uploads](#uploads).
+
+* method: POST
+* Content-Type: application/json
+* authentication: `Authorization: TurboEnrolledMachine <token>`
+
+Request:
+
+```json
+{
+    "schedule_pk": "b1d1a1f0-8b2a-4a76-9a4a-3a1f1d3b6f22",
+    "run_id": "0f3b06d2-3f4e-4c2a-90c7-4d6c9dbb3d4c",
+    "artifact": "archive",
+    "size": 41264128,
+    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "digests": {
+        "crc64nvme": "nD+hB17SSLE="
+    }
+}
+```
+
+|Attribute|Description|
+|---|---|
+|`schedule_pk`|**Required.** The schedule the run belongs to. The rules are the ones of the config endpoint: a schedule the agent could not have been served is one it cannot ask a destination for.|
+|`run_id`|**Required.** The run identity, chosen by the agent. The same value must come back in `run.id` in the result.|
+|`artifact`|**Required.** The artifact name, as the job kind declares it.|
+|`size`|**Required.** The exact size of the file, in bytes.|
+|`sha256`|**Required.** The hex SHA-256 of the file. This is the identity of the artifact for Zentral.|
+|`digests`|Optional. The storage digests the config asked for, keyed by algorithm.|
+
+Response:
+
+```json
+{
+    "mode": "put",
+    "url": "https://bucket.s3.amazonaws.com/turbo/uploads/...&X-Amz-Signature=...",
+    "headers": {
+        "Content-Type": "application/gzip",
+        "Content-Length": "41264128",
+        "x-amz-checksum-sha256": "n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg="
+    },
+    "key": "turbo/uploads/C02ZXXXXXXXX/b1d1a1f0-.../7/sysdiagnose_C02ZXXXXXXXX_20260820-091541.tar.gz",
+    "expires_at": "2026-08-20T10:15:41+00:00"
+}
+```
+
+The agent sends the file in one `PUT` to `url`, with every header in `headers`, exactly as given. Those headers are part of the signature: a request that drops one, or changes a value, is refused by the storage. This is how the declared size and the declared digest are enforced without Zentral reading the file.
+
+`key` goes back to Zentral in the result. `expires_at` is when the signature stops being accepted; the signature is verified when the request starts, so an upload that begins in time can finish.
+
+The same request again, for the same run and the same artifact, returns the same `key` with a new signature. That is the retry: it replaces the object instead of adding a second one. Zentral counts the requests and stops at five.
+
+Errors:
+
+|Status|Body|Meaning|
+|---|---|---|
+|`400`|`{"error": "missing_schedule_pk"}`, `{"error": "invalid_schedule_pk"}`|`schedule_pk` is absent, or not a UUID.|
+|`400`|`{"error": "missing_run_id"}`, `{"error": "invalid_run_id"}`|`run_id` is absent, or not a UUID.|
+|`400`|`{"error": "missing_artifact"}`|`artifact` is absent or empty.|
+|`400`|`{"error": "invalid_size"}`|`size` is absent, or not a positive integer.|
+|`400`|`{"error": "invalid_sha256"}`|`sha256` is absent, or not 64 hexadecimal characters.|
+|`400`|`{"error": "invalid_digests"}`|`digests` is not an object, or one of its values is not a base 64 digest.|
+|`400`|`{"error": "unknown_artifact"}`|The job does not declare that artifact. Terminal – no retry changes it.|
+|`400`|`{"error": "attempts_exhausted"}`|Five destinations were already minted for that run and artifact.|
+|`404`|`{"error": "unknown_schedule"}`|The schedule is unknown, belongs to another configuration, is out of scope, or is outside its delivery window.|
+|`410`|`{"error": "gate_closed"}`|A result for that one-time job already came back. The job is done on this machine, and an artifact uploaded now could never be referenced.|
+|`410`|`{"error": "already_uploaded"}`|The result already reported that artifact as uploaded.|
+|`413`|`{"error": "too_large"}`|`size` is above the limit of the job kind, or above the limit of the deployment.|
+|`429`|`{"error": "too_many_pending"}`|The machine holds too many destinations on that schedule that no result has closed. Report the runs already made; a request for a destination the machine already has is never refused for this reason.|
+
+#### The hosted destination
+
+When the deployment has no storage that can sign a `PUT`, the `url` of the response points back at Zentral. The agent sends the same request to it: one `PUT`, with the headers it was given. That destination answers JSON like every other device endpoint.
+
+|Status|Body|Meaning|
+|---|---|---|
+|`200`|`{}`|The artifact is stored.|
+|`400`|`{"error": "size_mismatch"}`|The body is not the size that was declared. A presigned `PUT` has the size in its signature and the storage refuses a mismatch; here Zentral does it.|
+|`400`|`{"error": "digest_mismatch"}`|The body is the declared size, and not the declared SHA-256. Checked after the size, which a wrong length fails first and explains better. This is the only point at which a file system storage can check the digest at all: it reports no checksum, so there is nothing to compare later.|
+|`403`|`{"error": "invalid_token"}`|The token in the URL is not one Zentral signed, or it expired.|
+|`404`|`{"error": "unknown_upload"}`|The token names an upload that does not exist.|
+|`409`|`{"error": "already_uploaded"}`|The result already reported that artifact as uploaded.|
+|`413`|`{"error": "too_large"}`|The body is above the body limit of the deployment.|
