@@ -1,7 +1,9 @@
 import logging
 
+from django.utils import timezone
+
 from ..events import post_turbo_result_events
-from ..models import resolve_machine_schedules
+from ..models import JobUpload, UploadErrorReason, UploadStatus, resolve_machine_schedules
 from ..results import ParsedResult, ResultsBatch
 from ..wire import WireResultsSerializer
 from .base import BaseEnrolledMachinePostView, WireError
@@ -95,8 +97,60 @@ class ResultsView(BaseEnrolledMachinePostView):
                 sort_key=(ran_at, index),
                 wire_ref=self._wire_ref(job, kind, entry["version"], run, ran_at, outcome),
             ))
+            self._close_uploads(schedule_pk, run.get("id"), outcome)
             accepted.append(ack)
         return accepted, skipped
+
+    def _close_uploads(self, schedule_pk, run_id, outcome):
+        """Move this run's upload rows out of `pending`, on the agent's word.
+
+        The gate closes here and nowhere else: whether the storage agrees is a *second* axis, decided
+        later and never able to reopen a spent shot. Tolerant, like the rest of ingest — a row that
+        cannot be matched is logged and skipped, never a reason to fail the batch, because the run
+        did happen and the outcome is already recorded.
+        """
+        uploads = outcome.get("uploads")
+        if not uploads or not isinstance(uploads, list):
+            return
+        if run_id is None:
+            # nothing to match on: the rows are keyed by run, and two runs of one schedule are
+            # otherwise indistinguishable
+            logger.warning("Turbo results from %s: uploads without a run id on schedule %s",
+                           self.serial_number, schedule_pk)
+            return
+        rows = {row.artifact: row for row in JobUpload.objects.filter(
+            schedule_pk=schedule_pk, serial_number=self.serial_number, run_id=run_id)}
+        for reported in uploads:
+            if not isinstance(reported, dict):
+                continue
+            artifact = reported.get("artifact")
+            row = rows.get(artifact)
+            if row is None:
+                # an artifact the agent never minted for, or a name it invented
+                logger.warning("Turbo results from %s: no upload row for %r on run %s",
+                               self.serial_number, artifact, run_id)
+                continue
+            if row.status != UploadStatus.PENDING:
+                continue
+            error = reported.get("error")
+            if isinstance(error, dict):
+                reason = error.get("reason")
+                row.status = UploadStatus.FAILED
+                row.error_reason = (reason if reason in UploadErrorReason.values else None)
+            else:
+                # the key is NOT taken from the wire — it is compared to the one we minted. An echo
+                # that does not match is the agent talking about a different object than the one we
+                # signed, so the row is not closed as uploaded.
+                if reported.get("key") != row.key:
+                    logger.warning("Turbo results from %s: echoed key does not match for %r on run %s",
+                                   self.serial_number, artifact, run_id)
+                    row.status = UploadStatus.FAILED
+                    row.error_reason = None
+                else:
+                    row.status = UploadStatus.UPLOADED
+                    row.truncated = bool(reported.get("truncated"))
+            row.completed_at = timezone.now()
+            row.save()
 
     @staticmethod
     def _wire_ref(job, kind, version, run, ran_at, outcome):

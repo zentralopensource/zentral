@@ -17,10 +17,17 @@ logger = logging.getLogger("zentral.contrib.turbo.public_views.base")
 
 class WireError(Exception):
     """A wire-contract violation. `code` is the stable machine-readable reason returned to the agent
-    as `{"error": code}` with a 400 — the device endpoints never serve a Django HTML error page."""
+    as `{"error": code}` — the device endpoints never serve a Django HTML error page.
 
-    def __init__(self, code):
+    `status` is 400 for a malformed or refused request, which the agent treats as terminal. The
+    upload plane needs two more: 404 / 410 for a schedule that is gone or a shot already closed,
+    which the agent abandons silently, and 413 for an artifact over the kind's maximum. The status is
+    part of the contract, not decoration — it is what tells the agent whether to report a failure or
+    say nothing at all."""
+
+    def __init__(self, code, status=400):
         self.code = code
+        self.status = status
         super().__init__(code)
 
 
@@ -32,8 +39,8 @@ class WireErrorMixin:
             _, ip = user_agent_and_ip_address_from_request(request)
             logger.warning("Turbo wire error on %s from %s: %s",
                            request.path, getattr(self, "serial_number", None) or ip, error.code,
-                           extra={"status_code": 400, "request": request})
-            return JsonResponse({"error": error.code}, status=400)
+                           extra={"status_code": error.status, "request": request})
+            return JsonResponse({"error": error.code}, status=error.status)
 
 
 class BaseEnrolledMachineView(WireErrorMixin, View):
