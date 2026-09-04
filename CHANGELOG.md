@@ -101,6 +101,12 @@ The upload carries the outcome next to its status, and each `result.uploads` ent
 
 Verification never reopens a one-time job. The job was done on that machine when the agent reported, whatever the storage says afterwards.
 
+A large artifact goes up in parts on an S3 storage backend. Zentral chooses that from the size the agent declares — 128 MiB and above, in 64 MiB parts — and the response carries the geometry with the signed URLs, so the agent has nothing to predict and no part size to cache. Parts retry one at a time, and an agent whose URLs expired asks again with the `upload_id` and the numbers of the parts it still needs.
+
+Zentral completes the multipart upload itself, and the new `/public/turbo/uploads/complete/` endpoint answers `202`: completion can take several minutes, so it runs in the background, and the agent has no use for the answer. Zentral lists the parts from the storage and never takes a part list from a request. Completion is what verifies a multipart object — the whole-object CRC-64/NVME the agent declared is supplied at completion, and the storage refuses a mismatch — so Zentral declares that algorithm when it creates the upload. Without the declaration the storage would accept a wrong checksum and then report a correct one it computed itself. A multipart artifact is therefore refused when the agent asks for a destination without a `crc64nvme`: the SHA-256 cannot do that work on a multipart upload. `assembly_failed` is the new verification outcome for parts that never made the object.
+
+Configure the `AbortIncompleteMultipartUpload` lifecycle rule on the bucket. Zentral drops the parts when an agent reports that it gave up, but the rule is the only thing that removes the parts of an upload the agent never reports, and parts are stored, and billed, until something removes them.
+
 
 ### Backward incompatibilities
 

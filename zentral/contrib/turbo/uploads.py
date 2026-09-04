@@ -7,10 +7,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from zentral.conf import api_base_url
-from zentral.utils.storage import (file_storage_has_presigned_uploads, generate_presigned_put,
-                                   sha256_object, stat_object)
+from zentral.utils.storage import (create_multipart_upload, file_storage_has_presigned_uploads,
+                                   generate_presigned_part, generate_presigned_put, sha256_object,
+                                   stat_object)
 
-from .models import UploadVerification
+from .models import UploadMode, UploadVerification
 
 
 logger = logging.getLogger("zentral.contrib.turbo.uploads")
@@ -65,6 +66,18 @@ MAX_UPLOAD_ATTEMPTS = 5
 # version bump re-arms a one-time job, so more than one open run is legitimate; a dozen is not.
 MAX_PENDING_UPLOADS = 12
 
+# The slicing rule for a multipart upload. Server-side only — the agent reads the geometry off the
+# mint response, so retuning this needs no protocol change and no agent release.
+MULTIPART_PART_SIZE = 64 * 2**20
+# TWO part sizes and not one. Resumability is the entire point, and at one there is none to buy: a
+# part_size + 1 artifact is a two-part upload whose second part is one byte, so losing the first part
+# costs the same retransmission that restarting a single PUT would have. The whole multipart bill —
+# an upload id on the row, N signed URLs, a device-facing completion call, a queue task and a
+# lifecycle obligation for parts that never complete — would be paid to protect a one-byte tail. At
+# two, the first failure loses at most half the transfer, so a resume saves at least one whole part.
+# That is the line: multipart starts paying when a resume can save a full part.
+MULTIPART_THRESHOLD = 2 * MULTIPART_PART_SIZE
+
 _UNSAFE_KEY_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 # a length check is not a format check: a 64-character non-hex digest passes one and reaches the
 # encoder, which cannot unhexlify it — on a device endpoint that is a 500 instead of a 400 the agent
@@ -80,6 +93,32 @@ _hosted_upload_signer = TimestampSigner(salt="zentral.contrib.turbo.uploads")
 
 def upload_max_size(storage=None):
     return PRESIGNED_UPLOAD_MAX_SIZE if file_storage_has_presigned_uploads(storage) else hosted_upload_max_size()
+
+
+def upload_mode(size, storage):
+    """Single PUT or multipart, and entirely the server's business.
+
+    The agent sends the same mint body either way and reads the mode off the response, so there is
+    nothing for it to predict, no part size to cache, and no stale-configuration two-step. Nothing
+    forces the choice either: S3's single-PUT ceiling is 5 GiB against a 2 GiB upload_max_size, so a
+    single PUT is legal for every artifact Zentral accepts and multipart is purely an optimisation.
+    """
+    if size >= MULTIPART_THRESHOLD and file_storage_has_presigned_uploads(storage):
+        return UploadMode.MULTIPART
+    return UploadMode.PUT
+
+
+def part_lengths(size, part_size):
+    """The exact length of every part, in order.
+
+    Returned rather than computed at the call site so the slicing falls out of the mint response —
+    the agent reads a Content-Length per part instead of reproducing this division.
+    """
+    full, tail = divmod(size, part_size)
+    lengths = [part_size] * full
+    if tail:
+        lengths.append(tail)
+    return lengths
 
 
 def upload_digests(storage=None):
@@ -222,14 +261,22 @@ def _report_agrees_with_the_mint(upload, reported):
     return True
 
 
-def build_upload_destination(upload, artifact, storage):
-    """Where to PUT the artifact, and the headers to send with it.
+def build_upload_destination(upload, artifact, storage, missing_parts=None):
+    """Where to send the artifact, as the mode-specific half of the mint response.
 
-    The two branches produce the same contract on the wire — one `mode: "put"` shape — so the agent
-    has no storage to detect. What differs is who validates the body: a presigned PUT signs the
-    length and the digest as headers, so the storage rejects a mismatch and Zentral never reads a
-    byte; the hosted fallback has to read it, which is exactly why its ceiling is small.
+    A single PUT is one url and the headers to send with it, and the two single-PUT branches produce
+    the same shape on the wire so the agent has no storage to detect. What differs is who validates
+    the body: a presigned PUT signs the length and the digest as headers, so the storage rejects a
+    mismatch and Zentral never reads a byte; the hosted fallback has to read it, which is exactly why
+    its ceiling is small.
+
+    A multipart upload is the geometry plus one presigned URL per part. The geometry comes back WITH
+    the URLs, which is the whole reason it is not published or cached anywhere.
     """
+    if upload.mode == UploadMode.MULTIPART:
+        return {"upload_id": upload.upload_id,
+                "part_size": upload.part_size,
+                "parts": _presigned_parts(upload, storage, missing_parts)}
     if file_storage_has_presigned_uploads(storage):
         url, headers = generate_presigned_put(
             upload.key, upload.size, artifact.content_type, upload.sha256, UPLOAD_URL_EXPIRY,
@@ -239,4 +286,32 @@ def build_upload_destination(upload, artifact, storage):
         url = "{}{}".format(api_base_url(),
                             reverse("turbo_public:upload", args=(sign_hosted_upload(upload),)))
         headers = {"Content-Type": artifact.content_type, "Content-Length": str(upload.size)}
-    return url, headers
+    return {"url": url, "headers": headers}
+
+
+def _presigned_parts(upload, storage, missing_parts):
+    # against the row's OWN part_size, fixed when the multipart upload was created: a resume has to
+    # produce parts that line up with the object already in flight, so a change to the deployment's
+    # default in the meantime must not reach it
+    lengths = part_lengths(upload.size, upload.part_size)
+    wanted = range(1, len(lengths) + 1)
+    if missing_parts is not None:
+        # a resume signs only what is still needed, and only numbers this geometry actually has
+        wanted = [n for n in missing_parts if 1 <= n <= len(lengths)]
+    parts = []
+    for number in wanted:
+        url, headers = generate_presigned_part(
+            upload.key, upload.upload_id, number, lengths[number - 1], UPLOAD_URL_EXPIRY, storage,
+        )
+        parts.append({"n": number, "url": url, "headers": headers})
+    return parts
+
+
+def start_multipart_upload(upload, artifact, storage):
+    """Create the multipart upload the row will hold for the rest of its life.
+
+    Once, on the first mint that chose multipart: the upload id and the part size are then the row's,
+    and every resume re-signs against them.
+    """
+    upload.upload_id = create_multipart_upload(upload.key, artifact.content_type, storage)
+    upload.part_size = MULTIPART_PART_SIZE

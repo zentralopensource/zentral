@@ -5,18 +5,34 @@ import hashlib
 from django.core.files.storage import storages, InvalidStorageError
 
 
-# One HEAD is a single small round trip — tens of milliseconds — but it happens on a device endpoint,
-# inside the request transaction, so it gets an explicit ceiling instead of botocore's minute-scale
-# defaults: an unbounded call to a storage that has gone quiet holds a web worker AND a database
-# connection. One attempt, deliberately: a retry would double how long that transaction stays open to
-# buy an answer that was never urgent, and the caller treats "could not tell" as a normal outcome it
-# can ask about again later.
-_STAT_CONNECT_TIMEOUT = 2
-_STAT_READ_TIMEOUT = 5
+# A HEAD, or starting a multipart upload, is a single small round trip — tens of milliseconds — but it
+# happens on a device endpoint, inside the request transaction, so it gets an explicit ceiling instead
+# of botocore's minute-scale defaults: an unbounded call to a storage that has gone quiet holds a web
+# worker AND a database connection.
+_REQUEST_CONNECT_TIMEOUT = 2
+_REQUEST_READ_TIMEOUT = 5
+
+# Assembling a multipart upload is the exception: both storages document that it can take several
+# MINUTES, which is why it runs in a worker and not in a request. The ceiling is there to bound a
+# connection that died rather than to bound the operation, and the retrying is the task's, with
+# backoff, rather than botocore's.
+_ASSEMBLY_CONNECT_TIMEOUT = 5
+_ASSEMBLY_READ_TIMEOUT = 600
+
 # total, not retries: botocore reads `max_attempts` as the number of RETRIES and stores
-# max_attempts + 1, so the obvious spelling of "once" asks for twice and doubles the worst case this
-# ceiling exists to bound. total_max_attempts is the key it keeps, and it means what it says.
-_STAT_TOTAL_ATTEMPTS = 1
+# max_attempts + 1, so the obvious spelling of "once" asks for twice and doubles the worst case these
+# ceilings exist to bound. total_max_attempts is the key it keeps, and it means what it says. One
+# attempt for both: the caller of a request-path call treats "could not tell" as a normal outcome it
+# can ask about again later, and the assembly is retried by its task, with backoff.
+_ONE_ATTEMPT = {"mode": "standard", "total_max_attempts": 1}
+
+# The one line of the multipart design that must not be dropped. Declaring the algorithm at
+# CreateMultipartUpload is what makes the checksum supplied at completion actually validate: without
+# it S3 accepts a WRONG whole-object checksum silently, and HeadObject afterwards reports a perfectly
+# correct one, because S3 computed its own — the object looks verified and is not. CRC64NVME and not
+# SHA-256 because S3 offers a full-object checksum on a multipart upload only for the CRC algorithms:
+# only those compose from part checksums into a checksum of the whole object.
+MULTIPART_CHECKSUM_ALGORITHM = "CRC64NVME"
 
 
 def file_storage_has_signed_urls(storage=None):
@@ -84,19 +100,28 @@ def _presigning_client(storage):
     return _s3_client(storage, "_zentral_presigning_client", signature_version="s3v4")
 
 
-def _stat_client(storage):
-    """A client for the verification HEAD, with a ceiling the deployment's config cannot lift.
+def _request_client(storage):
+    """A client for the storage calls made inside a device request, with a ceiling the deployment's
+    config cannot lift.
 
-    Unlike the presigning client this one talks to the network, on a device endpoint, inside the
-    request transaction — so an unbounded call to a storage that has gone quiet would hold a web
-    worker AND a database connection. One attempt, deliberately: a retry would double how long that
-    transaction stays open to buy an answer that was never urgent, and the caller treats "could not
-    tell" as a normal outcome it can ask about again later.
+    Unlike the presigning client these talk to the network, on a device endpoint, inside the request
+    transaction — so an unbounded call to a storage that has gone quiet would hold a web worker AND a
+    database connection. One attempt, deliberately: a retry would double how long that transaction
+    stays open to buy an answer that was never urgent, and the callers treat "could not tell" as a
+    normal outcome they can ask about again later.
     """
-    return _s3_client(storage, "_zentral_stat_client",
-                      connect_timeout=_STAT_CONNECT_TIMEOUT,
-                      read_timeout=_STAT_READ_TIMEOUT,
-                      retries={"mode": "standard", "total_max_attempts": _STAT_TOTAL_ATTEMPTS})
+    return _s3_client(storage, "_zentral_request_client",
+                      connect_timeout=_REQUEST_CONNECT_TIMEOUT,
+                      read_timeout=_REQUEST_READ_TIMEOUT,
+                      retries=_ONE_ATTEMPT)
+
+
+def _assembly_client(storage):
+    """The one client allowed to wait minutes, for the one call that takes them, in a worker."""
+    return _s3_client(storage, "_zentral_assembly_client",
+                      connect_timeout=_ASSEMBLY_CONNECT_TIMEOUT,
+                      read_timeout=_ASSEMBLY_READ_TIMEOUT,
+                      retries=_ONE_ATTEMPT)
 
 
 def _object_key(storage, key):
@@ -169,7 +194,7 @@ def stat_object(key, storage=None):
         storage = storages["default"]
     if file_storage_has_presigned_uploads(storage):
         from botocore.exceptions import ClientError
-        client = _stat_client(storage)
+        client = _request_client(storage)
         try:
             response = client.head_object(Bucket=storage.bucket_name, Key=_object_key(storage, key),
                                           ChecksumMode="ENABLED")
@@ -200,6 +225,90 @@ def sha256_object(key, storage=None):
         for chunk in stored.chunks():
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def create_multipart_upload(key, content_type, storage):
+    """Start a multipart upload, and DECLARE the checksum algorithm.
+
+    Every call of this plane names the object through _object_key: with a `location` set, a bare key
+    would start the upload, sign its parts, list them and complete them outside the namespace the
+    rest of the storage reads, and the object would land where nothing looks for it.
+
+    The declaration is what makes the value supplied at completion validate anything — see
+    MULTIPART_CHECKSUM_ALGORITHM. ChecksumType and the object size at completion are genuinely
+    optional (CRC64NVME defaults to full-object), and are sent for clarity; the algorithm is not
+    optional, and its optionality elsewhere must not be read as license to drop it.
+    """
+    response = _request_client(storage).create_multipart_upload(
+        Bucket=storage.bucket_name,
+        Key=_object_key(storage, key),
+        ContentType=content_type,
+        ChecksumAlgorithm=MULTIPART_CHECKSUM_ALGORITHM,
+        ChecksumType="FULL_OBJECT",
+    )
+    return response["UploadId"]
+
+
+def generate_presigned_part(key, upload_id, part_number, size, expires_in, storage):
+    """A presigned UploadPart, and the one header that goes with it.
+
+    Geometry only: a part carries no checksum on either storage, so the length is the entire contract
+    — and it is a SIGNED header, which is why this goes through the SigV4 client like every other
+    presign here. The legacy V2 presign signs no header at all, and a part could then be any size.
+    """
+    url = _presigning_client(storage).generate_presigned_url(
+        "upload_part",
+        Params={"Bucket": storage.bucket_name, "Key": _object_key(storage, key),
+                "UploadId": upload_id, "PartNumber": part_number, "ContentLength": size},
+        ExpiresIn=expires_in,
+    )
+    return url, {"Content-Length": str(size)}
+
+
+def list_multipart_parts(key, upload_id, storage):
+    """The parts the storage is holding, as CompletedPart entries in part order.
+
+    Paginated, because reading a truncated first page as the whole list would assemble a partial
+    object and call it done. Zentral's own geometry cannot fill a page — which is exactly why a
+    truncated answer must not be mistaken for a complete one.
+    """
+    paginator = _assembly_client(storage).get_paginator("list_parts")
+    parts = []
+    for page in paginator.paginate(Bucket=storage.bucket_name, Key=_object_key(storage, key),
+                                   UploadId=upload_id):
+        for part in page.get("Parts", ()):
+            parts.append({"PartNumber": part["PartNumber"], "ETag": part["ETag"]})
+    parts.sort(key=lambda part: part["PartNumber"])
+    return parts
+
+
+def complete_multipart_upload(key, upload_id, parts, crc64nvme, object_size, storage):
+    """Assemble the object, and let the storage refuse it if the bytes are not what was declared.
+
+    The part list comes from the storage, never from a client. The whole-object checksum is the one
+    the agent declared before it sent a byte, and S3 computes the assembled object's own and answers
+    BadDigest on a mismatch — because the algorithm was declared at create.
+    """
+    return _assembly_client(storage).complete_multipart_upload(
+        Bucket=storage.bucket_name,
+        Key=_object_key(storage, key),
+        UploadId=upload_id,
+        MultipartUpload={"Parts": parts},
+        ChecksumCRC64NVME=crc64nvme,
+        ChecksumType="FULL_OBJECT",
+        MpuObjectSize=object_size,
+    )
+
+
+def abort_multipart_upload(key, upload_id, storage):
+    """Drop the parts of an upload that will never complete.
+
+    Parts of an abandoned multipart upload are stored, and billed, until something removes them. The
+    bucket's AbortIncompleteMultipartUpload rule is the backstop; this is the fast path, for the
+    cases where the agent told us it gave up.
+    """
+    _request_client(storage).abort_multipart_upload(
+        Bucket=storage.bucket_name, Key=_object_key(storage, key), UploadId=upload_id)
 
 
 def select_dist_storage():
