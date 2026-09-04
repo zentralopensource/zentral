@@ -338,7 +338,7 @@ class MultipartUploadTestCase(SimpleTestCase):
              "MpuObjectSize": 200},
         )
         with stub:
-            response = complete_multipart_upload("k", "mpu-1", parts, "nD+hB17SSLE=", 200,
+            response = complete_multipart_upload("k", "mpu-1", parts, "9c3fa1075ed248b1", 200,
                                                  storage=storage)
         self.assertEqual(response["ETag"], '"final"')
 
