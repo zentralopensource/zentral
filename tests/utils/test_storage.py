@@ -12,9 +12,9 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from zentral.utils.storage import (_assembly_client, _request_client, abort_multipart_upload,
                                    complete_multipart_upload, create_multipart_upload,
                                    file_storage_has_presigned_uploads, file_storage_has_signed_urls,
-                                   generate_presigned_part, generate_presigned_put,
-                                   list_multipart_parts, select_dist_storage, sha256_object,
-                                   stat_object)
+                                   generate_presigned_get, generate_presigned_part,
+                                   generate_presigned_put, list_multipart_parts,
+                                   select_dist_storage, sha256_object, stat_object)
 
 
 S3_STORAGE = {"default": {"BACKEND": "storages.backends.s3.S3Storage",
@@ -355,3 +355,31 @@ class AssemblyClientTestCase(SimpleTestCase):
         # only the PRESIGN needed forcing; a real request resolves to v4 on its own. Asserted so a
         # future change to the shared builder cannot quietly take that away.
         self.assertEqual(_assembly_client(self._storage()).meta.config.signature_version, "s3v4")
+
+
+class PresignedGetTestCase(SimpleTestCase):
+    """The disposition is an S3 spelling, and only S3 takes it."""
+
+    @override_settings(STORAGES=S3_STORAGE)
+    def test_s3_signs_the_disposition(self):
+        url = generate_presigned_get("turbo/uploads/manifest.json", "manifest.json",
+                                     storages["default"])
+        query = parse_qs(urlparse(url).query)
+        self.assertIn("attachment", query["response-content-disposition"][0])
+
+    def test_a_storage_that_cannot_take_parameters_gets_a_plain_url(self):
+        """The GCS subclass overrides url() as url(self, name).
+
+        Passing `parameters` to it is a TypeError, not a header the storage ignores — and django
+        storages' own GoogleCloudStorage would hand the dict to generate_signed_url, which spells the
+        option `response_disposition`. Either way a GCP deployment answered 500 on every download.
+        """
+        storage = storages.create_storage(
+            {"BACKEND": "zentral.utils.gcs_storage.ZentralGoogleCloudStorage",
+             "OPTIONS": {"bucket_name": "zentral-tests"}})
+        self.assertTrue(file_storage_has_signed_urls(storage))
+        with patch.object(type(storage), "url", return_value="https://example.com/signed") as url:
+            self.assertEqual(
+                generate_presigned_get("turbo/uploads/manifest.json", "manifest.json", storage),
+                "https://example.com/signed")
+        url.assert_called_once_with("turbo/uploads/manifest.json")

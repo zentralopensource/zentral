@@ -408,6 +408,8 @@ Zentral writes the artifacts and never removes them, and a bucket collects other
 |`Expiration`|`turbo/uploads/`|Zentral keeps no expiry of its own, so nothing removes a collected artifact. They hold the data of the person who uses the machine, and they are collected to answer one question: keep them for as long as answering it takes. 14 days is a good default.|
 |`AbortIncompleteMultipartUpload`|the bucket|The parts of a [multipart](#multipart) upload that never completes are stored, and billed, until something aborts it. No expiration rule reaches them, because the object they would have made never appears. 7 days leaves room for an agent that retries a large artifact over several of its cycles.|
 
+If the storage has a `location`, the keys are under it, and the prefix of the expiration rule is `<location>/turbo/uploads/`. A rule on the bare prefix matches nothing, and nothing reports that the artifacts are not being removed.
+
 Set the abort rule on the whole bucket and not only on `turbo/uploads/`. Any client can start a multipart upload — the AWS SDK does it by itself above its transfer threshold — and an upload that is abandoned leaves its parts wherever it was going. The rule only removes the parts of an upload that never completed, so it cannot touch an object that is finished.
 
 If the bucket has versioning enabled, add a rule with `ExpiredObjectDeleteMarker`. Expiring an object writes a delete marker and makes the version noncurrent; a noncurrent-version rule removes the version and leaves the marker, and nothing else removes that. It must be a rule of its own, because one `Expiration` cannot carry both `ExpiredObjectDeleteMarker` and a number of days.
