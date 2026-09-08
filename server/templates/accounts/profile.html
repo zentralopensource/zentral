@@ -60,6 +60,7 @@
             <a href="{% url 'accounts:verification_devices' %}">Manage your verification devices</a>
         </td>
         </tr>
+        {% endif %}
         <tr>
             <th>
                 Global items per page
@@ -68,7 +69,6 @@
                 {{ user.items_per_page }}
             </td>
         </tr>
-        {% endif %}
     </tbody>
     </table>
 </div>

@@ -362,6 +362,18 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertTemplateUsed(response, "accounts/profile.html")
         self.assertNotContains(response, self.user.username)
         self.assertContains(response, self.ui_user.username)
+        self.assertContains(response, ">Change password</a>")
+        self.assertContains(response, ">Manage your verification devices</a>")
+        self.assertContains(response, "Global items per page")
+
+    def test_profile_remote_user(self):
+        self.client.force_login(self.remote_user)
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertTemplateUsed(response, "accounts/profile.html")
+        self.assertContains(response, self.remote_user.username)
+        self.assertNotContains(response, ">Change password</a>")
+        self.assertNotContains(response, ">Manage your verification devices</a>")
+        self.assertContains(response, "Global items per page")
 
     def test_update_profile_login_redirect(self):
         self.login_redirect("update_profile")
