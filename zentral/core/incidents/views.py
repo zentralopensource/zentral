@@ -79,6 +79,16 @@ class IncidentView(PermissionRequiredMixin, UserPaginationMixin, DetailView):
         except InvalidPage:
             raise Http404("Invalid page number")
         ctx["machine_incidents"] = page.object_list
+        if page.has_next():
+            qd = self.request.GET.copy()
+            qd["page"] = page.next_page_number()
+            ctx["next_url"] = "?{}".format(qd.urlencode())
+        if page.has_previous():
+            qd = self.request.GET.copy()
+            qd["page"] = page.previous_page_number()
+            ctx["previous_url"] = "?{}".format(qd.urlencode())
+            qd.pop("page", None)
+            ctx["reset_link"] = "?{}".format(qd.urlencode())
 
         # events links
         if self.request.user.has_perms(EventsMixin.permission_required):
