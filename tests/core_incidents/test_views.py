@@ -158,6 +158,8 @@ class InventoryViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Machine incidents (23)")
         self.assertContains(response, "page 1 of 3")
+        self.assertContains(response, '<a class="page-link" href="?page=2">Next')
+        self.assertContains(response, '<a class="page-link" href=""><i class="bi bi-caret-left"></i> Previous')
 
     def test_incident_detail_machine_incidents_second_page(self):
         incident = self._force_incident()
@@ -168,6 +170,31 @@ class InventoryViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Machine incidents (23)")
         self.assertContains(response, "page 2 of 3")
+        self.assertContains(response, '<a class="page-link" href="?page=3">Next')
+        self.assertContains(response, '<a class="page-link" href="?page=1"><i class="bi bi-caret-left"></i> Previous')
+        self.assertContains(response, '<a href="?">{}</a>'.format(incident.name))
+
+    def test_incident_detail_machine_incidents_last_page(self):
+        incident = self._force_incident()
+        for i in range(23):
+            self._force_machine_incident(incident)
+        self.login("incidents.view_incident", "incidents.view_machineincident")
+        response = self.client.get(reverse("incidents:incident", args=(incident.pk,)) + "?page=3")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "page 3 of 3")
+        self.assertContains(response, '<a class="page-link" href="">Next')
+        self.assertContains(response, '<a class="page-link" href="?page=2"><i class="bi bi-caret-left"></i> Previous')
+
+    def test_incident_detail_machine_incidents_single_page(self):
+        incident = self._force_incident()
+        for i in range(3):
+            self._force_machine_incident(incident)
+        self.login("incidents.view_incident", "incidents.view_machineincident")
+        response = self.client.get(reverse("incidents:incident", args=(incident.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Machine incidents (3)")
+        self.assertNotContains(response, "page 1 of 1")
+        self.assertNotContains(response, "Page navigation")
 
     def test_incident_detail_no_perm_no_machine_incidents(self):
         incident = self._force_incident()
