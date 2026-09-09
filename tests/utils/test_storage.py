@@ -2,10 +2,14 @@ import base64
 import hashlib
 from urllib.parse import parse_qs, urlparse
 
+from botocore.exceptions import ClientError
+from botocore.stub import Stubber
+from django.core.files.base import ContentFile
 from django.core.files.storage import storages
-from django.test import SimpleTestCase, override_settings
-from zentral.utils.storage import (file_storage_has_presigned_uploads, file_storage_has_signed_urls,
-                                   generate_presigned_put, select_dist_storage)
+from django.test import SimpleTestCase, TestCase, override_settings
+from zentral.utils.storage import (_stat_client, file_storage_has_presigned_uploads,
+                                   file_storage_has_signed_urls, generate_presigned_put,
+                                   select_dist_storage, sha256_object, stat_object)
 
 
 S3_STORAGE = {"default": {"BACKEND": "storages.backends.s3.S3Storage",
@@ -99,3 +103,123 @@ class PresignedUploadTestCase(SimpleTestCase):
         with self.assertRaises(ValueError) as cm:
             generate_presigned_put("turbo/uploads/test", 4, "application/gzip", "yolo", 900)
         self.assertEqual(cm.exception.args[0], "Not a hex sha256: 'yolo'")
+
+
+class StatObjectS3TestCase(SimpleTestCase):
+    """The S3 branch, stubbed against the real service model — so a parameter S3 does not have, or a
+    response member that is not one, fails here instead of in production."""
+
+    def _stubbed(self):
+        storage = storages.create_storage(S3_STORAGE["default"])
+        # the client stat_object caches on the storage, primed with a stub before it can build one
+        client = storage.connection.meta.client
+        storage._zentral_stat_client = client
+        return storage, Stubber(client)
+
+    def test_the_stat_client_carries_its_own_ceiling(self):
+        # the only test that builds the real client: everything below primes the cache with a stub,
+        # so a typo in these kwargs would surface in production as an exception verify_upload
+        # swallows into "undecided", with one log line to find it by
+        client = _stat_client(storages.create_storage(S3_STORAGE["default"]))
+        self.assertEqual(client.meta.config.connect_timeout, 2)
+        self.assertEqual(client.meta.config.read_timeout, 5)
+        # botocore stores retries as a TOTAL: asking for max_attempts=1 would have meant two
+        self.assertEqual(client.meta.config.retries["total_max_attempts"], 1)
+
+    @override_settings(STORAGES={"default": {"BACKEND": "storages.backends.s3.S3Storage",
+                                             "OPTIONS": dict(S3_STORAGE["default"]["OPTIONS"],
+                                                             location="zentral")}})
+    def test_stat_object_looks_where_the_presign_wrote(self):
+        # the same normalisation the presigned PUT signs. Without it the agent writes under the
+        # prefix, this HEAD looks at the bucket root, S3 answers 404 — and `missing` is a verdict,
+        # not an undecided answer, so it sticks.
+        storage = storages.create_storage(
+            dict(S3_STORAGE["default"],
+                 OPTIONS=dict(S3_STORAGE["default"]["OPTIONS"], location="zentral")))
+        storage._zentral_stat_client = storage.connection.meta.client
+        stub = Stubber(storage.connection.meta.client)
+        stub.add_response("head_object", {"ContentLength": 4},
+                          {"Bucket": "zentral-tests", "Key": "zentral/turbo/uploads/test",
+                           "ChecksumMode": "ENABLED"})
+        with stub:
+            self.assertEqual(stat_object("turbo/uploads/test", storage=storage)["size"], 4)
+
+    def test_stat_object_asks_for_the_checksum_and_gets_hex_back(self):
+        # HeadObject reports a checksum ONLY when the request asks for it. Without ChecksumMode the
+        # response is silently checksum-free, and a comparison against it would pass for any object.
+        storage, stub = self._stubbed()
+        stub.add_response(
+            "head_object",
+            {"ContentLength": 4, "ChecksumSHA256": base64.b64encode(hashlib.sha256(b"yolo").digest()).decode()},
+            {"Bucket": "zentral-tests", "Key": "turbo/uploads/test", "ChecksumMode": "ENABLED"},
+        )
+        with stub:
+            stored = stat_object("turbo/uploads/test", storage=storage)
+        self.assertEqual(stored["size"], 4)
+        # hex, the encoding the wire carries, not the base64 S3 reports
+        self.assertEqual(stored["sha256"], hashlib.sha256(b"yolo").hexdigest())
+
+    def test_stat_object_missing_key(self):
+        # HeadObject has no body to carry an error code, so a missing key surfaces as the bare status
+        # 404 — an `except NoSuchKey` would never fire
+        storage, stub = self._stubbed()
+        stub.add_client_error("head_object", service_error_code="404", http_status_code=404)
+        with stub:
+            self.assertIsNone(stat_object("turbo/uploads/gone", storage=storage))
+
+    def test_stat_object_forbidden_is_not_missing(self):
+        # a key we may not read is not an object that is not there, and recording it as missing would
+        # blame the agent for a bucket policy
+        storage, stub = self._stubbed()
+        stub.add_client_error("head_object", service_error_code="403", http_status_code=403)
+        with stub, self.assertRaises(ClientError):
+            stat_object("turbo/uploads/test", storage=storage)
+
+    def test_stat_object_without_a_stored_checksum(self):
+        # an object something else wrote: the size is all the stat can say
+        storage, stub = self._stubbed()
+        stub.add_response("head_object", {"ContentLength": 4},
+                          {"Bucket": "zentral-tests", "Key": "k", "ChecksumMode": "ENABLED"})
+        with stub:
+            stored = stat_object("k", storage=storage)
+        self.assertEqual(stored, {"size": 4, "sha256": None, "crc64nvme": None})
+
+    def test_stat_object_composite_checksum_is_not_a_sha256(self):
+        # S3 reports a multipart composite checksum with a part-count suffix, which is not the digest
+        # of the object and must not be compared against one
+        storage, stub = self._stubbed()
+        composite = base64.b64encode(hashlib.sha256(b"yolo").digest()).decode() + "-3"
+        stub.add_response("head_object", {"ContentLength": 4, "ChecksumSHA256": composite},
+                          {"Bucket": "zentral-tests", "Key": "k", "ChecksumMode": "ENABLED"})
+        with stub:
+            self.assertIsNone(stat_object("k", storage=storage)["sha256"])
+
+
+class StatObjectLocalTestCase(TestCase):
+    """The branch for a storage that signs nothing and records no digest of its own."""
+
+    def _store(self, key, body):
+        storage = storages["default"]
+        storage.save(key, ContentFile(body))
+        self.addCleanup(storage.delete, key)
+        return storage
+
+    def test_stat_object_reports_the_size_and_no_digest(self):
+        storage = self._store("turbo/uploads/stat-test", b"yolo")
+        self.assertEqual(stat_object("turbo/uploads/stat-test", storage=storage),
+                         {"size": 4, "sha256": None, "crc64nvme": None})
+
+    def test_stat_object_missing_file(self):
+        self.assertIsNone(stat_object("turbo/uploads/never-written", storage=storages["default"]))
+
+    def test_both_helpers_default_to_the_default_storage(self):
+        self._store("turbo/uploads/default-storage", b"yolo")
+        self.assertEqual(stat_object("turbo/uploads/default-storage"),
+                         {"size": 4, "sha256": None, "crc64nvme": None})
+        self.assertEqual(sha256_object("turbo/uploads/default-storage"),
+                         hashlib.sha256(b"yolo").hexdigest())
+
+    def test_sha256_object(self):
+        storage = self._store("turbo/uploads/hash-test", b"yolo" * 1024)
+        self.assertEqual(sha256_object("turbo/uploads/hash-test", storage=storage),
+                         hashlib.sha256(b"yolo" * 1024).hexdigest())

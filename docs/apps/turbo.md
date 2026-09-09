@@ -389,7 +389,32 @@ The result closes the upload. It carries a `run.id`, and one entry in `result.up
 
 Partial success is a normal outcome. A `file_export` that sends its manifest and fails on its archive keeps the manifest: the two artifacts are two rows, and they close one at a time.
 
-The agent's report is the first axis, and Zentral records it immediately. Verification against the storage is a second axis, and it comes later. Verification never reopens a one-time job: a one-time job that reported an upload does not get another destination.
+The agent's report is the first axis, and Zentral records it immediately. Whether the storage agrees is a second axis.
+
+#### Verification
+
+When the agent reports an upload, Zentral compares the size and the SHA-256 of the stored object with the ones the agent declared when it asked for the destination.
+
+Those two numbers reach the comparison by two independent paths. They went out at the request for a destination and were signed into the upload, so the storage refused any body that did not match them, and they come back as the checksum the storage recorded. They also come home a second time in the result. Verification is where the two copies meet, and on a storage that signs, Zentral reads no part of the file to do it. Where the storage records no digest of its own, Zentral reads the object and hashes it — which is affordable because that is the same storage that has the low size limit.
+
+Zentral checks both paths. A result that echoes a size or a digest which is not the one it asked for is a `mismatch`, whatever is at the key: an agent that requests a destination for one file and reports another has described two files, and only one of them was stored. Echoing them at all is optional — the request for the destination is what was signed either way.
+
+The outcome is a separate field on the upload, next to the status:
+
+|Verification|Meaning|
+|---|---|
+|`pending`|Not decided yet.|
+|`verified`|The stored object is the size and the SHA-256 the agent declared.|
+|`mismatch`|Something is at the key and it is not what the agent declared, or the result contradicts the request for the destination.|
+|`missing`|There is nothing at the key.|
+
+The outcome rides the result event as well, as `verification` on the `result.uploads` entry. It is the outcome itself and not a yes or no, because `mismatch` and `missing` are different problems and a consumer of the event cannot go to the database to tell them apart.
+
+Some answers are not answers, and Zentral records none of them. A storage that times out, a key the deployment cannot read, or an object with no stored digest all leave the verification `pending`, with a log entry, and put no `verification` on the event. Recording a transient failure as `missing` would be worse than recording nothing: the object is very likely there, and the row would say for ever that it is not.
+
+Give Zentral `s3:ListBucket` on the bucket. Without it S3 answers 403 rather than 404 for a key that does not exist, and Zentral cannot tell a missing object from one it may not read: the upload stays `pending`, and every result for it writes an error to the log.
+
+**Verification never reopens a one-time job.** That is what the two axes are for: the job was done on that machine when the agent reported, whatever the storage says afterwards. A `mismatch` does not give the agent another destination, and it does not make Zentral ask for the file again.
 
 ### Tolerant batches
 
@@ -1982,6 +2007,8 @@ Each entry in `result.uploads` reports one artifact, and it is what closes that 
 |`error`|Present instead of `key` when the artifact did not go up. `error.reason` is one of `expired`, `http_status`, `network`, `too_large` or `mint_rejected`; `error.attempts` and `error.last_http_status` are informational. A reason this release does not know still closes the upload as failed – the artifact is not coming either way.|
 
 An entry that reports an artifact Zentral never minted a destination for is logged and ignored. It never fails the batch: the run happened, and its result is worth keeping.
+
+The `turbo_result` event carries the entries back, each with a `verification` added when [verification](#verification) reached an answer. The event also carries `run.id`, which is what an upload is keyed on.
 
 Response:
 
