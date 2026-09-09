@@ -383,6 +383,22 @@ Where the bytes go depends on the storage backend:
 
 The agent sees the same `mode: "put"` shape in both cases, and does not know which storage is behind it.
 
+#### Multipart
+
+A large artifact on an S3 storage backend goes up in parts. Zentral chooses that, not the agent: the mint response says `mode: "multipart"` and carries the geometry — the size of a part, and one signed URL for each part. The agent sends the same request either way and reads the mode off the answer, so there is nothing for it to predict and no part size for it to cache.
+
+Resumability is the reason. A 400 MiB `PUT` that fails at 95 % starts again from zero, where parts retry one at a time. An agent whose part URLs expired asks again with the `upload_id` and the numbers of the parts it still needs, and Zentral signs only those, against the part size the upload was created with.
+
+The limit is two part sizes of 64 MiB, so 128 MiB. At one part size there is nothing to gain: an artifact one byte over would be a two-part upload with a one-byte second part, and losing the first part costs the same as starting the single `PUT` again. Multipart begins to pay when a resume can save a full part.
+
+**Zentral completes the upload, not the agent.** When every part is up, the agent posts the three keys that identify the upload to [`/public/turbo/uploads/complete/`](#publicturbouploadscomplete) and gets a `202`. Zentral then lists the parts from the storage — it never takes a part list from a request — and completes the upload with its own credentials. This is the one place the agent would have needed to know something about the storage: completion means collecting entity tags, building a request body, and, on S3, finding an error inside a `200` answer.
+
+The completion runs in the background because both storages document that it can take several minutes. The agent has no use for the answer: it sent the bytes, and whether the storage assembles them is recorded on the upload's own verification field. The call is idempotent, so the agent can repeat it, and Zentral asks for a completion again by itself when a result arrives for an upload that is still waiting.
+
+A multipart upload is verified by its completion and not by a later question to the storage. The whole-object CRC-64/NVME the agent declared when it asked for the destination is supplied at completion, and the storage computes the assembled object's own and refuses a mismatch. A failure there is `assembly_failed`. This is why the config asks for that digest, and why an artifact large enough for multipart is refused without it: the SHA-256 cannot do the same work on a multipart upload.
+
+When the agent gives up on a multipart upload and says so in its result, Zentral drops the parts. Configure the `AbortIncompleteMultipartUpload` lifecycle rule on the bucket as well: it is the only thing that removes the parts of an upload the agent never reports, and parts are stored, and billed, until something removes them.
+
 [Config](#configuration) publishes `upload_max_size` and `upload_digests`. The agent can then refuse a file that is too large before it collects it, and compute the digests the storage wants in the same pass as the SHA-256.
 
 The result closes the upload. It carries a `run.id`, and one entry in `result.uploads` for each declared artifact. The entry reports the upload, or the reason it failed. Zentral compares the key the agent echoes with the key it minted, and refuses an echo that does not match: the key never comes from the wire.
@@ -404,9 +420,10 @@ The outcome is a separate field on the upload, next to the status:
 |Verification|Meaning|
 |---|---|
 |`pending`|Not decided yet.|
-|`verified`|The stored object is the size and the SHA-256 the agent declared.|
+|`verified`|The stored object is the size and the SHA-256 the agent declared, or a multipart upload assembled with the CRC-64/NVME it declared.|
 |`mismatch`|Something is at the key and it is not what the agent declared, or the result contradicts the request for the destination.|
 |`missing`|There is nothing at the key.|
+|`assembly_failed`|A [multipart](#multipart) upload could not be assembled. The parts do not make the object the agent described.|
 
 The outcome rides the result event as well, as `verification` on the `result.uploads` entry. It is the outcome itself and not a yes or no, because `mismatch` and `missing` are different problems and a consumer of the event cannot go to the database to tell them apart.
 
@@ -2157,7 +2174,9 @@ Request:
 |`artifact`|**Required.** The artifact name, as the job kind declares it.|
 |`size`|**Required.** The exact size of the file, in bytes.|
 |`sha256`|**Required.** The hex SHA-256 of the file. This is the identity of the artifact for Zentral.|
-|`digests`|Optional. The storage digests the config asked for, keyed by algorithm.|
+|`digests`|Optional. The storage digests the config asked for, keyed by algorithm. Required for an artifact large enough for [multipart](#multipart), which nothing else can validate.|
+|`upload_id`|Resume only. The `upload_id` of the multipart upload to continue. Zentral compares it with the one it holds.|
+|`missing_parts`|Resume only. The numbers of the parts that still need a URL. Send it with `upload_id`, never alone.|
 
 Response:
 
@@ -2179,6 +2198,30 @@ The agent sends the file in one `PUT` to `url`, with every header in `headers`, 
 
 `key` goes back to Zentral in the result. `expires_at` is when the signature stops being accepted; the signature is verified when the request starts, so an upload that begins in time can finish.
 
+For an artifact large enough for [multipart](#multipart), the answer carries the geometry and one URL per part instead of a single `url`:
+
+```json
+{
+    "mode": "multipart",
+    "key": "turbo/uploads/C02ZXXXXXXXX/b1d1a1f0-.../7/sysdiagnose_C02ZXXXXXXXX_20260820-091541.tar.gz",
+    "upload_id": "2~kEXAMPLEuploadIDexample",
+    "part_size": 67108864,
+    "parts": [
+        {"n": 1, "url": "https://bucket.s3.amazonaws.com/...&partNumber=1", "headers": {"Content-Length": "67108864"}},
+        {"n": 2, "url": "https://bucket.s3.amazonaws.com/...&partNumber=2", "headers": {"Content-Length": "31457280"}}
+    ],
+    "expires_at": "2026-08-20T10:15:41+00:00"
+}
+```
+
+|Attribute|Description|
+|---|---|
+|`part_size`|The size of every part but the last. The agent slices on it.|
+|`parts[].n`|The part number, which the storage needs and which a resume names.|
+|`parts[].headers`|The exact length of that part, signed. A part carries no checksum: the whole object is validated at completion.|
+
+The agent sends each part with one `PUT`, then tells Zentral it is done. See [`/public/turbo/uploads/complete/`](#publicturbouploadscomplete). A resume asks this endpoint again with `upload_id` and `missing_parts`, and gets back only the parts it named — signed against the `part_size` the upload already has, so they line up with what is in flight.
+
 The same request again, for the same run and the same artifact, returns the same `key` with a new signature. That is the retry: it replaces the object instead of adding a second one. Zentral counts the requests and stops at five.
 
 Errors:
@@ -2191,12 +2234,19 @@ Errors:
 |`400`|`{"error": "invalid_size"}`|`size` is absent, or not a positive integer.|
 |`400`|`{"error": "invalid_sha256"}`|`sha256` is absent, or not 64 hexadecimal characters.|
 |`400`|`{"error": "invalid_digests"}`|`digests` is not an object, or one of its values is not a base 64 digest.|
+|`400`|`{"error": "missing_digest"}`|The artifact is large enough for [multipart](#multipart) and `digests.crc64nvme` is absent. Nothing else can validate the assembled object.|
+|`400`|`{"error": "invalid_upload_id"}`|`upload_id` is present and is not a string.|
+|`400`|`{"error": "unknown_upload_id"}`|`upload_id` is not the one of the multipart upload Zentral holds for that run and artifact.|
+|`400`|`{"error": "invalid_missing_parts"}`|`missing_parts` is not a non-empty list of part numbers.|
+|`400`|`{"error": "missing_upload_id"}`|`missing_parts` is present without `upload_id`. A resume names the upload it resumes.|
+|`400`|`{"error": "artifact_changed"}`|A resume declares a different `size` or `sha256` than the multipart upload in flight. That is a different artifact, and it needs its own upload.|
 |`400`|`{"error": "unknown_artifact"}`|The job does not declare that artifact. Terminal – no retry changes it.|
 |`400`|`{"error": "attempts_exhausted"}`|Five destinations were already minted for that run and artifact.|
 |`404`|`{"error": "unknown_schedule"}`|The schedule is unknown, belongs to another configuration, is out of scope, or is outside its delivery window.|
 |`410`|`{"error": "gate_closed"}`|A result for that one-time job already came back. The job is done on this machine, and an artifact uploaded now could never be referenced.|
 |`410`|`{"error": "already_uploaded"}`|The result already reported that artifact as uploaded.|
 |`413`|`{"error": "too_large"}`|`size` is above the limit of the job kind, or above the limit of the deployment.|
+|`503`|`{"error": "storage_unavailable"}`|The storage did not answer when Zentral started the [multipart](#multipart) upload. Ask again later.|
 |`429`|`{"error": "too_many_pending"}`|The machine holds too many destinations on that schedule that no result has closed. Report the runs already made; a request for a destination the machine already has is never refused for this reason.|
 
 #### The hosted destination
@@ -2212,3 +2262,41 @@ When the deployment has no storage that can sign a `PUT`, the `url` of the respo
 |`404`|`{"error": "unknown_upload"}`|The token names an upload that does not exist.|
 |`409`|`{"error": "already_uploaded"}`|The result already reported that artifact as uploaded.|
 |`413`|`{"error": "too_large"}`|The body is above the body limit of the deployment.|
+
+### /public/turbo/uploads/complete/
+
+Report that every part of a [multipart](#multipart) upload is sent. Nothing else uses this endpoint: a `mode: "put"` upload is finished when its `PUT` answers, and `mode` is how the agent knows which one it has.
+
+* method: POST
+* Content-Type: application/json
+* authentication: `Authorization: TurboEnrolledMachine <token>`
+
+Request — the identity of the upload, and nothing else. Zentral already holds the key, the `upload_id` and the geometry:
+
+```json
+{
+    "schedule_pk": "b1d1a1f0-8b2a-4a76-9a4a-3a1f1d3b6f22",
+    "run_id": "0f3b06d2-3f4e-4c2a-90c7-4d6c9dbb3d4c",
+    "artifact": "archive"
+}
+```
+
+Response:
+
+```json
+{}
+```
+
+The status is `202`, not `200`: Zentral accepted the work and completes the upload in the background, because both storages document that assembling a multipart upload can take several minutes. The agent moves on and posts its result.
+
+The call is idempotent. Repeat it after a timeout or a `5xx`; completing an upload that is already complete is a success. If the agent never manages to make the call, Zentral asks for the completion itself when the result for that run arrives.
+
+Errors:
+
+|Status|Body|Meaning|
+|---|---|---|
+|`400`|`{"error": "missing_schedule_pk"}`, `{"error": "invalid_schedule_pk"}`|`schedule_pk` is absent, or not a UUID.|
+|`400`|`{"error": "missing_run_id"}`, `{"error": "invalid_run_id"}`|`run_id` is absent, or not a UUID.|
+|`400`|`{"error": "missing_artifact"}`|`artifact` is absent or empty.|
+|`400`|`{"error": "unknown_upload"}`|No upload of that run and artifact for this machine.|
+|`400`|`{"error": "not_multipart"}`|The upload is a single `PUT`. It was finished when its `PUT` answered.|

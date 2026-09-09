@@ -5,16 +5,19 @@ from datetime import timedelta
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
+from django.db import transaction
+from botocore.exceptions import BotoCoreError, ClientError
 from django.core.exceptions import RequestDataTooBig
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import View
 
-from ..models import (JobUpload, ScheduleMode, UploadStatus, get_machine_schedule,
-                      one_time_gate_closed)
+from ..models import (JobUpload, ScheduleMode, UploadMode, UploadStatus, UploadVerification,
+                      get_machine_schedule, one_time_gate_closed)
+from ..tasks import complete_multipart_upload_task
 from ..uploads import (MAX_PENDING_UPLOADS, MAX_UPLOAD_ATTEMPTS, UPLOAD_URL_EXPIRY,
                        build_upload_destination, build_upload_key, parse_digests, parse_sha256,
-                       unsign_hosted_upload, upload_max_size)
+                       start_multipart_upload, unsign_hosted_upload, upload_max_size, upload_mode)
 from .base import BaseEnrolledMachinePostView, WireError
 
 logger = logging.getLogger("zentral.contrib.turbo.public_views.uploads")
@@ -28,6 +31,24 @@ def _uuid(data, key):
         return uuid.UUID(value)
     except ValueError:
         raise WireError(f"invalid_{key}")
+
+
+def _part_numbers(value):
+    """The part numbers of a resume, or None when the request is not one.
+
+    A part number is what it says, so it is checked as one here rather than trusted into a range()
+    below. The geometry the row holds decides which of them exist.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, list) or not value:
+        raise WireError("invalid_missing_parts")
+    numbers = []
+    for number in value:
+        if not isinstance(number, int) or isinstance(number, bool) or number < 1:
+            raise WireError("invalid_missing_parts")
+        numbers.append(number)
+    return sorted(set(numbers))
 
 
 class UploadMintView(BaseEnrolledMachinePostView):
@@ -56,6 +77,17 @@ class UploadMintView(BaseEnrolledMachinePostView):
         digests = parse_digests(data.get("digests"))
         if digests is None:
             raise WireError("invalid_digests")
+        # the resume block, both halves or neither: an upload_id names the multipart upload already in
+        # flight, and missing_parts says which parts of it still need a URL
+        upload_id = data.get("upload_id")
+        if upload_id is not None and not isinstance(upload_id, str):
+            raise WireError("invalid_upload_id")
+        missing_parts = _part_numbers(data.get("missing_parts"))
+        if missing_parts is not None and upload_id is None:
+            # the resume shape is both keys. Without the id there is nothing to resume, and signing
+            # part 3 of a multipart upload the agent has not started would hand it a URL for two
+            # thirds of an object it can never finish.
+            raise WireError("missing_upload_id")
 
         resolved = get_machine_schedule(self.configuration, self.serial_number, schedule_pk)
         if resolved is None:
@@ -77,12 +109,20 @@ class UploadMintView(BaseEnrolledMachinePostView):
             raise WireError("too_large", status=413)
         self._check_pending(schedule.pk, run_id, artifact_name)
 
+        mode = upload_mode(size, storage)
+        if mode == UploadMode.MULTIPART and not digests.get("crc64nvme"):
+            # a multipart object is validated by the whole-object CRC and by nothing else: sha256 is
+            # composite-only on a multipart upload, so without this there is no value to complete
+            # with and the assembled object would be accepted unchecked
+            raise WireError("missing_digest")
+
         upload, _ = JobUpload.objects.get_or_create(
             schedule_pk=schedule.pk, serial_number=self.serial_number,
             run_id=run_id, artifact=artifact_name,
             defaults={"schedule_mode": schedule.wire_mode, "size": size, "sha256": sha256,
                       "crc64nvme": digests.get("crc64nvme", ""),
                       "crc32c": digests.get("crc32c", ""),
+                      "mode": mode,
                       "key": ""},
         )
         if upload.status == UploadStatus.UPLOADED:
@@ -91,6 +131,18 @@ class UploadMintView(BaseEnrolledMachinePostView):
             raise WireError("already_uploaded", status=410)
         if upload.attempts >= MAX_UPLOAD_ATTEMPTS:
             raise WireError("attempts_exhausted")
+
+        if upload.mode == UploadMode.MULTIPART and upload.upload_id:
+            if upload_id is not None and upload_id != upload.upload_id:
+                # the presented id is checked against the row, never believed: parts signed against a
+                # different multipart upload would assemble somewhere nothing is looking
+                raise WireError("unknown_upload_id")
+            if (size, sha256) != (upload.size, upload.sha256):
+                # the parts already up are the bytes this row describes, and the geometry was fixed
+                # against that size when the multipart upload was created. A different artifact needs
+                # its own upload, not a resume of this one — re-signing against a new geometry would
+                # produce parts that cannot line up with what is already in flight.
+                raise WireError("artifact_changed")
 
         # a retry re-signs the SAME key, so it overwrites in place instead of leaving a twin
         if not upload.key:
@@ -102,14 +154,28 @@ class UploadMintView(BaseEnrolledMachinePostView):
         upload.sha256 = sha256
         upload.crc64nvme = digests.get("crc64nvme", "")
         upload.crc32c = digests.get("crc32c", "")
+        if upload.mode == UploadMode.MULTIPART and not upload.upload_id:
+            try:
+                start_multipart_upload(upload, artifact, storage)
+            except (BotoCoreError, ClientError):
+                # the one storage call this endpoint makes, and a storage that does not answer is not
+                # the agent's fault. Unhandled it would be an HTML 500 on an endpoint contracted never
+                # to serve one, and ATOMIC_REQUESTS would roll the row back while the storage may
+                # already hold the upload id — an orphan for the lifecycle rule to sweep. A retry-later
+                # answer instead: the agent mints again, which is the right thing to do about a
+                # storage that was busy.
+                logger.exception("Turbo upload mint from %s: could not start the multipart upload",
+                                 self.serial_number)
+                raise WireError("storage_unavailable", status=503)
         upload.attempts += 1
         upload.save()
 
-        url, headers = build_upload_destination(upload, artifact, storage)
+        destination = build_upload_destination(upload, artifact, storage, missing_parts)
         self.request_event_payload = {"artifact": artifact_name, "size": size,
-                                      "attempts": upload.attempts}
-        return {"mode": upload.mode, "url": url, "headers": headers, "key": upload.key,
-                "expires_at": (timezone.now() + timedelta(seconds=UPLOAD_URL_EXPIRY)).isoformat()}
+                                      "attempts": upload.attempts, "mode": upload.mode}
+        return {"mode": upload.mode, "key": upload.key,
+                "expires_at": (timezone.now() + timedelta(seconds=UPLOAD_URL_EXPIRY)).isoformat(),
+                **destination}
 
     def _max_size(self, job, storage):
         # the kind's ceiling under the deployment's, never above it. The definition is resolved: the
@@ -131,6 +197,46 @@ class UploadMintView(BaseEnrolledMachinePostView):
             logger.warning("Turbo upload mint from %s: %s pending rows on schedule %s",
                            self.serial_number, pending, schedule_pk)
             raise WireError("too_many_pending", status=429)
+
+
+class UploadCompleteView(BaseEnrolledMachinePostView):
+    """`POST /public/turbo/uploads/complete/` — every part is up; the server closes the upload.
+
+    There is no presigned complete and no presigned abort. Completing means collecting ETags,
+    building a CompleteMultipartUpload body and, on S3, parsing an error out of a 200 OK — the one
+    place the agent would have needed storage-specific knowledge, which is what "the agent is a plain
+    HTTP client" was supposed to mean.
+
+    202, because both storages document that assembling a multipart upload can take several minutes,
+    so it cannot sit in a device request. The agent has nothing to do with the answer either: it
+    uploaded the bytes, and whether the storage assembles them lands on the row's verification axis.
+    Idempotent, so the agent can retry the call freely.
+    """
+    request_type = "upload_complete"
+    response_status = 202
+
+    def do_post(self, data):
+        schedule_pk = _uuid(data, "schedule_pk")
+        run_id = _uuid(data, "run_id")
+        artifact_name = data.get("artifact")
+        if not isinstance(artifact_name, str) or not artifact_name:
+            raise WireError("missing_artifact")
+        try:
+            upload = JobUpload.objects.get(schedule_pk=schedule_pk, serial_number=self.serial_number,
+                                           run_id=run_id, artifact=artifact_name)
+        except JobUpload.DoesNotExist:
+            raise WireError("unknown_upload")
+        if upload.mode != UploadMode.MULTIPART or not upload.upload_id:
+            # a single PUT is finished when its PUT returns, and `mode` is how the agent knows which
+            # it has — asking for this one is a contract error, not a transient one
+            raise WireError("not_multipart")
+        self.request_event_payload = {"artifact": artifact_name}
+        if upload.verification != UploadVerification.VERIFIED:
+            # on_commit like every other enqueue here: ATOMIC_REQUESTS means a task started now could
+            # run against a transaction that never lands
+            transaction.on_commit(
+                lambda: complete_multipart_upload_task.apply_async((str(upload.pk),)))
+        return {}
 
 
 class HostedUploadView(View):
