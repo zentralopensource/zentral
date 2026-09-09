@@ -112,6 +112,83 @@ class MetricsView(BasePrometheusMetricsView):
                 for le, val in row_d.items():
                     edg.labels(le=le, **default_labels).set(val)
 
+    def populate_devices_per_realm_group(self):
+        drgg = Gauge(
+            'zentral_mdm_enrolled_device_bucket', 'Zentral MDM devices per realm group',
+            ['realm', 'realm_group', 'platform', 'blueprint', 'le'],
+            registry=self.registry,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                # enrolled devices carry no realm user, only the enrollment sessions do. A device can have
+                # more than one session, and those sessions can point at different realm users, so only the
+                # realm user of the most recent session is used, like in the realm group tag mappings.
+                "with recursive enrollment_sessions as ("
+                "  select enrolled_device_id, realm_user_id, created_at from mdm_depenrollmentsession"
+                "  union all"
+                "  select enrolled_device_id, realm_user_id, created_at from mdm_otaenrollmentsession"
+                "  union all"
+                "  select enrolled_device_id, realm_user_id, created_at from mdm_reenrollmentsession"
+                "  union all"
+                "  select enrolled_device_id, realm_user_id, created_at from mdm_userenrollmentsession"
+                "), sorted_enrollment_sessions as ("
+                "  select enrolled_device_id, realm_user_id,"
+                "  row_number() over (partition by enrolled_device_id order by created_at desc) row_number"
+                "  from enrollment_sessions"
+                "  where enrolled_device_id is not null"
+                "), latest_enrollment_sessions as ("
+                "  select enrolled_device_id, realm_user_id from sorted_enrollment_sessions"
+                "  where row_number = 1 and realm_user_id is not null"
+                # the parents of the direct groups are included, like everywhere else the realm group
+                # memberships are resolved. the union, and not a union all, is what makes the recursion
+                # stop if the groups happen to form a cycle.
+                "), user_groups as ("
+                "  select les.realm_user_id user_id, m.group_id"
+                "  from latest_enrollment_sessions les"
+                "  join realms_realmusergroupmembership m on (m.user_id = les.realm_user_id)"
+                "  union"
+                "  select ug.user_id, g.parent_id"
+                "  from user_groups ug"
+                "  join realms_realmgroup g on (g.uuid = ug.group_id)"
+                "  where g.parent_id is not null"
+                "), device_realm_groups as ("
+                "  select les.enrolled_device_id device_id, ug.group_id"
+                "  from latest_enrollment_sessions les"
+                "  join user_groups ug on (ug.user_id = les.realm_user_id)"
+                "), devices as ("
+                "  select r.name realm, rg.display_name realm_group, d.platform, b.name blueprint,"
+                "  case when d.last_seen_at is not null"
+                "  then date_part('days', now() - d.last_seen_at)"
+                "  else null end age"
+                "  from mdm_enrolleddevice d"
+                "  left join mdm_blueprint b on (d.blueprint_id = b.id)"
+                "  left join device_realm_groups drg on (drg.device_id = d.id)"
+                "  left join realms_realmgroup rg on (rg.uuid = drg.group_id)"
+                "  left join realms_realm r on (r.uuid = rg.realm_id)"
+                ") "
+                "select realm, realm_group, platform, blueprint,"
+                'count(*) filter (where age is not null and age < 1) "1",'
+                'count(*) filter (where age is not null and age < 7) "7",'
+                'count(*) filter (where age is not null and age < 14) "14",'
+                'count(*) filter (where age is not null and age < 30) "30",'
+                'count(*) filter (where age is not null and age < 45) "45",'
+                'count(*) filter (where age is not null and age < 90) "90",'
+                'count(*) as "+Inf" '
+                'from devices '
+                'group by realm, realm_group, platform, blueprint'
+            )
+            columns = [c.name for c in cursor.description]
+            for row in cursor.fetchall():
+                row_d = dict(zip(columns, row))
+                default_labels = {
+                    "realm": row_d.pop("realm") or "_",
+                    "realm_group": row_d.pop("realm_group") or "_",
+                    "platform": row_d.pop("platform") or "_",
+                    "blueprint": row_d.pop("blueprint") or "_",
+                }
+                for le, val in row_d.items():
+                    drgg.labels(le=le, **default_labels).set(val)
+
     def populate_target_artifacts_buckets(self):
         tag = Gauge(
             "zentral_mdm_target_artifacts_bucket",
@@ -169,4 +246,5 @@ class MetricsView(BasePrometheusMetricsView):
         self.populate_enrollment_sessions()
         self.populate_commands()
         self.populate_enrolled_devices()
+        self.populate_devices_per_realm_group()
         self.populate_target_artifacts_buckets()
