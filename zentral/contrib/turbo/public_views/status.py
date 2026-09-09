@@ -52,6 +52,15 @@ class StatusView(BaseEnrolledMachinePostView):
             row.last_seen_at = now
             row.removed_at = None   # the agent still holds it
             held[(type(row), row.pk)] = row
+            if job.definition is None:
+                # a kind this release does not know — an instance still on the previous release can be
+                # sent the status of a job a newer one served. The tracker is updated above either way,
+                # or the next sweep would mark a job the agent is still holding as removed; it is only
+                # the event ref that cannot be built, since definition_wire_ref() reads .pk on None.
+                logger.warning("Turbo status from %s: unknown kind %r for schedule %s",
+                               serial_number, job.kind, schedule_pk)
+                skipped.append({**ack, "reason": "unknown_job_kind"})
+                continue
             # the event ref IS the validated wire status entry: identity + the held schedule + last_run,
             # plus the definition block (name / rule_id) so the held set links its definitions too
             schedule_ref = {"pk": str(schedule_pk)}

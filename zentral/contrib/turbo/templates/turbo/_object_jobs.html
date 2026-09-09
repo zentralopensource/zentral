@@ -1,8 +1,11 @@
 {% load inventory_extras ui_extras %}
 {% comment %}
-List of the scheduled and one-time jobs that run this Script / MSCPCheck.
+List of the scheduled and one-time jobs that run this Script / MSCPCheck / Command.
 Expects `recurring_jobs` and `one_time_jobs` in the context (see JobDetailMixin). Edit / delete are
 managed on the job's configuration, so the actions carry the job's configuration_id.
+`one_time_jobs` is a list, not a queryset — the mixin evaluates it to decide the buttons per row — so
+the heading counts it with `length`. A list has no argument-free `count()`, and the engine renders the
+empty string rather than raise.
 {% endcomment %}
 
 {% if perms.turbo.view_recurringjob %}
@@ -48,7 +51,7 @@ managed on the job's configuration, so the actions carry the job's configuration
 {% endif %}
 
 {% if perms.turbo.view_onetimejob %}
-<h3 id="one-time-jobs" class="mt-3">One-time job{{ one_time_jobs.count|pluralize }} ({{ one_time_jobs.count }})</h3>
+<h3 id="one-time-jobs" class="mt-3">One-time job{{ one_time_jobs|length|pluralize }} ({{ one_time_jobs|length }})</h3>
 {% if one_time_jobs %}
 <table class="table table-striped align-middle table-hover">
   <thead>
@@ -56,7 +59,7 @@ managed on the job's configuration, so the actions carry the job's configuration
       <th>Configuration</th>
       <th>Window</th>
       <th>Scope</th>
-      {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}<th></th>{% endif %}
+      {% if can_edit_one_time_job %}<th></th>{% endif %}
     </tr>
   </thead>
   <tbody>
@@ -69,13 +72,13 @@ managed on the job's configuration, so the actions carry the job's configuration
         {% else %}<span class="text-secondary">anytime</span>{% endif %}
       </td>
       <td>{% include "turbo/_job_scope.html" with job_scope=one_time_job %}</td>
-      {% if perms.turbo.change_onetimejob or perms.turbo.delete_onetimejob %}
+      {% if can_edit_one_time_job %}
       <td class="text-end py-0">
-        {% if perms.turbo.change_onetimejob %}
+        {% if one_time_job.can_update %}
           {% url 'turbo:update_one_time_job' one_time_job.configuration_id one_time_job.pk as url %}
           {% button 'UPDATE' url "Edit one-time job" %}
         {% endif %}
-        {% if perms.turbo.delete_onetimejob %}
+        {% if one_time_job.can_delete %}
           {% url 'turbo:delete_one_time_job' one_time_job.configuration_id one_time_job.pk as url %}
           {% button 'DELETE' url "Delete one-time job" %}
         {% endif %}

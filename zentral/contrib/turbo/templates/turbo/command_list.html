@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'turbo:index' %}">Turbo</a></li>
+  {% if form.has_changed %}
+  <li class="breadcrumb-item"><a href="{% url 'turbo:commands' %}">Commands</a></li>
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Search</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Search</li>
+  {% endif %}
+  {% else %}
+  {% if reset_link %}
+  <li class="breadcrumb-item"><a href="{{ reset_link }}">Commands</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">Commands</li>
+  {% endif %}
+  {% endif %}
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">Command{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+</div>
+
+<div class="d-flex flex-wrap align-items-center mb-1">
+    <form method="GET" class="search-form">
+        {{ form }}
+        <button type="submit" class="btn btn-link mx-2"><i class="bi bi-search"></i></button>
+    </form>
+</div>
+
+{% if object_list %}
+{% pagination next_url previous_url %}
+<table class="table table-striped align-middle table-hover">
+<thead>
+    <th>Name</th>
+    <th>Kind</th>
+    <th>Version</th>
+</thead>
+<tbody>
+    {% for command in object_list %}
+    <tr class="data-row">
+    <td><a href="{{ command.get_absolute_url }}">{{ command }}</a></td>
+    <td>{{ command.get_backend_display }}</td>
+    <td>{{ command.job.version }}</td>
+    </tr>
+    {% endfor %}
+</tbody>
+</table>
+{% pagination next_url previous_url %}
+{% elif form.has_changed %}
+    {% url 'turbo:commands' as empty_results_url %}
+    {% empty_results empty_results_url %}
+{% else %}
+    {% no_entities 'Turbo commands' %}
+{% endif %}
+
+{% endblock %}

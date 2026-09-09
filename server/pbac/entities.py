@@ -109,8 +109,16 @@ class Request:
         principal: Principal,
         action: Action,
         resource: Resource,
-        context: Optional[Dict] = None
+        context: Optional[Dict] = None,
+        unknown_context: bool = False,
     ) -> None:
+        # unknown_context marks a request whose context cannot be filled in yet — a view deciding
+        # whether to offer an action before the user has picked the object that would complete it.
+        # Such a request is answered by partial evaluation, which residualizes the attributes a policy
+        # reads instead of failing on a record that does not have them. That is what lets the context
+        # attributes stay REQUIRED: an action never has to declare an attribute optional just because
+        # one caller cannot supply it yet.
+        self.unknown_context = unknown_context
         self.principal = principal
         self.action = action
         self.resource = resource

@@ -30,6 +30,11 @@ urlpatterns = [
     path('enrolled_machines/<str:urlsafe_serial_number>/schedule/',
          views.ScheduleMachineOneTimeJobView.as_view(), name='schedule_machine_one_time_job'),
 
+    # command — no create/update/delete: a command is defined through the API, like a store or a probe
+    # action. The detail page is what every definition link needs.
+    path('commands/', views.CommandListView.as_view(), name='commands'),
+    path('commands/<uuid:pk>/', views.CommandView.as_view(), name='command'),
+
     # script
     path('scripts/', views.ScriptListView.as_view(), name='scripts'),
     path('scripts/create/', views.CreateScriptView.as_view(), name='create_script'),
@@ -71,6 +76,7 @@ modules_menu_cfg = {
         ('enrolled_machines', 'Enrolled machines', False, ('turbo.view_enrolledmachine',)),
         ('scripts', 'Scripts', False, ('turbo.view_script',)),
         ('mscp_checks', 'mSCP checks', False, ('turbo.view_mscpcheck',)),
+        ('commands', 'Commands', False, ('turbo.view_command',)),
         ('recurring_jobs', 'Recurring jobs', False, ('turbo.view_recurringjob',)),
         ('one_time_jobs', 'One-time jobs', False, ('turbo.view_onetimejob',)),
     ),

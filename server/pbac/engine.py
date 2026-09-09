@@ -7,15 +7,18 @@ from django.apps.config import AppConfig
 from django.contrib.auth import get_permission_codename
 from django.db.models.base import ModelBase
 
-from .cedar import authorize_request, authorize_requests, render_schema_json
+from .cedar import (authorize_request, authorize_request_preview, authorize_requests,
+                    render_schema_json)
 from .entities import Action, ActionGroup, Namespace, Principal, Request, Resource
 from .schema import build_schema_ir
 from .types import (
     AppliesTo,
     EntityType,
     LEGACY_PERM_APPLIES_TO,
+    RecordOf,
     ROLE,
     SERVICE_ACCOUNT,
+    SetOf,
     SYSTEM,
     USER,
 )
@@ -70,20 +73,41 @@ class Engine:
 
     # Entity types
 
+    def _register_attr_entity_types(self, type_ref) -> None:
+        """Register every EntityType an attribute type refers to, however deeply.
+
+        An attribute can be typed as an entity — a one-time job pointing at the job it runs — and
+        Cedar refuses a schema that names a type it cannot resolve: "failed to resolve type". That
+        rejection is not per-action, it fails the whole schema, so every policy save in the
+        deployment would start erroring. Registering through attributes as well as parents keeps a
+        declaration from bringing the schema down.
+        """
+        if isinstance(type_ref, EntityType):
+            self.register_entity_type(type_ref)
+        elif isinstance(type_ref, SetOf):
+            self._register_attr_entity_types(type_ref.inner)
+        elif isinstance(type_ref, RecordOf):
+            for attr in type_ref.fields.values():
+                self._register_attr_entity_types(attr.type)
+
     def register_entity_type(self, et: EntityType) -> EntityType:
         """Register (or idempotently re-register) an EntityType.
 
-        Parents are auto-registered. Re-registering with the same EntityType
-        instance is a no-op. Re-registering with a different instance under
-        the same (namespace, name) raises EntityTypeConflict — entity types
-        are global declarations and must be unique.
+        Parents and the entity types its attributes refer to are auto-registered. Re-registering
+        with the same EntityType instance is a no-op. Re-registering with a different instance under
+        the same (namespace, name) raises EntityTypeConflict — entity types are global declarations
+        and must be unique.
         """
         key = (et.name, et.namespace.id if et.namespace else None)
         existing = self.entity_types.get(key)
         if existing is None:
+            # in the registry before recursing, so a type whose attribute points back at it — or at
+            # itself — terminates
             self.entity_types[key] = et
             for parent in et.parents:
                 self.register_entity_type(parent)
+            for attr in et.attrs.values():
+                self._register_attr_entity_types(attr.type)
             return et
         if existing is et:
             return existing
@@ -193,6 +217,11 @@ class Engine:
             self.legacy_perm_actions[legacy_perm] = action
         for et in (*applies_to.principals, *applies_to.resources):
             self.register_entity_type(et)
+        # the context too: an entity type named only there is just as absent from the schema, and
+        # Cedar fails the WHOLE schema over a type it cannot resolve — every policy save, not just
+        # the ones naming this action
+        for attr in (applies_to.context or {}).values():
+            self._register_attr_entity_types(attr.type)
         return action
 
     def get_action(self, id: str, namespace: Namespace) -> Action:
@@ -334,11 +363,22 @@ class Engine:
         return render_schema_json(build_schema_ir(self))
 
     def authorize_request(self, request: Request):
+        # routed on the request, so every caller — PBACViewMixin, PBACPermission, a check helper —
+        # gets the right evaluator without knowing there are two
         if request.is_pending:
-            authorize_request(request)
+            if request.unknown_context:
+                authorize_request_preview(request)
+            else:
+                authorize_request(request)
 
     def authorize_requests(self, requests: list[Request]):
-        authorize_requests([r for r in requests if r.is_pending])
+        pending = [r for r in requests if r.is_pending]
+        # partial evaluation has no batch form; there is nothing to batch anyway, since a preview is
+        # asked once per page and the batched decisions are the per-object ones
+        for request in pending:
+            if request.unknown_context:
+                authorize_request_preview(request)
+        authorize_requests([r for r in pending if not r.unknown_context])
 
 
 engine = Engine()

@@ -5,7 +5,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.turbo.models import RecurringJob
-from .utils import TurboAPITestCase, force_configuration, force_recurring_job, force_script
+from .utils import (TurboAPITestCase, force_command, force_configuration, force_recurring_job,
+                    force_script)
 
 
 class TurboRecurringJobAPITestCase(TurboAPITestCase):
@@ -23,6 +24,20 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         response = self.post(reverse("turbo_api:recurring_jobs"),
                              {"configuration": str(configuration.pk), "job": str(script.job.pk)})
         self.assertEqual(response.status_code, 403)
+
+    def test_create_recurring_command_rejected(self):
+        # a command kind declares itself one-time only: a recurring collection is a log shipper, not a
+        # job. The GUI narrows its choices instead; the API has to say so.
+        configuration = force_configuration()
+        command = force_command()
+        self.set_permissions("turbo.add_recurringjob")
+        response = self.post(reverse("turbo_api:recurring_jobs"),
+                             {"configuration": str(configuration.pk), "job": str(command.job.pk),
+                              "interval": 3600})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+                         {"job": ["A sysdiagnose job cannot be scheduled to run repeatedly"]})
+        self.assertFalse(RecurringJob.objects.filter(job=command.job).exists())
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_recurring_job(self, post_event):

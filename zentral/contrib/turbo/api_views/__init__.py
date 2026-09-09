@@ -1,3 +1,4 @@
+from .commands import *  # NOQA
 from .configurations import *  # NOQA
 from .enrollments import *  # NOQA
 from .mscp_checks import *  # NOQA

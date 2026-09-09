@@ -78,12 +78,13 @@ Enrolled machines are listed under *Turbo > Enrolled machines*, with the date th
 
 ## Jobs
 
-A **job** is what Turbo runs on a machine. There are two kinds:
+A **job** is what Turbo runs on a machine. There are three kinds:
 
  * a **script** – a zsh script, whose exit code is the outcome,
- * an **mSCP check** – an mSCP rule, whose check logic and baseline defaults are bundled in the agent.
+ * an **mSCP check** – an mSCP rule, whose check logic and baseline defaults are bundled in the agent,
+ * a **command** – something to collect from the machine, uploaded as one or more files.
 
-Creating a script or an mSCP check only *defines* the job. It does not run anywhere until it is scheduled in a configuration, as a [recurring job](#recurring-jobs) or a [one-time job](#one-time-jobs). The same definition can be scheduled in several configurations.
+Creating a script, an mSCP check or a command only *defines* the job. It does not run anywhere until it is scheduled in a configuration, as a [recurring job](#recurring-jobs) or a [one-time job](#one-time-jobs). The same definition can be scheduled in several configurations.
 
 ### Scripts
 
@@ -125,6 +126,125 @@ The rule identifier, the baseline and the ODV together form the identity of a ch
 An mSCP check *is* a compliance check – one is created with it, named after that identity, and there is no toggle. The check logic itself, and the baseline defaults, are bundled and signed in the agent, not stored in Zentral.
 
 An mSCP check cannot be deleted while it is scheduled in a configuration.
+
+### Commands
+
+A command collects something from a machine and uploads it. Unlike a script or an mSCP check, a command has no compliance role and produces no verdict — it produces one or more files.
+
+Commands are created with the [API](#apiturbocommands), not in the web console. *Turbo > Commands* lists them and shows what each one collects. This is the same shape as the event stores and the probe actions: the kind decides which options the command takes, and the API validates them.
+
+|Attribute|Description|
+|---|---|
+|`backend`|Which kind of command this is. It cannot be changed after the command is created.|
+|`name`|A unique name.|
+|`description`|Optional.|
+|`<backend>_kwargs`|The options for that kind. A kind with no options does not need this attribute.|
+
+Two kinds are available:
+
+|Kind|Collects|Options|
+|---|---|---|
+|`sysdiagnose`|A `sysdiagnose` archive.|None. The agent runs the tool unattended and uploads the archive it produces.|
+|`file_export`|The files that match a list of path patterns, plus a manifest of what was collected.|`patterns` and `max_size`, below.|
+
+The `file_export` options:
+
+|Option|Description|
+|---|---|
+|`patterns`|1 to 32 absolute path patterns, for example `/var/log/install.log*`. Each one is at most 1024 characters, must start with a `/`, and must not contain a `..` segment or a `**`. See the syntax below.|
+|`max_size`|The maximum **uncompressed** total, in bytes. 104857600 (100 MB) by default, 524288000 (500 MB) at most. File sizes are known before anything is written, so the agent decides what to include first, in a stable path order, and reports what it skipped.|
+
+The agent matches the patterns with `fnmatch`, which macOS provides. The syntax is the shell glob syntax, with one important limit:
+
+|Pattern|Matches|
+|---|---|
+|`*`|Any sequence of characters, up to the next `/`. `/var/log/*` matches `/var/log/install.log`, and does not match `/var/log/sub/deep.log`.|
+|`?`|Any single character.|
+|`[abc]`|One character of the set.|
+
+**There is no recursive wildcard.** `fnmatch` reads `**` as a single `*`, so `/Library/Logs/**/*.log` would match `/Library/Logs/a/b.log` and not `/Library/Logs/a/b/c.log` — one level, not every level. Zentral refuses a pattern that contains `**`, because a pattern written for recursion would otherwise collect one level and give no error. Name each level you want instead:
+
+```
+/Library/Logs/Foo/*.log
+/Library/Logs/Foo/*/*.log
+/Library/Logs/Foo/*/*/*.log
+```
+
+A `file_export` run produces two files: a manifest, which lists what was matched, collected, skipped and unreadable, and an archive of the collected files. The manifest is a separate file so an operator can read what a run collected without downloading the archive. A run that matched nothing uploads the manifest and no archive.
+
+**A command runs one time only.** It cannot be attached to a recurring job — collecting the same files every hour is a log shipper, not a job. Schedule it with a one-time job, or with the *Schedule one-time job* action on a machine page. That second path also requires `turbo.view_enrolledmachine`: the configuration a policy is evaluated against is only known once the serial number resolves, so it cannot be the first gate, and the response must not reveal whether a serial number is enrolled.
+
+Every command carries the *changing the version re-runs the job* behaviour of the other kinds: editing the options bumps the version, and the agent runs the command again. Renaming it does not.
+
+A command cannot be deleted while it is scheduled in a configuration.
+
+Collecting a `sysdiagnose` archive, and even more so collecting arbitrary files, reads user data. Use a [policy](../configuration/pbac.md) to say which kinds a role may schedule.
+
+Three actions authorize the scheduling of a one-time job:
+
+|Action|Resource|
+|---|---|
+|`Turbo::Action::"createOneTimeJob"`|The **configuration**. The schedule does not exist yet, so the resource is the configuration it will be created in.|
+|`Turbo::Action::"updateOneTimeJob"`|The **schedule**.|
+|`Turbo::Action::"deleteOneTimeJob"`|The **schedule**.|
+
+A schedule is a member of its configuration, so a policy scoped to a configuration covers all three. All three carry the job in `context.job`, so one policy can name all three — refuse a kind with a `forbid`:
+
+```
+forbid (
+  principal,
+  action in [Turbo::Action::"createOneTimeJob",
+             Turbo::Action::"updateOneTimeJob",
+             Turbo::Action::"deleteOneTimeJob"],
+  resource
+) when { context.job.kind == "file_export" };
+```
+
+The kinds are `script`, `mscp_check`, `sysdiagnose` and `file_export`. Every kind is covered, not only the commands, so the same policy shape restricts a script.
+
+A grant can name the kind directly, and needs no companion `forbid`:
+
+```
+permit (
+  principal in Role::"<role id>",
+  action == Turbo::Action::"createOneTimeJob",
+  resource
+) when { context.job.kind == "sysdiagnose" };
+```
+
+That role can schedule a `sysdiagnose` and nothing else. It still reaches the *Schedule one-time job* page, because Zentral only refuses to offer an action when **no** kind could be permitted.
+
+Because the resource is the configuration, a grant can be scoped to one:
+
+```
+permit (
+  principal in Role::"<role id>",
+  action == Turbo::Action::"createOneTimeJob",
+  resource == Turbo::Configuration::"<configuration id>"
+);
+```
+
+`updateOneTimeJob` is included in the refusal above because the job of a schedule cannot be changed, but its tags, its serial numbers and its window can. Widening the reach of a `file_export` schedule is a scheduling act.
+
+`deleteOneTimeJob` is in the list because removing a schedule stops it being served to the machines that have not run it yet. A policy that governs a kind governs its removal too.
+
+An update or delete policy can also read the schedule itself, which a create policy cannot — there is no schedule yet when one is created:
+
+```
+forbid (
+  principal,
+  action == Turbo::Action::"updateOneTimeJob",
+  resource
+) when { resource.job.kind == "file_export" };
+```
+
+Use `context.job` when one policy should cover several actions, and `resource` when a policy needs the schedule — to name one, or to read more of it than the job.
+
+The machines are not the resource. A schedule targets tags and serial numbers, and tag membership changes after the schedule is written, so there is no machine for a policy to name.
+
+**These three actions replace the `turbo.add_onetimejob`, `turbo.change_onetimejob` and `turbo.delete_onetimejob` permissions**, which no longer authorize anything. A role that scheduled jobs before needs a policy that grants the actions. A policy that came from the automatic conversion of a role already does, because it names the actions and leaves the resource open.
+
+`turbo.view_onetimejob` is unchanged. Seeing the one-time jobs is still a permission, not a typed action: scoping a list means filtering it by policy rather than deciding one request, which is a separate piece of work.
 
 ### Recurring jobs
 
@@ -255,7 +375,7 @@ The results and status endpoints validate strictly per entry, and tolerantly per
 The response therefore acknowledges every entry Zentral *processed*, in two lists:
 
  * `accepted` – the entry was recorded,
- * `skipped` – the entry was well-formed but could not be used, with a `reason`: `unknown_schedule` (the schedule is unknown, or belongs to another configuration), or `kind_mismatch` (the `kind` contradicts the resolved schedule).
+ * `skipped` – the entry was well-formed but could not be used, with a `reason`: `unknown_schedule` (the schedule is unknown, or belongs to another configuration), `kind_mismatch` (the `kind` contradicts the resolved schedule), or `unknown_job_kind` (the job is of a kind this Zentral does not know – it can only happen to an instance still on the previous release, during a rolling upgrade, and it resolves itself when the upgrade completes).
 
 An entry that appears in neither list was set aside as malformed. Zentral logs it; the agent deduces it from what is missing.
 
@@ -744,6 +864,158 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -o zentral_turbo_configuration.mobileconfig \
   https://$ZTL_FQDN/api/turbo/enrollments/1/configuration_profile/
+```
+
+### /api/turbo/commands/
+
+#### List all commands
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewCommand"`
+* Optional filter parameters:
+    * `name`: name of the command
+    * `backend`: `sysdiagnose` or `file_export`
+    * `configuration`: primary key of a Turbo configuration – the commands scheduled in it
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/commands/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": "c2f4a6b8-1d3e-4f50-9a7b-8c5d2e1f0a3b",
+            "backend": "file_export",
+            "name": "Install logs",
+            "description": "The installer logs and Munki's",
+            "sysdiagnose_kwargs": null,
+            "file_export_kwargs": {
+                "patterns": [
+                    "/var/log/install.log*",
+                    "/Library/Logs/Munki/*.log"
+                ],
+                "max_size": 104857600
+            },
+            "version": 1,
+            "job_id": "8b1c9d7e-2a45-4c68-b9f0-3e6a7d4c5b21",
+            "created_at": "2026-09-02T14:02:11.884213",
+            "updated_at": "2026-09-02T14:02:11.884901"
+        }
+    ]
+}
+```
+
+Only the options of the command's own kind are set – the other `<backend>_kwargs` attributes are `null`. `job_id` is the primary key of the job the command anchors – it is what a one-time job schedules. `version` and `job_id` are read-only.
+
+#### Add a command
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Turbo::Action::"createCommand"`
+
+`backend` is required. The matching `<backend>_kwargs` attribute is required for a kind that takes options, and is not needed for a kind that takes none.
+
+Example:
+
+command.json
+
+```json
+{
+  "backend": "file_export",
+  "name": "Install logs",
+  "description": "The installer logs and Munki's",
+  "file_export_kwargs": {
+    "patterns": ["/var/log/install.log*", "/Library/Logs/Munki/*.log"]
+  }
+}
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @command.json \
+  https://$ZTL_FQDN/api/turbo/commands/ \
+  |python3 -m json.tool
+```
+
+A `sysdiagnose` command takes no options:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"backend": "sysdiagnose", "name": "Support archive"}' \
+  https://$ZTL_FQDN/api/turbo/commands/ \
+  |python3 -m json.tool
+```
+
+### /api/turbo/commands/`<uuid:pk>`/
+
+#### Get a command
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewCommand"`
+* `<uuid:pk>`: the primary key of the command
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/commands/c2f4a6b8-1d3e-4f50-9a7b-8c5d2e1f0a3b/ \
+  |python3 -m json.tool
+```
+
+#### Update a command
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Turbo::Action::"updateCommand"`
+* `<uuid:pk>`: the primary key of the command
+
+`backend` cannot be changed. The kind is half the identity of the command on the wire, so a different kind is a different command.
+
+Changing the options bumps `version`, and the agent runs the command again on the machines where it is scheduled. Changing only the name or the description does not.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X PUT \
+  -d @command.json \
+  https://$ZTL_FQDN/api/turbo/commands/c2f4a6b8-1d3e-4f50-9a7b-8c5d2e1f0a3b/ \
+  |python3 -m json.tool
+```
+
+#### Delete a command
+
+* method: DELETE
+* PBAC action: `Turbo::Action::"deleteCommand"`
+* `<uuid:pk>`: the primary key of the command
+
+A command that is scheduled in a configuration cannot be deleted.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -X DELETE \
+  https://$ZTL_FQDN/api/turbo/commands/c2f4a6b8-1d3e-4f50-9a7b-8c5d2e1f0a3b/
 ```
 
 ### /api/turbo/scripts/
@@ -1579,7 +1851,7 @@ Each entry in `jobs` carries:
 
 |Attribute|Description|
 |---|---|
-|`kind`|`script` or `mscp_check`.|
+|`kind`|`script`, `mscp_check`, or a command kind (`sysdiagnose`, `file_export`).|
 |`pk`|The primary key of the job – the identity of the definition.|
 |`version`|The current version of the definition.|
 |`schedule.mode`|`recurring` or `one_time`.|
@@ -1640,7 +1912,7 @@ Request:
 |`run.at`|**Required.** When the job ran on the device. It becomes the event's `created_at`.|
 |`run.duration`|Optional. How long the run took, in seconds.|
 |`run.mode`|Optional, informational – the correlation is on `schedule_pk` alone.|
-|`kind`|The job kind. Optional, but expected: when present it must agree with the resolved schedule, or the entry is skipped.|
+|`kind`|The job kind. Optional, but expected: when present it must agree with the resolved schedule, or the entry is skipped. A kind this Zentral does not know is *not* rejected – during a rolling upgrade the instances do not share a set of kinds, and a report of a run that happened must not be dropped. It is skipped with `unknown_job_kind`, and the schedule still records the run.|
 |`pk`, `version`|Declarative. The resolved schedule stays authoritative.|
 |`result.exit_code`|Scripts – the process exit code, or `null` when the script could not run.|
 |`result.status`|mSCP checks – the compliance status code. See [Compliance checks](#compliance-checks).|

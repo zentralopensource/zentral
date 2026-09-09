@@ -6,12 +6,14 @@ from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
+from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.compliance_checks import sync_script_compliance_check
-from zentral.contrib.turbo.models import (Configuration, EnrolledMachine, Enrollment, MSCPCheck,
-                                          OneTimeJob, RecurringJob, Script)
+from zentral.contrib.turbo.models import (Command, Configuration, EnrolledMachine, Enrollment,
+                                          MSCPCheck, OneTimeJob, RecurringJob, Script)
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
+from pbac.engine import engine
 
 
 def force_configuration(name=None):
@@ -34,6 +36,19 @@ def force_mscp_check(rule_id=None, baseline="", odv_int=None, odv_string=None, o
         odv_string=odv_string,
         odv_bool=odv_bool,
     )
+
+
+def force_command(backend=CommandBackend.SYSDIAGNOSE, name=None, backend_kwargs=None):
+    # the Job (kind == backend) is auto-minted in Command.save()
+    if backend_kwargs is None:
+        backend_kwargs = (
+            {"patterns": ["/var/log/install.log*"], "max_size": 1048576}
+            if backend == CommandBackend.FILE_EXPORT else {}
+        )
+    command = Command.objects.create(name=name or get_random_string(12), backend=backend)
+    command.set_backend_kwargs(backend_kwargs)
+    command.save()
+    return command
 
 
 def force_recurring_job(configuration=None, job=None, interval=None, tags=None, serial_numbers=None):
@@ -181,3 +196,39 @@ class TurboAPITestCase(TestCase, LoginCase, RequestCase):
     @staticmethod
     def _audit_events(post_event):
         return [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], AuditEvent)]
+
+
+# PBAC helpers
+#
+# turbo.add_onetimejob and turbo.change_onetimejob are not mapped to an action any more, so
+# set_permissions() cannot grant scheduling. These build the policy instead: the legacy perms a test
+# still needs, plus the typed scheduling actions.
+
+SCHEDULE_ACTIONS = ('Turbo::Action::"createOneTimeJob"',
+                    'Turbo::Action::"updateOneTimeJob"',
+                    'Turbo::Action::"deleteOneTimeJob"')
+
+
+def turbo_policy(group, *legacy_perms, actions=SCHEDULE_ACTIONS, condition=None):
+    action_ids = [str(engine.legacy_perm_actions[perm]) for perm in legacy_perms]
+    action_ids.append(str(engine.module_legacy_perm_actions["turbo"]))
+    action_ids.extend(actions)
+    source = ("permit (\n"
+              f'  principal in Role::"{group.pk}",\n'
+              f"  action in [{', '.join(action_ids)}],\n"
+              "  resource\n"
+              ")")
+    if condition:
+        source += f" when {{ {condition} }}"
+    return source + ";\n"
+
+
+def forbid_job_kind_policy(kind):
+    # one policy for all three actions, keyed on the job in the context — the only thing create can
+    # supply, since it has no row. No has guard: the question asked before a job is picked is a
+    # preview, so the whole expression residualizes instead of failing.
+    return ("forbid (\n"
+            "  principal,\n"
+            f"  action in [{', '.join(SCHEDULE_ACTIONS)}],\n"
+            "  resource\n"
+            f') when {{ context.job.kind == "{kind}" }};\n')

@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 
 from zentral.contrib.inventory.models import MachineTag
-from ..models import OneTimeJob, OneTimeJobMachine, RecurringJob
+from ..models import Job, OneTimeJob, OneTimeJobMachine, RecurringJob
 from .base import BaseEnrolledMachineView
 
 logger = logging.getLogger("zentral.contrib.turbo.public_views.config")
@@ -14,10 +14,17 @@ logger = logging.getLogger("zentral.contrib.turbo.public_views.config")
 class ConfigView(BaseEnrolledMachineView):
     request_type = "config"
 
-    @staticmethod
-    def _wire(job, schedule):
+    def _wire(self, job, schedule):
+        # a kind this release does not know has no definition to serve — during a rolling deploy an
+        # older instance can read a row a newer one wrote. Skip it instead of dereferencing None, or
+        # every machine holding that job gets a 500 here until the refresh finishes.
+        definition = job.definition
+        if definition is None:
+            logger.error("Turbo config for %s: unknown job kind %r, skipping job %s",
+                         self.serial_number, job.kind, job.pk)
+            return None
         return {"kind": job.kind, "pk": str(job.pk), "version": job.version,
-                "schedule": schedule, "payload": job.definition.wire_payload()}
+                "schedule": schedule, "payload": definition.wire_payload()}
 
     def get(self, request, *args, **kwargs):
         configuration = self.configuration
@@ -28,13 +35,15 @@ class ConfigView(BaseEnrolledMachineView):
         # recurring — every in-scope RecurringJob; null interval falls back to the configuration default
         recurring_jobs = (
             RecurringJob.in_scope(configuration, serial_number, tag_ids)
-            .select_related("job__script", "job__mscp_check")
+            .select_related(*Job.definition_relations("job__"))
         )
         for recurring_job in recurring_jobs:
             job = recurring_job.job
             interval = recurring_job.interval or configuration.default_check_interval
             schedule = {"mode": recurring_job.wire_mode, "pk": str(recurring_job.pk), "interval": interval}
-            jobs.append(self._wire(job, schedule))
+            wired = self._wire(job, schedule)
+            if wired is not None:
+                jobs.append(wired)
 
         # one-time — in-scope and within the [not_before, not_after] window; keep serving until a result
         # comes back (last_result_at set). The OneTimeJob pk is the wire handle, so nothing is minted here.
@@ -43,7 +52,7 @@ class ConfigView(BaseEnrolledMachineView):
             OneTimeJob.in_scope(configuration, serial_number, tag_ids)
             .filter(Q(not_before__isnull=True) | Q(not_before__lte=now))
             .filter(Q(not_after__isnull=True) | Q(not_after__gte=now))
-            .select_related("job__script", "job__mscp_check")
+            .select_related(*Job.definition_relations("job__"))
         )
         done = set(
             OneTimeJobMachine.objects
@@ -56,7 +65,9 @@ class ConfigView(BaseEnrolledMachineView):
                 continue
             job = one_time_job.job
             schedule = {"mode": one_time_job.wire_mode, "pk": str(one_time_job.pk)}
-            jobs.append(self._wire(job, schedule))
+            wired = self._wire(job, schedule)
+            if wired is not None:
+                jobs.append(wired)
 
         return JsonResponse({"config_refresh_interval": configuration.config_refresh_interval,
                              "results_batch_size": configuration.results_batch_size,

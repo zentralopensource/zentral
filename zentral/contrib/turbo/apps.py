@@ -5,5 +5,5 @@ class ZentralTurboAppConfig(ZentralAppConfig):
     name = "zentral.contrib.turbo"
     default = True
     verbose_name = "Zentral Turbo contrib app"
-    permission_models = ("configuration", "enrolledmachine", "enrollment", "mscpcheck", "onetimejob",
-                         "recurringjob", "script")
+    permission_models = ("command", "configuration", "enrolledmachine", "enrollment", "mscpcheck",
+                         "onetimejob", "recurringjob", "script")
