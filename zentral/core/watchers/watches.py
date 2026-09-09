@@ -61,7 +61,10 @@ STATE_WITHOUT_INCIDENT = (
     # events are posted only after the commit — and the ticks after it, while the pipeline catches up.
     # Nothing else holds reconcile back, so a grace of zero re-emits every transition one interval later.
     "  AND ws.fired_at < NOW() - interval '1 second' * %(reconcile_grace)s "
-    "  AND NOT EXISTS ({reported})"
+    "  AND NOT EXISTS ({reported}) "
+    # oldest first, and never newest first: if the arrival rate ever exceeds the limit, newest first
+    # would leave the oldest rows unreported forever, where this drains them in order
+    "ORDER BY ws.fired_at LIMIT %(reconcile_limit)s"
 )
 
 # `status_time > ws.fired_at` is the whole discriminator: a close that came AFTER this transition was
@@ -102,7 +105,8 @@ INCIDENT_WITHOUT_STATE = (
     " WHERE i.incident_type = %(incident_type)s AND i.status = %(open_status)s"
     "   AND i.status_time < NOW() - interval '1 second' * %(reconcile_grace)s"
     "   AND NOT EXISTS (SELECT 1 FROM watchers_watchstate AS ws"
-    "                    WHERE ws.watch = %(watch)s AND ws.incident_key = i.key)"
+    "                    WHERE ws.watch = %(watch)s AND ws.incident_key = i.key) "
+    "ORDER BY i.status_time LIMIT %(reconcile_limit)s"
 )
 
 MACHINE_INCIDENT_WITHOUT_STATE = (
@@ -115,7 +119,8 @@ MACHINE_INCIDENT_WITHOUT_STATE = (
     # open while any machine incident is, and closes it with the last one
     "   AND NOT EXISTS (SELECT 1 FROM watchers_watchstate AS ws"
     "                    WHERE ws.watch = %(watch)s AND ws.incident_key = i.key"
-    "                      AND ws.serial_number = mi.serial_number)"
+    "                      AND ws.serial_number = mi.serial_number) "
+    "ORDER BY mi.status_time LIMIT %(reconcile_limit)s"
 )
 
 
@@ -140,6 +145,14 @@ class BaseWatch:
     # It absorbs the pipeline: the events of this tick are posted after the commit, so everything is
     # briefly without one, and a back-pressured pipeline makes brief mean minutes. None disables reconcile.
     reconcile_grace = 900
+
+    # Most per tick, per half — so 2x this in one tick at worst. It bounds the ONE statement pair a watch
+    # cannot bound itself: degraded_select belongs to the watch and can carry its own ORDER BY / LIMIT,
+    # these two are core's. It matters because reconcile runs precisely when publishing is failing, where
+    # unbounded means re-posting the whole degraded set every tick into the thing that is already broken.
+    # Convergence covers the remainder: each slice gets its incident, so the next tick moves on.
+    # None means unbounded — postgres reads LIMIT NULL as LIMIT ALL.
+    reconcile_limit = 1000
 
     # supplied by the subclass — the predicates, and nothing else
     degraded_select = None    # SELECT producing the 9 insert columns, in order
@@ -260,7 +273,8 @@ class BaseWatch:
                       incident_type=self.incident_class.incident_type,
                       open_statuses=list(Status.open_values()),
                       open_status=Status.OPEN.value,
-                      reconcile_grace=self.reconcile_grace)
+                      reconcile_grace=self.reconcile_grace,
+                      reconcile_limit=self.reconcile_limit)
         reported = REPORTED_MACHINE_INCIDENT if self.machine_scoped else REPORTED_INCIDENT
         without_incident = self._fetch(STATE_WITHOUT_INCIDENT.format(reported=reported), kwargs)
         without_state = self._fetch(
@@ -328,8 +342,11 @@ class BaseWatch:
                      self.name, len(changed), len(recovered), len(unwatched), len(events))
         if without_incident or without_state:
             # not debug: every one of these is an event that was owed and never arrived, so a rate that is
-            # anything but zero is the interesting signal here, not reconcile itself
-            logger.warning("Watch %s: re-emitted %d transition(s), closed %d incident(s)",
-                           self.name, len(without_incident), len(without_state))
+            # anything but zero is the interesting signal here, not reconcile itself. A slice that came
+            # back full is a backlog rather than a steady state, and the counts alone cannot say so.
+            saturated = self.reconcile_limit in (len(without_incident), len(without_state))
+            logger.warning("Watch %s: re-emitted %d transition(s), closed %d incident(s)%s",
+                           self.name, len(without_incident), len(without_state),
+                           ", limit reached, more pending" if saturated else "")
         return WatchRunResult(len(changed), len(recovered), len(unwatched),
                               len(without_incident), len(without_state), len(events))

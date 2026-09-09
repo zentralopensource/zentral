@@ -100,6 +100,15 @@ class ReconcileTestCase(TestCase):
         self._age(watch, subject_id)
         return subject_id
 
+    def _degrade_many(self, watch, n):
+        "One tick for n subjects, then age them so the first returned is the oldest."
+        subject_ids = [self._subject() for _ in range(n)]
+        with patch.object(ReconcileTestEvent, "post"):
+            self._run(watch)
+        for i, subject_id in enumerate(subject_ids):
+            self._age(watch, subject_id, seconds=watch.reconcile_grace + 60 + (n - i) * 60)
+        return subject_ids
+
     def _age(self, watch, subject_id, seconds=None):
         WatchState.objects.filter(watch=watch.name, subject_id=subject_id).update(
             fired_at=naive_utcnow() - timedelta(seconds=seconds or watch.reconcile_grace + 60)
@@ -309,3 +318,70 @@ class ReconcileTestCase(TestCase):
             with self.assertLogs("zentral.core.watchers.watches", level="WARNING") as cm:
                 self._run(watch)
         self.assertIn("re-emitted 1 transition(s), closed 0 incident(s)", cm.output[0])
+
+    # the limit
+
+    def test_the_limit_caps_a_slice(self):
+        watch = _GlobalWatch()
+        watch.reconcile_limit = 2
+        self._degrade_many(watch, 3)
+        with patch.object(ReconcileTestEvent, "post"):
+            self.assertEqual(self._run(watch).re_emitted, 2)
+
+    def test_the_limit_takes_the_oldest_first(self):
+        watch = _GlobalWatch()
+        watch.reconcile_limit = 2
+        subject_ids = self._degrade_many(watch, 3)
+        events, collect = self._collect(ReconcileTestEvent)
+        with collect:
+            self._run(watch)
+        self.assertEqual({e.payload["subject_id"] for e in events}, set(subject_ids[:2]))
+
+    def test_a_backlog_drains_over_consecutive_ticks(self):
+        watch = _GlobalWatch()
+        watch.reconcile_limit = 2
+        subject_ids = self._degrade_many(watch, 3)
+        with patch.object(ReconcileTestEvent, "post"):
+            self.assertEqual(self._run(watch).re_emitted, 2)
+            # what the pipeline would have done with the first slice, so the next tick moves past it
+            for subject_id in subject_ids[:2]:
+                self._incident(subject_id)
+            events, collect = self._collect(ReconcileTestEvent)
+            with collect:
+                self.assertEqual(self._run(watch).re_emitted, 1)
+        self.assertEqual([e.payload["subject_id"] for e in events], [subject_ids[2]])
+
+    def test_the_limit_caps_the_incidents_without_state_too(self):
+        watch = _GlobalWatch()
+        watch.reconcile_limit = 2
+        old = naive_utcnow() - timedelta(seconds=watch.reconcile_grace + 60)
+        for _ in range(3):
+            self._incident(get_random_string(12), status_time=old)
+        with patch.object(SubjectUnwatchedEvent, "post"):
+            self.assertEqual(self._run(watch).closed, 2)
+
+    def test_a_null_limit_is_unbounded(self):
+        # postgres reads LIMIT NULL as LIMIT ALL, so the escape hatch needs no branch in python
+        watch = _GlobalWatch()
+        watch.reconcile_limit = None
+        self._degrade_many(watch, 3)
+        with patch.object(ReconcileTestEvent, "post"):
+            self.assertEqual(self._run(watch).re_emitted, 3)
+
+    def test_a_full_slice_says_more_is_pending(self):
+        watch = _GlobalWatch()
+        watch.reconcile_limit = 2
+        self._degrade_many(watch, 3)
+        with patch.object(ReconcileTestEvent, "post"):
+            with self.assertLogs("zentral.core.watchers.watches", level="WARNING") as cm:
+                self._run(watch)
+        self.assertIn("limit reached, more pending", cm.output[0])
+
+    def test_a_partial_slice_does_not(self):
+        watch = _GlobalWatch()
+        watch.reconcile_limit = 2
+        self._degrade_many(watch, 1)
+        with patch.object(ReconcileTestEvent, "post"):
+            with self.assertLogs("zentral.core.watchers.watches", level="WARNING") as cm:
+                self._run(watch)
+        self.assertNotIn("limit reached", cm.output[0])

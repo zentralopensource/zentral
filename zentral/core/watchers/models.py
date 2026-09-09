@@ -35,6 +35,12 @@ class WatchState(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["watch", "subject_id"], name="watchers_watchstate_unique"),
         ]
+        indexes = [
+            # reconcile takes the oldest slice of one watch per tick, so it orders by fired_at under an
+            # equality on watch. Without this the ORDER BY sorts every degraded row of that watch, every
+            # tick, and the set is fleet-sized exactly when reconcile has work to do.
+            models.Index(fields=["watch", "fired_at"], name="watchers_ws_watch_fired_at"),
+        ]
 
     def __str__(self):
         return f"{self.watch} {self.subject_id}"

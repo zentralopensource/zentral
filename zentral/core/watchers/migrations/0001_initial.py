@@ -28,6 +28,9 @@ class Migration(migrations.Migration):
                 ('fired_at', models.DateTimeField()),
             ],
             options={
+                'indexes': [
+                    models.Index(fields=['watch', 'fired_at'], name='watchers_ws_watch_fired_at')
+                ],
                 'constraints': [
                     models.UniqueConstraint(fields=('watch', 'subject_id'),
                                             name='watchers_watchstate_unique')
