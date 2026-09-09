@@ -164,6 +164,14 @@ class MunkiState(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        indexes = [
+            # MunkiAgentUnhealthyWatch re-scans this table on every interval; one row per machine is
+            # fleet-sized, so both phase timestamps get an index rather than a seq scan forever.
+            models.Index(fields=["last_preflight_at"], name="munki_ms_last_preflight_at"),
+            models.Index(fields=["last_postflight_at"], name="munki_ms_last_postflight_at"),
+        ]
+
     def force_full_sync(self):
         self.force_full_sync_at = naive_utcnow()
         self.save()

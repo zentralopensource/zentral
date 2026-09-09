@@ -37,4 +37,4 @@ The configuration can be loaded from a file or an environment variable. To load 
  * `apps`
  * `extra_links`
 
-The `apps` section holds the configuration of each Zentral app, keyed by the app module name. The [event stores](stores/) are configured there, under `apps.zentral.core.stores`.
+The `apps` section holds the configuration of each Zentral app, keyed by the app module name. The [event stores](stores/) are configured there, under `apps.zentral.core.stores`, and the [watchers](watchers/) under `apps.zentral.core.watchers`.

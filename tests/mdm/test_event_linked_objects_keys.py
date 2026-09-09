@@ -16,6 +16,7 @@ from zentral.contrib.mdm.events.mdm import (
     OTAEnrollmentRequestEvent,
     UserEnrollmentRequestEvent,
 )
+from zentral.contrib.mdm.events.push_certificates import PushCertificateHealthEvent
 from zentral.contrib.mdm.events.recovery_password import RecoveryPasswordSetEvent
 from zentral.contrib.mdm.models import (
     Artifact,
@@ -29,6 +30,7 @@ from zentral.contrib.mdm.models import (
     Location,
     OTAEnrollment,
     Package,
+    PushCertificate,
     ReEnrollmentSession,
     UserEnrollment,
 )
@@ -127,6 +129,18 @@ CASES = (
         UserEnrollmentRequestEvent,
         {"user_enrollment": {"pk": 3}},
         {UserEnrollment: [(3,)]},
+    ),
+    (
+        PushCertificateHealthEvent,
+        {"status": "degraded", "push_certificate": {"pk": 4, "name": "yolo"}},
+        {PushCertificate: [(4,)]},
+    ),
+    (
+        PushCertificateHealthEvent,
+        # the watch emits a null subject when the certificate is deleted between the transition and
+        # the lookup: the event still goes out, with nothing left to link it to
+        {"status": "recovered", "push_certificate": None},
+        {},
     ),
 )
 

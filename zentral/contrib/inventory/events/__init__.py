@@ -76,6 +76,34 @@ def iter_inventory_events(msn, events):
         yield event_cls(metadata, data)
 
 
+# inventory source staleness — emitted by InventorySourceStaleWatch, not by an ingest path
+
+
+class InventorySourceHealthEvent(BaseEvent):
+    """One event type for the whole staleness lifecycle — `status` says which way it went.
+
+    Not one type per outcome: an alert and its resolution belong on the same stream, or whoever routed
+    the alert has to remember to route the all-clear too, and a page that never closes is the failure
+    nobody notices until 3am.
+    """
+    event_type = 'inventory_source_health'
+    namespace = "inventory"
+    tags = ['machine', 'inventory_source_health', 'watch']
+
+    def get_linked_objects_keys(self):
+        keys = {}
+        # the payload carries source=None when the snapshot went away mid-tick
+        pk = (self.payload.get("source") or {}).get("pk")
+        if pk:
+            # deliberately prefixed, where AuditEvent.build would drop it for an inventory object:
+            # these follow inventory_jmespath_check, the other hand-written key in this module
+            keys["inventory_source"] = [(pk,)]
+        return keys
+
+
+register_event_type(InventorySourceHealthEvent)
+
+
 # enrollment secret
 
 

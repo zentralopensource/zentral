@@ -28,6 +28,23 @@ class MunkiRequestEvent(BaseEvent):
 register_event_type(MunkiRequestEvent)
 
 
+# agent health — emitted by MunkiAgentUnhealthyWatch, not by a request path
+
+
+class MunkiAgentHealthEvent(BaseEvent):
+    """One event type for the whole agent-health lifecycle — `status` says which way it went.
+
+    Not one type per outcome: an alert and its resolution belong on the same stream, or whoever routed
+    the alert has to remember to route the all-clear too, and a page that never closes is the failure
+    nobody notices until 3am.
+    """
+    event_type = "munki_agent_health"
+    tags = ["munki", "munki_agent_health", "machine", "watch"]
+
+
+register_event_type(MunkiAgentHealthEvent)
+
+
 class BaseMunkiEvent(BaseEvent):
     tags = ["munki"]
     namespace = "munki_event"

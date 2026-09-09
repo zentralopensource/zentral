@@ -136,6 +136,7 @@ class ZentralSettings(ConfigDict):
                     "zentral.core.probes",
                     "zentral.core.stores",
                     "zentral.core.terraform",
+                    "zentral.core.watchers",
                     "zentral.contrib.inventory"]:
             self.setdefault("apps", {}).setdefault(app, {})
 
