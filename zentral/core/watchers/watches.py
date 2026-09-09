@@ -336,6 +336,7 @@ class BaseWatch:
             without_incident, without_state = self._reconcile(kwargs, deleted)
             events.extend(self.iter_events(without_incident, []))
             events.extend(self.iter_unwatched_events(without_state))
+            # batching, the size limits and isolating an oversized message belong to the queue backend
             if events:
                 transaction.on_commit(lambda: [event.post() for event in events])
         logger.debug("Watch %s: %d changed, %d recovered, %d unwatched, %d event(s)",
