@@ -46,7 +46,7 @@ class WatchWorker:
             self.inc_counter(watch.name, "recovered", result.recovered)
             # counted apart from the transitions they repeat: these two measure how often an event did not
             # reach the pipeline, which is a property of the deployment and not of the watch
-            self.inc_counter(watch.name, "reconciled", result.reconciled)
+            self.inc_counter(watch.name, "re_emitted", result.re_emitted)
             self.inc_counter(watch.name, "closed", result.closed)
 
     def run(self, metrics_exporter=None, only_once=False):

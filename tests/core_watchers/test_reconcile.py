@@ -93,7 +93,7 @@ class ReconcileTestCase(TestCase):
             return watch.run_once()
 
     def _degrade(self, watch, **kwargs):
-        "One full tick, then age the state row past the grace so the repair can see it."
+        "One full tick, then age the state row past the grace so reconcile can see it."
         subject_id = self._subject(**kwargs)
         with patch.object(ReconcileTestEvent, "post"):
             self._run(watch)
@@ -127,13 +127,13 @@ class ReconcileTestCase(TestCase):
 
     # the forward direction: a transition with no incident to show for it
 
-    def test_an_unreported_transition_is_re_emitted(self):
+    def test_a_state_without_an_incident_is_re_emitted(self):
         watch = _GlobalWatch()
         subject_id = self._degrade(watch)
         events, collect = self._collect(ReconcileTestEvent)
         with collect:
             result = self._run(watch)
-        self.assertEqual((result.changed, result.reconciled, result.events), (0, 1, 1))
+        self.assertEqual((result.changed, result.re_emitted, result.events), (0, 1, 1))
         event = events[0]
         # the same event the first tick owed, from the same code path: only the elapsed time moved on
         self.assertEqual(event.payload["status"], "degraded")
@@ -152,7 +152,7 @@ class ReconcileTestCase(TestCase):
         events, collect = self._collect(ReconcileTestEvent)
         with collect:
             result = self._run(watch)
-        self.assertEqual((result.reconciled, result.events), (0, 0))
+        self.assertEqual((result.re_emitted, result.events), (0, 0))
         self.assertEqual(events, [])
 
     def test_an_in_progress_incident_is_not_re_emitted(self):
@@ -160,7 +160,7 @@ class ReconcileTestCase(TestCase):
         watch = _GlobalWatch()
         subject_id = self._degrade(watch)
         self._incident(subject_id, status=Status.IN_PROGRESS)
-        self.assertEqual(self._run(watch).reconciled, 0)
+        self.assertEqual(self._run(watch).re_emitted, 0)
 
     def test_a_close_after_the_transition_is_left_alone(self):
         # the deliberate close: an operator saw this degradation and resolved it
@@ -168,7 +168,7 @@ class ReconcileTestCase(TestCase):
         subject_id = self._degrade(watch)
         fired_at = WatchState.objects.get(watch=watch.name, subject_id=subject_id).fired_at
         self._incident(subject_id, status=Status.CLOSED, status_time=fired_at + timedelta(seconds=1))
-        self.assertEqual(self._run(watch).reconciled, 0)
+        self.assertEqual(self._run(watch).re_emitted, 0)
 
     def test_a_close_before_the_transition_is_re_emitted(self):
         # a close that belongs to an EARLIER degradation says nothing about this one
@@ -177,17 +177,17 @@ class ReconcileTestCase(TestCase):
         fired_at = WatchState.objects.get(watch=watch.name, subject_id=subject_id).fired_at
         self._incident(subject_id, status=Status.CLOSED, status_time=fired_at - timedelta(seconds=1))
         with patch.object(ReconcileTestEvent, "post"):
-            self.assertEqual(self._run(watch).reconciled, 1)
+            self.assertEqual(self._run(watch).re_emitted, 1)
 
     def test_a_transition_inside_the_grace_is_not_re_emitted(self):
-        # the events of a tick are posted after its commit, so everything is briefly unreported
+        # the events of a tick are posted after its commit, so everything is briefly without an incident
         watch = _GlobalWatch()
         subject_id = self._subject()
         with patch.object(ReconcileTestEvent, "post"):
             first = self._run(watch)
             second = self._run(watch)
         self.assertEqual((first.changed, first.events), (1, 1))
-        self.assertEqual((second.changed, second.reconciled, second.events), (0, 0, 0))
+        self.assertEqual((second.changed, second.re_emitted, second.events), (0, 0, 0))
         self.assertTrue(WatchState.objects.filter(watch=watch.name, subject_id=subject_id).exists())
 
     def test_a_row_without_an_incident_key_is_not_re_emitted(self):
@@ -195,18 +195,18 @@ class ReconcileTestCase(TestCase):
         watch = _GlobalWatch()
         subject_id = self._degrade(watch)
         WatchState.objects.filter(watch=watch.name, subject_id=subject_id).update(incident_key=None)
-        self.assertEqual(self._run(watch).reconciled, 0)
+        self.assertEqual(self._run(watch).re_emitted, 0)
 
     def test_a_watch_without_an_incident_class_does_not_reconcile(self):
         watch = _NoIncidentWatch()
         self._degrade(watch)
-        self.assertEqual((self._run(watch).reconciled, self._run(watch).closed), (0, 0))
+        self.assertEqual((self._run(watch).re_emitted, self._run(watch).closed), (0, 0))
 
-    def test_a_null_grace_disables_the_repair(self):
+    def test_a_null_grace_disables_reconcile(self):
         watch = _GlobalWatch()
         subject_id = self._degrade(watch)
         watch.reconcile_grace = None
-        self.assertEqual(self._run(watch).reconciled, 0)
+        self.assertEqual(self._run(watch).re_emitted, 0)
         self.assertTrue(WatchState.objects.filter(watch=watch.name, subject_id=subject_id).exists())
 
     # the forward direction, machine scoped
@@ -219,18 +219,18 @@ class ReconcileTestCase(TestCase):
         self._incident(subject_id)
         events, collect = self._collect(ReconcileTestEvent)
         with collect:
-            self.assertEqual(self._run(watch).reconciled, 1)
+            self.assertEqual(self._run(watch).re_emitted, 1)
         self.assertEqual(events[0].metadata.machine_serial_number, "SN1")
 
     def test_an_open_machine_incident_is_not_re_emitted(self):
         watch = _MachineWatch()
         subject_id = self._degrade(watch, serial_number="SN1")
         self._incident(subject_id, serial_number="SN1")
-        self.assertEqual(self._run(watch).reconciled, 0)
+        self.assertEqual(self._run(watch).re_emitted, 0)
 
     # the reverse direction: an incident with no transition left to close it
 
-    def test_an_orphaned_incident_is_closed(self):
+    def test_an_incident_without_state_is_closed(self):
         watch = _GlobalWatch()
         subject_id = get_random_string(12)
         self._incident(subject_id, status_time=naive_utcnow() - timedelta(seconds=watch.reconcile_grace + 60))
@@ -248,7 +248,7 @@ class ReconcileTestCase(TestCase):
         self.assertEqual(update.key, {"subject_id": subject_id})
         self.assertEqual(update.severity, Severity.NONE)
 
-    def test_an_orphaned_machine_incident_is_closed(self):
+    def test_a_machine_incident_without_state_is_closed(self):
         watch = _MachineWatch()
         subject_id = get_random_string(12)
         old = naive_utcnow() - timedelta(seconds=watch.reconcile_grace + 60)
@@ -256,7 +256,7 @@ class ReconcileTestCase(TestCase):
         events, collect = self._collect(SubjectUnwatchedEvent)
         with collect:
             self.assertEqual(self._run(watch).closed, 1)
-        # one event per orphaned machine incident and none for the parent: close_open_incident holds the
+        # one event per machine incident and none for the parent: close_open_incident holds the
         # parent open until the last machine incident closes, then closes it
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].metadata.machine_serial_number, "SN1")
@@ -277,10 +277,10 @@ class ReconcileTestCase(TestCase):
         events, collect = self._collect(ReconcileTestEvent)
         with collect:
             result = self._run(watch)
-        # the recovery closes it, and the repair does not say so a second time
+        # the recovery closes it, and reconcile does not say so a second time
         self.assertEqual((result.recovered, result.closed, result.events), (1, 0, 1))
 
-    def test_an_orphaned_incident_inside_the_grace_is_not_closed(self):
+    def test_an_incident_without_state_inside_the_grace_is_not_closed(self):
         watch = _GlobalWatch()
         self._incident(get_random_string(12))
         self.assertEqual(self._run(watch).closed, 0)
@@ -302,7 +302,7 @@ class ReconcileTestCase(TestCase):
 
     # visibility
 
-    def test_the_repair_is_logged_as_a_warning(self):
+    def test_reconcile_is_logged_as_a_warning(self):
         watch = _GlobalWatch()
         self._degrade(watch)
         with patch.object(ReconcileTestEvent, "post"):
