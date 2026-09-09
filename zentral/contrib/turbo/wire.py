@@ -52,6 +52,10 @@ class WireRunSerializer(serializers.Serializer):
     at = serializers.DateTimeField()
     duration = serializers.FloatField(required=False, allow_null=True, default=None)
     schedule_pk = serializers.UUIDField()
+    # the agent's own identity for this run. Optional, because correlation is by schedule_pk and an
+    # agent that uploads nothing never needs one — but an upload row is keyed on it, so a result that
+    # carries uploads[] without it cannot be matched to what was minted.
+    id = serializers.UUIDField(required=False, allow_null=True, default=None)
     mode = serializers.ChoiceField(choices=ScheduleMode.values, required=False)
 
 

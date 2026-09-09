@@ -5,8 +5,9 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import connection, models, transaction
 from django.db.models import Exists, OuterRef, Q
 from django.urls import reverse
+from django.utils import timezone
 
-from zentral.contrib.inventory.models import BaseEnrollment, MetaMachine, Tag
+from zentral.contrib.inventory.models import BaseEnrollment, MachineTag, MetaMachine, Tag
 from zentral.utils.backend_model import BackendInstance
 
 from .command_backends import CommandBackend, get_command_backend, get_command_backend_class
@@ -242,6 +243,18 @@ class Job(models.Model):
         elif self.is_command:
             return self.command
 
+    def get_artifact(self, name):
+        # Through the DEFINITION, never through the command backend: a definition declares the
+        # artifacts a run of it produces, and the upload plane only needs to know that much. A kind
+        # reified into its own model later can then produce artifacts without the plane learning what
+        # a Command is. None for an unknown name, or for a kind this release cannot resolve at all.
+        definition = self.definition
+        if definition is None:
+            return None
+        for artifact in definition.artifacts:
+            if artifact.name == name:
+                return artifact
+
     @property
     def definition_payload_key(self):
         # the turbo-local key the definition block rides under in an event payload
@@ -282,6 +295,10 @@ class JobDefinitionManager(models.Manager):
 
 
 class Script(models.Model):
+    # a definition declares what a run of it produces; a verdict is not an artifact
+    artifacts = ()
+    max_upload_size = None
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name="script", editable=False)
     name = models.CharField(max_length=256, unique=True)
@@ -390,6 +407,10 @@ class Script(models.Model):
 
 
 class MSCPCheck(models.Model):
+    # a definition declares what a run of it produces; a verdict is not an artifact
+    artifacts = ()
+    max_upload_size = None
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name="mscp_check", editable=False)
     compliance_check = models.OneToOneField(
@@ -568,6 +589,18 @@ class Command(BackendInstance):
 
     def can_be_deleted(self):
         return Command.objects.can_be_deleted().filter(pk=self.pk).exists()
+
+    @property
+    def artifacts(self):
+        # the declaration lives on the backend, but every reader reaches it through the definition
+        return self.get_backend(load=True).artifacts
+
+    @property
+    def max_upload_size(self):
+        # like artifacts: declared on the backend, read through the definition. Not reachable with
+        # getattr() on the model — BackendInstance.__getattr__ raises for a name it does not know, so
+        # a getattr(..., None) would silently return None and the kind's ceiling would never apply.
+        return self.get_backend(load=True).max_upload_size
 
     def wire_payload(self):
         # a pure function of (kwargs, version): cached for config_refresh_interval and re-served to
@@ -796,6 +829,100 @@ class RecurringJobMachine(models.Model):
         return f"{self.recurring_job} on {self.serial_number}"
 
 
+class UploadMode(models.TextChoices):
+    PUT = "put", "Single PUT"
+    MULTIPART = "multipart", "Multipart"
+
+
+class UploadStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    UPLOADED = "uploaded", "Uploaded"
+    FAILED = "failed", "Failed"
+
+
+class UploadErrorReason(models.TextChoices):
+    # what the agent reports when it gives up on an artifact. Terminal: the run is over, and a
+    # re-mint would be a new run.
+    EXPIRED = "expired", "URL expired"
+    HTTP_STATUS = "http_status", "HTTP status"
+    NETWORK = "network", "Network"
+    TOO_LARGE = "too_large", "Too large"
+    MINT_REJECTED = "mint_rejected", "Mint rejected"
+
+
+class UploadVerification(models.TextChoices):
+    # the SECOND axis, and deliberately not part of status: "the agent says it uploaded" and "the
+    # storage agrees" are two facts. The three failures are different problems — present but wrong,
+    # nothing at a key we believed was written, and every part landed but the assembly never finished.
+    PENDING = "pending", "Pending"
+    VERIFIED = "verified", "Verified"
+    MISMATCH = "mismatch", "Mismatch"
+    MISSING = "missing", "Missing"
+    ASSEMBLY_FAILED = "assembly_failed", "Assembly failed"
+
+
+class JobUpload(models.Model):
+    # One row per (run, artifact), created by the first mint and closed by that run's result. Named for
+    # the JOB and not the command: a command is grouped under one model because per-kind reification is
+    # not justified for it, which has nothing to do with the reason this plane exists — some jobs
+    # produce artifacts. A reified kind that collects a file writes here too.
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Keyed like the WIRE, not like the ORM: schedule_pk + schedule_mode rather than a foreign key to
+    # OneTimeJobMachine / RecurringJobMachine. Both scheduling models use UUID pks, so one column covers
+    # both modes and a recurring upload kind needs no migration — and the mint stays free of side
+    # effects on ledger rows it does not own. The cost is no cascade, so cleanup grows a few lines.
+    schedule_pk = models.UUIDField()
+    schedule_mode = models.CharField(max_length=32, choices=ScheduleMode.choices)
+    serial_number = models.TextField(db_index=True)
+    run_id = models.UUIDField()               # the agent's own identity for the run (wire: run.id)
+    artifact = models.CharField(max_length=64)  # one of the kind's declared outputs
+
+    # the server builds the key and never takes one from the wire; stable for the life of the row, so a
+    # retry overwrites in place instead of littering
+    key = models.TextField()
+    mode = models.CharField(max_length=32, choices=UploadMode.choices, default=UploadMode.PUT)
+    part_size = models.PositiveIntegerField(null=True)   # fixed when the MPU was created
+    upload_id = models.TextField(null=True)
+    size = models.BigIntegerField()                      # 2 GiB is one byte past a signed int32
+    sha256 = models.CharField(max_length=64)             # hex; base64 when signed into the S3 header
+    # base64, whole artifact. The multipart completion supplies it minutes after the mint, so it has to
+    # live on the row rather than in the request that started the upload.
+    crc64nvme = models.CharField(max_length=32, blank=True)
+    crc32c = models.CharField(max_length=32, blank=True)  # GCS, later version
+    truncated = models.BooleanField(default=False)
+
+    # the SERVER's count, incremented only by a mint that hands out URLs — the attempts the agent
+    # reports are its telemetry, not the enforcement input
+    attempts = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=32, choices=UploadStatus.choices, default=UploadStatus.PENDING)
+    error_reason = models.CharField(max_length=32, choices=UploadErrorReason.choices, null=True)
+    verification = models.CharField(max_length=32, choices=UploadVerification.choices,
+                                    default=UploadVerification.PENDING)
+    verified_at = models.DateTimeField(null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True)   # when the agent reported, not when it verified
+
+    class Meta:
+        default_permissions = ()   # the agent writes these rows, never an operator
+        constraints = [
+            # what is actually unique: one row per run and artifact. There is deliberately no index
+            # asserting one uploaded artifact per one-time schedule and machine — a version bump
+            # re-arms a one-time job, so a machine can legitimately hold two runs of one shot and
+            # upload for both. An index saying otherwise turns the second result into an
+            # IntegrityError, and under ATOMIC_REQUESTS that is a 500 on every retry of that batch.
+            # The gate lives where it can see the version: last_result_at on the tracker, which the
+            # mint reads.
+            models.UniqueConstraint(fields=["schedule_pk", "serial_number", "run_id", "artifact"],
+                                    name="turbo_jobupload_unique_run_artifact"),
+        ]
+
+    def __str__(self):
+        return f"{self.artifact} of {self.run_id} on {self.serial_number}"
+
+
 def _unique_schedule_uuids(schedule_pks):
     # ordered {original value: UUID} for the well-formed, non-empty, de-duplicated pks
     parsed = {}
@@ -807,6 +934,45 @@ def _unique_schedule_uuids(schedule_pks):
         except (ValueError, TypeError):
             continue
     return parsed
+
+
+def get_machine_schedule(configuration, serial_number, schedule_pk):
+    """The mint's resolver: one schedule, and no side effects.
+
+    resolve_machine_schedules() creates the tracker rows the results path needs. The mint must not —
+    it writes exactly one row, its own, so a run that mints and never reports leaves no trace in a
+    ledger it does not own. The rules are the config view's, because a schedule the agent could not
+    have been served is one it must not be able to mint against: the machine's own configuration, in
+    scope, and — for a one-time shot — inside its window.
+
+    Takes a parsed pk — the batch resolver below has to sift raw values out of a wire list, the mint
+    has exactly one and has already refused it if it was not a UUID.
+
+    Returns (schedule, job), or None when there is nothing to mint for.
+    """
+    tag_ids = list(MachineTag.objects.filter(serial_number=serial_number).values_list("tag_id", flat=True))
+    related = Job.definition_relations("job__")
+    recurring_job = (RecurringJob.in_scope(configuration, serial_number, tag_ids)
+                     .select_related(*related).filter(pk=schedule_pk).first())
+    if recurring_job is not None:
+        return recurring_job, recurring_job.job
+    now = timezone.now()
+    one_time_job = (OneTimeJob.in_scope(configuration, serial_number, tag_ids)
+                    .filter(Q(not_before__isnull=True) | Q(not_before__lte=now))
+                    .filter(Q(not_after__isnull=True) | Q(not_after__gte=now))
+                    .select_related(*related).filter(pk=schedule_pk).first())
+    if one_time_job is not None:
+        return one_time_job, one_time_job.job
+    return None
+
+
+def one_time_gate_closed(one_time_job, serial_number):
+    # the shot is spent: a current-version result came back and ConfigView stopped serving the job.
+    # A mint after that would write an object nothing can ever reference, because the result that
+    # would have carried its key has already been ingested.
+    return OneTimeJobMachine.objects.filter(
+        one_time_job=one_time_job, serial_number=serial_number, last_result_at__isnull=False
+    ).exists()
 
 
 def resolve_machine_schedules(configuration, serial_number, schedule_pks):
