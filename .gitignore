@@ -3,7 +3,10 @@ __pycache__
 *.sw[op]
 *credentials.json
 .ruff_cache
-build/
+/docs/.hugo_build.lock
+/docs/public/
+/docs/resources/
+/build/
 
 /.*
 !/.gitignore
@@ -20,8 +23,7 @@ build/
 !/docker-compose.puppet.yml
 !/docker-compose.syslog.yml
 !/docker-compose.tests.yml
-!/mkdocs.yml
-!/.readthedocs.yaml
+!/docker-compose.docs.yml
 
 /conf/*
 !/conf/mdm

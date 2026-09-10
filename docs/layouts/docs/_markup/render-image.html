@@ -1,0 +1,15 @@
+{{- /* The image paths are relative to the markdown file. A page url sits one
+       level deeper than its source, so the browser cannot resolve them: they
+       are looked up as resources of the docs root instead. */ -}}
+{{- $d := .Destination -}}
+{{- $src := $d -}}
+{{- if not (urls.Parse $d).IsAbs -}}
+  {{- $root := partial "docs_root.html" . -}}
+  {{- $rel := path.Join (path.Dir (partial "docs_rel_path.html" .Page)) $d -}}
+  {{- with $root.Resources.GetMatch $rel -}}
+    {{- $src = .RelPermalink -}}
+  {{- else -}}
+    {{- errorf "unresolved image %q (looked for %q) in %s" $d $rel $.Page.File.Path -}}
+  {{- end -}}
+{{- end -}}
+<img src="{{ $src }}" alt="{{ .Text }}"{{ with .Title }} title="{{ . }}"{{ end }} loading="lazy">

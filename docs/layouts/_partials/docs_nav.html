@@ -1,0 +1,11 @@
+{{- $current := .current -}}
+<ul>
+  {{- range .page.Pages.ByWeight }}
+  <li{{ if eq . $current }} class="here"{{ end }}>
+    <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+    {{- if and .IsSection .Pages }}
+      {{- partial "docs_nav.html" (dict "page" . "current" $current) }}
+    {{- end }}
+  </li>
+  {{- end }}
+</ul>

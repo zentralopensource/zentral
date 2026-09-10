@@ -1,0 +1,241 @@
+/* Zentral palette: Blutrazid, Zentral Red, Zentral Cyan, Putty, Foggy Blue */
+:root {
+    --ink: #2b2a36;
+    --ink-soft: #5d5b6d;
+    --ink-faint: #8b8898;
+    --red: #ea5165;
+    --cyan: #79c6bc;
+    --ground: #fafafa;
+    --surface: #ffffff;
+    --tint: #f5f4ff;
+    --rule: #e2e0ea;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--red); }
+
+.docs {
+    display: grid;
+    grid-template-columns: 18rem minmax(0, 1fr) 14rem;
+    align-items: start;
+}
+
+.docs-side {
+    position: sticky;
+    top: 0;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--rule);
+    padding: 1.5rem 1rem 3rem;
+}
+
+.docs-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    text-decoration: none;
+}
+.docs-brand img { display: block; width: auto; height: 2rem; }
+.docs-brand span {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--cyan);
+}
+
+.docs-side ul { margin: 0; padding: 0; list-style: none; }
+.docs-side ul ul {
+    margin-left: 0.75rem;
+    padding-left: 0.6rem;
+    border-left: 1px solid var(--rule);
+}
+.docs-side li { margin: 0.1rem 0; }
+.docs-side a {
+    display: block;
+    padding: 0.2rem 0.45rem;
+    border-radius: 3px;
+    color: var(--ink);
+    font-size: 0.875rem;
+    text-decoration: none;
+}
+.docs-side a:hover { background: var(--tint); }
+.docs-side li.here > a {
+    padding-left: 0.3rem;
+    border-left: 4px solid var(--cyan);
+    background: var(--tint);
+    font-weight: 600;
+}
+
+.docs-main { padding: 2.5rem clamp(1rem, 4vw, 3rem) 5rem; }
+.docs-crumbs { margin-bottom: 0.75rem; font-size: 0.8125rem; color: var(--ink-faint); }
+.docs-crumbs a { color: var(--ink-faint); }
+.docs-crumbs a:not(:last-child)::after { content: " / "; color: var(--rule); }
+
+/* Headings. One scale for the page, stated in full: the website's global
+   stylesheet sizes h1-h4 by viewport and would otherwise make an h3 larger than
+   the h2 above it. Every value here overrides that, so both shells render the
+   same hierarchy. */
+.docs-page h1, .docs-page h2, .docs-page h3,
+.docs-page h4, .docs-page h5, .docs-page h6 {
+    font-family: inherit;
+    font-weight: 600;
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: normal;
+}
+.docs-page h1 { margin: 0 0 1.25rem; font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; }
+.docs-page h2 { margin: 2.4rem 0 0.75rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--rule); font-size: 1.6rem; line-height: 1.25; }
+.docs-page h3 { margin: 1.8rem 0 0.5rem; font-size: 1.25rem; line-height: 1.3; }
+.docs-page h4 { margin: 1.4rem 0 0.4rem; font-size: 1.05rem; line-height: 1.35; }
+.docs-page h5 { margin: 1.2rem 0 0.3rem; font-size: 0.95rem; line-height: 1.4; }
+.docs-page h6 { margin: 1.2rem 0 0.3rem; font-size: 0.9rem; line-height: 1.4; color: var(--ink-soft); }
+
+/* Body text. The website gives p its own font and colour; list items and table
+   cells would otherwise not match the paragraphs next to them. */
+.docs-page p { margin: 0 0 1rem; font-family: inherit; font-weight: inherit; color: inherit; }
+.docs-page img { max-width: 100%; }
+.docs-page > p:first-of-type > img:only-child { max-width: 640px; }
+
+/* Content lists. The website's global stylesheet strips margin, padding and
+   markers from every ul and li; these give them back inside the page. In the
+   standalone preview they restate the browser defaults. */
+.docs-page ul, .docs-page ol { margin: 0 0 1rem; padding-left: 1.6rem; }
+.docs-page ul { list-style: disc; }
+.docs-page ol { list-style: decimal; }
+.docs-page ul ul { list-style: circle; }
+.docs-page li { list-style: inherit; margin: 0.3rem 0; }
+.docs-page li > ul, .docs-page li > ol { margin: 0.3rem 0 0; }
+.docs-page li > p { margin: 0.3rem 0; }
+
+.docs-aside {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+    padding: 2.5rem 1rem 3rem 0;
+}
+
+.docs-toc { font-size: 0.8125rem; }
+.docs-toc-title {
+    margin: 0 0 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+}
+.docs-toc ul { margin: 0; padding: 0; list-style: none; }
+.docs-toc li { margin: 0.15rem 0; }
+.docs-toc a {
+    display: block;
+    padding: 0.15rem 0 0.15rem 0.6rem;
+    border-left: 2px solid var(--rule);
+    color: var(--ink-soft);
+    text-decoration: none;
+}
+.docs-toc a:hover { color: var(--ink); border-left-color: var(--cyan); }
+
+.docs-toc li li a {
+    padding-left: 1.4rem;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+}
+
+.docs-toc li li li a {
+    padding-left: 2.4rem;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+}
+
+/* Following the reader. The website's script marks the section in view
+   (.is-current) and keeps its ancestors unfolded (.is-open). Nested entries are
+   hidden only once the script has set .is-live, so without it every entry shows. */
+.docs-toc li.is-current > a {
+    color: var(--ink);
+    border-left-color: var(--cyan);
+    font-weight: 600;
+}
+.docs-toc.is-live li ul { display: none; }
+.docs-toc.is-live li.is-open > ul {
+    display: block;
+    animation: docs-toc-reveal 0.2s ease;
+}
+@keyframes docs-toc-reveal {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .docs-toc.is-live li.is-open > ul { animation: none; }
+}
+
+
+@media (max-width: 72rem) {
+    .docs { grid-template-columns: 18rem minmax(0, 1fr); }
+    .docs-aside { display: none; }
+}
+
+.docs-page table {
+    display: block;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+    border-collapse: collapse;
+}
+.docs-page td, .docs-page th {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--rule);
+    text-align: left;
+}
+.docs-page th { background: var(--tint); }
+
+.docs-page pre {
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow-x: auto;
+}
+.docs-page code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.875em; }
+.docs-page :not(pre) > code {
+    padding: 0.05em 0.32em;
+    background: var(--tint);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+}
+.docs-page blockquote {
+    margin: 1.5rem 0;
+    padding: 0.1rem 1rem;
+    border-left: 4px solid var(--cyan);
+    color: var(--ink-soft);
+}
+
+.docs-pagefoot {
+    margin-top: 3.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.875rem;
+}
+
+@media (max-width: 56rem) {
+    /* minmax(0, 1fr): a bare 1fr would grow to fit a wide code block or table. */
+    .docs { grid-template-columns: minmax(0, 1fr); }
+    .docs-side {
+        position: static;
+        min-height: 0;
+        max-height: none;
+        border-right: 0;
+        border-bottom: 1px solid var(--rule);
+    }
+    .docs-main { padding-top: 1.5rem; }
+}
