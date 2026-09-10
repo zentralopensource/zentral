@@ -104,6 +104,45 @@ First Zentral checks the `excluded_tags`. If a machine has any one of the tags l
 
 **IMPORTANT** Make sure that the tags used in the PkgInfo exist in Zentral **before** the repository is synced.
 
+## PkgInfo data
+
+The version of a PkgInfo in the *PkgInfos* list and on a PkgInfo name page links to its data: the pkginfo as it is stored in Zentral, and the pkginfo as it is served in the catalogs, with the differences between the two – the *rewrites* monolith applies, for example the `installer_item_location` it points at its own repository endpoint, or the `catalogs` key it drops.
+
+* PBAC action: `Monolith::Action::"viewPkgInfoData"`
+
+The raw pkginfo carries the installation checks and the pre/postinstall scripts, so this action is not part of the viewer action groups, unlike the other monolith view actions: `Monolith::Action::"ViewerActions"` does not grant it, and neither does `monolith.view_pkginfo`. It has to be granted explicitly, and only to a role, not to a service account – the pkginfo data has no API endpoint.
+
+The action takes the PkgInfo as its resource, with its repository and its active catalogs as parents, and the repository with its meta business unit as parent. Nothing goes in the context. A policy can be scoped to one PkgInfo, to a catalog, to a repository, or to the meta business unit that already scopes the machines:
+
+```
+permit (
+  principal in Role::"6",
+  action == Monolith::Action::"viewPkgInfoData",
+  resource in Monolith::Repository::"3"
+);
+```
+
+`resource in Monolith::Catalog::"7"` matches the PkgInfos of that catalog, `resource in Inventory::MetaBusinessUnit::"2"` the PkgInfos of every repository of that meta business unit, and `resource == Monolith::PkgInfo::"12"` one PkgInfo.
+
+A scope on a catalog is existential: a PkgInfo of the `testing` **and** of the `production` catalog matches a policy scoped on `testing`. Take a restricted catalog back with a `forbid` policy, which wins over every `permit`:
+
+```
+permit (
+  principal in Role::"6",
+  action == Monolith::Action::"viewPkgInfoData",
+  resource in Monolith::Repository::"3"
+);
+forbid (
+  principal,
+  action == Monolith::Action::"viewPkgInfoData",
+  resource in Monolith::Catalog::"9"
+);
+```
+
+A PkgInfo promoted to the restricted catalog in the repository leaves the permission on the next sync. A new restricted catalog needs its own `forbid`.
+
+Only the active catalogs of a PkgInfo are parents of the resource, and all of them are, whatever the *PkgInfos* list is filtered on: a PkgInfo of a forbidden catalog keeps its link hidden on a list filtered on another catalog.
+
 ## HTTP API
 
 ### Requests
