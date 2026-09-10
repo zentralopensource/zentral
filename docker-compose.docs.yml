@@ -1,0 +1,9 @@
+---
+services:
+  docs:
+    build: ./conf/start/docker/hugo/
+    volumes:
+      - ./docs:/docs
+    # 1313 is taken by the zentral.com preview, which is often up at the same time
+    ports:
+      - "1314:1313"

@@ -9,6 +9,13 @@
 The PBAC Schema browser documents each action now. It shows what the action authorizes, the context attributes a `when` clause can read, and the values an attribute accepts when the set is closed — for example the artifact types of `MDM::Action::"forceInstallArtifact"`. An optional attribute carries a `?` after its name, which tells you if a `has` guard is necessary. The principals and the resources show the types they are members of, so you can see what a `resource in` clause can name: a `forceCleanSync` policy can be scoped to a machine, or to one of its meta business units.
 
 
+#### Documentation
+
+The documentation is published at https://www.zentral.com/docs/zentral/ now, and built with [Hugo](https://gohugo.io/) instead of mkdocs. The pages live in `docs/content/`, and the layouts in `docs/layouts/`. The website build mounts the two directories into its own site.
+
+`docker compose -f docker-compose.docs.yml up` serves a live preview on http://localhost:1314. The same build runs on each pull request that touches the documentation, with warnings promoted to errors: an internal link that does not resolve to a page, or a raw HTML tag, fails the build instead of reaching the site. `docs/README.md` explains how to write a page, and what is pinned where.
+
+
 #### Inventory
 
 The inventory JMESPath compliance check publishes the same `zentral_audit` events as the other objects now, from the web console and from the API.

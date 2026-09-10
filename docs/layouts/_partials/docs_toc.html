@@ -1,0 +1,10 @@
+{{- /* A page with a single entry gets no menu. The depth comes from
+       tableOfContents.endLevel, which must match in both Hugo configurations. */ -}}
+{{- with .TableOfContents }}
+  {{- if gt (strings.Count "<li>" .) 1 }}
+<div class="docs-toc">
+  <p class="docs-toc-title">On this page</p>
+  {{ . }}
+</div>
+  {{- end }}
+{{- end }}
