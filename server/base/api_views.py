@@ -1,5 +1,7 @@
 import json
 import logging
+import os.path
+from urllib.parse import urlencode
 import celery.states
 from django_celery_results.models import TaskResult
 from django.core.files.storage import default_storage
@@ -12,10 +14,19 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
 from accounts.models import task_results_for_user
-from zentral.utils.storage import file_storage_has_signed_urls
+from zentral.utils.storage import file_storage_has_signed_urls, file_storage_signed_url_expiration
+from zentral.utils.time import naive_utcnow
 
 
 logger = logging.getLogger("server.base.api_views")
+
+
+def get_manifest_location(result):
+    manifest = result.get("manifest")
+    if isinstance(manifest, dict):
+        location = manifest.get("location")
+        if isinstance(location, str) and location:
+            return location
 
 
 class BaseTaskResultView(APIView):
@@ -46,7 +57,10 @@ class TaskResultView(BaseTaskResultView):
                     logger.exception("Could not load task result")
                 else:
                     filepath = result.pop("filepath", None)
-                    if filepath:
+                    location = get_manifest_location(result)
+                    if location:
+                        del result["manifest"]["location"]
+                    if filepath or location:
                         response["download_url"] = reverse("base_api:task_result_file_download", args=(task_id,))
                     response["result"] = result
         return Response(response)
@@ -64,18 +78,45 @@ class TaskResultFileDownloadView(BaseTaskResultView):
         except (TypeError, ValueError):
             logger.exception("Could not load task result")
             raise Http404
-        try:
-            filepath = result["filepath"]
-            assert isinstance(filepath, str) and len(filepath) > 0
-        except (AssertionError, KeyError):
-            logger.error("No file found in task %s result", task_result.task_id)
-            raise Http404
+        location = get_manifest_location(result)
+        file_key = request.GET.get("file")
+        if file_key is not None:
+            # the key is checked against the manifest before it reaches the storage
+            if not location or file_key not in result["manifest"].get("files", {}):
+                raise Http404
+            return self._file_response(location + file_key, filename=os.path.basename(file_key))
+        filepath = result.get("filepath")
+        if isinstance(filepath, str) and filepath:
+            return self._file_response(filepath, headers=result.get("headers"))
+        if location:
+            return Response(self._manifest_with_urls(task_result.task_id, result["manifest"]))
+        logger.error("No file found in task %s result", task_result.task_id)
+        raise Http404
+
+    def _file_response(self, filepath, headers=None, filename=None):
         if self._redirect_to_files:
             return redirect(default_storage.url(filepath))
-        else:
-            if not default_storage.exists(filepath):
-                raise Http404
-            response = FileResponse(default_storage.open(filepath))
-            for k, v in result.get("headers").items():
-                response[k] = v
-            return response
+        if not default_storage.exists(filepath):
+            raise Http404
+        response = FileResponse(default_storage.open(filepath), as_attachment=bool(filename), filename=filename or "")
+        for k, v in (headers or {}).items():
+            response[k] = v
+        return response
+
+    def _manifest_with_urls(self, task_id, manifest):
+        manifest = dict(manifest)
+        location = manifest.pop("location")
+        download_url = reverse("base_api:task_result_file_download", args=(task_id,))
+        expiration = file_storage_signed_url_expiration() if self._redirect_to_files else None
+        files = {}
+        for key, file_info in manifest.get("files", {}).items():
+            file_info = dict(file_info)
+            file_info["download_url"] = f"{download_url}?{urlencode({'file': key})}"
+            if self._redirect_to_files:
+                signed_at = naive_utcnow()
+                file_info["url"] = default_storage.url(location + key)
+                if expiration:
+                    file_info["expires_at"] = f"{signed_at + expiration:%Y-%m-%dT%H:%M:%SZ}"
+            files[key] = file_info
+        manifest["files"] = files
+        return manifest

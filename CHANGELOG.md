@@ -8,6 +8,8 @@
 
 The PBAC Schema browser documents each action now. It shows what the action authorizes, the context attributes a `when` clause can read, and the values an attribute accepts when the set is closed — for example the artifact types of `MDM::Action::"forceInstallArtifact"`. An optional attribute carries a `?` after its name, which tells you if a `has` guard is necessary. The principals and the resources show the types they are members of, so you can see what a `resource in` clause can name: a `forceCleanSync` policy can be scoped to a machine, or to one of its meta business units.
 
+A task that produces several files has a manifest in its result. The download endpoint of the task gives the manifest with a download URL for each file, and the `file` parameter downloads one file. With an S3 or GCS storage, the manifest also gives the URL of each file in the storage, and the expiration time of the URL when it expires. The tasks pages list the files.
+
 
 #### Documentation
 

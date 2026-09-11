@@ -118,6 +118,8 @@ Issuers can also be managed over the API, at `/api/accounts/token_issuers/oidc/`
 
 Use this endpoint to get the status of a task. If the task generates a file, a `download_url` attribute will be included. The `download_url` will redirect to the exported file (for example, a signed S3 URL if Zentral is configured with a S3 bucket). A process should wait for a task if `unready` is true.
 
+If the task generates several files, its result carries a `manifest` that lists them, and the `download_url` attribute is present too. It gives the manifest with a download URL for each file, see [below](#apitask_resultuuidtask_iddownload).
+
 A task belongs to the user or the service account that launched it. Only that principal can read its status, and a superuser can read the status of all the tasks. The endpoint gives the `UNKNOWN` status for the task of a different principal, like it does for a task that does not exist. A task that a device launched, and a task that Zentral launched before version 2025.11, has no user: only a superuser can read it.
 
 Example:
@@ -160,6 +162,48 @@ Example:
 curl -H "Authorization: Token $ZTL_API_TOKEN" \
      -L -o inventory_export_2025-03-12_10-21-12.xlsx \
      https://$ZTL_FQDN/api/task_result/d40e9320-8c0c-459b-bfdb-001a9f73619f/download/
+```
+
+A task that generates several files puts them in one directory of the storage. Its result carries a manifest with the `files` of the directory, keyed by their name in the directory. For such a task, this endpoint gives the manifest, with a `download_url` for each file. If the storage is an S3 or a GCS bucket, each file also has its `url` in the storage, and the `expires_at` time of the URL when the URL expires. The `file` parameter downloads one file: `?file=<name>`, where the name is a key of `files`. An unknown name gives a `404`.
+
+Example:
+
+```
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     https://$ZTL_FQDN/api/task_result/5ecb057b-57cc-41e4-a07e-fcc357d7a5c7/download/
+```
+
+Result:
+
+```json
+{
+    "version": 1,
+    "export_id": "20260911T100000Z-3f9c1a2b",
+    "exported_at": "2026-09-11T10:00:00Z",
+    "format": "PARQUET",
+    "tables": {
+        "machine": {"rows": 4213, "columns": ["…"], "files": ["machine/machine-00001.parquet"]}
+    },
+    "files": {
+        "machine/machine-00001.parquet": {
+            "table": "machine",
+            "rows": 4213,
+            "size": 1284906,
+            "sha256": "…",
+            "download_url": "/api/task_result/5ecb057b-57cc-41e4-a07e-fcc357d7a5c7/download/?file=machine%2Fmachine-00001.parquet",
+            "url": "https://acme-zentral.s3.amazonaws.com/exports/inventory/20260911T100000Z-3f9c1a2b/machine/machine-00001.parquet?X-Amz-…",
+            "expires_at": "2026-09-11T11:05:12Z"
+        }
+    }
+}
+```
+
+One file:
+
+```
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+     -L -o machine-00001.parquet \
+     "https://$ZTL_FQDN/api/task_result/5ecb057b-57cc-41e4-a07e-fcc357d7a5c7/download/?file=machine%2Fmachine-00001.parquet"
 ```
 
 ### `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/`

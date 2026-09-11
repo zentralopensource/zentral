@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import timedelta
 
@@ -56,6 +57,18 @@ class AccountTasksViewsTestCase(TestCase):
             date_created=naive_utcnow() - timedelta(days=1, seconds=10),
             date_done=naive_utcnow() - timedelta(days=1)
         )
+        cls.task_with_files = TaskResult.objects.create(
+            task_name='zentral.test.files_task',
+            task_id=str(uuid.uuid4()),
+            result=json.dumps({"manifest": {"location": "exports/inventory/yolo/",
+                                            "files": {"machine/machine-00001.parquet": {"table": "machine",
+                                                                                        "rows": 2,
+                                                                                        "size": 4096,
+                                                                                        "sha256": "…"}}}}),
+            date_created=naive_utcnow() - timedelta(days=1, seconds=10),
+            date_done=naive_utcnow() - timedelta(days=1)
+        )
+        UserTask.objects.create(user=cls.ui_user, task_result=cls.task_with_files)
 
     # auth utils
 
@@ -91,15 +104,25 @@ class AccountTasksViewsTestCase(TestCase):
         self.login(self.ui_user)
         response = self.client.get(reverse("accounts:tasks"))
         self.assertTemplateUsed(response, "accounts/task_list.html")
-        self.assertEqual(response.context["object_list"].count(), 1)
+        self.assertEqual(response.context["object_list"].count(), 2)
         self.assertContains(response, 'User Task')
 
     def test_task_list_admin(self):
         self.login(self.admin_user)
         response = self.client.get(reverse("accounts:tasks"))
         self.assertTemplateUsed(response, "accounts/task_list.html")
-        self.assertEqual(response.context["object_list"].count(), 3)
+        self.assertEqual(response.context["object_list"].count(), 4)
         self.assertContains(response, 'Admin Task')
+
+    def test_task_list_files(self):
+        self.login(self.ui_user)
+        response = self.client.get(reverse("accounts:tasks"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "dropdown-menu")
+        self.assertContains(
+            response,
+            f"/api/task_result/{self.task_with_files.task_id}/download/?file=machine%2Fmachine-00001.parquet"
+        )
 
     # task detail
 
@@ -146,3 +169,15 @@ class AccountTasksViewsTestCase(TestCase):
         self.assertContains(response, self.ui_user.username)
         # check for result display
         self.assertContains(response, "result_error")
+
+    def test_view_task_files(self):
+        self.login(self.ui_user)
+        response = self.client.get(reverse("accounts:task", args=(self.task_with_files.task_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/task_detail.html")
+        self.assertContains(response, "<code>machine/machine-00001.parquet</code>")
+        self.assertContains(response, "4.0\xa0KB")
+        self.assertContains(
+            response,
+            f"/api/task_result/{self.task_with_files.task_id}/download/?file=machine%2Fmachine-00001.parquet"
+        )
