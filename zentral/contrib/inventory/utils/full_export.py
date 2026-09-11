@@ -3,6 +3,7 @@ import logging
 import os.path
 import tempfile
 import zipfile
+from contextlib import contextmanager
 
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
@@ -19,6 +20,52 @@ __all__ = [
 logger = logging.getLogger("zentral.contrib.inventory.utils.full_export")
 
 
+# A table holds the rows a current machine snapshot reaches, directly or through the rows of another
+# exported table.
+
+CURRENT_MS_IDS = "select machine_snapshot_id from inventory_currentmachinesnapshot"
+
+
+def ms_fk_ids(column):
+    return f"select {column} from inventory_machinesnapshot where id in ({CURRENT_MS_IDS})"
+
+
+def m2m_ids(through_table, column):
+    return f"select {column} from {through_table} where machinesnapshot_id in ({CURRENT_MS_IDS})"
+
+
+def fk_ids(column, table, ids):
+    return f"select {column} from {table} where id in ({ids})"
+
+
+def rows(table, ids, columns="*"):
+    return f"select {columns} from {table} where id in ({ids})"
+
+
+def link_rows(through_table, columns):
+    return (f"select machinesnapshot_id ms_id, {columns} from {through_table} "
+            f"where machinesnapshot_id in ({CURRENT_MS_IDS})")
+
+
+BUSINESS_UNIT_IDS = ms_fk_ids("business_unit_id")
+OSX_APP_INSTANCE_IDS = m2m_ids("inventory_machinesnapshot_osx_app_instances", "osxappinstance_id")
+PROFILE_IDS = m2m_ids("inventory_machinesnapshot_profiles", "profile_id")
+PROGRAM_INSTANCE_IDS = m2m_ids("inventory_machinesnapshot_program_instances", "programinstance_id")
+
+# the certificates of the snapshots, the signers of the app instances and of the profiles, and the chains above them
+CERTIFICATE_QUERY = (
+    "with recursive reachable_certificate as ("
+    "select id, signed_by_id from inventory_certificate where id in ("
+    f"{m2m_ids('inventory_machinesnapshot_certificates', 'certificate_id')} "
+    f"union {fk_ids('signed_by_id', 'inventory_osxappinstance', OSX_APP_INSTANCE_IDS)} "
+    f"union {fk_ids('signed_by_id', 'inventory_profile', PROFILE_IDS)}) "
+    "union "
+    "select c.id, c.signed_by_id from inventory_certificate c join reachable_certificate r on (c.id = r.signed_by_id)"
+    ") "
+    "select * from inventory_certificate where id in (select id from reachable_certificate)"
+)
+
+
 FULL_EXPORT_QUERIES = [
     # first the current snapshots
     ("machine",
@@ -30,103 +77,107 @@ FULL_EXPORT_QUERIES = [
      "from inventory_currentmachinesnapshot cms "
      "join inventory_machinesnapshot ms on (cms.machine_snapshot_id = ms.id)"),
     # meta/business units
-    ("business_unit", "select * from inventory_businessunit"),
-    ("meta_business_unit", "select * from inventory_metabusinessunit"),
+    ("business_unit", rows("inventory_businessunit", BUSINESS_UNIT_IDS)),
+    ("meta_business_unit",
+     rows("inventory_metabusinessunit", fk_ids("meta_business_unit_id", "inventory_businessunit", BUSINESS_UNIT_IDS))),
     # extra many to one tables
-    ("os_version", "select * from inventory_osversion"),
-    ("principal_user", "select * from inventory_principaluser"),
-    ("source", "select id, mt_hash, mt_created_at, module, name from inventory_source"),
-    ("system_info", "select * from inventory_systeminfo"),
+    ("os_version", rows("inventory_osversion", ms_fk_ids("os_version_id"))),
+    ("principal_user", rows("inventory_principaluser", ms_fk_ids("principal_user_id"))),
+    ("source",
+     rows("inventory_source",
+          f"{ms_fk_ids('source_id')} union {fk_ids('source_id', 'inventory_businessunit', BUSINESS_UNIT_IDS)}",
+          columns="id, mt_hash, mt_created_at, module, name")),
+    ("system_info", rows("inventory_systeminfo", ms_fk_ids("system_info_id"))),
     # disks
-    ("disk", "select * from inventory_disk"),
-    ("machine_disks",
-     "select machinesnapshot_id ms_id, disk_id "
-     "from inventory_machinesnapshot_disks"),
+    ("disk", rows("inventory_disk", m2m_ids("inventory_machinesnapshot_disks", "disk_id"))),
+    ("machine_disks", link_rows("inventory_machinesnapshot_disks", "disk_id")),
     # network interfaces
-    ("network_interface", "select * from inventory_networkinterface"),
+    ("network_interface",
+     rows("inventory_networkinterface",
+          m2m_ids("inventory_machinesnapshot_network_interfaces", "networkinterface_id"))),
     ("machine_network_interface",
-     "select machinesnapshot_id ms_id, networkinterface_id network_interface_id "
-     "from inventory_machinesnapshot_network_interfaces"),
+     link_rows("inventory_machinesnapshot_network_interfaces", "networkinterface_id network_interface_id")),
     # certificates
-    ("certificate", "select * from inventory_certificate"),
-    ("machine_certificate",
-     "select machinesnapshot_id ms_id, certificate_id "
-     "from inventory_machinesnapshot_certificates"),
+    ("certificate", CERTIFICATE_QUERY),
+    ("machine_certificate", link_rows("inventory_machinesnapshot_certificates", "certificate_id")),
     # profiles
-    ("profile", "select * from inventory_profile"),
-    ("machine_profile",
-     "select machinesnapshot_id ms_id, profile_id "
-     "from inventory_machinesnapshot_profiles"),
+    ("profile", rows("inventory_profile", PROFILE_IDS)),
+    ("machine_profile", link_rows("inventory_machinesnapshot_profiles", "profile_id")),
     # macOS apps
-    ("macos_app", "select * from inventory_osxapp"),
+    ("macos_app", rows("inventory_osxapp", fk_ids("app_id", "inventory_osxappinstance", OSX_APP_INSTANCE_IDS))),
     ("macos_app_instance",
-     "select id, mt_hash, mt_created_at,"
-     "bundle_path, executable_path, path, sha_1, sha_256, type, app_id macos_app_id, signed_by_id,"
-     "team_id, cd_hash, entitlements, signing_time, secure_signing_time "
-     "from inventory_osxappinstance"),
+     rows("inventory_osxappinstance", OSX_APP_INSTANCE_IDS,
+          columns="id, mt_hash, mt_created_at,"
+                  "bundle_path, executable_path, path, sha_1, sha_256, type, app_id macos_app_id, signed_by_id,"
+                  "team_id, cd_hash, entitlements, signing_time, secure_signing_time")),
     ("machine_macos_app_instance",
-     "select machinesnapshot_id ms_id, osxappinstance_id macos_app_instance_id "
-     "from inventory_machinesnapshot_osx_app_instances"),
+     link_rows("inventory_machinesnapshot_osx_app_instances", "osxappinstance_id macos_app_instance_id")),
     # Android apps
-    ("android_app", "select * from inventory_androidapp"),
-    ("machine_android_app",
-     "select machinesnapshot_id ms_id, androidapp_id android_app_id "
-     "from inventory_machinesnapshot_android_apps"),
+    ("android_app", rows("inventory_androidapp", m2m_ids("inventory_machinesnapshot_android_apps", "androidapp_id"))),
+    ("machine_android_app", link_rows("inventory_machinesnapshot_android_apps", "androidapp_id android_app_id")),
     # Debian packages
-    ("deb_package", "select * from inventory_debpackage"),
-    ("machine_deb_package",
-     "select machinesnapshot_id ms_id, debpackage_id deb_package_id "
-     "from inventory_machinesnapshot_deb_packages"),
+    ("deb_package", rows("inventory_debpackage", m2m_ids("inventory_machinesnapshot_deb_packages", "debpackage_id"))),
+    ("machine_deb_package", link_rows("inventory_machinesnapshot_deb_packages", "debpackage_id deb_package_id")),
     # EC2
-    ("ec2_instance_metadata", "select * from inventory_ec2instancemetadata"),
-    ("ec2_instance_tag", "select * from inventory_ec2instancetag"),
+    ("ec2_instance_metadata", rows("inventory_ec2instancemetadata", ms_fk_ids("ec2_instance_metadata_id"))),
+    ("ec2_instance_tag",
+     rows("inventory_ec2instancetag", m2m_ids("inventory_machinesnapshot_ec2_instance_tags", "ec2instancetag_id"))),
     ("machine_ec2_instance_tag",
-     "select machinesnapshot_id ms_id, ec2instancetag_id ec2_instance_tag_id "
-     "from inventory_machinesnapshot_ec2_instance_tags"),
+     link_rows("inventory_machinesnapshot_ec2_instance_tags", "ec2instancetag_id ec2_instance_tag_id")),
     # iOS apps
-    ("ios_app", "select * from inventory_iosapp"),
-    ("machine_ios_app",
-     "select machinesnapshot_id ms_id, iosapp_id ios_app_id "
-     "from inventory_machinesnapshot_ios_apps"),
+    ("ios_app", rows("inventory_iosapp", m2m_ids("inventory_machinesnapshot_ios_apps", "iosapp_id"))),
+    ("machine_ios_app", link_rows("inventory_machinesnapshot_ios_apps", "iosapp_id ios_app_id")),
     # Programs
-    ("program", "select * from inventory_program"),
-    ("program_instance", "select * from inventory_programinstance"),
+    ("program", rows("inventory_program", fk_ids("program_id", "inventory_programinstance", PROGRAM_INSTANCE_IDS))),
+    ("program_instance", rows("inventory_programinstance", PROGRAM_INSTANCE_IDS)),
     ("machine_program_instance",
-     "select machinesnapshot_id ms_id, programinstance_id program_instance_id "
-     "from inventory_machinesnapshot_program_instances"),
+     link_rows("inventory_machinesnapshot_program_instances", "programinstance_id program_instance_id")),
     # TODO: compliance checks
     # TODO: blueprints
 ]
 
 
-def iter_model_exports(export_dt, max_temp_file_size, window_size):
+@contextmanager
+def export_transaction():
+    connection = connections[get_read_only_database()]
+    # SET TRANSACTION must be the first statement of a transaction. The isolation level can only be raised
+    # when the export opens the transaction, not when it runs inside an outer one.
+    set_isolation_level = not connection.in_atomic_block
+    with transaction.atomic(using=connection.alias):
+        if set_isolation_level:
+            with connection.cursor() as cursor:
+                cursor.execute("set transaction isolation level repeatable read")
+        yield connection
+
+
+def iter_model_exports(max_temp_file_size, window_size):
     # for each model
     # - execute the query
     # - write the results in a temporary file
-    database = get_read_only_database()
-    for model_name, query in FULL_EXPORT_QUERIES:
-        model_export_f = model_export_p = None
-        file_index = 0
-        with transaction.atomic(), connections[database].chunked_cursor() as cursor:
-            cursor.itersize = window_size
-            cursor.execute(query, [export_dt])
-            columns = None
-            for row in cursor:
-                if columns is None:
-                    columns = [c.name for c in cursor.description]
-                if model_export_f is None or model_export_f.tell() > max_temp_file_size:
-                    if model_export_f:
-                        model_export_f.close()
-                        yield model_name, file_index, model_export_p
-                    file_index += 1
-                    model_export_fh, model_export_p = tempfile.mkstemp()
-                    model_export_f = os.fdopen(model_export_fh, mode="w", newline="")
-                obj = dict(zip(columns, row))
-                json.dump(obj, model_export_f, cls=DjangoJSONEncoder)
-                model_export_f.write("\n")
-        if model_export_f:
-            model_export_f.close()
-            yield model_name, file_index, model_export_p
+    with export_transaction() as connection:
+        for model_name, query in FULL_EXPORT_QUERIES:
+            model_export_f = model_export_p = None
+            file_index = 0
+            with connection.chunked_cursor() as cursor:
+                cursor.itersize = window_size
+                cursor.execute(query)
+                columns = None
+                for row in cursor:
+                    if columns is None:
+                        columns = [c.name for c in cursor.description]
+                    if model_export_f is None or model_export_f.tell() > max_temp_file_size:
+                        if model_export_f:
+                            model_export_f.close()
+                            yield model_name, file_index, model_export_p
+                        file_index += 1
+                        model_export_fh, model_export_p = tempfile.mkstemp()
+                        model_export_f = os.fdopen(model_export_fh, mode="w", newline="")
+                    obj = dict(zip(columns, row))
+                    json.dump(obj, model_export_f, cls=DjangoJSONEncoder)
+                    model_export_f.write("\n")
+            if model_export_f:
+                model_export_f.close()
+                yield model_name, file_index, model_export_p
 
 
 def do_full_export(max_temp_file_size=2**30, window_size=5000):
@@ -135,9 +186,7 @@ def do_full_export(max_temp_file_size=2**30, window_size=5000):
     # create ZIP archive
     zip_fh, zip_p = tempfile.mkstemp()
     with zipfile.ZipFile(zip_p, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_a:
-        for model_name, file_index, file_p in iter_model_exports(
-            export_dt, max_temp_file_size, window_size
-        ):
+        for model_name, file_index, file_p in iter_model_exports(max_temp_file_size, window_size):
             zip_a.write(file_p, f"zentral_{model_name}_{file_index:04d}.jsonl")
             os.unlink(file_p)
 

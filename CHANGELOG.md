@@ -122,6 +122,11 @@ An import of a standard Osquery pack fails if one of its queries has SQL that Ze
 
 `PATCH` gives a `405 Method Not Allowed` on the Monolith catalog, condition, enrollment and manifest enrollment package endpoints. Use `PUT`, and send all the attributes of the object.
 
+#### 🧨 Inventory full export
+
+The full inventory export contains the current snapshot of each machine and source, and the objects that these snapshots reference. A snapshot that a newer snapshot replaced, and an object that only such a snapshot references, are not exported anymore. All the tables of an export are read in one transaction, so they are consistent with each other.
+
+
 #### 🧨 Inventory JMESPath compliance check events
 
 The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `inventory_jmespath_check_deleted` events do not exist anymore. The JMESPath compliance checks publish `zentral_audit` events, like the other objects. A probe or a query on the three event types must use `zentral_audit` with the `inventory.jmespathcheck` model. The events are still linked to the compliance check and to the JMESPath check, so the events page of a check does not change. The `inventory_jmespath_check_status_updated` event does not change.

@@ -806,7 +806,7 @@ Response:
 * PBAC actions:
 	* `Inventory::Action::"viewMachineSnapshot"`
 
-Use this endpoint to trigger a full inventory export (ZIP archive of `.jsonl`. files).
+Use this endpoint to start a full inventory export. The export is a ZIP archive of `.jsonl` files, with one set of files per table. It contains the current snapshot of each machine and source, and the objects that these snapshots reference: operating system versions, applications, certificates, profiles, disks, … A snapshot that a newer snapshot replaced, and an object that only such a snapshot references, are not exported. All the tables are read in one transaction, so they are consistent with each other.
 
 Example:
 
