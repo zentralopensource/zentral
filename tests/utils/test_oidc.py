@@ -13,7 +13,7 @@ from django.utils.crypto import get_random_string
 from zentral.utils.oidc import get_openid_configuration, verify_jws
 
 
-# see https://github.com/jpadilla/pyjwt/blob/b85050f1d444c6828bb4618ee764443b0a3f5d18/jwt/jwks_client.py#L108
+# see https://github.com/jpadilla/pyjwt/blob/2.14.0/jwt/jwks_client.py#L162
 class FakeHTTPResponse:
     def __init__(self, bytes):
         self.bytes = bytes
@@ -112,9 +112,9 @@ class OIDCUtilsTestCase(TestCase):
 
     # test verify_jws
 
-    @patch("jwt.jwks_client.urllib.request.urlopen")
-    def test_verify_jws_success(self, jwt_urlopen):
-        jwt_urlopen.return_value = FakeHTTPResponse(self.jwks_payload)
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_success(self, build_opener):
+        build_opener.return_value.open.return_value = FakeHTTPResponse(self.jwks_payload)
 
         issuer = "https://issuer.zentral.com"
         audience = "my-client"
@@ -154,9 +154,9 @@ class OIDCUtilsTestCase(TestCase):
                 openid_configuration=self._make_oid_config(issuer),
             )
 
-    @patch("jwt.jwks_client.urllib.request.urlopen")
-    def test_verify_jws_wrong_kid(self, jwt_urlopen):
-        jwt_urlopen.return_value = FakeHTTPResponse(self.jwks_payload)
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_wrong_kid(self, build_opener):
+        build_opener.return_value.open.return_value = FakeHTTPResponse(self.jwks_payload)
 
         issuer = "https://issuer.zentral.com"
         audience = "my-client"
@@ -178,9 +178,9 @@ class OIDCUtilsTestCase(TestCase):
                 openid_configuration=self._make_oid_config(issuer),
             )
 
-    @patch("jwt.jwks_client.urllib.request.urlopen")
-    def test_verify_jws_keys_not_found(self, jwt_urlopen):
-        jwt_urlopen.side_effect = HTTPError("Boom!", 404, "Not found", {}, None)
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_keys_not_found(self, build_opener):
+        build_opener.return_value.open.side_effect = HTTPError("Boom!", 404, "Not found", {}, None)
 
         issuer = "https://issuer.zentral.com"
         audience = "my-client"
@@ -201,9 +201,9 @@ class OIDCUtilsTestCase(TestCase):
                 openid_configuration=self._make_oid_config(issuer),
             )
 
-    @patch("jwt.jwks_client.urllib.request.urlopen")
-    def test_verify_jws_invalid_audience(self, jwt_urlopen):
-        jwt_urlopen.return_value = FakeHTTPResponse(self.jwks_payload)
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_invalid_audience(self, build_opener):
+        build_opener.return_value.open.return_value = FakeHTTPResponse(self.jwks_payload)
 
         issuer = "https://issuer.zentral.com"
         audience = "my-client"
@@ -221,9 +221,9 @@ class OIDCUtilsTestCase(TestCase):
                 openid_configuration=self._make_oid_config(issuer),
             )
 
-    @patch("jwt.jwks_client.urllib.request.urlopen")
-    def test_verify_jws_expired_token(self, jwt_urlopen):
-        jwt_urlopen.return_value = FakeHTTPResponse(self.jwks_payload)
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_expired_token(self, build_opener):
+        build_opener.return_value.open.return_value = FakeHTTPResponse(self.jwks_payload)
 
         issuer = "https://issuer.zentral.com"
         audience = "my-client"
