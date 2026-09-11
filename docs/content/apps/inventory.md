@@ -806,9 +806,11 @@ Response:
 * PBAC actions:
 	* `Inventory::Action::"viewMachineSnapshot"`
 
-Use this endpoint to start a full inventory export. The export is a ZIP archive of `.jsonl` files, with one set of files per table, and a `manifest.json` file. It contains the current snapshot of each machine and source, and the objects that these snapshots reference: operating system versions, applications, certificates, profiles, disks, … A snapshot that a newer snapshot replaced, and an object that only such a snapshot references, are not exported. All the tables are read in one transaction, so they are consistent with each other.
+Use this endpoint to start a full inventory export. The export is a ZIP archive of `.jsonl` files by default, with one set of files per table, and a `manifest.json` file. It contains the current snapshot of each machine and source, and the objects that these snapshots reference: operating system versions, applications, certificates, profiles, disks, … A snapshot that a newer snapshot replaced, and an object that only such a snapshot references, are not exported. All the tables are read in one transaction, so they are consistent with each other.
 
 The optional `tables` attribute limits the export to a list of tables. An unknown table, or an empty list, gives a `400` response that lists the valid tables.
+
+The optional `export_format` attribute selects the format: `JSONL`, the default, or `PARQUET`. See [the Parquet export](#the-parquet-export) below.
 
 | Tables | Content |
 |---|---|
@@ -833,13 +835,53 @@ The task result carries a manifest, also present in the archive as `manifest.jso
 
 Zentral does not delete the exports. The retention of the files under `exports/` in the storage is a responsibility of the deployment, for example with a lifecycle policy on the bucket.
 
+#### The Parquet export
+
+With `"export_format": "PARQUET"`, each table is a set of [Apache Parquet](https://parquet.apache.org/) files in a directory of the storage, and not a ZIP archive. The manifest gives the `location` of the directory, for example `exports/inventory/20260911T100000Z-3f9c1a2b/`, and the files, keyed by their path in the directory: `machine/machine-00001.parquet`, `machine/machine-00002.parquet`, … A table with many rows has more than one file. A table without a row has one file without rows, so that the columns of the table are still available. The directory also contains the manifest, as `manifest.json`.
+
+The columns of a table have a type, given in the manifest:
+
+| PostgreSQL type | Parquet type |
+|---|---|
+| `text`, `varchar` | `string` |
+| `integer` | `int32` |
+| `bigint` | `int64` |
+| `boolean` | `bool` |
+| `timestamp` | `timestamp[us, tz=UTC]` |
+| `json`, `jsonb` | `string`, with the JSON text |
+| `inet` | `string` |
+
+Download the files with the task result endpoint: [`/api/task_result/<uuid:task_id>/download/`](core.md#apitask_resultuuidtask_iddownload) gives the manifest with a download URL for each file, and `?file=<key>` downloads one file. With an S3 or a GCS bucket, the manifest also gives the URL of each file in the storage, and a tool reads the files without a download:
+
+```sql
+-- DuckDB, with the URLs of the manifest
+SELECT platform, count(*) FROM read_parquet(['https://…/machine/machine-00001.parquet']) GROUP BY 1;
+-- DuckDB, with the downloaded files
+SELECT * FROM read_parquet('machine/*.parquet');
+```
+
+A tool with access to the bucket reads a table from its directory. With Athena:
+
+```sql
+CREATE EXTERNAL TABLE machine (serial_number string, last_seen timestamp, ms_id int, platform string)
+STORED AS PARQUET
+LOCATION 's3://acme-zentral/exports/inventory/20260911T100000Z-3f9c1a2b/machine/';
+```
+
+With Snowflake:
+
+```sql
+SELECT $1:serial_number, $1:platform
+FROM @acme_zentral/exports/inventory/20260911T100000Z-3f9c1a2b/machine/ (FILE_FORMAT => 'parquet');
+```
+
 Example:
 
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"tables": ["machine", "os_version"]}' \
+  -d '{"export_format": "PARQUET", "tables": ["machine", "os_version"]}' \
   https://$ZTL_FQDN/api/inventory/full_export/\
   |python3 -m json.tool
 ```
@@ -863,32 +905,30 @@ Task result, when the task is done (see [`/api/task_result/<uuid:task_id>/`](cor
   "unready": false,
   "download_url": "/api/task_result/5ecb057b-57cc-41e4-a07e-fcc357d7a5c7/download/",
   "result": {
-    "headers": {
-      "Content-Type": "application/zip",
-      "Content-Disposition": "attachment; filename=\"full_inventory_export-20260911T100000Z-3f9c1a2b.zip\""
-    },
     "manifest": {
       "version": 1,
       "export_id": "20260911T100000Z-3f9c1a2b",
       "exported_at": "2026-09-11T10:00:00Z",
-      "format": "JSONL",
+      "format": "PARQUET",
       "tables": {
         "machine": {
           "rows": 4213,
-          "columns": [{"name": "serial_number"}, {"name": "last_seen"}, {"name": "ms_id"}, "…"],
-          "files": ["zentral_machine_0001.jsonl"]
+          "columns": [{"name": "serial_number", "type": "string", "nullable": true}, "…"],
+          "files": ["machine/machine-00001.parquet"]
         },
         "os_version": {
           "rows": 17,
-          "columns": [{"name": "id"}, {"name": "mt_hash"}, {"name": "mt_created_at"}, "…"],
-          "files": ["zentral_os_version_0001.jsonl"]
+          "columns": [{"name": "id", "type": "int32", "nullable": true}, "…"],
+          "files": ["os_version/os_version-00001.parquet"]
         }
       },
       "files": {
-        "zentral_machine_0001.jsonl": {"table": "machine", "rows": 4213, "size": 5312876, "sha256": "…"},
-        "zentral_os_version_0001.jsonl": {"table": "os_version", "rows": 17, "size": 3021, "sha256": "…"}
+        "machine/machine-00001.parquet": {"table": "machine", "rows": 4213, "size": 1284906, "sha256": "…"},
+        "os_version/os_version-00001.parquet": {"table": "os_version", "rows": 17, "size": 3021, "sha256": "…"}
       }
     }
   }
 }
 ```
+
+With the `JSONL` format, the result also carries the headers of the ZIP archive, the keys of `files` are the names of the `.jsonl` files in the archive, and the columns have no type.

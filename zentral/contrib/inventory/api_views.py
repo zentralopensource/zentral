@@ -404,7 +404,9 @@ class FullExport(APIView):
         serializer = FullExportSerializer(data=request.data)
         if serializer.is_valid():
             result = export_full_inventory.apply_async(
-                kwargs={"tables": serializer.validated_data.get("tables"), "task_user": request.user.id}
+                kwargs={"tables": serializer.validated_data.get("tables"),
+                        "export_format": serializer.validated_data["export_format"],
+                        "task_user": request.user.id}
             )
             return Response({"task_id": result.id,
                              "task_result_url": reverse("base_api:task_result", args=(result.id,))},

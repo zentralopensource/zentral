@@ -61,8 +61,36 @@ class InventoryManagementCommandsTest(TestCase):
         do_full_export.return_value = {"filepath": "exports/yolo.zip"}
         out = StringIO()
         call_command('export_full_inventory', '--table', 'machine', '--table', 'os_version', stdout=out)
-        do_full_export.assert_called_once_with(tables=["machine", "os_version"])
+        do_full_export.assert_called_once_with(tables=["machine", "os_version"], export_format="JSONL")
         self.assertEqual(out.getvalue(), "File: exports/yolo.zip\n")
+
+    @patch("zentral.contrib.inventory.management.commands.export_full_inventory.do_full_export")
+    def test_export_full_inventory_parquet(self, do_full_export):
+        do_full_export.return_value = {"manifest": {"location": "exports/inventory/yolo/",
+                                                    "files": {"machine/machine-00001.parquet": {}}}}
+        out = StringIO()
+        call_command('export_full_inventory', '--format', 'PARQUET', stdout=out)
+        do_full_export.assert_called_once_with(tables=None, export_format="PARQUET")
+        self.assertEqual(out.getvalue(),
+                         "Manifest: exports/inventory/yolo/manifest.json\n"
+                         "File: exports/inventory/yolo/machine/machine-00001.parquet\n")
+
+    @patch("zentral.contrib.inventory.management.commands.export_full_inventory.file_storage_has_signed_urls")
+    @patch("zentral.contrib.inventory.management.commands.export_full_inventory.do_full_export")
+    def test_export_full_inventory_parquet_download(self, do_full_export, file_storage_has_signed_urls):
+        file_storage_has_signed_urls.return_value = True
+        do_full_export.return_value = {"manifest": {"location": "exports/inventory/yolo/",
+                                                    "files": {"machine/machine-00001.parquet": {}}}}
+        out = StringIO()
+        call_command('export_full_inventory', '--format', 'PARQUET', stdout=out)
+        self.assertEqual(out.getvalue(),
+                         "Manifest URL: /exports/inventory/yolo/manifest.json\n"
+                         "Download URL: /exports/inventory/yolo/machine/machine-00001.parquet\n")
+
+    def test_export_full_inventory_unknown_format(self):
+        with self.assertRaises(CommandError) as cm:
+            call_command('export_full_inventory', '--format', 'YOLO')
+        self.assertIn("argument --format: invalid choice: 'YOLO'", cm.exception.args[0])
 
     def test_export_full_inventory_unknown_table(self):
         with self.assertRaises(CommandError) as cm:

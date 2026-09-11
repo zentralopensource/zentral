@@ -1,7 +1,10 @@
+import io
 from unittest.mock import patch
 import uuid
+import pyarrow.parquet as pq
 from django_celery_results.models import TaskResult
 from django.contrib.auth.models import Group
+from django.core.files.storage import default_storage
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -14,7 +17,9 @@ from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSna
                                               MachineSnapshotCommit, MachineTag,
                                               MetaBusinessUnit, Tag, Taxonomy)
 from zentral.core.events.base import AuditEvent
+from zentral.contrib.inventory.tasks import export_full_inventory
 from zentral.contrib.inventory.utils import FULL_EXPORT_TABLE_NAMES
+from tests.server_base.utils import force_task_result
 
 
 class InventoryAPITests(TestCase, LoginCase, RequestCase):
@@ -422,7 +427,9 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         response = self.post(reverse('inventory_api:full_export'), {"tables": ["os_version", "machine", "machine"]})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         # canonical order, no duplicates
-        apply_async.assert_called_once_with(kwargs={"tables": ["machine", "os_version"], "task_user": self.user.id})
+        apply_async.assert_called_once_with(
+            kwargs={"tables": ["machine", "os_version"], "export_format": "JSONL", "task_user": self.user.id}
+        )
 
     @patch("zentral.contrib.inventory.api_views.export_full_inventory.apply_async")
     def test_full_export_null_tables(self, apply_async):
@@ -430,7 +437,9 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_permissions("inventory.view_machinesnapshot")
         response = self.post(reverse('inventory_api:full_export'), {"tables": None})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        apply_async.assert_called_once_with(kwargs={"tables": None, "task_user": self.user.id})
+        apply_async.assert_called_once_with(
+            kwargs={"tables": None, "export_format": "JSONL", "task_user": self.user.id}
+        )
 
     def test_full_export_unknown_table(self):
         self.set_permissions("inventory.view_machinesnapshot")
@@ -449,6 +458,45 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
             response.json(),
             {"tables": [f"This list may not be empty. Valid tables: {', '.join(FULL_EXPORT_TABLE_NAMES)}."]}
         )
+
+    @patch("zentral.contrib.inventory.api_views.export_full_inventory.apply_async")
+    def test_full_export_parquet_format(self, apply_async):
+        apply_async.return_value.id = str(uuid.uuid4())
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'), {"export_format": "PARQUET", "tables": ["machine"]})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        apply_async.assert_called_once_with(
+            kwargs={"tables": ["machine"], "export_format": "PARQUET", "task_user": self.user.id}
+        )
+
+    def test_full_export_unknown_format(self):
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'), {"export_format": "YOLO"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"export_format": ['"YOLO" is not a valid choice.']})
+
+    def test_full_export_parquet_download(self):
+        self.commit_machine_snapshot()
+        result = export_full_inventory(tables=["machine"], export_format="PARQUET")
+        tr, _, _ = force_task_result(result=result, user=self.user)
+        location = result["manifest"]["location"]
+        key = "machine/machine-00001.parquet"
+        # the manifest, with a download URL for each file
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("location", response.json())
+        download_url = response.json()["files"][key]["download_url"]
+        self.assertEqual(download_url,
+                         f"/api/task_result/{tr.task_id}/download/?file=machine%2Fmachine-00001.parquet")
+        # one file
+        response = self.get(download_url)
+        self.assertEqual(response.status_code, 200)
+        content = b"".join(response.streaming_content)
+        pa_table = pq.read_table(io.BytesIO(content))
+        self.assertEqual(pa_table.num_rows, result["manifest"]["tables"]["machine"]["rows"])
+        self.assertIn("serial_number", pa_table.schema.names)
+        for name in list(result["manifest"]["files"]) + ["manifest.json"]:
+            default_storage.delete(location + name)
 
     # create meta business unit
 

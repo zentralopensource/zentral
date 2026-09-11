@@ -1,7 +1,7 @@
 from django.db.models import F
 from rest_framework import serializers
 from zentral.core.compliance_checks.models import ComplianceCheck
-from .utils import FULL_EXPORT_TABLE_NAMES, get_default_snapshot_retention_days
+from .utils import FULL_EXPORT_FORMATS, FULL_EXPORT_TABLE_NAMES, get_default_snapshot_retention_days
 from .compliance_checks import InventoryJMESPathCheck
 from .models import EnrollmentSecret, JMESPathCheck, MetaBusinessUnit, Tag, Taxonomy
 
@@ -98,6 +98,7 @@ class CleanupInventorySerializer(serializers.Serializer):
 
 
 class FullExportSerializer(serializers.Serializer):
+    export_format = serializers.ChoiceField(choices=FULL_EXPORT_FORMATS, default="JSONL")
     tables = serializers.ListField(
         child=serializers.ChoiceField(
             choices=FULL_EXPORT_TABLE_NAMES,

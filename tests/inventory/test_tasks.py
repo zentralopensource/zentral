@@ -78,6 +78,12 @@ class InventoryTasksTest(TestCase):
         result = export_full_inventory(tables=["machine"])
         self.assertEqual(list(result["manifest"]["tables"]), ["machine"])
 
+    def test_export_full_inventory_parquet(self):
+        result = export_full_inventory(tables=["machine"], export_format="PARQUET")
+        self.assertNotIn("filepath", result)
+        self.assertEqual(result["manifest"]["format"], "PARQUET")
+        self.assertEqual(list(result["manifest"]["tables"]), ["machine"])
+
     # apps
 
     def test_export_android_apps(self):

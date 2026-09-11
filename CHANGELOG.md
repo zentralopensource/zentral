@@ -24,6 +24,8 @@ The inventory JMESPath compliance check publishes the same `zentral_audit` event
 
 The full inventory export can be limited to a list of tables, with the `tables` attribute of the API request or the `--table` option of the `export_full_inventory` command. The task result carries a manifest with the tables, their row counts and their columns, and the files of the archive with their size and SHA-256 digest. The archive contains the manifest as `manifest.json`.
 
+The full inventory export has a `PARQUET` format, with the `export_format` attribute of the API request or the `--format` option of the command. Each table is a set of Parquet files in a directory of the storage, with typed columns. The task result carries the manifest, with the location of the directory, the columns of each table and the files. The task result endpoint downloads the files one by one, and a tool with access to the storage reads them in place.
+
 
 #### MDM
 

@@ -1,8 +1,13 @@
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch
 import hashlib
+import io
 import json
+import os
+from pathlib import Path
 import zipfile
+import pyarrow.parquet as pq
 from django.core.files.storage import default_storage
 from django.test import TestCase, TransactionTestCase
 from django.utils.crypto import get_random_string
@@ -10,8 +15,9 @@ from zentral.contrib.inventory.models import MachineSnapshot, MachineSnapshotCom
 from zentral.contrib.inventory.utils import (do_full_export,
                                              export_machine_macos_app_instances,
                                              export_machine_snapshots)
-from zentral.contrib.inventory.utils.full_export import (FULL_EXPORT_QUERIES, FULL_EXPORT_TABLE_NAMES,
-                                                         export_transaction, iter_tables)
+from zentral.contrib.inventory.utils.full_export import (FULL_EXPORT_QUERIES, FULL_EXPORT_TABLE_NAMES, TempFile,
+                                                         export_transaction, iter_tables, save_export_object)
+from zentral.utils.parquet import arrow_schema
 
 
 # The *_id columns of the export that the naming rule (<table>_id → <table>.id) does not resolve, with the reason.
@@ -171,6 +177,7 @@ class InventoryExportsTests(TestCase):
             "serial_number": serial_number,
             "business_unit": {"name": f"BU {marker}", "reference": f"bu-{marker}", "source": source},
             "os_version": {"name": "macOS", "major": 26, "minor": 0, "patch": 0, "build": f"26A{index}"},
+            "public_ip_address": f"203.0.113.{index}",
             "system_info": {"computer_name": f"computer {marker}", "hardware_model": "Mac16,10"},
             "principal_user": {"source": {"type": "LOGGED_IN_USER", "properties": {"marker": marker}},
                                "unique_id": f"uid-{marker}",
@@ -297,9 +304,9 @@ class InventoryExportsTests(TestCase):
     def test_iter_tables_window_size(self):
         self.commit_machine_snapshot()
         self.commit_machine_snapshot()
-        for table, columns, batches in iter_tables(["machine"], window_size=1):
+        for table, description, batches in iter_tables(["machine"], window_size=1):
             self.assertEqual(table, "machine")
-            self.assertIn("serial_number", columns)
+            self.assertIn("serial_number", [c.name for c in description])
             # one fetch per row
             self.assertEqual([len(batch) for batch in batches], [1, 1])
 
@@ -374,6 +381,128 @@ class InventoryExportsTests(TestCase):
             with zipfile.ZipFile(f) as zf:
                 self.assertEqual(zf.namelist(), ["manifest.json"])
         default_storage.delete(result["filepath"])
+
+    def test_temp_file(self):
+        f = TempFile()
+        f.write(b"yo")
+        f.flush()
+        f.write(b"lo")
+        self.assertEqual(f.tell(), 4)
+        self.assertFalse(f.closed)
+        f.close()
+        self.assertTrue(f.closed)
+        self.assertEqual(f.size, 4)
+        self.assertEqual(f.hexdigest(), hashlib.sha256(b"yolo").hexdigest())
+        with open(f.path, "rb") as rf:
+            self.assertEqual(rf.read(), b"yolo")
+        os.unlink(f.path)
+
+    def test_save_export_object_renamed(self):
+        with patch("zentral.contrib.inventory.utils.full_export.default_storage.save",
+                   return_value="exports/other") as save:
+            with self.assertRaises(RuntimeError) as cm:
+                save_export_object("exports/yolo", io.BytesIO(b"yolo"))
+        save.assert_called_once()
+        self.assertEqual(cm.exception.args[0], "Export object exports/yolo saved as exports/other")
+
+    def test_full_export_unknown_format(self):
+        with self.assertRaises(ValueError) as cm:
+            do_full_export(export_format="YOLO")
+        self.assertEqual(cm.exception.args[0], "Unknown export format: YOLO")
+
+    # PARQUET
+
+    def read_parquet_export(self, result):
+        manifest = result["manifest"]
+        location = manifest["location"]
+        tables = {}
+        for key, file_manifest in manifest["files"].items():
+            with default_storage.open(location + key) as f:
+                content = f.read()
+            default_storage.delete(location + key)
+            self.assertEqual(file_manifest["size"], len(content))
+            self.assertEqual(file_manifest["sha256"], hashlib.sha256(content).hexdigest())
+            pa_table = pq.read_table(io.BytesIO(content))
+            self.assertEqual(pa_table.num_rows, file_manifest["rows"])
+            table_manifest = manifest["tables"][file_manifest["table"]]
+            self.assertIn(key, table_manifest["files"])
+            self.assertEqual([(field.name, str(field.type)) for field in pa_table.schema],
+                             [(c["name"], c["type"]) for c in table_manifest["columns"]])
+            tables.setdefault(file_manifest["table"], []).extend(pa_table.to_pylist())
+        with default_storage.open(location + "manifest.json") as f:
+            self.assertEqual(json.load(f), manifest)
+        default_storage.delete(location + "manifest.json")
+        return tables
+
+    def test_full_export_parquet(self):
+        serial_number = get_random_string(12)
+        self.commit_full_tree(serial_number, 1)
+        ms2 = self.commit_full_tree(serial_number, 2)
+        ms3 = self.commit_full_tree(get_random_string(12), 3, source_name="Zentral Tests Bis")
+        result = do_full_export(export_format="PARQUET")
+        self.assertEqual(set(result), {"manifest"})
+        manifest = result["manifest"]
+        self.assertEqual(manifest["format"], "PARQUET")
+        self.assertEqual(manifest["location"], f"exports/inventory/{manifest['export_id']}/")
+        self.assertEqual(set(manifest["tables"]), set(FULL_EXPORT_TABLE_NAMES))
+        self.assertNotIn("manifest.json", manifest["files"])
+        for key, file_manifest in manifest["files"].items():
+            self.assertEqual(key, f"{file_manifest['table']}/{file_manifest['table']}-00001.parquet")
+        tables = self.read_parquet_export(result)
+        for table, table_manifest in manifest["tables"].items():
+            self.assertEqual(len(tables[table]), table_manifest["rows"], table)
+            self.assertTrue(table_manifest["rows"] > 0, table)
+            self.assertTrue(all(c["nullable"] for c in table_manifest["columns"]), table)
+        # the current snapshots only
+        self.assertEqual({row["ms_id"] for row in tables["machine"]}, {ms2.pk, ms3.pk})
+        row = next(row for row in tables["machine"] if row["ms_id"] == ms2.pk)
+        # typed columns: timestamps are UTC, JSON is text
+        self.assertEqual(row["mt_created_at"].utcoffset(), timedelta(0))
+        self.assertEqual(json.loads(row["extra_facts"]), {"marker": "V2"})
+        # inet values are text
+        self.assertEqual(row["public_ip_address"], "203.0.113.2")
+        self.assertEqual(next(row for row in tables["disk"] if row["name"] == "/dev/disk-V2")["size"], 62826479616)
+        self.assertEqual(next(row for row in tables["network_interface"] if row["address"] == "10.0.0.2")["mask"],
+                         "255.255.255.0")
+
+    def test_full_export_parquet_empty_table(self):
+        # no Debian packages in this tree
+        self.commit_machine_snapshot()
+        result = do_full_export(tables=["deb_package"], export_format="PARQUET")
+        manifest = result["manifest"]
+        key = "deb_package/deb_package-00001.parquet"
+        # a table without a row keeps its schema in one file
+        self.assertEqual(manifest["tables"]["deb_package"]["rows"], 0)
+        self.assertEqual(manifest["tables"]["deb_package"]["files"], [key])
+        self.assertEqual(manifest["files"][key]["rows"], 0)
+        self.assertIn({"name": "name", "type": "string", "nullable": True},
+                      manifest["tables"]["deb_package"]["columns"])
+        tables = self.read_parquet_export(result)
+        self.assertEqual(tables, {"deb_package": []})
+
+    def test_full_export_parquet_rolls_the_parts(self):
+        self.commit_full_tree(get_random_string(12), 1)
+        self.commit_full_tree(get_random_string(12), 2)
+        result = do_full_export(tables=["machine"], export_format="PARQUET", max_part_size=1, window_size=1)
+        manifest = result["manifest"]
+        self.assertEqual(manifest["tables"]["machine"]["files"],
+                         ["machine/machine-00001.parquet", "machine/machine-00002.parquet"])
+        self.assertEqual([f["rows"] for f in manifest["files"].values()], [1, 1])
+        tables = self.read_parquet_export(result)
+        self.assertEqual(len(tables["machine"]), 2)
+
+    def test_full_export_parquet_schemas(self):
+        # The Parquet schema of the export is a contract. A model change that reaches the export must update
+        # tests/inventory/full_export_parquet_schemas.json: run the test with ZENTRAL_UPDATE_PARQUET_SCHEMAS=1.
+        schemas = {}
+        for table, description, _ in iter_tables(FULL_EXPORT_TABLE_NAMES, window_size=1):
+            schemas[table] = [[column.name, str(field.type)]
+                              for column, field in zip(description, arrow_schema(description))]
+        schemas_path = Path(__file__).parent / "full_export_parquet_schemas.json"
+        if os.environ.get("ZENTRAL_UPDATE_PARQUET_SCHEMAS"):
+            schemas_path.write_text(json.dumps(schemas, indent=2) + "\n")
+        with schemas_path.open() as f:
+            self.assertEqual(schemas, json.load(f))
 
     def test_full_export_referential_closure(self):
         serial_number = get_random_string(12)

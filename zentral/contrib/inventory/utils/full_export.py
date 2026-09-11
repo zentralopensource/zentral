@@ -7,14 +7,17 @@ import tempfile
 import zipfile
 from contextlib import contextmanager
 
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connections, transaction
 
 from zentral.utils.db import get_read_only_database
+from zentral.utils.parquet import arrow_schema, iter_parquet_parts, record_batch
 from zentral.utils.time import naive_utcnow
 
 __all__ = [
+    "FULL_EXPORT_FORMATS",
     "FULL_EXPORT_TABLE_NAMES",
     "do_full_export",
 ]
@@ -141,6 +144,12 @@ FULL_EXPORT_QUERIES = [
 
 
 FULL_EXPORT_TABLE_NAMES = [name for name, _ in FULL_EXPORT_QUERIES]
+FULL_EXPORT_FORMATS = ("JSONL", "PARQUET")
+
+JSONL_WINDOW_SIZE = 5000
+JSONL_MAX_TEMP_FILE_SIZE = 2**30
+PARQUET_WINDOW_SIZE = 65536
+PARQUET_MAX_PART_SIZE = 128 * 2**20
 
 
 def normalize_tables(tables):
@@ -182,8 +191,8 @@ def iter_tables(tables, window_size):
                 cursor.execute(query)
                 # the description of a server-side cursor is only known after the first fetch
                 batch = cursor.fetchmany(window_size)
-                columns = [c.name for c in cursor.description]
-                yield table, columns, iter_batches(cursor, batch, window_size)
+                description = list(cursor.description)
+                yield table, description, iter_batches(cursor, batch, window_size)
 
 
 class HashingFile:
@@ -191,24 +200,38 @@ class HashingFile:
         self._f = f
         self._hash = hashlib.sha256()
         self.size = 0
+        self.closed = False
 
     def write(self, data):
         self._f.write(data)
         self._hash.update(data)
         self.size += len(data)
 
+    def tell(self):
+        return self.size
+
+    def flush(self):
+        self._f.flush()
+
     def close(self):
         self._f.close()
+        self.closed = True
 
     def hexdigest(self):
         return self._hash.hexdigest()
 
 
+class TempFile(HashingFile):
+    def __init__(self):
+        fh, self.path = tempfile.mkstemp()
+        super().__init__(os.fdopen(fh, mode="wb"))
+
+
 class JSONLPart:
     def __init__(self, table, index):
         self.name = f"zentral_{table}_{index:04d}.jsonl"
-        fh, self.path = tempfile.mkstemp()
-        self.file = HashingFile(os.fdopen(fh, mode="wb"))
+        self.file = TempFile()
+        self.path = self.file.path
         self.rows = 0
 
     def write_row(self, obj):
@@ -235,23 +258,24 @@ def iter_jsonl_parts(table, columns, batches, max_temp_file_size):
         yield part
 
 
-def do_full_export(tables=None, max_temp_file_size=2**30, window_size=5000):
-    tables = normalize_tables(tables)
+def new_manifest(export_format):
     export_dt = naive_utcnow()
-    export_id = f"{export_dt:%Y%m%dT%H%M%SZ}-{secrets.token_hex(4)}"
-    manifest = {
+    return {
         "version": 1,
-        "export_id": export_id,
+        "export_id": f"{export_dt:%Y%m%dT%H%M%SZ}-{secrets.token_hex(4)}",
         "exported_at": f"{export_dt:%Y-%m-%dT%H:%M:%SZ}",
-        "format": "JSONL",
+        "format": export_format,
         "tables": {},
         "files": {},
     }
 
+
+def export_jsonl(tables, manifest, max_temp_file_size, window_size):
     # create ZIP archive
     zip_fh, zip_p = tempfile.mkstemp()
     with zipfile.ZipFile(zip_p, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_a:
-        for table, columns, batches in iter_tables(tables, window_size):
+        for table, description, batches in iter_tables(tables, window_size):
+            columns = [c.name for c in description]
             table_manifest = {"rows": 0, "columns": [{"name": column} for column in columns], "files": []}
             for part in iter_jsonl_parts(table, columns, batches, max_temp_file_size):
                 file_manifest = part.close()
@@ -265,7 +289,8 @@ def do_full_export(tables=None, max_temp_file_size=2**30, window_size=5000):
 
     # copy ZIP archive to default storage
     with os.fdopen(zip_fh, "rb") as zip_f:
-        filepath = default_storage.save(os.path.join("exports", f"full_inventory_export-{export_id}.zip"), zip_f)
+        filepath = default_storage.save(os.path.join("exports", f"full_inventory_export-{manifest['export_id']}.zip"),
+                                        zip_f)
     filename = os.path.basename(filepath)
 
     # cleanup local ZIP archive
@@ -280,3 +305,49 @@ def do_full_export(tables=None, max_temp_file_size=2**30, window_size=5000):
         },
         "manifest": manifest,
     }
+
+
+def save_export_object(name, content):
+    saved_name = default_storage.save(name, content)
+    if saved_name != name:
+        raise RuntimeError(f"Export object {name} saved as {saved_name}")
+
+
+def export_parquet(tables, manifest, max_part_size, window_size):
+    location = f"exports/inventory/{manifest['export_id']}/"
+    manifest["location"] = location
+    # The files are saved from inside the export transaction, so the transaction on the read-only database
+    # lasts for the uploads too. The alternative, one local copy of the whole export, is the JSONL design.
+    for table, description, batches in iter_tables(tables, window_size):
+        schema = arrow_schema(description)
+        table_manifest = {
+            "rows": 0,
+            "columns": [{"name": field.name, "type": str(field.type), "nullable": field.nullable} for field in schema],
+            "files": [],
+        }
+        arrow_batches = (record_batch(schema, description, rows) for rows in batches)
+        for index, rows, sink in iter_parquet_parts(schema, arrow_batches, lambda index: TempFile(), max_part_size):
+            sink.close()
+            key = f"{table}/{table}-{index:05d}.parquet"
+            with open(sink.path, "rb") as f:
+                save_export_object(location + key, f)
+            os.unlink(sink.path)
+            table_manifest["rows"] += rows
+            table_manifest["files"].append(key)
+            manifest["files"][key] = {"table": table, "rows": rows, "size": sink.size, "sha256": sink.hexdigest()}
+        manifest["tables"][table] = table_manifest
+    # the manifest is written last, when all the files are in the storage
+    save_export_object(location + "manifest.json", ContentFile(json.dumps(manifest, indent=2).encode("utf-8")))
+    return {"manifest": manifest}
+
+
+def do_full_export(tables=None, export_format="JSONL",
+                   max_temp_file_size=JSONL_MAX_TEMP_FILE_SIZE, max_part_size=PARQUET_MAX_PART_SIZE,
+                   window_size=None):
+    tables = normalize_tables(tables)
+    if export_format not in FULL_EXPORT_FORMATS:
+        raise ValueError(f"Unknown export format: {export_format}")
+    manifest = new_manifest(export_format)
+    if export_format == "PARQUET":
+        return export_parquet(tables, manifest, max_part_size, window_size or PARQUET_WINDOW_SIZE)
+    return export_jsonl(tables, manifest, max_temp_file_size, window_size or JSONL_WINDOW_SIZE)

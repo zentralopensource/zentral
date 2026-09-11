@@ -41,9 +41,9 @@ def cleanup_inventory(days, serialized_event_request, **kwargs):
 
 
 @shared_task
-def export_full_inventory(tables=None, **kwargs):
+def export_full_inventory(tables=None, export_format="JSONL", **kwargs):
     # kwargs absorbs task_user, added by the API view for the UserTask created in the celery signal
-    return do_full_export(tables=tables)
+    return do_full_export(tables=tables, export_format=export_format)
 
 
 @shared_task
