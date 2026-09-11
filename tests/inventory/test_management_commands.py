@@ -2,6 +2,7 @@ from io import StringIO
 from unittest import mock
 from unittest.mock import patch, MagicMock
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase
 from zentral.contrib.inventory.models import MACAddressBlockAssignment
 
@@ -54,6 +55,19 @@ class InventoryManagementCommandsTest(TestCase):
         result = out.getvalue()
         self.assertTrue(result.startswith("Download URL:"))
         self.assertTrue(result.endswith(".zip\n"))
+
+    @patch("zentral.contrib.inventory.management.commands.export_full_inventory.do_full_export")
+    def test_export_full_inventory_tables(self, do_full_export):
+        do_full_export.return_value = {"filepath": "exports/yolo.zip"}
+        out = StringIO()
+        call_command('export_full_inventory', '--table', 'machine', '--table', 'os_version', stdout=out)
+        do_full_export.assert_called_once_with(tables=["machine", "os_version"])
+        self.assertEqual(out.getvalue(), "File: exports/yolo.zip\n")
+
+    def test_export_full_inventory_unknown_table(self):
+        with self.assertRaises(CommandError) as cm:
+            call_command('export_full_inventory', '--table', 'yolo')
+        self.assertIn("argument --table: invalid choice: 'yolo'", cm.exception.args[0])
 
     # import mac assigment
 

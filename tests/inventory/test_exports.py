@@ -10,7 +10,8 @@ from zentral.contrib.inventory.models import MachineSnapshot, MachineSnapshotCom
 from zentral.contrib.inventory.utils import (do_full_export,
                                              export_machine_macos_app_instances,
                                              export_machine_snapshots)
-from zentral.contrib.inventory.utils.full_export import FULL_EXPORT_QUERIES, export_transaction
+from zentral.contrib.inventory.utils.full_export import (FULL_EXPORT_QUERIES, FULL_EXPORT_TABLE_NAMES,
+                                                         export_transaction, iter_tables)
 
 
 # The *_id columns of the export that the naming rule (<table>_id → <table>.id) does not resolve, with the reason.
@@ -103,10 +104,11 @@ class InventoryExportsTests(TestCase):
             with zipfile.ZipFile(f) as zf:
                 self.assertEqual(
                     sorted(zf.namelist()),
-                    ['zentral_business_unit_0001.jsonl',
+                    ['manifest.json',
+                     'zentral_business_unit_0001.jsonl',
                      'zentral_disk_0001.jsonl',
                      'zentral_machine_0001.jsonl',
-                     'zentral_machine_disks_0001.jsonl',
+                     'zentral_machine_disk_0001.jsonl',
                      'zentral_machine_macos_app_instance_0001.jsonl',
                      'zentral_machine_network_interface_0001.jsonl',
                      'zentral_macos_app_0001.jsonl',
@@ -128,7 +130,7 @@ class InventoryExportsTests(TestCase):
                     disk_d = json.loads(content[0])
                     self.assertEqual(disk_d["filevault_status"], "on")
                     d_id = disk_d["id"]
-                with zf.open("zentral_machine_disks_0001.jsonl") as jl:
+                with zf.open("zentral_machine_disk_0001.jsonl") as jl:
                     content = jl.read().decode("utf-8").splitlines()
                     self.assertEqual(len(content), 1)
                     mdi_d = json.loads(content[0])
@@ -223,6 +225,8 @@ class InventoryExportsTests(TestCase):
         with default_storage.open(result["filepath"]) as f:
             with zipfile.ZipFile(f) as zf:
                 for name in zf.namelist():
+                    if not name.startswith("zentral_"):
+                        continue
                     # zentral_<table>_<index>.jsonl
                     table = name[len("zentral_"):].rsplit("_", 1)[0]
                     with zf.open(name) as jl:
@@ -249,7 +253,7 @@ class InventoryExportsTests(TestCase):
             return {row[column] for row in tables[table]}
 
         self.assertEqual(values("machine", "ms_id"), {ms2.pk})
-        for table in ("machine_disks", "machine_network_interface", "machine_certificate", "machine_profile",
+        for table in ("machine_disk", "machine_network_interface", "machine_certificate", "machine_profile",
                       "machine_macos_app_instance", "machine_android_app", "machine_deb_package",
                       "machine_ec2_instance_tag", "machine_ios_app", "machine_program_instance"):
             self.assertEqual(values(table, "ms_id"), {ms2.pk}, table)
@@ -289,6 +293,87 @@ class InventoryExportsTests(TestCase):
                         self.assertEqual(len(jl.read().decode("utf-8").splitlines()), 1)
         tables = self.read_export(result)
         self.assertEqual(len(tables["machine"]), 2)
+
+    def test_iter_tables_window_size(self):
+        self.commit_machine_snapshot()
+        self.commit_machine_snapshot()
+        for table, columns, batches in iter_tables(["machine"], window_size=1):
+            self.assertEqual(table, "machine")
+            self.assertIn("serial_number", columns)
+            # one fetch per row
+            self.assertEqual([len(batch) for batch in batches], [1, 1])
+
+    def test_full_export_manifest(self):
+        self.commit_full_tree(get_random_string(12), 1)
+        self.commit_full_tree(get_random_string(12), 2)
+        result = do_full_export(max_temp_file_size=1)
+        manifest = result["manifest"]
+        self.assertEqual(manifest["version"], 1)
+        self.assertRegex(manifest["export_id"], r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
+        self.assertRegex(manifest["exported_at"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        self.assertEqual(manifest["format"], "JSONL")
+        self.assertEqual(list(manifest["tables"]), FULL_EXPORT_TABLE_NAMES)
+        self.assertEqual(result["filepath"], f"exports/full_inventory_export-{manifest['export_id']}.zip")
+        self.assertEqual(result["headers"]["Content-Disposition"],
+                         f'attachment; filename="full_inventory_export-{manifest["export_id"]}.zip"')
+        with default_storage.open(result["filepath"]) as f:
+            with zipfile.ZipFile(f) as zf:
+                self.assertEqual(json.loads(zf.read("manifest.json")), manifest)
+                self.assertNotIn("manifest.json", manifest["files"])
+                self.assertEqual(set(manifest["files"]), set(zf.namelist()) - {"manifest.json"})
+                for name, file_manifest in manifest["files"].items():
+                    content = zf.read(name)
+                    self.assertEqual(file_manifest["size"], len(content))
+                    self.assertEqual(file_manifest["sha256"], hashlib.sha256(content).hexdigest())
+                    lines = content.decode("utf-8").splitlines()
+                    # max_temp_file_size=1: one row per file
+                    self.assertEqual(len(lines), 1)
+                    self.assertEqual(file_manifest["rows"], 1)
+                    table_manifest = manifest["tables"][file_manifest["table"]]
+                    self.assertIn(name, table_manifest["files"])
+                    self.assertEqual([c["name"] for c in table_manifest["columns"]], list(json.loads(lines[0])))
+        for table, table_manifest in manifest["tables"].items():
+            self.assertTrue(table_manifest["rows"] > 0, table)
+            self.assertEqual(table_manifest["rows"], len(table_manifest["files"]))
+        default_storage.delete(result["filepath"])
+
+    def test_full_export_tables(self):
+        self.commit_machine_snapshot()
+        result = do_full_export(tables=["machine_disk", "machine", "machine"])
+        # canonical order, no duplicates
+        self.assertEqual(list(result["manifest"]["tables"]), ["machine", "machine_disk"])
+        with default_storage.open(result["filepath"]) as f:
+            with zipfile.ZipFile(f) as zf:
+                self.assertEqual(sorted(zf.namelist()),
+                                 ["manifest.json", "zentral_machine_0001.jsonl", "zentral_machine_disk_0001.jsonl"])
+        default_storage.delete(result["filepath"])
+
+    def test_full_export_unknown_tables(self):
+        with self.assertRaises(ValueError) as cm:
+            do_full_export(tables=["machine", "yolo", "fomo"])
+        self.assertEqual(cm.exception.args[0], "Unknown tables: fomo, yolo")
+
+    def test_full_export_no_tables(self):
+        with self.assertRaises(ValueError) as cm:
+            do_full_export(tables=[])
+        self.assertEqual(cm.exception.args[0], "At least one table is required")
+
+    def test_full_export_empty_table(self):
+        # no Debian packages in this tree
+        self.commit_machine_snapshot()
+        result = do_full_export(tables=["deb_package", "machine_deb_package"])
+        manifest = result["manifest"]
+        self.assertEqual(manifest["files"], {})
+        self.assertEqual(manifest["tables"]["deb_package"]["rows"], 0)
+        self.assertEqual(manifest["tables"]["deb_package"]["files"], [])
+        # the columns are known without a row
+        self.assertIn({"name": "name"}, manifest["tables"]["deb_package"]["columns"])
+        self.assertEqual(manifest["tables"]["machine_deb_package"]["columns"],
+                         [{"name": "ms_id"}, {"name": "deb_package_id"}])
+        with default_storage.open(result["filepath"]) as f:
+            with zipfile.ZipFile(f) as zf:
+                self.assertEqual(zf.namelist(), ["manifest.json"])
+        default_storage.delete(result["filepath"])
 
     def test_full_export_referential_closure(self):
         serial_number = get_random_string(12)

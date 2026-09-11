@@ -1,4 +1,5 @@
 from unittest.mock import patch
+import uuid
 from django_celery_results.models import TaskResult
 from django.contrib.auth.models import Group
 from django.test import TestCase
@@ -13,6 +14,7 @@ from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSna
                                               MachineSnapshotCommit, MachineTag,
                                               MetaBusinessUnit, Tag, Taxonomy)
 from zentral.core.events.base import AuditEvent
+from zentral.contrib.inventory.utils import FULL_EXPORT_TABLE_NAMES
 
 
 class InventoryAPITests(TestCase, LoginCase, RequestCase):
@@ -412,6 +414,41 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         # the export produces a file, and its download button lives on the task page
         user_task = UserTask.objects.get(task_result__task_id=response.data["task_id"])
         self.assertEqual(user_task.user, self.user)
+
+    @patch("zentral.contrib.inventory.api_views.export_full_inventory.apply_async")
+    def test_full_export_tables(self, apply_async):
+        apply_async.return_value.id = str(uuid.uuid4())
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'), {"tables": ["os_version", "machine", "machine"]})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # canonical order, no duplicates
+        apply_async.assert_called_once_with(kwargs={"tables": ["machine", "os_version"], "task_user": self.user.id})
+
+    @patch("zentral.contrib.inventory.api_views.export_full_inventory.apply_async")
+    def test_full_export_null_tables(self, apply_async):
+        apply_async.return_value.id = str(uuid.uuid4())
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'), {"tables": None})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        apply_async.assert_called_once_with(kwargs={"tables": None, "task_user": self.user.id})
+
+    def test_full_export_unknown_table(self):
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'), {"tables": ["machine", "yolo"]})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"tables": {"1": [f'"yolo" is not a valid table. Valid tables: {", ".join(FULL_EXPORT_TABLE_NAMES)}.']}}
+        )
+
+    def test_full_export_empty_tables(self):
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'), {"tables": []})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"tables": [f"This list may not be empty. Valid tables: {', '.join(FULL_EXPORT_TABLE_NAMES)}."]}
+        )
 
     # create meta business unit
 

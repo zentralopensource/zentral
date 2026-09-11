@@ -1,7 +1,7 @@
 from django.db.models import F
 from rest_framework import serializers
 from zentral.core.compliance_checks.models import ComplianceCheck
-from .utils import get_default_snapshot_retention_days
+from .utils import FULL_EXPORT_TABLE_NAMES, get_default_snapshot_retention_days
 from .compliance_checks import InventoryJMESPathCheck
 from .models import EnrollmentSecret, JMESPathCheck, MetaBusinessUnit, Tag, Taxonomy
 
@@ -95,6 +95,26 @@ class MachineSerialNumbersSerializer(serializers.Serializer):
 
 class CleanupInventorySerializer(serializers.Serializer):
     days = serializers.IntegerField(min_value=1, max_value=3660, default=get_default_snapshot_retention_days)
+
+
+class FullExportSerializer(serializers.Serializer):
+    tables = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=FULL_EXPORT_TABLE_NAMES,
+            error_messages={"invalid_choice": '"{input}" is not a valid table. '
+                                              f"Valid tables: {', '.join(FULL_EXPORT_TABLE_NAMES)}."},
+        ),
+        required=False,
+        allow_null=True,
+        allow_empty=False,
+        error_messages={"empty": f"This list may not be empty. Valid tables: {', '.join(FULL_EXPORT_TABLE_NAMES)}."},
+    )
+
+    def validate_tables(self, value):
+        if value is None:
+            return value
+        # canonical order, no duplicates
+        return [name for name in FULL_EXPORT_TABLE_NAMES if name in value]
 
 
 # Standard model serializers

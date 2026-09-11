@@ -22,6 +22,7 @@ from .models import (CurrentMachineSnapshot,
                      MetaMachine,
                      Tag, Taxonomy)
 from .serializers import (CleanupInventorySerializer,
+                          FullExportSerializer,
                           JMESPathCheckSerializer,
                           MachineSerialNumbersSerializer,
                           MachineTagsUpdateSerializer,
@@ -397,14 +398,19 @@ class CleanupInventory(APIView):
 class FullExport(APIView):
     permission_required = "inventory.view_machinesnapshot"
     permission_classes = [DjangoPermissionRequired]
+    parser_classes = [FormParser, JSONParser, MultiPartParser]
 
     def post(self, request, *args, **kwargs):
-        result = export_full_inventory.apply_async(
-            kwargs={"task_user": request.user.id}
-        )
-        return Response({"task_id": result.id,
-                         "task_result_url": reverse("base_api:task_result", args=(result.id,))},
-                        status=status.HTTP_201_CREATED)
+        serializer = FullExportSerializer(data=request.data)
+        if serializer.is_valid():
+            result = export_full_inventory.apply_async(
+                kwargs={"tables": serializer.validated_data.get("tables"), "task_user": request.user.id}
+            )
+            return Response({"task_id": result.id,
+                             "task_result_url": reverse("base_api:task_result", args=(result.id,))},
+                            status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # Standard DRF views

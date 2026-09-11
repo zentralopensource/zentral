@@ -74,6 +74,10 @@ class InventoryTasksTest(TestCase):
         result = export_full_inventory()
         self.assertTrue(result["filepath"].startswith("exports/full_inventory_export-2"))
 
+    def test_export_full_inventory_tables(self):
+        result = export_full_inventory(tables=["machine"])
+        self.assertEqual(list(result["manifest"]["tables"]), ["machine"])
+
     # apps
 
     def test_export_android_apps(self):

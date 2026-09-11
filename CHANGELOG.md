@@ -20,6 +20,8 @@ The documentation is published at https://www.zentral.com/docs/zentral/ now, and
 
 The inventory JMESPath compliance check publishes the same `zentral_audit` events as the other objects now, from the web console and from the API.
 
+The full inventory export can be limited to a list of tables, with the `tables` attribute of the API request or the `--table` option of the `export_full_inventory` command. The task result carries a manifest with the tables, their row counts and their columns, and the files of the archive with their size and SHA-256 digest. The archive contains the manifest as `manifest.json`.
+
 
 #### MDM
 
@@ -125,6 +127,10 @@ An import of a standard Osquery pack fails if one of its queries has SQL that Ze
 #### 🧨 Inventory full export
 
 The full inventory export contains the current snapshot of each machine and source, and the objects that these snapshots reference. A snapshot that a newer snapshot replaced, and an object that only such a snapshot references, are not exported anymore. All the tables of an export are read in one transaction, so they are consistent with each other.
+
+The `zentral_machine_disks_<index>.jsonl` files of the archive are named `zentral_machine_disk_<index>.jsonl` now, like the files of the other link tables.
+
+The export archive has a new name: `full_inventory_export-20260911T100000Z-3f9c1a2b.zip`, and not `full_inventory_export-2026-09-11_10-00-00.zip`. The last part of the name is random, so two exports started in the same second do not have the same name.
 
 
 #### 🧨 Inventory JMESPath compliance check events

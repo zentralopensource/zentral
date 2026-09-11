@@ -1,6 +1,8 @@
+import hashlib
 import json
 import logging
 import os.path
+import secrets
 import tempfile
 import zipfile
 from contextlib import contextmanager
@@ -13,7 +15,8 @@ from zentral.utils.db import get_read_only_database
 from zentral.utils.time import naive_utcnow
 
 __all__ = [
-    "do_full_export"
+    "FULL_EXPORT_TABLE_NAMES",
+    "do_full_export",
 ]
 
 
@@ -90,7 +93,7 @@ FULL_EXPORT_QUERIES = [
     ("system_info", rows("inventory_systeminfo", ms_fk_ids("system_info_id"))),
     # disks
     ("disk", rows("inventory_disk", m2m_ids("inventory_machinesnapshot_disks", "disk_id"))),
-    ("machine_disks", link_rows("inventory_machinesnapshot_disks", "disk_id")),
+    ("machine_disk", link_rows("inventory_machinesnapshot_disks", "disk_id")),
     # network interfaces
     ("network_interface",
      rows("inventory_networkinterface",
@@ -137,6 +140,20 @@ FULL_EXPORT_QUERIES = [
 ]
 
 
+FULL_EXPORT_TABLE_NAMES = [name for name, _ in FULL_EXPORT_QUERIES]
+
+
+def normalize_tables(tables):
+    if tables is None:
+        return FULL_EXPORT_TABLE_NAMES
+    if not tables:
+        raise ValueError("At least one table is required")
+    unknown = sorted(set(tables) - set(FULL_EXPORT_TABLE_NAMES))
+    if unknown:
+        raise ValueError(f"Unknown tables: {', '.join(unknown)}")
+    return [name for name in FULL_EXPORT_TABLE_NAMES if name in tables]
+
+
 @contextmanager
 def export_transaction():
     connection = connections[get_read_only_database()]
@@ -150,51 +167,106 @@ def export_transaction():
         yield connection
 
 
-def iter_model_exports(max_temp_file_size, window_size):
-    # for each model
-    # - execute the query
-    # - write the results in a temporary file
+def iter_batches(cursor, batch, window_size):
+    while batch:
+        yield batch
+        batch = cursor.fetchmany(window_size)
+
+
+def iter_tables(tables, window_size):
     with export_transaction() as connection:
-        for model_name, query in FULL_EXPORT_QUERIES:
-            model_export_f = model_export_p = None
-            file_index = 0
+        for table, query in FULL_EXPORT_QUERIES:
+            if table not in tables:
+                continue
             with connection.chunked_cursor() as cursor:
-                cursor.itersize = window_size
                 cursor.execute(query)
-                columns = None
-                for row in cursor:
-                    if columns is None:
-                        columns = [c.name for c in cursor.description]
-                    if model_export_f is None or model_export_f.tell() > max_temp_file_size:
-                        if model_export_f:
-                            model_export_f.close()
-                            yield model_name, file_index, model_export_p
-                        file_index += 1
-                        model_export_fh, model_export_p = tempfile.mkstemp()
-                        model_export_f = os.fdopen(model_export_fh, mode="w", newline="")
-                    obj = dict(zip(columns, row))
-                    json.dump(obj, model_export_f, cls=DjangoJSONEncoder)
-                    model_export_f.write("\n")
-            if model_export_f:
-                model_export_f.close()
-                yield model_name, file_index, model_export_p
+                # the description of a server-side cursor is only known after the first fetch
+                batch = cursor.fetchmany(window_size)
+                columns = [c.name for c in cursor.description]
+                yield table, columns, iter_batches(cursor, batch, window_size)
 
 
-def do_full_export(max_temp_file_size=2**30, window_size=5000):
+class HashingFile:
+    def __init__(self, f):
+        self._f = f
+        self._hash = hashlib.sha256()
+        self.size = 0
+
+    def write(self, data):
+        self._f.write(data)
+        self._hash.update(data)
+        self.size += len(data)
+
+    def close(self):
+        self._f.close()
+
+    def hexdigest(self):
+        return self._hash.hexdigest()
+
+
+class JSONLPart:
+    def __init__(self, table, index):
+        self.name = f"zentral_{table}_{index:04d}.jsonl"
+        fh, self.path = tempfile.mkstemp()
+        self.file = HashingFile(os.fdopen(fh, mode="wb"))
+        self.rows = 0
+
+    def write_row(self, obj):
+        self.file.write(json.dumps(obj, cls=DjangoJSONEncoder).encode("utf-8") + b"\n")
+        self.rows += 1
+
+    def close(self):
+        self.file.close()
+        return {"rows": self.rows, "size": self.file.size, "sha256": self.file.hexdigest()}
+
+
+def iter_jsonl_parts(table, columns, batches, max_temp_file_size):
+    part = None
+    part_index = 0
+    for batch in batches:
+        for row in batch:
+            if part is None or part.file.size > max_temp_file_size:
+                if part:
+                    yield part
+                part_index += 1
+                part = JSONLPart(table, part_index)
+            part.write_row(dict(zip(columns, row)))
+    if part:
+        yield part
+
+
+def do_full_export(tables=None, max_temp_file_size=2**30, window_size=5000):
+    tables = normalize_tables(tables)
     export_dt = naive_utcnow()
+    export_id = f"{export_dt:%Y%m%dT%H%M%SZ}-{secrets.token_hex(4)}"
+    manifest = {
+        "version": 1,
+        "export_id": export_id,
+        "exported_at": f"{export_dt:%Y-%m-%dT%H:%M:%SZ}",
+        "format": "JSONL",
+        "tables": {},
+        "files": {},
+    }
 
     # create ZIP archive
     zip_fh, zip_p = tempfile.mkstemp()
     with zipfile.ZipFile(zip_p, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_a:
-        for model_name, file_index, file_p in iter_model_exports(max_temp_file_size, window_size):
-            zip_a.write(file_p, f"zentral_{model_name}_{file_index:04d}.jsonl")
-            os.unlink(file_p)
+        for table, columns, batches in iter_tables(tables, window_size):
+            table_manifest = {"rows": 0, "columns": [{"name": column} for column in columns], "files": []}
+            for part in iter_jsonl_parts(table, columns, batches, max_temp_file_size):
+                file_manifest = part.close()
+                zip_a.write(part.path, part.name)
+                os.unlink(part.path)
+                table_manifest["rows"] += file_manifest["rows"]
+                table_manifest["files"].append(part.name)
+                manifest["files"][part.name] = {"table": table, **file_manifest}
+            manifest["tables"][table] = table_manifest
+        zip_a.writestr("manifest.json", json.dumps(manifest, indent=2))
 
     # copy ZIP archive to default storage
-    filename = f"full_inventory_export-{export_dt:%Y-%m-%d_%H-%M-%S}.zip"
-    filepath = os.path.join("exports", filename)
     with os.fdopen(zip_fh, "rb") as zip_f:
-        default_storage.save(filepath, zip_f)
+        filepath = default_storage.save(os.path.join("exports", f"full_inventory_export-{export_id}.zip"), zip_f)
+    filename = os.path.basename(filepath)
 
     # cleanup local ZIP archive
     os.unlink(zip_p)
@@ -205,5 +277,6 @@ def do_full_export(max_temp_file_size=2**30, window_size=5000):
         "headers": {
             "Content-Type": "application/zip",
             "Content-Disposition": f'attachment; filename="{filename}"',
-        }
+        },
+        "manifest": manifest,
     }

@@ -806,13 +806,40 @@ Response:
 * PBAC actions:
 	* `Inventory::Action::"viewMachineSnapshot"`
 
-Use this endpoint to start a full inventory export. The export is a ZIP archive of `.jsonl` files, with one set of files per table. It contains the current snapshot of each machine and source, and the objects that these snapshots reference: operating system versions, applications, certificates, profiles, disks, … A snapshot that a newer snapshot replaced, and an object that only such a snapshot references, are not exported. All the tables are read in one transaction, so they are consistent with each other.
+Use this endpoint to start a full inventory export. The export is a ZIP archive of `.jsonl` files, with one set of files per table, and a `manifest.json` file. It contains the current snapshot of each machine and source, and the objects that these snapshots reference: operating system versions, applications, certificates, profiles, disks, … A snapshot that a newer snapshot replaced, and an object that only such a snapshot references, are not exported. All the tables are read in one transaction, so they are consistent with each other.
+
+The optional `tables` attribute limits the export to a list of tables. An unknown table, or an empty list, gives a `400` response that lists the valid tables.
+
+| Tables | Content |
+|---|---|
+| `machine` | The current snapshot of each machine and source. `ms_id` is the identifier of the snapshot. |
+| `business_unit`, `meta_business_unit` | The business units of the snapshots, and their meta business units. |
+| `source` | The inventory sources of the snapshots and of the business units. |
+| `os_version`, `system_info`, `principal_user` | The operating system versions, the system information and the principal users of the snapshots. |
+| `disk`, `machine_disk` | The disks, and their link to the snapshots. |
+| `network_interface`, `machine_network_interface` | The network interfaces, and their link to the snapshots. |
+| `certificate`, `machine_certificate` | The certificates of the snapshots, the signers of the applications and of the profiles, with their chains, and the link of the certificates to the snapshots. |
+| `profile`, `machine_profile` | The configuration profiles, and their link to the snapshots. |
+| `macos_app`, `macos_app_instance`, `machine_macos_app_instance` | The macOS applications, their instances, and the link of the instances to the snapshots. |
+| `android_app`, `machine_android_app` | The Android applications, and their link to the snapshots. |
+| `deb_package`, `machine_deb_package` | The Debian packages, and their link to the snapshots. |
+| `ec2_instance_metadata`, `ec2_instance_tag`, `machine_ec2_instance_tag` | The EC2 instance metadata of the snapshots, the EC2 instance tags, and their link to the snapshots. |
+| `ios_app`, `machine_ios_app` | The iOS applications, and their link to the snapshots. |
+| `program`, `program_instance`, `machine_program_instance` | The Windows programs, their instances, and the link of the instances to the snapshots. |
+
+A `machine_*` table links the snapshots to the rows of another table: `ms_id` is the identifier of the snapshot, and the other column is the identifier of the row. The files of a table are named `zentral_<table>_<index>.jsonl`. The index starts at `0001`, and a table with many rows has more than one file. A table without a row has no file.
+
+The task result carries a manifest, also present in the archive as `manifest.json`. The manifest gives the tables, with their row counts, their columns and their files, and the files, with their table, row count, size and SHA-256 digest. The keys of `files` are the names of the `.jsonl` files in the archive.
+
+Zentral does not delete the exports. The retention of the files under `exports/` in the storage is a responsibility of the deployment, for example with a lifecycle policy on the bucket.
 
 Example:
 
 ```bash
 curl -XPOST \
   -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tables": ["machine", "os_version"]}' \
   https://$ZTL_FQDN/api/inventory/full_export/\
   |python3 -m json.tool
 ```
@@ -826,3 +853,42 @@ Response:
 }
 ```
 
+Task result, when the task is done (see [`/api/task_result/<uuid:task_id>/`](core.md#apitask_resultuuidtask_id)):
+
+```json
+{
+  "name": "zentral.contrib.inventory.tasks.export_full_inventory",
+  "id": "5ecb057b-57cc-41e4-a07e-fcc357d7a5c7",
+  "status": "SUCCESS",
+  "unready": false,
+  "download_url": "/api/task_result/5ecb057b-57cc-41e4-a07e-fcc357d7a5c7/download/",
+  "result": {
+    "headers": {
+      "Content-Type": "application/zip",
+      "Content-Disposition": "attachment; filename=\"full_inventory_export-20260911T100000Z-3f9c1a2b.zip\""
+    },
+    "manifest": {
+      "version": 1,
+      "export_id": "20260911T100000Z-3f9c1a2b",
+      "exported_at": "2026-09-11T10:00:00Z",
+      "format": "JSONL",
+      "tables": {
+        "machine": {
+          "rows": 4213,
+          "columns": [{"name": "serial_number"}, {"name": "last_seen"}, {"name": "ms_id"}, "…"],
+          "files": ["zentral_machine_0001.jsonl"]
+        },
+        "os_version": {
+          "rows": 17,
+          "columns": [{"name": "id"}, {"name": "mt_hash"}, {"name": "mt_created_at"}, "…"],
+          "files": ["zentral_os_version_0001.jsonl"]
+        }
+      },
+      "files": {
+        "zentral_machine_0001.jsonl": {"table": "machine", "rows": 4213, "size": 5312876, "sha256": "…"},
+        "zentral_os_version_0001.jsonl": {"table": "os_version", "rows": 17, "size": 3021, "sha256": "…"}
+      }
+    }
+  }
+}
+```
