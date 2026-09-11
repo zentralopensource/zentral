@@ -9,6 +9,10 @@ logger = logging.getLogger("zentral.utils.oidc")
 
 TIMESTAMP_LEEWAY = 60
 
+# an ID token is verified with a key from the issuer JWKS, and the HMAC algorithms
+# use the client secret
+UNSUPPORTED_ALGORITHMS = {"NONE", "HS256", "HS384", "HS512"}
+
 
 def get_discovery_uri_from_issuer_uri(issuer_uri):
     return issuer_uri.rstrip("/") + "/.well-known/openid-configuration"
@@ -36,7 +40,7 @@ def get_openid_configuration_from_issuer_uri(issuer_uri):
 def verify_jws(token, issuer, audience, openid_configuration, exception_class=None):
     supported_algorithms = [
         alg for alg in openid_configuration["id_token_signing_alg_values_supported"]
-        if alg.upper() != "NONE"
+        if alg.upper() not in UNSUPPORTED_ALGORITHMS
     ]
     try:
         header = jwt.get_unverified_header(token)

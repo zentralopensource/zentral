@@ -171,6 +171,8 @@ The probe caches expire after 300 seconds now. A notifier notification was the o
 
 A store worker verifies the configuration of its store every 300 seconds now. Before, only a notifier notification made the worker apply a change, and the notifier does not guarantee delivery. A worker that did not receive the notification kept the event filters and the credentials from its start, and an operator had to restart it. The worker now stops when it finds a change to its store, and starts again with the configuration in the database.
 
+Zentral does not use the HMAC algorithms that an OpenID Connect issuer advertises anymore. It verifies an ID token with a key from the issuer JWKS, and the HMAC algorithms use the client secret. An ID token signed with one of them gives an invalid token error now, and not a 500 error.
+
 Fixed the `zentral_audit` events of the Santa enrollments and the Santa enrolled machines, which were not linked to the object they report. A model that declares the parents of an object replaced the link to the object itself, and the events of that object did not reach its page. A model keeps control of its own key when it declares one, because the MDM commands are linked by UUID and not by primary key.
 
 Fixed the version of an Osquery query in the events published when a user changed the query from the web console. The version was a database expression, and not a number.

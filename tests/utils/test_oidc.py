@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import json
 import time
 from unittest.mock import patch
@@ -38,6 +41,10 @@ class OIDCUtilsTestCase(TestCase):
             encryption_algorithm=serialization.NoEncryption(),
         )
         public_key = private_key.public_key()
+        cls.public_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
         jwk_json = RSAAlgorithm.to_jwk(public_key)
         jwk = json.loads(jwk_json)
         jwk["kid"] = "test-kid"
@@ -49,11 +56,11 @@ class OIDCUtilsTestCase(TestCase):
     # utils
 
     @staticmethod
-    def _make_oid_config(issuer):
+    def _make_oid_config(issuer, algorithms=None):
         return {
             "issuer": issuer,
             "jwks_uri": f"{issuer}/jwks",
-            "id_token_signing_alg_values_supported": ["RS256"],
+            "id_token_signing_alg_values_supported": algorithms or ["RS256"],
         }
 
     def _make_token(self, iss, aud, exp=None, iat=None, sub="user-123", kid="test-kid", none_alg=False):
@@ -85,6 +92,23 @@ class OIDCUtilsTestCase(TestCase):
             },
             **kwargs,
         )
+
+    # jwt.encode refuses the public key as an HMAC secret, so the forged token is assembled here
+    def _make_hs256_token_signed_with_the_public_key(self, iss, aud, kid="test-kid"):
+        now = int(time.time())
+        segments = [
+            self._b64encode({"alg": "HS256", "typ": "JWT", "kid": kid}),
+            self._b64encode({"iss": iss, "aud": aud, "sub": "user-123", "iat": now, "exp": now + 300}),
+        ]
+        signing_input = b".".join(segments)
+        segments.append(
+            base64.urlsafe_b64encode(hmac.new(self.public_pem, signing_input, hashlib.sha256).digest()).rstrip(b"=")
+        )
+        return b".".join(segments).decode("utf-8")
+
+    @staticmethod
+    def _b64encode(payload):
+        return base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).rstrip(b"=")
 
     # test get_openid_configuration
 
@@ -240,4 +264,39 @@ class OIDCUtilsTestCase(TestCase):
                 issuer=issuer,
                 audience=audience,
                 openid_configuration=self._make_oid_config(issuer),
+            )
+
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_hmac_alg_not_supported(self, build_opener):
+        build_opener.return_value.open.return_value = FakeHTTPResponse(self.jwks_payload)
+
+        issuer = "https://issuer.zentral.com"
+        audience = "my-client"
+
+        token = self._make_hs256_token_signed_with_the_public_key(iss=issuer, aud=audience)
+
+        with self.assertRaisesRegex(jwt.InvalidAlgorithmError, r"The specified alg value is not allowed"):
+            verify_jws(
+                token=token,
+                issuer=issuer,
+                audience=audience,
+                openid_configuration=self._make_oid_config(issuer, ["RS256", "HS256"]),
+            )
+
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_only_hmac_algs_supported(self, build_opener):
+        build_opener.return_value.open.return_value = FakeHTTPResponse(self.jwks_payload)
+
+        issuer = "https://issuer.zentral.com"
+        audience = "my-client"
+
+        token = self._make_hs256_token_signed_with_the_public_key(iss=issuer, aud=audience)
+
+        with self.assertRaisesRegex(ValueError, r"Invalid token"):
+            verify_jws(
+                token=token,
+                issuer=issuer,
+                audience=audience,
+                openid_configuration=self._make_oid_config(issuer, ["HS256"]),
+                exception_class=ValueError,
             )
