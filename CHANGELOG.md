@@ -167,6 +167,12 @@ Some MDM events linked an object under a key that did not match the key of the m
 
 The `mdm_asset_created` and `mdm_asset_updated` events put the asset in an `asset` object now, like the other apps & books events. The attributes of the asset were at the top level of the payload, so the two events linked no object at all: `get_linked_objects_keys()` reads the asset from the `asset` key. Update a probe or a query that reads `adam_id`, `pricing_param`, `name` or another attribute of the asset at the top level of these two payloads.
 
+#### 🧨 Terraform export removed
+
+The "Download Terraform config" buttons are gone from the Inventory, MDM, Monolith, Munki, Osquery and Santa pages, with the `terraform_export` URLs behind them.
+
+Use a Terraform `import` block with `terraform plan -generate-config-out=<file>` instead. The [Terraform provider](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs) imports each of its resources, and Terraform writes the configuration from the provider schema.
+
 
 ### Bug fixes
 
