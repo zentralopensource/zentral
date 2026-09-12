@@ -5,7 +5,7 @@ from django.db import transaction
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DetailView, TemplateView, View
+from django.views.generic import DetailView, TemplateView
 from django.views.generic.edit import DeleteView, FormView, UpdateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import Certificate, File
@@ -17,11 +17,9 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          VotingGroupForm,
                                          RuleForm, RuleSearchForm, UpdateRuleForm)
 from zentral.contrib.santa.models import Configuration, Enrollment, Rule, Target, VotingGroup
-from zentral.contrib.santa.terraform import iter_resources
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
-from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
                                  UpdateViewWithAudit, UserPaginationListView)
@@ -39,17 +37,6 @@ class ConfigurationListView(PermissionRequiredMixin, TemplateView):
         ctx["configurations"] = Configuration.objects.summary()
         ctx["configuration_count"] = len(ctx["configurations"])
         return ctx
-
-
-class TerraformExportView(PermissionRequiredMixin, View):
-    permission_required = (
-        "santa.view_configuration",
-        "santa.view_enrollment",
-        "santa.view_rule",
-    )
-
-    def get(self, request, *args, **kwargs):
-        return build_config_response(iter_resources(), "terraform_santa")
 
 
 class CreateConfigurationView(PermissionRequiredMixin, CreateViewWithAudit):

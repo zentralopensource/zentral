@@ -139,11 +139,6 @@ urlpatterns = [
     # ballots
     path('ballots/', views.BallotsView.as_view(), name="ballots"),
     path('ballots/cast/', views.CastBallotView.as_view(), name="cast_ballot"),
-
-    # terraform
-    path('terraform_export/',
-         views.TerraformExportView.as_view(),
-         name='terraform_export'),
 ]
 
 

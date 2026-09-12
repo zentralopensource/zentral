@@ -2110,21 +2110,3 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/pick_rule_signing_id.html")
         signing_ids = response.context["signing_ids"]
         self.assertEqual(len(signing_ids), 0)
-
-    # terraform export
-
-    def test_terraform_export_redirect(self):
-        self.login_redirect("terraform_export")
-
-    def test_terraform_export_permission_denied(self):
-        self.login()
-        response = self.client.get(reverse("santa:terraform_export"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_terraform_export(self):
-        self.login("santa.view_configuration", "santa.view_enrollment", "santa.view_rule")
-        configuration = force_configuration()
-        target = Target.objects.create(type=Target.Type.BINARY, identifier=get_random_string(64, "0123456789abcdef"))
-        Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
-        response = self.client.get(reverse("santa:terraform_export"))
-        self.assertEqual(response.status_code, 200)
