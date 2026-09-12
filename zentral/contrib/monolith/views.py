@@ -16,7 +16,6 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine, Tag
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
-from zentral.utils.terraform import build_config_response
 from zentral.utils.text import get_version_sort_key, shard as compute_shard, encode_args
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
 from .conf import monolith_conf
@@ -39,7 +38,6 @@ from .models import (Catalog, CacheServer,
 from .repository_backends import RepositoryBackend
 from .repository_backends.azure import AzureRepositoryForm
 from .repository_backends.s3 import S3RepositoryForm
-from .terraform import iter_resources
 from .utils import test_monolith_object_inclusion, test_pkginfo_catalog_inclusion
 
 
@@ -84,12 +82,7 @@ class IndexView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         if not self.request.user.has_module_perms("monolith"):
             raise PermissionDenied("Not allowed")
-        ctx = super().get_context_data(**kwargs)
-        ctx["show_terraform_export"] = all(
-            self.request.user.has_perm(perm)
-            for perm in TerraformExportView.permission_required
-        )
-        return ctx
+        return super().get_context_data(**kwargs)
 
 
 # repositories
@@ -692,19 +685,6 @@ class ManifestsView(PermissionRequiredMixin, UserPaginationListView):
         context = super(ManifestsView, self).get_context_data(**kwargs)
         context['form'] = self.form
         return context
-
-
-class TerraformExportView(PermissionRequiredMixin, View):
-    permission_required = (
-        "monolith.view_catalog",
-        "monolith.view_condition",
-        "monolith.view_enrollment",
-        "monolith.view_manifest",
-        "monolith.view_submanifest",
-    )
-
-    def get(self, request, *args, **kwargs):
-        return build_config_response(iter_resources(), "terraform_monolith")
 
 
 class CreateManifestView(PermissionRequiredMixin, CreateViewWithAudit):

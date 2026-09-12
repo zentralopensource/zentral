@@ -3197,28 +3197,3 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"monolith_manifest_sub_manifest": [str(manifest_sub_manifest.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
-
-    # terraform export
-
-    def test_terraform_export_redirect(self):
-        self.login_redirect("terraform_export")
-
-    def test_terraform_export_permission_denied(self):
-        self.login("monolith.view_manifest")  # no enough
-        response = self.client.get(reverse("monolith:terraform_export"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_terraform_export(self):
-        self.login(
-            "monolith.view_catalog",
-            "monolith.view_condition",
-            "monolith.view_enrollment",
-            "monolith.view_manifest",
-            "monolith.view_submanifest",
-        )
-        force_catalog()
-        condition = force_condition()
-        force_manifest()
-        force_sub_manifest_pkg_info(condition=condition)
-        response = self.client.get(reverse("monolith:terraform_export"))
-        self.assertEqual(response.status_code, 200)

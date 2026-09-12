@@ -103,11 +103,6 @@ urlpatterns = [
     # manifest cache servers
     path('manifests/<int:pk>/delete_cache_server/<int:cs_pk>/',
          views.DeleteManifestCacheServerView.as_view(), name='delete_manifest_cache_server'),
-
-    # terraform
-    path('terraform_export/',
-         views.TerraformExportView.as_view(),
-         name='terraform_export'),
 ]
 
 
