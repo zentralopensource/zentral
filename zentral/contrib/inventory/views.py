@@ -24,7 +24,6 @@ from zentral.core.compliance_checks.models import Status
 from zentral.core.incidents.models import MachineIncident
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsStoreRedirectView, EventsView, FetchEventsView
-from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
 from zentral.utils.time import naive_utcnow
 from zentral.utils.views import (
@@ -64,7 +63,6 @@ from .models import (
     Taxonomy,
 )
 from .pbac import CreateMachineTagRequest, DeleteMachineTagRequest
-from .terraform import iter_compliance_check_resources
 from .utils import (
     AndroidAppFilter,
     AndroidAppFilterForm,
@@ -1174,13 +1172,6 @@ class ComplianceCheckDevToolView(PermissionRequiredMixin, FormView):
             ))
         else:
             return self.render_test(form)
-
-
-class ComplianceCheckTerraformExportView(PermissionRequiredMixin, View):
-    permission_required = "inventory.view_jmespathcheck"
-
-    def get(self, request, *args, **kwargs):
-        return build_config_response(iter_compliance_check_resources(), "terraform_jmespath_checks")
 
 
 # tags
