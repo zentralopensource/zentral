@@ -2641,7 +2641,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         for i in range(3):
             self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
-        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': 4})
+        # a primary key a serial column never takes, so that the filter always rejects it
+        response = self.get(reverse('santa_api:enrollments'), {'configuration_id': 0})
         self.assertEqual(response.status_code, 400)
 
     def test_get_enrollments_search_unauthorized(self):
