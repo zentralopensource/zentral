@@ -125,6 +125,9 @@ def force_configuration(
     banned_threshold=-26,
     partially_allowlisted_threshold=5,
     globally_allowlisted_threshold=50,
+    event_detail_source=Configuration.EventDetailSource.LOCAL,
+    event_detail_url="",
+    event_detail_text="",
 ):
     if lockdown:
         client_mode = Configuration.LOCKDOWN_MODE
@@ -141,6 +144,9 @@ def force_configuration(
         banned_threshold=banned_threshold,
         partially_allowlisted_threshold=partially_allowlisted_threshold,
         globally_allowlisted_threshold=globally_allowlisted_threshold,
+        event_detail_source=event_detail_source,
+        event_detail_url=event_detail_url,
+        event_detail_text=event_detail_text,
     )
 
 

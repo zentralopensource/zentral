@@ -1,8 +1,12 @@
 import re
+from importlib import import_module
+from unittest.mock import patch
+from django.apps import apps
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.santa.models import Configuration
+from zentral.contrib.santa.models import Configuration, voting_portal_event_detail_url
 from zentral.core.incidents.models import Severity
+from .utils import force_realm
 
 
 class SantaConfigurationTestCase(TestCase):
@@ -95,3 +99,135 @@ class SantaConfigurationTestCase(TestCase):
                                               enable_all_event_upload_shard=100)
         self.assertEqual(config.get_sync_server_config("111111", (2022, 1))["enable_all_event_upload"], True)
         self.assertEqual(config.get_sync_server_config("777777", (2022, 1))["enable_all_event_upload"], True)
+
+    # event detail
+
+    def test_event_detail_local_source_distributes_nothing(self):
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              event_detail_url="https://www.example.com/blocked/",
+                                              event_detail_text="More info")
+        self.assertEqual(config.get_event_detail(), (None, None))
+        self.assertNotIn("EventDetailURL", config.get_local_config())
+        self.assertNotIn("EventDetailText", config.get_local_config())
+        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        self.assertNotIn("event_detail_url", sync_server_config)
+        self.assertNotIn("event_detail_text", sync_server_config)
+
+    def test_event_detail_none_source_removes_the_button(self):
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              event_detail_source=Configuration.EventDetailSource.NONE)
+        self.assertEqual(config.get_event_detail(), (Configuration.NO_EVENT_DETAIL_URL, None))
+        local_config = config.get_local_config()
+        self.assertEqual(local_config["EventDetailURL"], "null")
+        self.assertNotIn("EventDetailText", local_config)
+        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        self.assertEqual(sync_server_config["event_detail_url"], "null")
+        self.assertNotIn("event_detail_text", sync_server_config)
+
+    def test_event_detail_custom_source(self):
+        url = "https://www.example.com/blocked/?fid=%file_identifier%"
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              event_detail_source=Configuration.EventDetailSource.CUSTOM,
+                                              event_detail_url=url,
+                                              event_detail_text="Request an exception")
+        self.assertEqual(config.get_event_detail(), (url, "Request an exception"))
+        local_config = config.get_local_config()
+        self.assertEqual(local_config["EventDetailURL"], url)
+        self.assertEqual(local_config["EventDetailText"], "Request an exception")
+        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        self.assertEqual(sync_server_config["event_detail_url"], url)
+        self.assertEqual(sync_server_config["event_detail_text"], "Request an exception")
+
+    def test_event_detail_voting_portal_source(self):
+        realm = force_realm(user_portal=True)
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              voting_realm=realm,
+                                              event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL)
+        url, text = config.get_event_detail()
+        self.assertEqual(
+            url,
+            f"https://zentral/public/realms/{realm.pk}/up/santa/event_detail/"
+            "?bofid=%bundle_or_file_identifier%&fid=%file_identifier%&mid=%machine_id%"
+            "&tid=%team_id%&sid=%signing_id%&cdh=%cdhash%"
+        )
+        self.assertEqual(text, Configuration.DEFAULT_EVENT_DETAIL_TEXT)
+        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        self.assertEqual(sync_server_config["event_detail_url"], url)
+        self.assertEqual(sync_server_config["event_detail_text"], "More info")
+
+    def test_event_detail_voting_portal_source_custom_text(self):
+        realm = force_realm(user_portal=True)
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              voting_realm=realm,
+                                              event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL,
+                                              event_detail_text="Request an exception")
+        _, text = config.get_event_detail()
+        self.assertEqual(text, "Request an exception")
+
+    def test_event_detail_voting_portal_source_unavailable_distributes_nothing(self):
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL)
+        with self.assertLogs("zentral.contrib.santa.models", level="ERROR") as cm:
+            self.assertEqual(config.get_event_detail(), (None, None))
+        self.assertEqual(
+            cm.output,
+            [f"ERROR:zentral.contrib.santa.models:Configuration {config.pk}: "
+             "voting portal event detail URL unavailable"]
+        )
+
+    def test_event_detail_button_local_source(self):
+        config = Configuration.objects.create(name=get_random_string(256))
+        self.assertEqual(config.get_event_detail_button(), (None, None))
+
+    def test_event_detail_button_none_source(self):
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              event_detail_source=Configuration.EventDetailSource.NONE)
+        self.assertEqual(config.get_event_detail_button(), (None, None))
+
+    def test_event_detail_button_custom_source(self):
+        url = "https://www.example.com/blocked/"
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              event_detail_source=Configuration.EventDetailSource.CUSTOM,
+                                              event_detail_url=url,
+                                              event_detail_text="Request an exception")
+        self.assertEqual(config.get_event_detail_button(), (url, "Request an exception"))
+
+    def test_event_detail_button_voting_portal_source(self):
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              voting_realm=force_realm(user_portal=True),
+                                              event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL)
+        url, text = config.get_event_detail_button()
+        self.assertIn("/up/santa/event_detail/", url)
+        self.assertEqual(text, Configuration.DEFAULT_EVENT_DETAIL_TEXT)
+
+    def test_event_detail_voting_portal_source_without_the_app_setting(self):
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              voting_realm=force_realm(user_portal=True),
+                                              event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL)
+        with patch("zentral.contrib.santa.models.settings", {"apps": {"zentral.contrib.santa": {}}}):
+            self.assertIsNone(voting_portal_event_detail_url(config.voting_realm))
+            with self.assertLogs("zentral.contrib.santa.models", level="ERROR"):
+                self.assertEqual(config.get_event_detail(), (None, None))
+
+    def test_migration_reverse_restores_the_local_source(self):
+        migration = import_module("zentral.contrib.santa.migrations.0047_event_detail_source")
+        config = Configuration.objects.create(name=get_random_string(256),
+                                              voting_realm=force_realm(user_portal=True),
+                                              event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL)
+        migration.unset_voting_portal_source(apps, None)
+        config.refresh_from_db()
+        self.assertEqual(config.event_detail_source, Configuration.EventDetailSource.LOCAL)
+
+    def test_migration_forward_sets_the_voting_portal_source(self):
+        migration = import_module("zentral.contrib.santa.migrations.0047_event_detail_source")
+        with_portal = Configuration.objects.create(name=get_random_string(256),
+                                                   voting_realm=force_realm(user_portal=True))
+        without_portal = Configuration.objects.create(name=get_random_string(256),
+                                                      voting_realm=force_realm(user_portal=False))
+        no_realm = Configuration.objects.create(name=get_random_string(256))
+        migration.set_voting_portal_source(apps, None)
+        for config, expected in ((with_portal, Configuration.EventDetailSource.VOTING_PORTAL),
+                                 (without_portal, Configuration.EventDetailSource.LOCAL),
+                                 (no_realm, Configuration.EventDetailSource.LOCAL)):
+            config.refresh_from_db()
+            self.assertEqual(config.event_detail_source, expected)

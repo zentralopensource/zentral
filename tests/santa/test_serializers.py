@@ -5,7 +5,9 @@ from django.utils.crypto import get_random_string
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.santa.models import Configuration, Enrollment, Target
-from zentral.contrib.santa.serializers import EnrollmentSerializer, RuleUpdateSerializer
+from zentral.contrib.santa.serializers import (ConfigurationSerializer, EnrollmentSerializer,
+                                               RuleUpdateSerializer)
+from .utils import force_realm
 
 
 class SantaSerializersTestCase(TestCase):
@@ -225,3 +227,43 @@ class SantaSerializersTestCase(TestCase):
             serializer.get_configuration_profile_download_url(enrollment),
             f'{base_url}{reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,))}'
         )
+
+
+class SantaConfigurationSerializerTestCase(TestCase):
+    def test_voting_portal_event_detail_source_requires_a_portal(self):
+        serializer = ConfigurationSerializer(data={
+            "name": get_random_string(12),
+            "event_detail_source": Configuration.EventDetailSource.VOTING_PORTAL,
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(
+            serializer.errors["event_detail_source"],
+            ["Requires a voting realm with the user portal enabled"]
+        )
+
+    def test_custom_event_detail_source_requires_an_url(self):
+        serializer = ConfigurationSerializer(data={
+            "name": get_random_string(12),
+            "event_detail_source": Configuration.EventDetailSource.CUSTOM,
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(serializer.errors["event_detail_url"], ["This field is required"])
+
+    def test_voting_portal_event_detail_source(self):
+        realm = force_realm(user_portal=True)
+        serializer = ConfigurationSerializer(data={
+            "name": get_random_string(12),
+            "voting_realm": realm.pk,
+            "event_detail_source": Configuration.EventDetailSource.VOTING_PORTAL,
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_event_detail_source_defaults_to_local_when_omitted(self):
+        serializer = ConfigurationSerializer(data={"name": get_random_string(12)})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.save().event_detail_source, Configuration.EventDetailSource.LOCAL)
+
+    def test_event_detail_source_cannot_be_blank(self):
+        serializer = ConfigurationSerializer(data={"name": get_random_string(12), "event_detail_source": ""})
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual([str(e) for e in serializer.errors["event_detail_source"]], ['"" is not a valid choice.'])

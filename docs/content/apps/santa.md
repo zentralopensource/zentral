@@ -1027,6 +1027,9 @@ Response:
     "enable_transitive_rules": false,
     "allowed_path_regex": "",
     "blocked_path_regex": "",
+    "event_detail_source": "LOCAL",
+    "event_detail_url": "",
+    "event_detail_text": "",
     "block_usb_mount": false,
     "remount_usb_mode": [],
     "allow_unknown_shard": 100,
@@ -1043,6 +1046,16 @@ Response:
 * method: POST
 * Content-Type: application/json
 * PBAC action: `Santa::Action::"createConfiguration"`
+* Optional attributes:
+    * `event_detail_source`: where the button of the Santa block notification comes from. One of:
+        * `LOCAL` (default): Zentral distributes nothing, and the button is left to the Santa configuration profile.
+        * `VOTING_PORTAL`: Zentral distributes a link to the user portal. Requires a voting realm with the user portal enabled.
+        * `CUSTOM`: Zentral distributes `event_detail_url` and `event_detail_text`.
+        * `NONE`: no button.
+    * `event_detail_url`: the URL of the button, required with the `CUSTOM` source. The `%file_identifier%`, `%bundle_or_file_identifier%`, `%file_bundle_id%`, `%team_id%`, `%signing_id%`, `%cdhash%`, `%username%`, `%machine_id%`, `%hostname%`, `%uuid%` and `%serial%` sequences are replaced by the Santa agent.
+    * `event_detail_text`: the label of the button. Defaults to `More info` with the `VOTING_PORTAL` source.
+
+Switching a configuration back to the `LOCAL` source stops the distribution of the button, but does not remove a button already distributed to a machine – [force a clean sync](#apisantaenrolled_machinesintpkforce_clean_sync) to do that.
 
 Example
 
@@ -1051,6 +1064,9 @@ configuration.json
 ```json
 {
   "blocked_path_regex": "",
+  "event_detail_source": "LOCAL",
+  "event_detail_url": "",
+  "event_detail_text": "",
   "client_mode": 1,
   "enable_bundles": true,
   "batch_size": 50,
@@ -1083,6 +1099,9 @@ Response:
 {
   "id": 3,
   "blocked_path_regex": "",
+  "event_detail_source": "LOCAL",
+  "event_detail_url": "",
+  "event_detail_text": "",
   "client_mode": 1,
   "enable_bundles": true,
   "batch_size": 50,
@@ -1125,6 +1144,9 @@ Response:
 {
   "id": 1,
   "blocked_path_regex": "",
+  "event_detail_source": "LOCAL",
+  "event_detail_url": "",
+  "event_detail_text": "",
   "client_mode": 1,
   "enable_bundles": true,
   "batch_size": 50,
@@ -1158,6 +1180,9 @@ configuration.json
 ```json
 {
   "blocked_path_regex": "",
+  "event_detail_source": "LOCAL",
+  "event_detail_url": "",
+  "event_detail_text": "",
   "client_mode": 1,
   "enable_bundles": true,
   "batch_size": 50,
@@ -1190,6 +1215,9 @@ Response:
 {
   "id": 1,
   "blocked_path_regex": "",
+  "event_detail_source": "LOCAL",
+  "event_detail_url": "",
+  "event_detail_text": "",
   "client_mode": 1,
   "enable_bundles": true,
   "batch_size": 50,
