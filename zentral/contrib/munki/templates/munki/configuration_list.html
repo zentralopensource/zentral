@@ -15,10 +15,6 @@
                 {% url 'munki:create_configuration' as url %}
                 {% button 'CREATE' url "Create new Configuration" %}
             {% endif %}
-            {% if perms.munki.view_enrollment %}
-                {% url 'munki:terraform_export' as url %}
-                {% button 'DOWNLOAD' url "Create Terraform Configuration" %}
-            {% endif %}
         </div>
     </div>
 

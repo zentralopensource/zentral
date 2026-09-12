@@ -7,21 +7,19 @@ from django.db import transaction
 from django.db.models import F, Count
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DetailView, ListView, TemplateView, View
+from django.views.generic import DetailView, ListView, TemplateView
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
-from zentral.utils.terraform import build_config_response
 from zentral.utils.text import encode_args
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
                                  UpdateViewWithAudit, UserPaginationListView)
 from .compliance_checks import MunkiScriptCheck
 from .forms import ConfigurationForm, EnrollmentForm, ScriptCheckForm, ScriptCheckSearchForm
 from .models import Configuration, Enrollment, MunkiState, PrincipalUserDetectionSource, ScriptCheck
-from .terraform import iter_resources
 
 
 logger = logging.getLogger('zentral.contrib.munki.views')
@@ -37,20 +35,6 @@ class IndexView(LoginRequiredMixin, TemplateView):
         if not self.request.user.has_module_perms("munki"):
             raise PermissionDenied("Not allowed")
         return super().get_context_data(**kwargs)
-
-
-# Terraform export
-
-
-class TerraformExportView(PermissionRequiredMixin, View):
-    permission_required = (
-        "munki.view_configuration",
-        "munki.view_enrollment",
-        "munki.view_scriptcheck",
-    )
-
-    def get(self, request, *args, **kwargs):
-        return build_config_response(iter_resources(), "terraform_munki")
 
 
 # configuration

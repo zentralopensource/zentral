@@ -47,11 +47,6 @@ urlpatterns = [
     # machine actions
     path('machine/<str:urlsafe_serial_number>/force_full_sync/',
          views.ForceMachineFullSync.as_view(), name='force_machine_full_sync'),
-
-    # terraform
-    path('terraform_export/',
-         views.TerraformExportView.as_view(),
-         name='terraform_export'),
 ]
 
 

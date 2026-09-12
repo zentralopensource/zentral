@@ -1,6 +1,4 @@
-import io
 from unittest.mock import patch
-import zipfile
 from django.contrib.auth.models import Group
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
@@ -9,13 +7,13 @@ from django.test import TestCase
 
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
+from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.munki.models import Enrollment
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 from .utils import (assert_audit_event, assert_no_enrollment_secret, force_configuration,
-                    force_enrollment, force_script_check, make_enrolled_machine)
+                    force_enrollment, make_enrolled_machine)
 
 
 class MunkiSetupViewsTestCase(TestCase, LoginCase):
@@ -68,18 +66,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, reverse("munki:configurations"))
         self.assertContains(response, reverse("munki:script_checks"))
-
-    def test_index_terraform_export_link(self):
-        self.login("munki.view_configuration", "munki.view_enrollment", "munki.view_scriptcheck")
-        response = self.client.get(reverse("munki:index"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, reverse("munki:terraform_export"))
-
-    def test_index_no_terraform_export_link(self):
-        self.login("munki.view_configuration", "munki.view_enrollment")
-        response = self.client.get(reverse("munki:index"))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, reverse("munki:terraform_export"))
 
     # configurations
 
@@ -496,53 +482,3 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("munki:delete_enrollment", args=(enrollment.configuration.pk,
                                                                             enrollment.pk)))
         self.assertEqual(response.status_code, 404)
-
-    # terraform export
-
-    def test_terraform_export_redirect(self):
-        self.login_redirect("terraform_export")
-
-    def test_terraform_export_permission_denied(self):
-        self.login("munki.view_configuration")  # not enough
-        response = self.client.get(reverse("munki:terraform_export"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_terraform_export(self):
-        self.login("munki.view_configuration", "munki.view_enrollment", "munki.view_scriptcheck")
-        tag = Tag.objects.create(name=get_random_string(12))
-        sc = force_script_check()
-        sc.tags.set([tag])
-        e = force_enrollment(meta_business_unit=self.mbu)
-        cfg = e.configuration
-        mbu = e.secret.meta_business_unit
-        response = self.client.get(reverse("munki:terraform_export"))
-        self.assertEqual(response.status_code, 200)
-        with zipfile.ZipFile(io.BytesIO(response.content), mode="r") as zf:
-            with zf.open("tags.tf") as ttf:
-                self.assertEqual(
-                    ttf.read().decode("utf-8"),
-                    f'resource "zentral_tag" "tag{tag.pk}" {{\n'
-                    f'  name = "{tag.name}"\n'
-                    '}\n\n'
-                )
-            with zf.open("munki_configurations.tf") as mctf:
-                self.assertEqual(
-                    mctf.read().decode("utf-8"),
-                    f'resource "zentral_munki_configuration" "configuration{cfg.pk}" {{\n'
-                    f'  name = "{cfg.name}"\n'
-                    '}\n\n'
-                    f'resource "zentral_munki_enrollment" "enrollment{e.pk}" {{\n'
-                    f'  configuration_id      = zentral_munki_configuration.configuration{cfg.pk}.id\n'
-                    f'  meta_business_unit_id = zentral_meta_business_unit.metabusinessunit{mbu.pk}.id\n'
-                    '}\n\n'
-                )
-            with zf.open("munki_script_checks.tf") as msctf:
-                self.assertEqual(
-                    msctf.read().decode("utf-8"),
-                    f'resource "zentral_munki_script_check" "scriptcheck{sc.pk}" {{\n'
-                    f'  name            = "{sc.compliance_check.name}"\n'
-                    '  source          = "echo yolo"\n'
-                    '  expected_result = "yolo"\n'
-                    f'  tag_ids         = [zentral_tag.tag{tag.pk}.id]\n'
-                    '}\n\n'
-                )
