@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -54,15 +53,8 @@
 <p><a href="{% url 'mdm:realm_group_tag_mappings' %}">Group → Tag mappings</a></p>
 {% endif %}
 
-<div class="d-flex align-items-center mb-1">
-    <h3 class="m-0">Setup</h3>
-    <div class="me-auto">
-        {% if show_terraform_export %}
-            {% url 'mdm:terraform_export' as url %}
-            {% button 'DOWNLOAD' url "Download Terraform Config" %}
-        {% endif %}
-    </div>
-</div>
+<h3>Setup</h3>
+
 {% if perms.mdm.view_pushcertificate %}
 <p><a href="{% url 'mdm:push_certificates' %}">Push certificates</a></p>
 {% endif %}

@@ -16,8 +16,6 @@ from zentral.contrib.mdm.models import PushCertificate, DEPToken, DEPVirtualServ
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_root_ca_configuration_profile)
 from zentral.contrib.mdm.push_csr_signers import signer as push_csr_signer
-from zentral.contrib.mdm.terraform import iter_resources
-from zentral.utils.terraform import build_config_response
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
                                  UpdateViewWithAudit)
@@ -32,12 +30,7 @@ class IndexView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         if not self.request.user.has_module_perms("mdm"):
             raise PermissionDenied("Not allowed")
-        ctx = super().get_context_data(**kwargs)
-        ctx["show_terraform_export"] = all(
-            self.request.user.has_perm(perm)
-            for perm in TerraformExportView.permission_required
-        )
-        return ctx
+        return super().get_context_data(**kwargs)
 
 
 class RootCAView(LoginRequiredMixin, View):
@@ -45,18 +38,6 @@ class RootCAView(LoginRequiredMixin, View):
         if not self.request.user.has_module_perms("mdm"):
             raise PermissionDenied("Not allowed")
         return build_configuration_profile_response(build_root_ca_configuration_profile(), "zentral_root_ca")
-
-
-# terraform export
-
-
-class TerraformExportView(PermissionRequiredMixin, View):
-    permission_required = (
-        "mdm.view_blueprint",
-    )
-
-    def get(self, request, *args, **kwargs):
-        return build_config_response(iter_resources(), "terraform_mdm")
 
 
 # Push certificates
