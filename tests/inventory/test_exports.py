@@ -10,7 +10,7 @@ from pathlib import Path
 import zipfile
 import pyarrow.parquet as pq
 from django.core.files.storage import default_storage
-from django.db import connection
+from django.db import connection, connections
 from django.test import TestCase, TransactionTestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshot, MachineSnapshotCommit, MetaBusinessUnit, Source
@@ -18,6 +18,7 @@ from zentral.contrib.inventory.utils import (do_full_export,
                                              export_machine_macos_app_instances,
                                              export_machine_snapshots)
 from zentral.contrib.inventory.utils.app_exports import _export_machine_csv_zip
+from zentral.contrib.inventory.utils.db import chunked_query
 from zentral.contrib.inventory.utils.full_export import (FULL_EXPORT_QUERIES, FULL_EXPORT_TABLE_NAMES, TempFile,
                                                          export_transaction, iter_tables, save_export_object)
 from zentral.utils.parquet import arrow_schema
@@ -581,6 +582,21 @@ class InventoryExportsTests(TestCase):
                     self.assertEqual(snapshot["os_version"], {'major': 10, 'minor': 11, 'name': 'OS X', 'patch': 1})
                     self.assertEqual(snapshot["extra_facts"], {"un": 1, "deux": "zwei"})
         default_storage.delete(result["filepath"])
+
+    def test_chunked_query_reads_the_read_only_database(self):
+        aliases = []
+
+        class Connections:
+            def __getitem__(self, alias):
+                aliases.append(alias)
+                return connections["default"]
+
+        with patch("zentral.contrib.inventory.utils.db.get_read_only_database", return_value="ro"):
+            with patch("zentral.contrib.inventory.utils.db.connections", Connections()):
+                with chunked_query("select 1 as one", [], 10) as (columns, rows):
+                    self.assertEqual(columns, ["one"])
+                    self.assertEqual(list(rows), [(1,)])
+        self.assertEqual(aliases, ["ro"])
 
     def test_export_machine_snapshots_window_size(self):
         serial_numbers = {self.commit_machine_snapshot() for _ in range(5)}
