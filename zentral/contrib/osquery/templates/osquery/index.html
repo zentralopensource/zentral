@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -9,15 +8,7 @@
 
 <div class="row">
   <div class="col-md-12">
-    <div class="d-flex justify-content-between mb-3">
-        <h2>Osquery</h2>
-        <div class="me-auto">
-            {% if show_terraform_export %}
-                {% url 'osquery:terraform_export' as url %}
-                {% button 'DOWNLOAD' url "Download Terraform config" %}
-            {% endif %}
-        </div>
-    </div>
+    <h2>Osquery</h2>
   </div>
   <div class="col-sm-6">
     <canvas class="chart"

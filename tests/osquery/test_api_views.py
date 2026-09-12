@@ -3919,30 +3919,3 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(ConfigurationPack.objects.count(), 0)
         self.assertEqual(len(callbacks), 1)
         assert_audit_event(self, post_event, "deleted", configuration_pack, prev_value=prev_value)
-
-    # terraform export
-
-    def test_terraform_export_redirect(self):
-        self.login_redirect("terraform_export")
-
-    def test_terraform_export_permission_denied(self):
-        self.login("osquery.view_configuration")
-        response = self.client.get(reverse("osquery:terraform_export"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_terraform_export(self):
-        self.login(
-            "osquery.view_automatictableconstruction",
-            "osquery.view_configuration",
-            "osquery.view_configurationpack",
-            "osquery.view_enrollment",
-            "osquery.view_filecategory",
-            "osquery.view_pack",
-            "osquery.view_packquery",
-            "osquery.view_query",
-        )
-        self.force_configuration(force_atc=True, force_file_category=True, force_pack=True)
-        self.force_enrollment()
-        self.force_pack_query()
-        response = self.client.get(reverse("osquery:terraform_export"))
-        self.assertEqual(response.status_code, 200)

@@ -86,11 +86,6 @@ urlpatterns = [
     path('configurations/<int:configuration_pk>/enrollments/<int:pk>/bump_version/',
          views.EnrollmentBumpVersionView.as_view(),
          name='bump_enrollment_version'),
-
-    # terraform
-    path('terraform_export/',
-         views.TerraformExportView.as_view(),
-         name='terraform_export'),
 ]
 
 
