@@ -123,6 +123,35 @@
           <tbody>
             <tr>
               <td colspan="2">
+                <h5>Block notification button</h5>
+              </td>
+            </tr>
+            <tr>
+                <td>Source</td>
+                <td>{{ object.get_event_detail_source_display }}</td>
+            </tr>
+            {% with event_detail_button=object.get_event_detail_button %}
+            <tr>
+                <td>URL</td>
+                <td>
+                    {% if event_detail_button.0 %}
+                    <code>{{ event_detail_button.0 }}</code>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Text</td>
+                <td>{{ event_detail_button.1|default:"-" }}</td>
+            </tr>
+            {% endwith %}
+          </tbody>
+        </table>
+        <table class="table-object-properties">
+          <tbody>
+            <tr>
+              <td colspan="2">
                 <h5>USB</h5>
               </td>
             </tr>

@@ -89,6 +89,10 @@ New `/api/santa/enrolled_machines/` endpoint.
 
 The enrolled machine and sync state metrics are bucketed by the age of the last postflight now, like the active machine metric. A machine that stopped reporting kept its Santa version in the totals forever. The `le` label selects the machines that reported in the last 1, 7, 14, 30, 45 or 90 days, and `+Inf` counts all of them.
 
+The Santa configuration sets the button of the block notification now. Zentral sends it in the preflight response, so a machine that enrolls through another MDM gets it too. The event detail source picks where the button comes from: local configuration sends nothing and leaves the button to the configuration profile, voting portal sends a link to the user portal, custom sends your own URL and label, and none removes the button.
+
+Local configuration does not remove a button that a machine already has. Force a clean sync to do that.
+
 
 ### Backward incompatibilities
 
@@ -148,6 +152,10 @@ The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `
 #### 🧨 Santa compiler rules on team ID and certificate targets
 
 A rule with the `ALLOWLIST_COMPILER` policy is rejected on a target that is not a cdhash, a binary or a signing ID, in the web console, the rule API and the ruleset API. The Santa client only accepts the compiler state on those three rule types. On a team ID or a certificate it drops the rule when it evaluates it, so the rule synchronized cleanly and then left its target with no rule at all, which blocks the target in lockdown mode. The rules already in the database keep their policy, but Zentral rejects each of them at the next write: a ruleset that you post again, a `PUT` on the rule API, a Terraform configuration that you apply again, and a change to any other attribute of the rule in the web console.
+
+#### 🧨 Santa block notification button
+
+A voting realm does not add the button by itself any more. You pick the source on the configuration now. Zentral sets the voting portal source on every configuration that has a voting realm with the user portal, so those configurations keep their button. A new configuration starts with the local source.
 
 #### 🧨 Privilege escalation hardening — task results
 

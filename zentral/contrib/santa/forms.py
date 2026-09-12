@@ -22,6 +22,7 @@ from .models import (
     TargetState,
     VotingGroup,
 )
+from .validators import ConfigurationValidator
 
 logger = logging.getLogger("zentral.contrib.santa.forms")
 
@@ -76,6 +77,9 @@ class ConfigurationForm(forms.ModelForm):
                 "remount_usb_mode",
                 "'Block USB mount' must be set to use this option"
             )
+
+        for key, error in ConfigurationValidator(cleaned_data).validate().items():
+            self.add_error(key, error)
 
         return cleaned_data
 
