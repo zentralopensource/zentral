@@ -1,4 +1,6 @@
+from contextlib import contextmanager
 import logging
+from django.db import connection, transaction
 from zentral.contrib.inventory.compliance_checks import jmespath_checks_cache
 from zentral.contrib.inventory.events import (iter_inventory_events)
 from zentral.contrib.inventory.models import MachineSnapshotCommit
@@ -100,3 +102,20 @@ def commit_machine_snapshot_and_yield_events(tree):
         yield from iter_inventory_events(msc.serial_number, inventory_events_from_machine_snapshot_commit(msc))
     # compliance checks
     yield from jmespath_checks_cache.process_tree(tree, last_seen)
+
+
+@contextmanager
+def chunked_query(query, args, window_size):
+    """Run a query on a server-side cursor, and read window_size rows for each round trip."""
+    with transaction.atomic(), connection.chunked_cursor() as cursor:
+        cursor.execute(query, args)
+        # the description of a server-side cursor is only known after the first fetch
+        batch = cursor.fetchmany(window_size)
+        columns = [c.name for c in cursor.description]
+        yield columns, _iter_chunked_rows(cursor, batch, window_size)
+
+
+def _iter_chunked_rows(cursor, batch, window_size):
+    while batch:
+        yield from batch
+        batch = cursor.fetchmany(window_size)

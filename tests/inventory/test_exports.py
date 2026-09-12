@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import csv
 from datetime import datetime, timedelta
 from unittest.mock import patch
@@ -9,12 +10,14 @@ from pathlib import Path
 import zipfile
 import pyarrow.parquet as pq
 from django.core.files.storage import default_storage
+from django.db import connection
 from django.test import TestCase, TransactionTestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshot, MachineSnapshotCommit, MetaBusinessUnit, Source
 from zentral.contrib.inventory.utils import (do_full_export,
                                              export_machine_macos_app_instances,
                                              export_machine_snapshots)
+from zentral.contrib.inventory.utils.app_exports import _export_machine_csv_zip
 from zentral.contrib.inventory.utils.full_export import (FULL_EXPORT_QUERIES, FULL_EXPORT_TABLE_NAMES, TempFile,
                                                          export_transaction, iter_tables, save_export_object)
 from zentral.utils.parquet import arrow_schema
@@ -46,6 +49,29 @@ def sha_256(*parts):
 
 def root_certificate():
     return {"common_name": "Apple Root CA", "sha_256": sha_256("root")}
+
+
+@contextmanager
+def record_fetches():
+    """Record the (window, row count) of every fetch on the chunked cursors of the exports."""
+    fetches = []
+    chunked_cursor = connection.chunked_cursor
+
+    @contextmanager
+    def recording_chunked_cursor():
+        with chunked_cursor() as cursor:
+            fetchmany = cursor.fetchmany
+
+            def recording_fetchmany(size):
+                rows = fetchmany(size)
+                fetches.append((size, len(rows)))
+                return rows
+
+            cursor.fetchmany = recording_fetchmany
+            yield cursor
+
+    with patch.object(connection, "chunked_cursor", recording_chunked_cursor):
+        yield fetches
 
 
 class InventoryExportsTests(TestCase):
@@ -554,6 +580,39 @@ class InventoryExportsTests(TestCase):
                     self.assertEqual(snapshot["serial_number"], serial_number)
                     self.assertEqual(snapshot["os_version"], {'major': 10, 'minor': 11, 'name': 'OS X', 'patch': 1})
                     self.assertEqual(snapshot["extra_facts"], {"un": 1, "deux": "zwei"})
+        default_storage.delete(result["filepath"])
+
+    def test_export_machine_snapshots_window_size(self):
+        serial_numbers = {self.commit_machine_snapshot() for _ in range(5)}
+        with record_fetches() as fetches:
+            result = export_machine_snapshots(source_name="ZENTRAL TESTS", window_size=2)
+        # 5 rows, 2 rows per fetch, then an empty fetch
+        self.assertEqual(fetches, [(2, 2), (2, 2), (2, 1), (2, 0)])
+        with default_storage.open(result["filepath"]) as f:
+            with zipfile.ZipFile(f) as zf:
+                with zf.open("zentral-tests.jsonl") as jl:
+                    content = jl.read().decode("utf-8").splitlines()
+        self.assertEqual({json.loads(line)["serial_number"] for line in content}, serial_numbers)
+        default_storage.delete(result["filepath"])
+
+    def test_export_machine_csv_zip_window_size(self):
+        serial_numbers = {self.commit_machine_snapshot() for _ in range(5)}
+        query = (
+            "select s.name as source_name, cms.serial_number "
+            "from inventory_currentmachinesnapshot as cms "
+            "join inventory_machinesnapshot as ms on ms.id = cms.machine_snapshot_id "
+            "join inventory_source as s on ms.source_id = s.id "
+            "where UPPER(s.name) = %s "
+            "order by s.name, cms.serial_number;"
+        )
+        with record_fetches() as fetches:
+            result = _export_machine_csv_zip(query, "ZENTRAL TESTS", "window_size_export", window_size=2)
+        # 5 rows, 2 rows per fetch, then an empty fetch
+        self.assertEqual(fetches, [(2, 2), (2, 2), (2, 1), (2, 0)])
+        with default_storage.open(result["filepath"]) as f:
+            rows = list(csv.reader(zipfile.Path(f, at="zentral-tests.csv").open(newline="")))
+        self.assertEqual(rows[0], ["source_name", "serial_number"])
+        self.assertEqual({serial_number for _, serial_number in rows[1:]}, serial_numbers)
         default_storage.delete(result["filepath"])
 
     def test_export_machine_macos_app_instances(self):

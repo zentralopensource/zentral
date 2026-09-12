@@ -6,10 +6,11 @@ import zipfile
 
 from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import connection, transaction
 from django.utils.text import slugify
 
 from zentral.utils.time import naive_utcnow
+
+from .db import chunked_query
 
 __all__ = [
     "export_machine_snapshots",
@@ -92,7 +93,6 @@ def export_machine_snapshots(source_name=None, window_size=5000):
         "order by s.name, ms.serial_number"
     )
 
-    columns = None
     json_files = []
     current_source_name = json_f = json_p = None
 
@@ -120,13 +120,8 @@ def export_machine_snapshots(source_name=None, window_size=5000):
                     del row_d[k]
         return row_d
 
-    # iter all rows over a server-side cursor
-    with transaction.atomic(), connection.chunked_cursor() as cursor:
-        cursor.itersize = window_size
-        cursor.execute(query, args)
-        for row in cursor:
-            if columns is None:
-                columns = [c.name for c in cursor.description]
+    with chunked_query(query, args, window_size) as (columns, rows):
+        for row in rows:
             row_d = dict(zip(columns, row))
             source_name = row_d["source"]["name"]
             if source_name != current_source_name:

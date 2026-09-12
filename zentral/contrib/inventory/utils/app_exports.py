@@ -5,10 +5,11 @@ import tempfile
 import zipfile
 
 from django.core.files.storage import default_storage
-from django.db import connection, transaction
 from django.utils.text import slugify
 
 from zentral.utils.time import naive_utcnow
+
+from .db import chunked_query
 
 __all__ = [
     "export_machine_android_apps",
@@ -23,20 +24,14 @@ logger = logging.getLogger("zentral.contrib.inventory.utils.app_exports")
 
 
 def _export_machine_csv_zip(query, source_name, basename, window_size=5000):
-    columns = None
     csv_files = []
     current_source_name = csv_f = csv_w = csv_p = None
 
-    # iter all rows over a server-side cursor
     query_args = []
     if source_name:
         query_args.append(source_name.upper())
-    with transaction.atomic(), connection.chunked_cursor() as cursor:
-        cursor.itersize = window_size
-        cursor.execute(query, query_args)
-        for row in cursor:
-            if columns is None:
-                columns = [c.name for c in cursor.description]
+    with chunked_query(query, query_args, window_size) as (columns, rows):
+        for row in rows:
             source_name = row[columns.index("source_name")]
             if source_name != current_source_name:
                 if current_source_name:
