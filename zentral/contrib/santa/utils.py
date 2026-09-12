@@ -6,7 +6,7 @@ from dateutil import parser
 from django.db import connection, transaction
 from django.urls import reverse
 
-from zentral.conf import api_base_url, settings
+from zentral.conf import api_base_url
 from zentral.utils.payloads import generate_payload_uuid, get_payload_identifier, sign_payload
 from zentral.utils.time import naive_utcnow
 
@@ -23,15 +23,6 @@ def build_santa_enrollment_configuration(enrollment):
         # See also https://github.com/northpolesec/santa/blob/344a35aaf63c24a56f7a021ce18ecab090584da3/Source/common/SNTConfigurator.h#L418-L421  # NOQA
         "SyncExtraHeaders": {"Zentral-Authorization": f"Bearer {enrollment.secret.secret}"},
     })
-    realm = configuration.voting_realm
-    if realm and realm.user_portal and settings["apps"]["zentral.contrib.santa"].get("user_portal"):
-        path = reverse("realms_public:santa_up:event_detail", args=(realm.pk,))
-        params = (
-            "bofid=%bundle_or_file_identifier%&fid=%file_identifier%"
-            "&mid=%machine_id%&tid=%team_id%&sid=%signing_id%&cdh=%cdhash%"
-        )
-        config["EventDetailText"] = "More info"
-        config["EventDetailURL"] = f"{api_base_url()}{path}?{params}"
     return config
 
 

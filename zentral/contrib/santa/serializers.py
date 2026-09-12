@@ -15,6 +15,7 @@ from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from .events import post_santa_rule_update_event
 from .forms import cleanup_target_identifier
 from .models import Configuration, EnrolledMachine, Enrollment, Rule, Target
+from .validators import ConfigurationValidator
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
 
@@ -23,6 +24,12 @@ class ConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Configuration
         fields = '__all__'
+
+    def validate(self, data):
+        errors = ConfigurationValidator(data).validate()
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
