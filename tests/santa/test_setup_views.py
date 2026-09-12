@@ -14,7 +14,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MetaBusinessUnit, Tag
 from zentral.contrib.santa.events import SantaRuleUpdateEvent
-from zentral.contrib.santa.models import Bundle, Enrollment, Rule, Target
+from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
@@ -113,8 +113,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     # utility methods
 
-    def _force_enrollment(self, voting_realm=None):
-        configuration = force_configuration(voting_realm=voting_realm)
+    def _force_enrollment(self, voting_realm=None, event_detail_source=Configuration.EventDetailSource.LOCAL):
+        configuration = force_configuration(voting_realm=voting_realm, event_detail_source=event_detail_source)
         enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.mbu)
         enrollment = Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
         return configuration, enrollment
@@ -329,6 +329,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                                          "allow_unknown_shard": 87,
                                          "enable_all_event_upload_shard": 65,
                                          "sync_incident_severity": 0,
+                                         "event_detail_source": "LOCAL",
                                          }, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
@@ -361,6 +362,9 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "enable_transitive_rules": False,
                      "allowed_path_regex": "",
                      "blocked_path_regex": "",
+                     "event_detail_source": "LOCAL",
+                     "event_detail_url": "",
+                     "event_detail_text": "",
                      "block_usb_mount": False,
                      "remount_usb_mode": [],
                      "allow_unknown_shard": 87,
@@ -416,6 +420,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                                          "allow_unknown_shard": 91,
                                          "enable_all_event_upload_shard": 76,
                                          "sync_incident_severity": 300,
+                                         "event_detail_source": "LOCAL",
                                          "block_usb_mount": "on",
                                          "remount_usb_mode": "rdonly, noexec",
                                          "voting_realm": realm.pk,
@@ -453,6 +458,9 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "enable_transitive_rules": False,
                      "allowed_path_regex": "",
                      "blocked_path_regex": "",
+                     "event_detail_source": "LOCAL",
+                     "event_detail_url": "",
+                     "event_detail_text": "",
                      "block_usb_mount": False,
                      "remount_usb_mode": [],
                      "allow_unknown_shard": 100,
@@ -478,6 +486,9 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "enable_transitive_rules": False,
                      "allowed_path_regex": "",
                      "blocked_path_regex": "",
+                     "event_detail_source": "LOCAL",
+                     "event_detail_url": "",
+                     "event_detail_text": "",
                      "block_usb_mount": True,
                      "remount_usb_mode": ["rdonly", "noexec"],
                      "allow_unknown_shard": 91,
@@ -566,6 +577,9 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                      "enable_transitive_rules": False,
                      "allowed_path_regex": "",
                      "blocked_path_regex": "",
+                     "event_detail_source": "LOCAL",
+                     "event_detail_url": "",
+                     "event_detail_text": "",
                      "block_usb_mount": False,
                      "remount_usb_mode": [],
                      "allow_unknown_shard": 100,
@@ -701,7 +715,10 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_enrollment_with_voting_plist(self):
         realm = force_realm(user_portal=True)
-        configuration, enrollment = self._force_enrollment(voting_realm=realm)
+        configuration, enrollment = self._force_enrollment(
+            voting_realm=realm,
+            event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL,
+        )
         self.login("santa.view_enrollment")
         response = self.client.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -2110,3 +2127,33 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/pick_rule_signing_id.html")
         signing_ids = response.context["signing_ids"]
         self.assertEqual(len(signing_ids), 0)
+
+    def test_configuration_detail_event_detail_local(self):
+        configuration = force_configuration()
+        self.login("santa.view_configuration")
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Block notification button")
+        self.assertContains(response, "Local configuration")
+
+    def test_configuration_detail_event_detail_custom(self):
+        configuration = force_configuration(
+            event_detail_source=Configuration.EventDetailSource.CUSTOM,
+            event_detail_url="https://www.example.com/blocked/",
+            event_detail_text="Request an exception",
+        )
+        self.login("santa.view_configuration")
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Block notification button")
+        self.assertContains(response, "https://www.example.com/blocked/")
+        self.assertContains(response, "Request an exception")
+
+    def test_configuration_detail_event_detail_none(self):
+        configuration = force_configuration(event_detail_source=Configuration.EventDetailSource.NONE)
+        self.login("santa.view_configuration")
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Block notification button")
+        # the sentinel is what the client gets, not something to show an operator
+        self.assertNotContains(response, f"<code>{Configuration.NO_EVENT_DETAIL_URL}</code>")

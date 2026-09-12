@@ -17,6 +17,7 @@ from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmGroup, RealmUser
 
+from zentral.conf import api_base_url, settings
 from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, Tag
 from zentral.core.incidents.models import Severity
 from zentral.utils.text import shard
@@ -510,7 +511,24 @@ class ConfigurationManager(models.Manager):
         )
 
 
+def voting_portal_event_detail_url(realm):
+    if not realm or not realm.user_portal:
+        return None
+    if not settings["apps"]["zentral.contrib.santa"].get("user_portal"):
+        return None
+    path = reverse("realms_public:santa_up:event_detail", args=(realm.pk,))
+    params = ("bofid=%bundle_or_file_identifier%&fid=%file_identifier%"
+              "&mid=%machine_id%&tid=%team_id%&sid=%signing_id%&cdh=%cdhash%")
+    return f"{api_base_url()}{path}?{params}"
+
+
 class Configuration(models.Model):
+    class EventDetailSource(models.TextChoices):
+        LOCAL = "LOCAL", _("Local configuration")
+        VOTING_PORTAL = "VOTING_PORTAL", _("Voting portal")
+        CUSTOM = "CUSTOM", _("Custom")
+        NONE = "NONE", _("None")
+
     MONITOR_MODE = 1
     LOCKDOWN_MODE = 2
     CLIENT_MODE_CHOICES = (
@@ -521,6 +539,9 @@ class Configuration(models.Model):
     PREFLIGHT_LOCKDOWN_MODE = "LOCKDOWN"
     DEFAULT_BATCH_SIZE = 50
     DEFAULT_FULL_SYNC_INTERVAL = 600
+    DEFAULT_EVENT_DETAIL_TEXT = "More info"
+    # Santa suppresses the block notification button when the URL is this exact string.
+    NO_EVENT_DETAIL_URL = "null"
     # The preflight path regex fields have explicit presence: omitting one leaves the pattern the
     # client already persisted in place, so an emptied regex has to be overwritten with a pattern
     # that cannot match. Not an empty string: ICU rejects it, which clears the sync state key and
@@ -591,6 +612,27 @@ class Configuration(models.Model):
     blocked_path_regex = models.TextField(
         blank=True,
         help_text="In Monitor mode, executables whose paths are matched by this regex will be blocked."
+    )
+
+    # Block notification button
+
+    event_detail_source = models.CharField(
+        max_length=16,
+        choices=EventDetailSource.choices,
+        default=EventDetailSource.LOCAL,
+        help_text="Where the block notification button comes from. Local configuration sends nothing, and "
+                  "leaves the button to the configuration profile. Switching back to it does not remove a "
+                  "button already sent to a machine: force a clean sync to do that."
+    )
+    event_detail_url = models.URLField(
+        blank=True, max_length=1024,
+        help_text="Custom URL of the block notification button. The following sequences are replaced: "
+                  "%file_identifier%, %bundle_or_file_identifier%, %file_bundle_id%, %team_id%, %signing_id%, "
+                  "%cdhash%, %username%, %machine_id%, %hostname%, %uuid%, %serial%."
+    )
+    event_detail_text = models.TextField(
+        blank=True,
+        help_text="Label of the block notification button."
     )
 
     # USB
@@ -692,6 +734,29 @@ class Configuration(models.Model):
     def is_monitor_mode(self):
         return self.client_mode == self.MONITOR_MODE
 
+    def get_event_detail(self):
+        """The (url, text) to distribute, or (None, None) to distribute nothing."""
+        if self.event_detail_source == self.EventDetailSource.LOCAL:
+            return None, None
+        if self.event_detail_source == self.EventDetailSource.NONE:
+            return self.NO_EVENT_DETAIL_URL, None
+        if self.event_detail_source == self.EventDetailSource.VOTING_PORTAL:
+            url = voting_portal_event_detail_url(self.voting_realm)
+            if not url:
+                # the user portal was switched off after the configuration was saved. Distributing
+                # nothing keeps whatever button the machines have, an empty URL would remove it.
+                logger.error("Configuration %s: voting portal event detail URL unavailable", self.pk)
+                return None, None
+            return url, self.event_detail_text or self.DEFAULT_EVENT_DETAIL_TEXT
+        return self.event_detail_url, self.event_detail_text
+
+    def get_event_detail_button(self):
+        """The (url, text) of the button the user sees, or (None, None) when there is none."""
+        url, text = self.get_event_detail()
+        if not url or url == self.NO_EVENT_DETAIL_URL:
+            return None, None
+        return url, text
+
     def get_sync_server_config(self, serial_number, comparable_santa_version):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
@@ -712,6 +777,15 @@ class Configuration(models.Model):
              shard(serial_number, self.pk) <= self.enable_all_event_upload_shard)
         )
 
+        # block notification button. An omitted key leaves the value the client has persisted,
+        # which is what makes the local configuration source a no-op. An empty string would not:
+        # the client prefers an empty synced value over the one in the configuration profile.
+        event_detail_url, event_detail_text = self.get_event_detail()
+        if event_detail_url:
+            config["event_detail_url"] = event_detail_url
+        if event_detail_text:
+            config["event_detail_text"] = event_detail_text
+
         return config
 
     def get_local_config(self):
@@ -722,6 +796,11 @@ class Configuration(models.Model):
             config["AllowedPathRegex"] = self.allowed_path_regex
         if self.blocked_path_regex:
             config["BlockedPathRegex"] = self.blocked_path_regex
+        event_detail_url, event_detail_text = self.get_event_detail()
+        if event_detail_url:
+            config["EventDetailURL"] = event_detail_url
+        if event_detail_text:
+            config["EventDetailText"] = event_detail_text
         return config
 
     def save(self, *args, **kwargs):
@@ -745,6 +824,10 @@ class Configuration(models.Model):
             # Regexes
             "allowed_path_regex": self.allowed_path_regex,
             "blocked_path_regex": self.blocked_path_regex,
+            # Block notification button
+            "event_detail_source": self.event_detail_source,
+            "event_detail_url": self.event_detail_url,
+            "event_detail_text": self.event_detail_text,
             # Voting
             "voting_realm": self.voting_realm.serialize_for_event(keys_only=True) if self.voting_realm else None,
             "default_voting_weight": self.default_voting_weight,
