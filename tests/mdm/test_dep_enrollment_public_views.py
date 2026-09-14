@@ -178,6 +178,46 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(last_event.payload["status"], "warning")
         self.assertEqual(last_event.payload["reason"], "OS update to version 14.3 required")
 
+    def test_dep_enroll_max_macos_update_required_below_max(self, vicsp, post_event):
+        vicsp.side_effect = lambda d: d
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        force_software_update(
+            device_id="J413AP",
+            version="14.7.0",
+            build="23H124",
+            posting_date=datetime.date(2024, 9, 16),
+            expiration_date=datetime.date(3000, 1, 2)
+        )
+        force_software_update(
+            device_id="J413AP",
+            version="15.0.0",
+            build="24A335",
+            posting_date=datetime.date(2024, 9, 16),
+            expiration_date=datetime.date(3000, 1, 2)
+        )
+        enrollment = session.dep_enrollment
+        enrollment.macos_max_version = "15"
+        enrollment.save()
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=plistlib.dumps({"PRODUCT": "Macmini9,1",
+                                                         "SERIAL": session.enrolled_device.serial_number,
+                                                         "UDID": session.enrolled_device.udid,
+                                                         "MDM_CAN_REQUEST_SOFTWARE_UPDATE": True,
+                                                         "OS_VERSION": "14.6.1",
+                                                         "VERSION": "23G93",
+                                                         "SOFTWARE_UPDATE_DEVICE_ID": "J413AP"}),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.json(),
+            {'code': 'com.apple.softwareupdate.required', 'details': {'OSVersion': '14.7',
+                                                                      'BuildVersion': '23H124'}}
+        )
+        last_event = post_event.call_args.args[0]
+        self.assertIsInstance(last_event, DEPEnrollmentRequestEvent)
+        self.assertEqual(last_event.payload["status"], "warning")
+        self.assertEqual(last_event.payload["reason"], "OS update to version 14.7 required")
+
     def test_dep_enroll_max_macos_no_update_required(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)

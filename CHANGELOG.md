@@ -248,6 +248,8 @@ An MDM token update that has no `UserShortName` does not give a 500 anymore. App
 
 The MDM software update enforcement API rejects a null delay in days or local time when a maximum target OS version is set. A latest enforcement needs both fields to calculate the target date of its declaration. If you omit them, the defaults of 14 days and 09:30 apply, as before.
 
+A DEP enrollment with a maximum required OS version does not ask a device to install an update at or above that version anymore. Zentral read the maximum only to decide to look for an update, then asked the device to install the most recent update available for it. It selects the most recent update below the maximum now, as the enrollment page shows.
+
 Fixed the scope of a Monolith sub manifest package that uses the *Default Installs* key. Zentral put the package in the `default_installs` of every machine, and ignored the excluded tags and the shards. A machine out of scope kept a self-serve entry that can install the package later, with no request from the user. The web console form also removed the excluded tags and the shards from a package that uses the *Managed Updates* key.
 
 A rebuilt Monolith enrollment package keeps its file name now, on a storage that does not overwrite files. When an orphan file used the name, the storage saved the package under a name with a random suffix. Zentral deletes the orphan file before it saves the package.
