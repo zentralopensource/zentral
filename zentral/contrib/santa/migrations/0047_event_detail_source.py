@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='event_detail_source',
-            field=models.CharField(choices=[('LOCAL', 'Local configuration'), ('VOTING_PORTAL', 'Voting portal'), ('CUSTOM', 'Custom'), ('NONE', 'None')], default='LOCAL', help_text='Where the block notification button comes from. Local configuration sends nothing, and leaves the button to the configuration profile. Switching back to it does not remove a button already sent to a machine: force a clean sync to do that.', max_length=16),
+            field=models.CharField(choices=[('LOCAL', 'Local configuration'), ('VOTING_PORTAL', 'Voting portal'), ('CUSTOM', 'Custom'), ('NONE', 'None')], default='LOCAL', help_text='Where the block notification button comes from. Local configuration sends nothing, and leaves the button to the configuration profile. Switching back to it does not remove a button already sent to a machine: force a clean sync to do that. If the voting portal becomes unavailable, Zentral removes the button.', max_length=16),
         ),
         migrations.AddField(
             model_name='configuration',

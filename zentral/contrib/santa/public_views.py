@@ -2,15 +2,13 @@ import json
 import logging
 from uuid import UUID
 import zlib
-from django.contrib.postgres.expressions import ArraySubquery
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
-from django.db.models import OuterRef
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import View
 from zentral.contrib.inventory.conf import macos_version_from_build
 from zentral.contrib.inventory.exceptions import EnrollmentSecretVerificationFailed
-from zentral.contrib.inventory.models import MachineTag, PrincipalUserSource
+from zentral.contrib.inventory.models import PrincipalUserSource
 from zentral.contrib.inventory.utils import (add_machine_tags,
                                              commit_machine_snapshot_and_trigger_events,
                                              verify_enrollment_secret)
@@ -74,16 +72,7 @@ class BaseSyncView(View):
 
     def get_enrolled_machine(self):
         try:
-            enrolled_machine = EnrolledMachine.objects.select_related(
-                "enrollment__secret",
-                "enrollment__configuration"
-            ).annotate(
-                # only the rule download scopes on the tags, but they are one index scan in the
-                # round trip that reads the machine anyway
-                tag_ids=ArraySubquery(
-                    MachineTag.objects.filter(serial_number=OuterRef("serial_number")).values("tag_id")
-                )
-            ).get(
+            enrolled_machine = EnrolledMachine.objects.for_sync().get(
                 enrollment__secret__secret=self.enrollment_secret_secret,
                 hardware_uuid=self.hardware_uuid
             )
@@ -343,7 +332,7 @@ class PreflightView(BaseSyncView):
         comparable_santa_version = self.enrolled_machine.get_comparable_santa_version()
 
         response_dict = configuration.get_sync_server_config(
-            self.enrolled_machine.serial_number,
+            self.enrolled_machine,
             comparable_santa_version,
         )
 

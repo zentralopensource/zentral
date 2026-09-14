@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, TemplateView
 from django.views.generic.edit import DeleteView, FormView, UpdateView
+from pbac.engine import engine
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.events import post_santa_rule_update_event
@@ -14,14 +15,17 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          CDHashSearchForm, CertificateSearchForm,
                                          TeamIDSearchForm, SigningIDSearchForm,
                                          ConfigurationForm, EnrollmentForm,
-                                         VotingGroupForm,
+                                         ScopedClientModeForm, VotingGroupForm,
                                          RuleForm, RuleSearchForm, UpdateRuleForm)
-from zentral.contrib.santa.models import Configuration, Enrollment, Rule, Target, VotingGroup
+from zentral.contrib.santa.models import (Configuration, Enrollment, Rule, ScopedClientMode, Target,
+                                          VotingGroup)
+from zentral.contrib.santa.pbac import (CreateScopedClientModeRequest, DeleteScopedClientModeRequest,
+                                        UpdateScopedClientModeRequest, ViewScopedClientModeRequest)
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
-from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, post_audit_event,
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, PBACViewMixin, post_audit_event,
                                  UpdateViewWithAudit, UserPaginationListView)
 
 
@@ -77,7 +81,26 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
                        .select_related("realm_group")
                        .order_by("realm_group__display_name")
         )
+        ctx.update(self.get_scoped_client_mode_context())
         return ctx
+
+    def get_scoped_client_mode_context(self):
+        # a template cannot build a PBAC request
+        create_request = CreateScopedClientModeRequest(self.request.user, self.object)
+        scoped_client_modes = list(
+            self.object.scopedclientmode_set.prefetch_related("tags", "excluded_tags").order_by("name")
+        )
+        view_requests = [ViewScopedClientModeRequest(self.request.user, scm) for scm in scoped_client_modes]
+        update_requests = [UpdateScopedClientModeRequest(self.request.user, scm) for scm in scoped_client_modes]
+        delete_requests = [DeleteScopedClientModeRequest(self.request.user, scm) for scm in scoped_client_modes]
+        engine.authorize_requests([create_request] + view_requests + update_requests + delete_requests)
+        rows = [
+            {"scoped_client_mode": scm, "can_update": u.is_authorized, "can_delete": d.is_authorized}
+            for scm, v, u, d in zip(scoped_client_modes, view_requests, update_requests, delete_requests)
+            if v.is_authorized
+        ]
+        return {"scoped_client_modes": rows,
+                "can_create_scoped_client_mode": create_request.is_authorized}
 
 
 class EventsMixin:
@@ -182,6 +205,73 @@ class UpdateVotingGroupView(PermissionRequiredMixin, UpdateViewWithAudit):
 class DeleteVotingGroupView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "santa.delete_votinggroup"
     model = VotingGroup
+
+    def get_success_url(self):
+        return reverse("santa:configuration", args=(self.object.configuration.pk,))
+
+
+# scoped client modes
+
+
+class CreateScopedClientModeView(PBACViewMixin, CreateViewWithAudit):
+    pbac_request_class = CreateScopedClientModeRequest
+    model = ScopedClientMode
+    form_class = ScopedClientModeForm
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.configuration = get_object_or_404(Configuration, pk=kwargs["configuration_pk"])
+        return {"configuration": self.configuration}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["configuration"] = self.configuration
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Create scoped client mode"
+        return ctx
+
+
+class UpdateScopedClientModeView(PBACViewMixin, UpdateViewWithAudit):
+    pbac_request_class = UpdateScopedClientModeRequest
+    model = ScopedClientMode
+    form_class = ScopedClientModeForm
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.object = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
+        return {"scoped_client_mode": self.object}
+
+    def get_queryset(self):
+        # the PBAC resource, the audit event and the success URL all read the configuration
+        return (super().get_queryset()
+                       .select_related("configuration")
+                       .filter(configuration__pk=self.kwargs["configuration_pk"]))
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["configuration"] = self.object.configuration
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Update scoped client mode"
+        return ctx
+
+
+class DeleteScopedClientModeView(PBACViewMixin, DeleteViewWithAudit):
+    pbac_request_class = DeleteScopedClientModeRequest
+    model = ScopedClientMode
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.object = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
+        return {"scoped_client_mode": self.object}
+
+    def get_queryset(self):
+        # the PBAC resource, the audit event and the success URL all read the configuration
+        return (super().get_queryset()
+                       .select_related("configuration")
+                       .filter(configuration__pk=self.kwargs["configuration_pk"]))
 
     def get_success_url(self):
         return reverse("santa:configuration", args=(self.object.configuration.pk,))

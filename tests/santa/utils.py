@@ -12,6 +12,7 @@ from zentral.contrib.inventory.models import (
     EnrollmentSecret,
     File,
     MachineSnapshotCommit,
+    MachineTag,
     MetaBusinessUnit,
     PrincipalUserSource,
 )
@@ -162,6 +163,9 @@ def force_enrolled_machine(
     last_sync_ok=None,
     last_postflight_at=None,
     forced_sync_type=None,
+    serial_number=None,
+    tags=None,
+    for_sync=False,
 ):
     if mbu is None:
         mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
@@ -170,7 +174,8 @@ def force_enrolled_machine(
     enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=mbu)
     enrollment = Enrollment.objects.create(configuration=configuration, secret=enrollment_secret)
     hardware_uuid = uuid.uuid4()
-    serial_number = get_random_string(10)
+    if serial_number is None:
+        serial_number = get_random_string(10)
     em = EnrolledMachine.objects.create(
         enrollment=enrollment,
         hardware_uuid=hardware_uuid,
@@ -204,6 +209,11 @@ def force_enrolled_machine(
                 'principal_name': primary_user,
             }
         MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
+    for tag in tags or []:
+        MachineTag.objects.create(serial_number=serial_number, tag=tag)
+    if for_sync:
+        # the preflight and the rule download read the annotations, an enrollment does not
+        return EnrolledMachine.objects.for_sync().get(pk=em.pk)
     return em
 
 

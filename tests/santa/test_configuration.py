@@ -6,10 +6,19 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.santa.models import Configuration, voting_portal_event_detail_url
 from zentral.core.incidents.models import Severity
-from .utils import force_realm
+from .utils import force_enrolled_machine, force_realm
 
 
 class SantaConfigurationTestCase(TestCase):
+    def enrolled_machine(self, configuration, serial_number=None):
+        return force_enrolled_machine(configuration=configuration,
+                                      serial_number=serial_number or get_random_string(12),
+                                      for_sync=True)
+
+    def enable_all_event_upload(self, config, serial_number):
+        machine = self.enrolled_machine(config, serial_number)
+        return config.get_sync_server_config(machine, (2022, 1))["enable_all_event_upload"]
+
     # get_sync_incident_severity
 
     def test_get_sync_incident_severity(self):
@@ -40,7 +49,7 @@ class SantaConfigurationTestCase(TestCase):
         local_config = config.get_local_config()
         self.assertEqual(local_config["BlockedPathRegex"], blocked_path_regex)
         self.assertTrue("AllowedPathRegex" not in local_config)
-        sync_server_config = config.get_sync_server_config(get_random_string(12), (1, 14))
+        sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (1, 14))
         self.assertEqual(sync_server_config["blocked_path_regex"], blocked_path_regex)
         self.assertEqual(sync_server_config["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
@@ -51,7 +60,7 @@ class SantaConfigurationTestCase(TestCase):
         local_config = config.get_local_config()
         self.assertEqual(local_config["AllowedPathRegex"], allowed_path_regex)
         self.assertTrue("BlockedPathRegex" not in local_config)
-        sync_server_config = config.get_sync_server_config(get_random_string(12), (1, 14))
+        sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (1, 14))
         self.assertEqual(sync_server_config["allowed_path_regex"], allowed_path_regex)
         self.assertEqual(sync_server_config["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
@@ -60,8 +69,8 @@ class SantaConfigurationTestCase(TestCase):
         # caches twice per full sync
         config = Configuration.objects.create(name=get_random_string(256))
         serial_number = get_random_string(12)
-        first = config.get_sync_server_config(serial_number, (1, 14))
-        second = config.get_sync_server_config(serial_number, (1, 14))
+        first = config.get_sync_server_config(self.enrolled_machine(config, serial_number), (1, 14))
+        second = config.get_sync_server_config(self.enrolled_machine(config, serial_number), (1, 14))
         for attr in ("allowed_path_regex", "blocked_path_regex"):
             self.assertEqual(first[attr], Configuration.NON_MATCHING_PATH_REGEX)
             self.assertEqual(first[attr], second[attr])
@@ -83,22 +92,30 @@ class SantaConfigurationTestCase(TestCase):
         config = Configuration.objects.create(pk=1000000000,
                                               name=get_random_string(256),
                                               enable_all_event_upload_shard=0)
-        self.assertEqual(config.get_sync_server_config("111111", (2022, 1))["enable_all_event_upload"], False)
-        self.assertEqual(config.get_sync_server_config("777777", (2022, 1))["enable_all_event_upload"], False)
+        self.assertFalse(self.enable_all_event_upload(config, "111111"))
+        self.assertFalse(self.enable_all_event_upload(config, "777777"))
 
     def test_enable_all_event_upload_sync_server_config_50(self):
         config = Configuration.objects.create(pk=1000000000,
                                               name=get_random_string(256),
                                               enable_all_event_upload_shard=50)
-        self.assertEqual(config.get_sync_server_config("111111", (2022, 1))["enable_all_event_upload"], True)
-        self.assertEqual(config.get_sync_server_config("777777", (2022, 1))["enable_all_event_upload"], False)
+        self.assertTrue(self.enable_all_event_upload(config, "111111"))
+        self.assertFalse(self.enable_all_event_upload(config, "777777"))
 
     def test_enable_all_event_upload_sync_server_config_100(self):
         config = Configuration.objects.create(pk=1000000000,
                                               name=get_random_string(256),
                                               enable_all_event_upload_shard=100)
-        self.assertEqual(config.get_sync_server_config("111111", (2022, 1))["enable_all_event_upload"], True)
-        self.assertEqual(config.get_sync_server_config("777777", (2022, 1))["enable_all_event_upload"], True)
+        self.assertTrue(self.enable_all_event_upload(config, "111111"))
+        self.assertTrue(self.enable_all_event_upload(config, "777777"))
+
+    # preflight client mode
+
+    def test_unknown_client_mode(self):
+        configuration = Configuration.objects.create(name=get_random_string(256))
+        with self.assertRaises(ValueError) as cm:
+            configuration.get_preflight_client_mode(42)
+        self.assertEqual(cm.exception.args[0], "Unknown santa client mode: 42")
 
     # event detail
 
@@ -109,7 +126,7 @@ class SantaConfigurationTestCase(TestCase):
         self.assertEqual(config.get_event_detail(), (None, None))
         self.assertNotIn("EventDetailURL", config.get_local_config())
         self.assertNotIn("EventDetailText", config.get_local_config())
-        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (2022, 1))
         self.assertNotIn("event_detail_url", sync_server_config)
         self.assertNotIn("event_detail_text", sync_server_config)
 
@@ -120,7 +137,7 @@ class SantaConfigurationTestCase(TestCase):
         local_config = config.get_local_config()
         self.assertEqual(local_config["EventDetailURL"], "null")
         self.assertNotIn("EventDetailText", local_config)
-        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (2022, 1))
         self.assertEqual(sync_server_config["event_detail_url"], "null")
         self.assertNotIn("event_detail_text", sync_server_config)
 
@@ -134,7 +151,7 @@ class SantaConfigurationTestCase(TestCase):
         local_config = config.get_local_config()
         self.assertEqual(local_config["EventDetailURL"], url)
         self.assertEqual(local_config["EventDetailText"], "Request an exception")
-        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (2022, 1))
         self.assertEqual(sync_server_config["event_detail_url"], url)
         self.assertEqual(sync_server_config["event_detail_text"], "Request an exception")
 
@@ -151,7 +168,7 @@ class SantaConfigurationTestCase(TestCase):
             "&tid=%team_id%&sid=%signing_id%&cdh=%cdhash%"
         )
         self.assertEqual(text, Configuration.DEFAULT_EVENT_DETAIL_TEXT)
-        sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+        sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (2022, 1))
         self.assertEqual(sync_server_config["event_detail_url"], url)
         self.assertEqual(sync_server_config["event_detail_text"], "More info")
 
@@ -175,7 +192,7 @@ class SantaConfigurationTestCase(TestCase):
              "voting portal event detail URL unavailable"]
         )
         with self.assertLogs("zentral.contrib.santa.models", level="ERROR"):
-            sync_server_config = config.get_sync_server_config(get_random_string(12), (2022, 1))
+            sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (2022, 1))
         self.assertEqual(sync_server_config["event_detail_url"], "null")
         self.assertNotIn("event_detail_text", sync_server_config)
         with self.assertLogs("zentral.contrib.santa.models", level="ERROR"):

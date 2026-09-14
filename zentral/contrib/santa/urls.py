@@ -41,6 +41,16 @@ urlpatterns = [
          views.ResetTargetStateView.as_view(),
          name='reset_target_state'),
 
+    # scoped client modes
+    path('configurations/<int:configuration_pk>/scoped_client_modes/create/',
+         views.CreateScopedClientModeView.as_view(),
+         name='create_scoped_client_mode'),
+    path('configurations/<int:configuration_pk>/scoped_client_modes/<int:pk>/update/',
+         views.UpdateScopedClientModeView.as_view(),
+         name='update_scoped_client_mode'),
+    path('configurations/<int:configuration_pk>/scoped_client_modes/<int:pk>/delete/',
+         views.DeleteScopedClientModeView.as_view(),
+         name='delete_scoped_client_mode'),
     # voting groups
     path('configurations/<int:configuration_pk>/voting_groups/create/',
          views.CreateVotingGroupView.as_view(),
