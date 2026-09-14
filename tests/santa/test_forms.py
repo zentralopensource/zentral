@@ -70,6 +70,28 @@ class ConfigurationFormClientCertAuthTests(TestCase):
         )
 
 
+class ConfigurationFormPathRegexTests(TestCase):
+    form_data = {
+        "name": "pr",
+        "client_mode": Configuration.LOCKDOWN_MODE,
+        "blocked_path_regex": "^/Users/[^/]+/Downloads/",
+        "event_detail_source": Configuration.EventDetailSource.LOCAL,
+        "batch_size": 50,
+        "full_sync_interval": 600,
+        "allow_unknown_shard": 100,
+        "enable_all_event_upload_shard": 0,
+        "sync_incident_severity": 0,
+        "banned_threshold": -26,
+        "partially_allowlisted_threshold": 5,
+        "globally_allowlisted_threshold": 50,
+        "default_voting_weight": 0,
+    }
+
+    def test_blocked_path_regex_in_lockdown_mode(self):
+        form = ConfigurationForm(data=self.form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+
+
 class ConfigurationFormEventDetailTests(TestCase):
     form_data = {
         "name": "ed",

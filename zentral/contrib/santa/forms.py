@@ -56,13 +56,6 @@ class ConfigurationForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
 
-        # no blocked path regex in lockdown mode
-        client_mode = cleaned_data.get("client_mode")
-        blocked_path_regex = cleaned_data.get("blocked_path_regex")
-        if client_mode == Configuration.LOCKDOWN_MODE and blocked_path_regex:
-            self.add_error("blocked_path_regex",
-                           "Can't use a bloked path regex in Lockdown mode.")
-
         # client certificate authentication
         if cleaned_data.get("client_certificate_auth") and "fqdn_mtls" not in settings["api"]:
             self.add_error(
