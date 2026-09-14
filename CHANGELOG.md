@@ -102,6 +102,11 @@ The Santa configuration sets the button of the block notification now. Zentral s
 
 Local configuration does not remove a button that a machine already has. Force a clean sync to do that.
 
+A Santa configuration can give a different client mode to some of its machines now. A scoped client mode has the scope fields of a rule – serial numbers, primary users and tags, each one with an exclusion – a client mode, and its own block notification button. Zentral resolves one mode for each machine when it answers the preflight, so there is no payload to distribute, and the Santa agent keeps no scope of its own. If more than one entry is in scope, the narrowest one wins, then Lockdown, then the first name in alphabetical order.
+
+Four new PBAC actions manage the entries. `Santa::Action::"createScopedClientMode"` takes the configuration as its resource. `"viewScopedClientMode"`, `"updateScopedClientMode"` and `"deleteScopedClientMode"` take the entry, which has the configuration as its parent, so one policy covers every entry of a configuration. The configuration is the boundary: a role that can write the entries of a configuration can give any client mode to any of its machines. These actions have no Django permission. `"viewScopedClientMode"` is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups, and the three actions that write are members of `"AdminActions"` only, like the actions on the rules. A policy that uses a group covers them, but a policy that names each action must be extended.
+
+
 
 ### Backward incompatibilities
 

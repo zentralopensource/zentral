@@ -724,13 +724,13 @@ class Configuration(models.Model):
                          self.pk, self.sync_incident_severity)
             return Severity.NONE
 
-    def get_preflight_client_mode(self):
-        if self.client_mode == self.MONITOR_MODE:
+    def get_preflight_client_mode(self, client_mode):
+        if client_mode == self.MONITOR_MODE:
             return self.PREFLIGHT_MONITOR_MODE
-        elif self.client_mode == self.LOCKDOWN_MODE:
+        elif client_mode == self.LOCKDOWN_MODE:
             return self.PREFLIGHT_LOCKDOWN_MODE
         else:
-            raise ValueError(f"Unknown santa client mode: {self.client_mode}")
+            raise ValueError(f"Unknown santa client mode: {client_mode}")
 
     def is_monitor_mode(self):
         return self.client_mode == self.MONITOR_MODE
@@ -758,12 +758,45 @@ class Configuration(models.Model):
             return None, None
         return url, text
 
-    def get_sync_server_config(self, serial_number, comparable_santa_version):
+    @staticmethod
+    def resolve_scoped_client_mode(scoped_client_modes):
+        # narrowest reach, then Lockdown (False sorts first), then the name
+        ranked = sorted(
+            scoped_client_modes,
+            key=lambda m: (m.precedence_rank(),
+                           m.client_mode != Configuration.LOCKDOWN_MODE,
+                           m.name),
+        )
+        return ranked[0] if ranked else None
+
+    def get_sync_server_config(self, enrolled_machine, comparable_santa_version):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
 
+        # an optimisation: without the annotation, the method asks
+        has_scoped_client_modes = getattr(enrolled_machine, "has_scoped_client_modes", None)
+        if has_scoped_client_modes is None:
+            has_scoped_client_modes = ScopedClientMode.objects.filter(configuration=self).exists()
+        scoped_client_mode = None
+        if has_scoped_client_modes:
+            scoped_client_mode = self.resolve_scoped_client_mode(
+                ScopedClientMode.objects.for_machine(self,
+                                                     enrolled_machine.serial_number,
+                                                     enrolled_machine.primary_user,
+                                                     enrolled_machine.tag_ids)
+            )
+        client_mode = scoped_client_mode.client_mode if scoped_client_mode else self.client_mode
+
+        # the voting portal URL is computed, not stored, so INHERIT resolves the one of the
+        # configuration instead of copying its fields
+        if (scoped_client_mode is not None
+                and scoped_client_mode.event_detail_source != ScopedClientMode.EventDetailSource.INHERIT):
+            event_detail_url, event_detail_text = scoped_client_mode.get_event_detail(self)
+        else:
+            event_detail_url, event_detail_text = self.get_event_detail()
+
         # translate client mode
-        config['client_mode'] = self.get_preflight_client_mode()
+        config['client_mode'] = self.get_preflight_client_mode(client_mode)
 
         # provide non matching regexp if the regexp are empty
         for attr in ("allowed_path_regex",
@@ -775,13 +808,12 @@ class Configuration(models.Model):
         config["enable_all_event_upload"] = (
             self.enable_all_event_upload_shard > 0 and
             (self.enable_all_event_upload_shard == 100 or
-             shard(serial_number, self.pk) <= self.enable_all_event_upload_shard)
+             shard(enrolled_machine.serial_number, self.pk) <= self.enable_all_event_upload_shard)
         )
 
         # block notification button. An omitted key leaves the value the client has persisted,
         # which is what makes the local configuration source a no-op. An empty string would not:
         # the client prefers an empty synced value over the one in the configuration profile.
-        event_detail_url, event_detail_text = self.get_event_detail()
         if event_detail_url:
             config["event_detail_url"] = event_detail_url
         if event_detail_text:
@@ -850,6 +882,138 @@ class Configuration(models.Model):
 
     def can_be_deleted(self):
         return Configuration.objects.for_deletion().filter(pk=self.pk).exists()
+
+
+class ScopedConfigurationItemQuerySet(models.QuerySet):
+    def for_machine(self, configuration, serial_number, primary_user, tag_ids):
+        qs = (self.filter(configuration=configuration)
+                  .filter(Q(serial_numbers__len=0) | Q(serial_numbers__contains=[serial_number]))
+                  .exclude(excluded_serial_numbers__contains=[serial_number]))
+        if primary_user:
+            qs = (qs.filter(Q(primary_users__len=0) | Q(primary_users__contains=[primary_user]))
+                    .exclude(excluded_primary_users__contains=[primary_user]))
+        else:
+            qs = qs.filter(primary_users__len=0, excluded_primary_users__len=0)
+        if tag_ids:
+            qs = qs.filter(Q(tags__isnull=True) | Q(tags__in=tag_ids)).exclude(excluded_tags__in=tag_ids)
+        else:
+            qs = qs.filter(tags__isnull=True)
+        # the join above only carries the tags that matched, precedence_rank() needs them all
+        return qs.distinct().prefetch_related("tags")
+
+
+class ScopedConfigurationItem(models.Model):
+    RANK_SERIAL, RANK_USER, RANK_TAG, RANK_ALL = range(4)
+
+    configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
+    name = models.CharField(max_length=256)
+    description = models.TextField(blank=True)
+
+    serial_numbers = ArrayField(models.TextField(), blank=True, default=list)
+    excluded_serial_numbers = ArrayField(models.TextField(), blank=True, default=list)
+    primary_users = ArrayField(models.TextField(), blank=True, default=list)
+    excluded_primary_users = ArrayField(models.TextField(), blank=True, default=list)
+    tags = models.ManyToManyField(Tag, blank=True, related_name="+")
+    excluded_tags = models.ManyToManyField(Tag, blank=True, related_name="+")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ScopedConfigurationItemQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+
+    def __str__(self):
+        return self.name
+
+    def precedence_rank(self):
+        if self.serial_numbers:
+            return self.RANK_SERIAL
+        if self.primary_users:
+            return self.RANK_USER
+        if self.tags.all():
+            return self.RANK_TAG
+        return self.RANK_ALL
+
+    def serialize_scope_for_event(self):
+        d = {}
+        for attr in ("serial_numbers", "excluded_serial_numbers",
+                     "primary_users", "excluded_primary_users"):
+            value = getattr(self, attr)
+            if value:
+                d[attr] = sorted(value)
+        for attr in ("tags", "excluded_tags"):
+            tags = list(getattr(self, attr).all().order_by("pk"))
+            if tags:
+                d[attr] = [t.serialize_for_event(keys_only=True) for t in tags]
+        return d
+
+
+class ScopedClientMode(ScopedConfigurationItem):
+    # no LOCAL: an entry that says nothing means INHERIT, not "leave it to the profile"
+    class EventDetailSource(models.TextChoices):
+        INHERIT = "INHERIT", _("Inherit")
+        VOTING_PORTAL = "VOTING_PORTAL", _("Voting portal")
+        CUSTOM = "CUSTOM", _("Custom")
+        NONE = "NONE", _("None")
+
+    client_mode = models.IntegerField(choices=Configuration.CLIENT_MODE_CHOICES)
+    event_detail_source = models.CharField(
+        max_length=16,
+        choices=EventDetailSource.choices,
+        default=EventDetailSource.INHERIT,
+        help_text="Where the block notification button of the machines in scope comes from. "
+                  "Inherit takes the one of the configuration."
+    )
+    event_detail_url = models.URLField(
+        blank=True, max_length=1024,
+        help_text="Custom URL of the block notification button. The following sequences are replaced: "
+                  "%file_identifier%, %bundle_or_file_identifier%, %file_bundle_id%, %team_id%, %signing_id%, "
+                  "%cdhash%, %username%, %machine_id%, %hostname%, %uuid%, %serial%."
+    )
+    event_detail_text = models.TextField(
+        blank=True,
+        help_text="Label of the block notification button."
+    )
+
+    class Meta:
+        unique_together = (("configuration", "name"),)
+
+    def get_absolute_url(self):
+        return (reverse("santa:configuration", args=(self.configuration_id,))
+                + f"#scoped-client-mode-{self.pk}")
+
+    def get_event_detail(self, configuration):
+        if self.event_detail_source == self.EventDetailSource.NONE:
+            return Configuration.NO_EVENT_DETAIL_URL, None
+        if self.event_detail_source == self.EventDetailSource.VOTING_PORTAL:
+            url = voting_portal_event_detail_url(configuration.voting_realm)
+            if not url:
+                logger.error("Scoped client mode %s: voting portal event detail URL unavailable", self.pk)
+                return Configuration.NO_EVENT_DETAIL_URL, None
+            return url, self.event_detail_text or Configuration.DEFAULT_EVENT_DETAIL_TEXT
+        return self.event_detail_url, self.event_detail_text
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "configuration": self.configuration.serialize_for_event(keys_only=True),
+            "description": self.description,
+            "client_mode": self.get_client_mode_display(),
+            "event_detail_source": self.event_detail_source,
+            "event_detail_url": self.event_detail_url,
+            "event_detail_text": self.event_detail_text,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        d.update(self.serialize_scope_for_event())
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return {"santa_configuration": ((self.configuration.pk,),)}
 
 
 class VotingGroup(models.Model):

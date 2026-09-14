@@ -2,6 +2,7 @@ import datetime
 import json
 import uuid
 
+from types import SimpleNamespace
 from django.test import Client
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -580,3 +581,8 @@ def assert_no_enrollment_secret(test_case, payload, enrollment):
     credential in every event store.
     """
     test_case.assertNotIn(enrollment.secret.secret, json.dumps(payload))
+
+
+def fake_enrolled_machine(serial_number, primary_user=None, tag_ids=None):
+    return SimpleNamespace(serial_number=serial_number, primary_user=primary_user,
+                           tag_ids=tag_ids or [])

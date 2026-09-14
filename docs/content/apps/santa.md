@@ -171,6 +171,69 @@ Finally, rules can be scoped to machine tags. Select the matching tags in the ru
 
 **IMPORTANT:** The rule is in scope if **any** serial number, primary user or tag is a match.
 
+## Scoped client modes
+
+A Santa configuration gives the same client mode to all its machines. A scoped client mode gives a different mode to some of them. Open the configuration in Setup > Santa configurations, and use the [Create] button of the Scoped client mode section.
+
+Zentral resolves the mode of each machine when it answers the [preflight](#preflight). The machine applies it during its next full synchronization. There is no payload to distribute, and the Santa agent keeps no scope of its own.
+
+### Scope
+
+An entry has the same scope fields as a rule: `Serial numbers`, `Primary users` and `Tags`, each one with an exclusion. See [Rule scope](#rule-scope) for the fields, and for the Santa payload keys that set the primary user.
+
+The entry is in scope if **any** serial number, primary user or tag is a match, and if **no** excluded serial number, excluded primary user or excluded tag is a match. An entry with no scope field at all matches every machine of the configuration.
+
+### Resolution
+
+More than one entry can be in scope for a machine. Zentral sorts the entries that match, and applies the first one:
+
+1. The narrowest scope wins: serial numbers, then primary users, then tags, then no scope at all. Only the narrowest field of an entry counts – an entry with serial numbers and tags is a serial number entry.
+2. `Lockdown` wins over `Monitor`.
+3. The names are compared, and the first name in alphabetical order wins.
+
+An exception is usually written for one machine or for one user, and a policy for a population. This order lets the exception win. If no entry is in scope, the machine keeps the client mode of the configuration.
+
+### Block notification button
+
+Each entry has its own `Event detail source`. The choices are the ones of the configuration, without `Local configuration`, and with `Inherit` added:
+
+* `Inherit` (the default): the machines in scope keep the button of the configuration. The entry changes the mode only.
+* `Voting portal`: a link to the user portal of the voting realm **of the configuration**. An entry has no realm of its own.
+* `Custom`: the `Event detail URL` and the `Event detail text` of the entry.
+* `None`: the machines in scope get no button.
+
+`Local configuration` is absent on purpose. It tells Zentral to send nothing, and the configuration already made that choice for the machines that no entry covers.
+
+### Permissions
+
+Four PBAC actions manage the entries. `viewScopedClientMode` is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups, and the three that write are members of `"AdminActions"` only, like the actions on the rules. A policy that uses a group covers them. There is no Django permission for them, so a policy that names each action must be extended.
+
+`createScopedClientMode` takes the configuration as its resource:
+
+```
+permit (
+  principal in Role::"6",
+  action == Santa::Action::"createScopedClientMode",
+  resource == Santa::Configuration::"3"
+);
+```
+
+`viewScopedClientMode`, `updateScopedClientMode` and `deleteScopedClientMode` take the entry, which has the configuration as its parent. One policy covers every entry of a configuration:
+
+```
+permit (
+  principal in Role::"6",
+  action in [Santa::Action::"viewScopedClientMode",
+             Santa::Action::"updateScopedClientMode",
+             Santa::Action::"deleteScopedClientMode"],
+  resource in Santa::Configuration::"3"
+);
+```
+
+`resource in [A, B]` is a parse error, so a role that manages two configurations needs one policy for each of them.
+
+The configuration is the boundary. A role that can write the entries of a configuration can give any client mode to any of its machines.
+
 ## Santa sync
 
 The Santa agent is configured to sync periodically with the Zentral server. The `Full sync interval` can be adjusted for each Santa configuration – 10 min by default, cannot be shorter than 10 min. No need to distribute the updated Santa payload. The agent will apply the new interval during the next sync.

@@ -4,7 +4,7 @@ from uuid import UUID
 import zlib
 from django.contrib.postgres.expressions import ArraySubquery
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
-from django.db.models import OuterRef
+from django.db.models import Exists, OuterRef
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import View
@@ -17,7 +17,8 @@ from zentral.contrib.inventory.utils import (add_machine_tags,
 from zentral.contrib.santa.events import (post_enrollment_event, process_events, post_postflight_event,
                                           post_preflight_event)
 from zentral.contrib.santa.incidents import SyncIncident
-from zentral.contrib.santa.models import Configuration, EnrolledMachine, Enrollment, MachineRule
+from zentral.contrib.santa.models import (Configuration, EnrolledMachine, Enrollment, MachineRule,
+                                          ScopedClientMode)
 from zentral.core.incidents.models import Severity
 from zentral.utils.certificates import parse_dn
 from zentral.utils.http import user_agent_and_ip_address_from_request
@@ -82,7 +83,13 @@ class BaseSyncView(View):
                 # round trip that reads the machine anyway
                 tag_ids=ArraySubquery(
                     MachineTag.objects.filter(serial_number=OuterRef("serial_number")).values("tag_id")
-                )
+                ),
+                # most configurations have no entry, and then the query can only come back empty
+                has_scoped_client_modes=Exists(
+                    ScopedClientMode.objects.filter(
+                        configuration=OuterRef("enrollment__configuration")
+                    )
+                ),
             ).get(
                 enrollment__secret__secret=self.enrollment_secret_secret,
                 hardware_uuid=self.hardware_uuid
@@ -343,7 +350,7 @@ class PreflightView(BaseSyncView):
         comparable_santa_version = self.enrolled_machine.get_comparable_santa_version()
 
         response_dict = configuration.get_sync_server_config(
-            self.enrolled_machine.serial_number,
+            self.enrolled_machine,
             comparable_santa_version,
         )
 

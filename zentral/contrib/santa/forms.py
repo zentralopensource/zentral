@@ -18,11 +18,12 @@ from .models import (
     Enrollment,
     Rule,
     RuleSet,
+    ScopedClientMode,
     Target,
     TargetState,
     VotingGroup,
 )
-from .validators import ConfigurationValidator
+from .validators import ConfigurationValidator, ScopedClientModeValidator
 
 logger = logging.getLogger("zentral.contrib.santa.forms")
 
@@ -105,6 +106,41 @@ class VotingGroupForm(forms.ModelForm):
             # we allow the existing realm group of the voting group being updated
             vg_rg_pks_to_exclude.remove(self.instance.realm_group.pk)
         self.fields["realm_group"].queryset = self.fields["realm_group"].queryset.exclude(pk__in=vg_rg_pks_to_exclude)
+
+    def save(self, *args, **kwargs):
+        self.instance.configuration = self.configuration
+        return super().save(*args, **kwargs)
+
+
+class ScopedClientModeForm(forms.ModelForm):
+    class Meta:
+        model = ScopedClientMode
+        fields = (
+            "name",
+            "description",
+            "client_mode",
+            "event_detail_source",
+            "event_detail_url",
+            "event_detail_text",
+            "serial_numbers",
+            "excluded_serial_numbers",
+            "primary_users",
+            "excluded_primary_users",
+            "tags",
+            "excluded_tags",
+        )
+        widgets = {"event_detail_url": forms.Textarea(attrs={"cols": "40", "rows": "3"})}
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        validator = ScopedClientModeValidator(self.configuration, cleaned_data, self.instance.pk)
+        for key, error in validator.validate().items():
+            self.add_error(key, error)
+        return cleaned_data
 
     def save(self, *args, **kwargs):
         self.instance.configuration = self.configuration

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="breadcrumb-item"><a href="{{ object.configuration.get_absolute_url }}">{{ object.configuration }}</a></li>
+  <li class="breadcrumb-item active">Delete scoped client mode</li>
+</ol>
+
+<h2>Delete scoped client mode</h2>
+
+<form method="POST">{% csrf_token %}
+  <p>Do you really want to delete this scoped client mode?</p>
+  <p>
+    <a class="btn btn-outline-secondary" href="{{ object.get_absolute_url }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete</button>
+  </p>
+</form>
+{% endblock %}
