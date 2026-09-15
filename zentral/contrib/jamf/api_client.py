@@ -140,10 +140,16 @@ class APIClient(object):
         return self._make_get_query('/computers')['computers']
 
     def _computer(self, jamf_id):
-        return self._make_get_query('/computers/id/{}'.format(jamf_id))['computer']
+        response = self._make_get_query('/computers/id/{}'.format(jamf_id), missing_ok=True)
+        if response is None:
+            return None
+        return response['computer']
 
     def _mobile_device(self, jamf_id):
-        return self._make_get_query('/mobiledevices/id/{}'.format(jamf_id))['mobile_device']
+        response = self._make_get_query('/mobiledevices/id/{}'.format(jamf_id), missing_ok=True)
+        if response is None:
+            return None
+        return response['mobile_device']
 
     def _machine_links_from_id(self, device_type, jamf_id):
         if device_type == "computer":
@@ -234,7 +240,11 @@ class APIClient(object):
             raise APIClientError(f"Unknown device type: {device_type}")
 
     def get_machine_d_and_tags(self, device_type, jamf_id):
+        # None when the machine is gone from Jamf. Only a 404 produces it: every other API
+        # failure raises, so that the callers cannot act on a Jamf outage as a deletion.
         machine_d = self.get_machine_d(device_type, jamf_id)
+        if machine_d is None:
+            return None
         tags = {}
         groups = None
         for tag_config in self.tag_configs:
@@ -257,6 +267,8 @@ class APIClient(object):
 
     def get_computer_machine_d(self, jamf_id):
         computer = self._computer(jamf_id)
+        if computer is None:
+            return None
         serial_number = computer['general']['serial_number']
         # serial number, reference
         ct = {'source': self.get_source_d(),
@@ -475,6 +487,8 @@ class APIClient(object):
 
     def get_mobile_device_machine_d(self, jamf_id):
         mobile_device = self._mobile_device(jamf_id)
+        if mobile_device is None:
+            return None
         general = mobile_device["general"]
         # serial number, reference
         mdt = {'source': self.get_source_d(),

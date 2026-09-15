@@ -86,6 +86,53 @@ class JamfAPIClientTestCase(SimpleTestCase):
             api_client.get_machine_d("yolo", 123)
         self.assertEqual(cm.exception.args[0], "Unknown device type: yolo")
 
+    # machines missing from jamf
+
+    @staticmethod
+    def _mocked_response(status_code, json_value=None):
+        response = Mock()
+        response.status_code = status_code
+        response.json = Mock()
+        response.json.return_value = json_value
+        return response
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_get_machine_d_missing_computer(self, session_get):
+        session_get.return_value = self._mocked_response(404)
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        self.assertIsNone(api_client.get_machine_d("computer", 1))
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_get_machine_d_missing_mobile_device(self, session_get):
+        session_get.return_value = self._mocked_response(404)
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        self.assertIsNone(api_client.get_machine_d("mobile_device", 1))
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_get_machine_d_and_tags_missing_machine(self, session_get):
+        session_get.return_value = self._mocked_response(404)
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        self.assertIsNone(api_client.get_machine_d_and_tags("computer", 1))
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_get_machine_d_and_tags_api_error(self, session_get):
+        # only a 404 is a missing machine: the other errors must still raise, so that
+        # the callers cannot read an interruption of the Jamf service as a deletion
+        session_get.return_value = self._mocked_response(503)
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        with self.assertRaises(APIClientError) as cm:
+            api_client.get_machine_d_and_tags("computer", 1)
+        self.assertEqual(cm.exception.args[0],
+                         "https://host:443/JSSResource/computers/id/1 jamf API HTTP response status code 503")
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_get_machine_d_and_tags_ok(self, session_get):
+        session_get.return_value = self._mocked_response(200, {"computer": copy.deepcopy(computer_response)})
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        machine_d, tags = api_client.get_machine_d_and_tags("computer", 1)
+        self.assertEqual(machine_d["reference"], "computer,1")
+        self.assertEqual(tags, {})
+
     # extension attributes → extra facts
 
     @patch("zentral.contrib.jamf.api_client.requests.Session.get")
