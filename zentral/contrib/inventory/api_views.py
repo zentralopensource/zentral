@@ -14,8 +14,7 @@ from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
                                RetrieveUpdateDestroyAPIViewWithAudit)
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
-from .models import (CurrentMachineSnapshot,
-                     JMESPathCheck,
+from .models import (JMESPathCheck,
                      MachineSnapshot,
                      MachineTag,
                      MetaBusinessUnit,
@@ -39,7 +38,7 @@ from .tasks import (cleanup_inventory,
                     export_machine_ios_apps,
                     export_machine_program_instances,
                     export_machine_snapshots)
-from .utils import MSQuery, add_machine_tags, remove_machine_tags
+from .utils import MSQuery, add_machine_tags, archive_machine_snapshots, remove_machine_tags
 
 
 # Machine mass tagging
@@ -179,7 +178,8 @@ class ArchiveMachines(APIView):
     def post(self, request, *args, **kwargs):
         serializer = MachineSerialNumbersSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        count, _ = CurrentMachineSnapshot.objects.filter(serial_number__in=serializer.data["serial_numbers"]).delete()
+        count = archive_machine_snapshots(serializer.data["serial_numbers"],
+                                          event_request=EventRequest.build_from_request(request))
         return Response({"current_machine_snapshots": count})
 
 

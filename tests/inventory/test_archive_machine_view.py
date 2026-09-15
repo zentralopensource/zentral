@@ -1,7 +1,9 @@
+from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.test import TestCase
+from zentral.contrib.inventory.events import ArchiveMachine
 from zentral.contrib.inventory.models import CurrentMachineSnapshot, MachineSnapshotCommit
 
 from accounts.models import User
@@ -57,7 +59,8 @@ class ArchiveMachineViewTestCase(TestCase, LoginCase):
 
     # POST
 
-    def test_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post(self, post_event):
         self.create_machine_snapshot(serial_number="1111")
         qs = CurrentMachineSnapshot.objects.filter(serial_number="1111")
         self.assertEqual(qs.count(), 1)
@@ -68,3 +71,19 @@ class ArchiveMachineViewTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/machine_list.html")
         self.assertEqual(qs.count(), 0)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, ArchiveMachine)
+        self.assertEqual(event.metadata.machine_serial_number, "1111")
+        self.assertEqual(event.payload,
+                         {"sources": [{"module": "tests.zentral.com", "name": "Zentral Tests"}]})
+        self.assertEqual(event.metadata.request.user.username, "godzilla")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_post_unknown_machine_no_event(self, post_event):
+        self.login("inventory.change_machinesnapshot",
+                   "inventory.view_machinesnapshot",)
+        response = self.client.post(reverse("inventory:archive_machine", args=("2222",)),
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(post_event.call_args_list), 0)

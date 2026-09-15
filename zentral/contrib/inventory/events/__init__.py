@@ -33,6 +33,15 @@ class AddMachine(BaseEvent):
 register_event_type(AddMachine)
 
 
+class ArchiveMachine(BaseEvent):
+    event_type = 'archive_machine'
+    namespace = "inventory"
+    tags = ['machine']
+
+
+register_event_type(ArchiveMachine)
+
+
 for attr in ('link',
              'business_unit',
              'group',

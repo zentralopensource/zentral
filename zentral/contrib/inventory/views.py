@@ -16,7 +16,7 @@ from django.utils.functional import SimpleLazyObject
 from django.views.generic import DetailView, FormView, ListView, TemplateView, View
 
 from pbac.engine import engine
-from zentral.core.events.base import AuditEvent
+from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
@@ -81,6 +81,7 @@ from .utils import (
     ProgramFilterForm,
     SourceFilter,
     add_machine_tags,
+    archive_machine_snapshots,
     remove_machine_tags,
 )
 
@@ -629,7 +630,8 @@ class ArchiveMachineView(PermissionRequiredMixin, TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
-        self.machine.archive()
+        archive_machine_snapshots([self.machine.serial_number],
+                                  event_request=EventRequest.build_from_request(request))
         return redirect('inventory:index')
 
 

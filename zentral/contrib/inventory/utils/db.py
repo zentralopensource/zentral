@@ -1,13 +1,17 @@
 from contextlib import contextmanager
 import logging
+import uuid
 from django.db import connections, transaction
 from zentral.contrib.inventory.compliance_checks import jmespath_checks_cache
-from zentral.contrib.inventory.events import (iter_inventory_events)
-from zentral.contrib.inventory.models import MachineSnapshotCommit
+from zentral.contrib.inventory.events import ArchiveMachine, iter_inventory_events
+from zentral.contrib.inventory.models import CurrentMachineSnapshot, MachineSnapshotCommit
+from zentral.core.events.base import EventMetadata
 from zentral.utils.db import get_read_only_database
 
 
 __all__ = [
+    "archive_machine_snapshots",
+    "archive_machine_snapshots_and_yield_events",
     "commit_machine_snapshot_and_trigger_events",
     "commit_machine_snapshot_and_yield_events",
 ]
@@ -103,6 +107,49 @@ def commit_machine_snapshot_and_yield_events(tree):
         yield from iter_inventory_events(msc.serial_number, inventory_events_from_machine_snapshot_commit(msc))
     # compliance checks
     yield from jmespath_checks_cache.process_tree(tree, last_seen)
+
+
+def archive_machine_snapshots_and_yield_events(serial_numbers, sources=None, event_request=None):
+    """Remove the current machine snapshots and yield one archive event per machine.
+
+    sources restricts the removal to those inventory sources. The machine snapshots and their
+    commits are kept: only the pointers making them current are removed, so a later commit from
+    the same source makes the machine current again.
+    """
+    qs = CurrentMachineSnapshot.objects.filter(serial_number__in=serial_numbers)
+    if sources is not None:
+        qs = qs.filter(source__in=sources)
+    archived_sources = {}
+    pks = []
+    for cms in (qs.select_related("source")
+                  .order_by("serial_number", "source__module", "source__name")):
+        archived_sources.setdefault(cms.serial_number, []).append(cms.source)
+        pks.append(cms.pk)
+    if not archived_sources:
+        return
+    # delete the rows that were read, so that the events cannot under-report a
+    # snapshot committed between the two queries
+    CurrentMachineSnapshot.objects.filter(pk__in=pks).delete()
+    event_uuid = uuid.uuid4()
+    for index, (serial_number, machine_sources) in enumerate(archived_sources.items()):
+        yield ArchiveMachine(
+            EventMetadata(uuid=event_uuid, index=index,
+                          machine_serial_number=serial_number,
+                          request=event_request),
+            {"sources": [source.serialize() for source in machine_sources]},
+        )
+
+
+def archive_machine_snapshots(serial_numbers, sources=None, event_request=None):
+    """Same as archive_machine_snapshots_and_yield_events, but posts the events.
+
+    Returns the number of removed current machine snapshots.
+    """
+    count = 0
+    for event in archive_machine_snapshots_and_yield_events(serial_numbers, sources, event_request):
+        count += len(event.payload["sources"])
+        event.post()
+    return count
 
 
 @contextmanager

@@ -1116,9 +1116,6 @@ class MetaMachine:
     def compliance_check_statuses(self):
         return get_machine_compliance_check_statuses(self.serial_number, self.tags)
 
-    def archive(self):
-        CurrentMachineSnapshot.objects.filter(serial_number=self.serial_number).delete()
-
     def has_recent_source_snapshot(self, source_module, max_age=3600):
         query = (
             "select count(*) from inventory_currentmachinesnapshot as cms "

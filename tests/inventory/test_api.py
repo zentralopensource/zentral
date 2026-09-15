@@ -16,6 +16,7 @@ from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshot,
                                               MachineSnapshotCommit, MachineTag,
                                               MetaBusinessUnit, Tag, Taxonomy)
+from zentral.contrib.inventory.events import ArchiveMachine
 from zentral.core.events.base import AuditEvent
 from zentral.contrib.inventory.tasks import export_full_inventory
 from zentral.contrib.inventory.utils import FULL_EXPORT_TABLE_NAMES
@@ -137,7 +138,8 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
                              {"yolo": "fomo"})
         self.assertEqual(response.status_code, 400)
 
-    def test_archive_machines(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_archive_machines(self, post_event):
         serial_number = self.commit_machine_snapshot()
         serial_number2 = self.commit_machine_snapshot()
         self.set_permissions("inventory.change_machinesnapshot")
@@ -150,6 +152,40 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
             CurrentMachineSnapshot.objects.filter(serial_number__in=[serial_number, serial_number2]).count(),
             1
         )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, ArchiveMachine)
+        self.assertEqual(event.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event.payload,
+                         {"sources": [{"module": "tests.zentral.io", "name": "Zentral Tests"}]})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_archive_machines_one_event_per_machine(self, post_event):
+        serial_number = self.commit_machine_snapshot()
+        serial_number2 = self.commit_machine_snapshot()
+        self.set_permissions("inventory.change_machinesnapshot")
+        response = self.post(reverse('inventory_api:archive_machines'),
+                             {"serial_numbers": [serial_number, serial_number2]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data,
+                         {"current_machine_snapshots": 2})
+        self.assertEqual(len(post_event.call_args_list), 2)
+        events = [ca.args[0] for ca in post_event.call_args_list]
+        self.assertEqual({e.metadata.machine_serial_number for e in events},
+                         {serial_number, serial_number2})
+        # one operation, so the events share a uuid and are indexed
+        self.assertEqual(len({e.metadata.uuid for e in events}), 1)
+        self.assertEqual(sorted(e.metadata.index for e in events), [0, 1])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_archive_machines_unknown_serial_number_no_event(self, post_event):
+        self.set_permissions("inventory.change_machinesnapshot")
+        response = self.post(reverse('inventory_api:archive_machines'),
+                             {"serial_numbers": [get_random_string(12)]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data,
+                         {"current_machine_snapshots": 0})
+        self.assertEqual(len(post_event.call_args_list), 0)
 
     # prune machines
 

@@ -33,7 +33,8 @@ from zentral.contrib.inventory.models import (
     SourceManager,
     Tag,
 )
-from zentral.contrib.inventory.utils.db import inventory_events_from_machine_snapshot_commit
+from zentral.contrib.inventory.utils.db import (archive_machine_snapshots,
+                                                inventory_events_from_machine_snapshot_commit)
 from zentral.utils.mt_models import Hasher, MTOError, prepare_commit_tree
 from zentral.utils.time import naive_utcnow
 
@@ -585,9 +586,7 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual([ms.source], list(Source.objects.current_business_unit_sources()))
         self.assertEqual([ms.source], list(Source.objects.current_machine_snapshot_sources()))
         self.assertEqual([ms.source], list(Source.objects.current_macos_apps_sources()))
-        for sn in (self.serial_number, ms2.serial_number):
-            mm = MetaMachine(sn)
-            mm.archive()
+        archive_machine_snapshots([self.serial_number, ms2.serial_number])
         self.assertEqual([], list(Source.objects.current_machine_snapshot_sources()))
         self.assertEqual([], list(Source.objects.current_macos_apps_sources()))
 
@@ -615,7 +614,7 @@ class MachineSnapshotTestCase(TestCase):
         self.assertEqual(MachineSnapshot.objects.current().count(), 1)
         self.assertEqual(MachineSnapshot.objects.current().get(pk=ms3.id), ms3)
         mm = MetaMachine(self.serial_number)
-        mm.archive()
+        archive_machine_snapshots([mm.serial_number])
         self.assertEqual(CurrentMachineSnapshot.objects.count(), 0)
         tree = copy.deepcopy(self.machine_snapshot3)
         msc4, ms4, _ = MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
@@ -637,7 +636,7 @@ class MachineSnapshotTestCase(TestCase):
         self.assertFalse(mm.has_recent_source_snapshot(module + "lkjdelkwd", max_age=2*age))
         self.assertFalse(mm.has_recent_source_snapshot(module))
         self.assertTrue(mm.has_recent_source_snapshot(module, max_age=2*age))
-        mm.archive()
+        archive_machine_snapshots([mm.serial_number])
         self.assertFalse(mm.has_recent_source_snapshot(module))
         self.assertFalse(mm.has_recent_source_snapshot(module, max_age=2*age))
 
@@ -688,7 +687,7 @@ class MachineSnapshotTestCase(TestCase):
              'os_version': 'OS X 10.11.2 (a)'}
         )
 
-        mm.archive()
+        archive_machine_snapshots([mm.serial_number])
 
         mm = MetaMachine(self.serial_number)
         self.assertEqual(mm.snapshots, [])
