@@ -1,17 +1,18 @@
 from pbac.engine import ActionGroupBasename, engine
-from pbac.entities import Namespace, Principal, Request
+from pbac.entities import Namespace, Principal, Request, Resource
 from pbac.types import (
     SERVICE_ACCOUNT,
     SYSTEM,
     USER,
     AppliesTo,
     AttrSpec,
+    ResourceType,
 )
 
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
 
-from .models import EnrolledMachine
+from .models import EnrolledMachine, ScopedClientMode
 
 
 # namespace
@@ -108,3 +109,117 @@ class ForceCleanSyncRequest(Request):
              "configurationName": configuration.name,
              "configurationID": configuration.pk},
         )
+
+
+# scoped client mode
+
+
+CONFIGURATION_RESOURCE_TYPE = ResourceType(
+    "Configuration", get_namespace(),
+    attrs={"name": AttrSpec(str, help_text="The name of the Santa configuration.")},
+)
+
+
+SCOPED_CLIENT_MODE_RESOURCE_TYPE = ResourceType(
+    "ScopedClientMode", get_namespace(),
+    parents=(CONFIGURATION_RESOURCE_TYPE,),
+)
+
+
+def get_configuration_resource(configuration) -> Resource:
+    return Resource(
+        CONFIGURATION_RESOURCE_TYPE.name, str(configuration.pk), CONFIGURATION_RESOURCE_TYPE.namespace,
+        attrs={"name": configuration.name},
+    )
+
+
+def get_scoped_client_mode_resource(scoped_client_mode) -> Resource:
+    return Resource(
+        SCOPED_CLIENT_MODE_RESOURCE_TYPE.name, str(scoped_client_mode.pk),
+        SCOPED_CLIENT_MODE_RESOURCE_TYPE.namespace,
+        [get_configuration_resource(scoped_client_mode.configuration)],
+    )
+
+
+create_scoped_client_mode_action = engine.register_action(
+    "createScopedClientMode",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(CONFIGURATION_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Add a scoped client mode to a Santa configuration.",
+)
+
+
+view_scoped_client_mode_action = engine.register_action(
+    "viewScopedClientMode",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(SCOPED_CLIENT_MODE_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="See the scoped client modes of a Santa configuration.",
+)
+
+
+update_scoped_client_mode_action = engine.register_action(
+    "updateScopedClientMode",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(SCOPED_CLIENT_MODE_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Change a scoped client mode.",
+)
+
+
+delete_scoped_client_mode_action = engine.register_action(
+    "deleteScopedClientMode",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(SCOPED_CLIENT_MODE_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Remove a scoped client mode from a Santa configuration.",
+)
+
+
+class CreateScopedClientModeRequest(Request):
+    def __init__(self, user_obj, configuration) -> None:
+        super().__init__(
+            Principal.from_user(user_obj),
+            create_scoped_client_mode_action,
+            get_configuration_resource(configuration),
+        )
+
+
+class BaseScopedClientModeRequest(Request):
+    action = None
+
+    def __init__(self, user_obj, scoped_client_mode: ScopedClientMode) -> None:
+        super().__init__(
+            Principal.from_user(user_obj),
+            self.action,
+            get_scoped_client_mode_resource(scoped_client_mode),
+        )
+
+
+class ViewScopedClientModeRequest(BaseScopedClientModeRequest):
+    action = view_scoped_client_mode_action
+
+
+class UpdateScopedClientModeRequest(BaseScopedClientModeRequest):
+    action = update_scoped_client_mode_action
+
+
+class DeleteScopedClientModeRequest(BaseScopedClientModeRequest):
+    action = delete_scoped_client_mode_action

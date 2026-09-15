@@ -332,6 +332,66 @@
 {% endif %}
 {% endif %}
 
+{% if scoped_client_modes or can_create_scoped_client_mode %}
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Scoped client mode{{ scoped_client_modes|length|pluralize }} ({{ scoped_client_modes|length }})</h2>
+    {% if can_create_scoped_client_mode %}
+        <div class="ms-auto">
+            {% url 'santa:create_scoped_client_mode' object.id as url %}
+            {% button 'CREATE' url "Create scoped client mode" %}
+        </div>
+    {% endif %}
+</div>
+
+{% if scoped_client_modes %}
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Mode</th>
+        <th>Button</th>
+        <th>Scope</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in scoped_client_modes %}
+      {% with scm=row.scoped_client_mode %}
+      <tr class="data-row" id="scoped-client-mode-{{ scm.pk }}">
+        <td>
+          {{ scm.name }}
+          {% if scm.description %}<br><span class="text-secondary">{{ scm.description }}</span>{% endif %}
+        </td>
+        <td>{{ scm.get_client_mode_display }}</td>
+        <td>{{ scm.get_event_detail_source_display }}</td>
+        <td>
+          {% for tag in scm.tags.all %}{% inventory_tag tag %}{% endfor %}
+          {% for tag in scm.excluded_tags.all %}-{% inventory_tag tag %}{% endfor %}
+          {{ scm.serial_numbers|join:", " }}
+          {% if scm.excluded_serial_numbers %}-{{ scm.excluded_serial_numbers|join:", -" }}{% endif %}
+          {{ scm.primary_users|join:", " }}
+          {% if scm.excluded_primary_users %}-{{ scm.excluded_primary_users|join:", -" }}{% endif %}
+        </td>
+        <td class="text-end py-0">
+          {% if row.can_update %}
+          {% url 'santa:update_scoped_client_mode' object.id scm.id as url %}
+          {% button 'UPDATE' url "Edit scoped client mode" %}
+          {% endif %}
+          {% if row.can_delete %}
+          {% url 'santa:delete_scoped_client_mode' object.id scm.id as url %}
+          {% button 'DELETE' url "Delete scoped client mode" %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
 {% if perms.santa.view_votinggroup %}
 <div class="d-flex justify-content-between mb-3">
     <h2 class="m-0">Voting group{{ voting_groups|length|pluralize }} ({{ voting_groups|length }})</h2>
