@@ -2,10 +2,9 @@ import logging
 import os
 import threading
 import time
-from typing import Optional
 import weakref
 
-from cedarpy import is_authorized, is_authorized_batch, PolicySet
+from cedarpy import Decision, is_authorized, is_authorized_batch, is_authorized_partial, PolicySet
 
 from base.notifier import notifier
 from .entities import Entity, Request
@@ -78,41 +77,81 @@ zentral_policies_sync = os.environ.get("ZENTRAL_POLICIES_SYNC", "1") == "1"
 policies_cache = PoliciesCache(with_sync=zentral_policies_sync)
 
 
+# Cedar rejects the whole request for a value type it does not know, and it has no float, no date
+_CEDAR_VALUE_TYPES = (bool, int, str)
+
+
+def _serialize_value(value, collected_entities: dict):
+    """Render a value, and add every entity it names to collected_entities.
+
+    Cedar looks an entity up by id. If we do not send the entity too, a policy that reads it
+    errors, and Cedar skips that policy. A forbid we skip is a request we allow.
+    """
+    if isinstance(value, Entity):
+        _serialize_entity(value, collected_entities)
+        return {"__entity": {"type": value.full_type, "id": value.id}}
+    if isinstance(value, dict):
+        return {k: _serialize_value(v, collected_entities) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [_serialize_value(v, collected_entities) for v in value]
+    if not isinstance(value, _CEDAR_VALUE_TYPES):
+        raise TypeError(f"Unsupported value type {type(value).__name__}")
+    return value
+
+
 def _serialize_entity(entity: Entity, collected_entities: dict) -> None:
+    """Add an entity once per id.
+
+    Two Entity objects with the same id are not merged, the first one wins. Use one object per
+    id, or cache it on the model object like the builders do.
+    """
     key = (entity.full_type, entity.id)
     if key not in collected_entities:
         serialized_entity = {
             "uid": {"type": entity.full_type, "id": entity.id},
-            "attrs": dict(entity.attrs),
+            "attrs": {},
             "parents": []
         }
+        # added before the attributes are walked, so that a loop between two entities stops
         collected_entities[key] = serialized_entity
+        serialized_entity["attrs"] = _serialize_value(entity.attrs, collected_entities)
         for parent in entity.parents:
             _serialize_entity(parent, collected_entities)
             serialized_entity["parents"].append({"type": parent.full_type, "id": parent.id})
 
 
-def _serialize_requests_entities(requests: list[Request]) -> list:
+def _serialize_requests(requests: list[Request], with_correlation_ids: bool = False) -> tuple[list, list]:
+    """Render the requests, and collect the entities they need, in one pass."""
     collected_entities = {}
+    serialized_requests = []
     for request in requests:
         for entity in (request.principal, request.action, request.resource):
             _serialize_entity(entity, collected_entities)
-    return list(collected_entities.values())
+        data = {
+            "principal": str(request.principal),
+            "action": str(request.action),
+            "resource": str(request.resource),
+            # None means "not known yet"; an empty context means "known and empty", and a
+            # policy that reads a key from that one errors
+            "context": None if request.unknown_context else _serialize_value(request.context,
+                                                                             collected_entities),
+        }
+        if with_correlation_ids:
+            data["correlation_id"] = request.correlation_id
+        serialized_requests.append(data)
+    return serialized_requests, list(collected_entities.values())
 
 
-def _serialize_request(request: Request, correlation_id: Optional[str] = None) -> dict:
-    data = {
-        "principal": str(request.principal),
-        "action": str(request.action),
-        "resource": str(request.resource),
-        "context": request.context,
-    }
-    if correlation_id:
-        data["correlation_id"] = correlation_id
-    return data
+def _log_cedar_errors(request: Request, cedar_result) -> None:
+    # Cedar skips a policy that errors and answers with the others, so nothing else shows this
+    errors = cedar_result.diagnostics.errors
+    if errors:
+        logger.error("Cedar errors for %s: %s", request, "; ".join(errors))
 
 
 def authorize_request(request: Request) -> None:
+    if request.unknown_context:
+        raise ValueError("A request with an unknown context needs authorize_request_preview")
     # Note: we deliberately do not pass the engine schema here. Schema
     # validation happens once at policy-write time (Policy.clean calls
     # cedarpy.validate_policies against engine.cedar_schema_json) so the
@@ -122,24 +161,40 @@ def authorize_request(request: Request) -> None:
     # multiple has_perm / has_module_perms checks. For the same reason the
     # policies are pre-parsed into a PolicySet by policies_cache, so
     # is_authorized doesn't re-parse them on every call either.
-    cedar_result = is_authorized(
-        _serialize_request(request),
-        policies_cache.policy_set,
-        _serialize_requests_entities([request]),
-    )
+    serialized_requests, entities = _serialize_requests([request])
+    cedar_result = is_authorized(serialized_requests[0], policies_cache.policy_set, entities)
+    _log_cedar_errors(request, cedar_result)
     request.is_authorized = cedar_result.allowed
+
+
+def authorize_request_preview(request: Request) -> None:
+    """Answer "could this be allowed", for a request whose context is not known yet.
+
+    This is not a decision and must not gate anything. The decision comes later, from a request
+    that carries the context.
+
+    Cedar answers NoDecision in two cases: a policy needs the missing context, or Cedar could not
+    read the request at all. Only the first one can be allowed. The errors tell them apart.
+    """
+    serialized_requests, entities = _serialize_requests([request])
+    cedar_result = is_authorized_partial(serialized_requests[0], policies_cache.policy_set, entities)
+    _log_cedar_errors(request, cedar_result)
+    request.is_authorized = cedar_result.decision == Decision.Allow or (
+        cedar_result.decision == Decision.NoDecision and not cedar_result.diagnostics.errors
+    )
 
 
 def authorize_requests(requests: list[Request]) -> None:
     if not requests:
         return
+    if any(r.unknown_context for r in requests):
+        raise ValueError("A request with an unknown context needs authorize_request_preview")
     req_dict = {r.correlation_id: r for r in requests}
-    for cedar_result in is_authorized_batch(
-        (_serialize_request(r, correlation_id=r.correlation_id) for r in requests),
-        policies_cache.policy_set,
-        _serialize_requests_entities(requests),
-    ):
-        req_dict[cedar_result.correlation_id].is_authorized = cedar_result.allowed
+    serialized_requests, entities = _serialize_requests(requests, with_correlation_ids=True)
+    for cedar_result in is_authorized_batch(serialized_requests, policies_cache.policy_set, entities):
+        request = req_dict[cedar_result.correlation_id]
+        _log_cedar_errors(request, cedar_result)
+        request.is_authorized = cedar_result.allowed
 
 
 # Cedar schema rendering

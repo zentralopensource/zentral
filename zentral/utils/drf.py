@@ -49,6 +49,9 @@ class PBACPermission(BasePermission):
             # refusal into a 401 when no authenticator succeeded
             return False
         pbac_request = view.get_pbac_request(request)
+        if pbac_request.unknown_context:
+            # a preview is not a decision
+            raise ValueError(f"{pbac_request} cannot gate a view")
         engine.authorize_request(pbac_request)
         if not pbac_request.is_authorized:
             logger.error("Permission denied %s", pbac_request, extra={"request": request})

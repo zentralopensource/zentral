@@ -172,6 +172,9 @@ class PBACViewMixin(AccessMixin):
             request.user,
             **self.get_pbac_request_kwargs(kwargs),
         )
+        if pbac_request.unknown_context:
+            # a preview is not a decision
+            raise ValueError(f"{pbac_request} cannot gate a view")
         engine.authorize_request(pbac_request)
         if not pbac_request.is_authorized:
             logger.error("Permission denied %s", pbac_request, extra={"request": request})

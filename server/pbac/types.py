@@ -135,6 +135,25 @@ class AttrSpec:
         object.__setattr__(self, "values", tuple(values))
 
 
+def iter_entity_types(t: TypeRef):
+    """Yield every EntityType a type refers to, at any depth.
+
+    Raises on a type it does not know. A type we walk past is a type missing from the schema,
+    and Cedar then refuses the whole schema.
+    """
+    if isinstance(t, (PrimitiveType, ExtensionType)):
+        return
+    if isinstance(t, EntityType):
+        yield t
+    elif isinstance(t, SetOf):
+        yield from iter_entity_types(t.inner)
+    elif isinstance(t, RecordOf):
+        for attr in t.fields.values():
+            yield from iter_entity_types(attr.type)
+    else:
+        raise TypeError(f"Unsupported attribute type {t!r}")
+
+
 def format_type(t: TypeRef) -> str:
     """Format a TypeRef as a short type expression.
 

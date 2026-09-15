@@ -10,10 +10,13 @@ from pbac.engine import (
 from pbac.types import (
     AppliesTo,
     AttrSpec,
+    iter_entity_types,
     LEGACY_PERM_APPLIES_TO,
+    RecordOf,
     ResourceType,
     ROLE,
     SERVICE_ACCOUNT,
+    SetOf,
     SYSTEM,
     USER,
 )
@@ -750,6 +753,83 @@ class PBACEngineEntityTypeRegistryTestCase(TestCase):
 
     # register_entity_type
 
+    def test_register_entity_type_registers_an_entity_typed_attr(self):
+        # a type the schema does not declare makes Cedar refuse the whole schema
+        job = ResourceType("Job")
+        one_time_job = ResourceType("OneTimeJob", attrs={"job": AttrSpec(job)})
+        self.engine.register_entity_type(one_time_job)
+        self.assertIs(self.engine.entity_types[("Job", None)], job)
+
+    def test_register_action_registers_an_entity_typed_context_attr(self):
+        # a type named only in a context is missing from the schema just the same
+        widget = ResourceType("Widget")
+        self.engine.register_action(
+            "useWidget", self.engine.get_namespace("Inventory"), [ActionGroupBasename.ADMIN],
+            AppliesTo(principals=(USER,), resources=(SYSTEM,),
+                      context={"widget": AttrSpec(widget)}),
+        )
+        self.assertIs(self.engine.entity_types[("Widget", None)], widget)
+
+    def test_register_action_registers_through_a_context_set(self):
+        widget = ResourceType("Widget")
+        self.engine.register_action(
+            "useWidgets", self.engine.get_namespace("Inventory"), [ActionGroupBasename.ADMIN],
+            AppliesTo(principals=(USER,), resources=(SYSTEM,),
+                      context={"widgets": AttrSpec(SetOf(widget))}),
+        )
+        self.assertIs(self.engine.entity_types[("Widget", None)], widget)
+
+    def test_register_action_with_no_context_registers_nothing_extra(self):
+        before = set(self.engine.entity_types)
+        self.engine.register_action(
+            "plainAction", self.engine.get_namespace("Inventory"), [ActionGroupBasename.ADMIN],
+            AppliesTo(principals=(USER,), resources=(SYSTEM,)),
+        )
+        self.assertIsNone(
+            self.engine.actions[("plainAction", "Inventory")].applies_to.context)
+        self.assertEqual(set(self.engine.entity_types) - before, set())
+
+    def test_register_entity_type_registers_through_a_set(self):
+        tag = ResourceType("Tag")
+        machine = ResourceType("Machine", attrs={"tags": AttrSpec(SetOf(tag))})
+        self.engine.register_entity_type(machine)
+        self.assertIs(self.engine.entity_types[("Tag", None)], tag)
+
+    def test_register_entity_type_registers_through_a_record(self):
+        tag = ResourceType("Tag")
+        machine = ResourceType(
+            "Machine",
+            attrs={"scope": AttrSpec(RecordOf({"tag": AttrSpec(tag), "name": AttrSpec(str)}))},
+        )
+        self.engine.register_entity_type(machine)
+        self.assertIs(self.engine.entity_types[("Tag", None)], tag)
+
+    def test_register_entity_type_registers_through_a_set_of_records(self):
+        tag = ResourceType("Tag")
+        machine = ResourceType(
+            "Machine",
+            attrs={"scopes": AttrSpec(SetOf(RecordOf({"tag": AttrSpec(tag)})))},
+        )
+        self.engine.register_entity_type(machine)
+        self.assertIs(self.engine.entity_types[("Tag", None)], tag)
+
+    def test_register_entity_type_survives_a_self_referential_attr(self):
+        job = ResourceType("Job")
+        job.attrs["parent"] = AttrSpec(job)
+        self.engine.register_entity_type(job)
+        self.assertIs(self.engine.entity_types[("Job", None)], job)
+
+    def test_register_entity_type_ignores_a_primitive_attr(self):
+        before = set(self.engine.entity_types)
+        machine = ResourceType("Machine", attrs={"serial_number": AttrSpec(str)})
+        self.engine.register_entity_type(machine)
+        self.assertEqual(set(self.engine.entity_types) - before, {("Machine", None)})
+
+    def test_iter_entity_types_refuses_a_type_it_does_not_know(self):
+        with self.assertRaises(TypeError) as cm:
+            list(iter_entity_types(object()))
+        self.assertIn("Unsupported attribute type", cm.exception.args[0])
+
     def test_register_entity_type_idempotent(self):
         machine = ResourceType("Machine")
         first = self.engine.register_entity_type(machine)
@@ -863,6 +943,16 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
         # their id, so they must carry the prose.
         for app_label, action in engine.module_legacy_perm_actions.items():
             self.assertTrue(action.help_text, f"{app_label!r} -> {action!r} missing help_text")
+
+    def test_every_typed_action_has_help_text(self):
+        # an action built from LEGACY_PERM_APPLIES_TO has nothing to document. Any other action
+        # is typed on purpose, and a policy author reads its context in the schema browser.
+        for action in engine.actions.values():
+            if action.applies_to is LEGACY_PERM_APPLIES_TO:
+                continue
+            self.assertTrue(action.help_text, f"{action!r} missing help_text")
+            for name, spec in (action.applies_to.context or {}).items():
+                self.assertTrue(spec.help_text, f"{action!r} context.{name} missing help_text")
 
     def test_noop_action_belongs_to_admin_user_and_viewer_groups(self):
         # has_module_perms only grants when the user matches the NOOP

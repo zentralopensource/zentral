@@ -109,12 +109,17 @@ class Request:
         principal: Principal,
         action: Action,
         resource: Resource,
-        context: Optional[Dict] = None
+        context: Optional[Dict] = None,
+        unknown_context: bool = False,
     ) -> None:
+        # all or nothing: Cedar cannot be told that one key is missing, it errors on it instead
+        if unknown_context and context:
+            raise ValueError("A request with an unknown context cannot carry one")
         self.principal = principal
         self.action = action
         self.resource = resource
         self.context = context or {}
+        self.unknown_context = unknown_context
         if self.principal.is_superuser:
             self.is_authorized = True
         else:

@@ -7,12 +7,14 @@ from django.apps.config import AppConfig
 from django.contrib.auth import get_permission_codename
 from django.db.models.base import ModelBase
 
-from .cedar import authorize_request, authorize_requests, render_schema_json
+from .cedar import (authorize_request, authorize_request_preview, authorize_requests,
+                    render_schema_json)
 from .entities import Action, ActionGroup, Namespace, Principal, Request, Resource
 from .schema import build_schema_ir
 from .types import (
     AppliesTo,
     EntityType,
+    iter_entity_types,
     LEGACY_PERM_APPLIES_TO,
     ROLE,
     SERVICE_ACCOUNT,
@@ -70,20 +72,32 @@ class Engine:
 
     # Entity types
 
+    def _register_attr_entity_types(self, attrs: dict) -> None:
+        """Register every EntityType the attributes refer to, at any depth.
+
+        Cedar refuses the whole schema when it finds a type the schema does not declare, so one
+        missing type here stops every policy save.
+        """
+        for attr in attrs.values():
+            for et in iter_entity_types(attr.type):
+                self.register_entity_type(et)
+
     def register_entity_type(self, et: EntityType) -> EntityType:
         """Register (or idempotently re-register) an EntityType.
 
-        Parents are auto-registered. Re-registering with the same EntityType
-        instance is a no-op. Re-registering with a different instance under
-        the same (namespace, name) raises EntityTypeConflict — entity types
-        are global declarations and must be unique.
+        Parents and the types the attributes refer to are registered too, on the first call
+        only: an attribute added to an EntityType later is not picked up. Re-registering the same
+        instance does nothing. Another instance with the same (namespace, name) raises
+        EntityTypeConflict — an entity type must be unique.
         """
         key = (et.name, et.namespace.id if et.namespace else None)
         existing = self.entity_types.get(key)
         if existing is None:
+            # added before the parents and the attributes, so that a loop between types stops
             self.entity_types[key] = et
             for parent in et.parents:
                 self.register_entity_type(parent)
+            self._register_attr_entity_types(et.attrs)
             return et
         if existing is et:
             return existing
@@ -193,6 +207,8 @@ class Engine:
             self.legacy_perm_actions[legacy_perm] = action
         for et in (*applies_to.principals, *applies_to.resources):
             self.register_entity_type(et)
+        # the context too: a type named only there is missing from the schema just the same
+        self._register_attr_entity_types(applies_to.context or {})
         return action
 
     def get_action(self, id: str, namespace: Namespace) -> Action:
@@ -335,10 +351,22 @@ class Engine:
 
     def authorize_request(self, request: Request):
         if request.is_pending:
-            authorize_request(request)
+            if request.unknown_context:
+                authorize_request_preview(request)
+            else:
+                authorize_request(request)
 
     def authorize_requests(self, requests: list[Request]):
-        authorize_requests([r for r in requests if r.is_pending])
+        # cedarpy cannot answer a batch of previews, so they go one at a time
+        batch = []
+        for request in requests:
+            if not request.is_pending:
+                continue
+            if request.unknown_context:
+                authorize_request_preview(request)
+            else:
+                batch.append(request)
+        authorize_requests(batch)
 
 
 engine = Engine()
