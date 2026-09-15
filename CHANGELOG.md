@@ -268,6 +268,8 @@ The `sync_monolith_repositories` command uses one transaction for each repositor
 
 The Turbo results endpoint records the run of an entry that it sets aside now. It discards the outcome of an entry that it cannot use — a wire kind that contradicts the job, for example — and it discarded the run with it. `last_result_at` on the per-machine row is what stops the configuration endpoint from serving a one-time job again, so a one-time job with results that the server always set aside ran again after every configuration refresh. There was no end to this, because `not_after` is optional. The server discards only the outcome now. The `turbo_request` event of the endpoint also carries a `skipped_counts` map, because an entry that the server sets aside makes no `turbo_result` event.
 
+A machine whose serial number holds a character that Cedar cannot read is authorized now. The machine resource used the raw serial number, so a serial with a quote, a control character or an invisible space made an entity reference that Cedar refused to parse. The request was denied before Cedar read a policy, and the machine could not be tagged. A policy that named such a machine could not be saved either. The resource uses the url safe serial number now, the form that the machine URL and the links to it already use. A serial number that needs no encoding does not change, which covers every Apple serial number. A policy that names a machine whose serial number does need encoding must use the new id, which you can read in the URL of the machine page.
+
 
 ## 2026.5
 

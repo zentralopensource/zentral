@@ -8,7 +8,8 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.events import MachineTagEvent
-from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag, Taxonomy
+from zentral.contrib.inventory.models import (MachineSnapshotCommit, MachineTag, MetaMachine,
+                                              Tag, Taxonomy)
 
 
 class MachineTagsViewsTestCase(TestCase, LoginCase):
@@ -143,6 +144,39 @@ class MachineTagsViewsTestCase(TestCase, LoginCase):
             event.payload,
             {'action': 'added', 'tag': {'name': tag.name, 'pk': tag.pk}}
         )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_tag_on_a_machine_cedar_cannot_read(self, post_event):
+        # a raw serial with a quote in it made an entity reference cedar could not parse, so the
+        # request was refused before any policy was evaluated and the machine could not be tagged
+        serial_number = 'AB"CD'
+        urlsafe_serial_number = MetaMachine(serial_number).get_urlsafe_serial_number()
+        self.create_machine_snapshot(serial_number=serial_number)
+        tag = Tag.objects.create(name=get_random_string(12))
+        self.login_with_policy(
+            "permit ("
+            f' principal in Role::"{self.group.pk}",'
+            f' action == Inventory::Action::"viewMachineTag",'
+            '  resource'
+            ");\n"
+            "permit ("
+            f' principal in Role::"{self.group.pk}",'
+            f' action == Inventory::Action::"createMachineTag",'
+            f'  resource == Inventory::Machine::"{urlsafe_serial_number}"'
+            ") when {"
+            f' context has tagName && context.tagName == "{tag.name}"\n'
+            "};\n"
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("inventory:create_machine_tag", args=(urlsafe_serial_number, tag.pk)),
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "inventory/machine_tags.html")
+        self.assertTrue(MachineTag.objects.filter(serial_number=serial_number, tag=tag).exists())
+        event, = [c.args[0] for c in post_event.call_args_list]
+        self.assertIsInstance(event, MachineTagEvent)
 
     # delete tag
 

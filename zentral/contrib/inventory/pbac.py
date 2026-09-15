@@ -113,8 +113,11 @@ def get_meta_machine_resource(machine: MetaMachine) -> Resource:
     # MBU membership changes or other changes within the lifetime of the object may lead to inconsistent decisions.
     entity_cache_name = "_pbac_resource"
     if not hasattr(machine, entity_cache_name):
+        # the url safe serial number, not the raw one: a serial comes from a device and can carry
+        # characters cedar cannot read in an entity id, and this is the form the machine URL and
+        # the links to it already use
         resource = Resource(
-            "Machine", machine.serial_number, get_namespace(),
+            "Machine", machine.get_urlsafe_serial_number(), get_namespace(),
             [get_mbu_resource(mbu) for mbu in machine.meta_business_units]
         )
         setattr(machine, entity_cache_name, resource)
