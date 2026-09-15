@@ -29,6 +29,13 @@ The full inventory export has a `PARQUET` format, with the `export_format` attri
 Zentral publishes an `archive_machine` event when it removes the current machine snapshots of a machine. The event carries the list of the inventory sources it removed, and the machine serial number. The web console and the `machines/archive/` API endpoint publish it with the user that made the request. Before, an archive operation left no trace.
 
 
+#### Jamf
+
+Zentral removes the Jamf current machine snapshot of a machine that the Jamf API does not have anymore. Before, the machine stayed in the inventory. It was in the difference between the inventory and the Jamf group at each group update, and Zentral asked the Jamf API for it again each time. The request always failed, and the machine was never removed.
+
+Only a `404` response from the Jamf API removes the snapshot. The other API errors do not change the inventory, so an interruption of the Jamf service cannot remove the machines of a fleet. The machine snapshots and their commits stay: a new inventory update from Jamf makes the machine current again. Zentral publishes an `archive_machine` event for each machine it removes.
+
+
 #### MDM
 
 A data asset can be created and updated with its content in the request now, base 64 encoded in the new `source` attribute, and not only with a `file_uri` that points to an object in an S3 bucket. `file_uri` and `source` are mutually exclusive, and one of them is required. Zentral computes `file_sha256` from a `source`, and requires it only with a `file_uri`. A `file_sha256` given with a `source` is verified against the content. A data asset created from a `source` has no filename.

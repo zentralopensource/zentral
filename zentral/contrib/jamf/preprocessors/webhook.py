@@ -3,8 +3,10 @@ import logging
 from django.core.cache import cache
 from django.db import transaction
 
-from zentral.contrib.inventory.models import MachineGroup, MachineSnapshot, MachineSnapshotCommit, Taxonomy
-from zentral.contrib.inventory.utils import (commit_machine_snapshot_and_yield_events,
+from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineGroup,
+                                              MachineSnapshot, MachineSnapshotCommit, Taxonomy)
+from zentral.contrib.inventory.utils import (archive_machine_snapshots_and_yield_events,
+                                             commit_machine_snapshot_and_yield_events,
                                              set_machine_taxonomy_tags_and_yield_events)
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
 from zentral.core.events import event_cls_from_type
@@ -68,16 +70,34 @@ class WebhookEventPreprocessor(object):
             kwargs["source__{}".format(k)] = v
         return MachineSnapshotCommit.objects.filter(**kwargs).count() > 0
 
+    def _archive_machine(self, client, device_type, jamf_id):
+        """Drop the jamf current machine snapshot of a machine deleted in Jamf.
+
+        Without this the machine stays in the inventory group, so it is in the symmetric
+        difference of every following group update, and gets fetched from Jamf forever.
+        """
+        kwargs = {"machine_snapshot__reference": client.machine_reference(device_type, jamf_id)}
+        for k, v in client.get_source_d().items():
+            kwargs["source__{}".format(k)] = v
+        for cms in CurrentMachineSnapshot.objects.select_related("source").filter(**kwargs):
+            logger.info("Archive machine %s %s %s", client.source_repr, device_type, jamf_id)
+            yield from archive_machine_snapshots_and_yield_events([cms.serial_number], sources=[cms.source])
+
     def _update_machine(self, client, device_type, jamf_id):
         logger.info("Update machine %s %s %s", client.source_repr, device_type, jamf_id)
 
         try:
-            machine_d, tags = client.get_machine_d_and_tags(device_type, jamf_id)
+            machine_d_and_tags = client.get_machine_d_and_tags(device_type, jamf_id)
         except Exception:
             logger.exception("Could not get machine_d and tags. %s %s %s",
                              client.source_repr, device_type, jamf_id)
             return
 
+        if machine_d_and_tags is None:
+            yield from self._archive_machine(client, device_type, jamf_id)
+            return
+
+        machine_d, tags = machine_d_and_tags
         serial_number = machine_d.get("serial_number")
         if not serial_number:
             logger.warning("Machine %s %s %s without serial number", client.source_repr, device_type, jamf_id)

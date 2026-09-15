@@ -1,9 +1,14 @@
 from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
-from zentral.contrib.inventory.events import MachineTagEvent
-from zentral.contrib.inventory.models import MachineTag, Tag, Taxonomy
+from zentral.contrib.inventory.events import ArchiveMachine, MachineTagEvent
+from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshotCommit,
+                                              MachineTag, Tag, Taxonomy)
+from zentral.contrib.jamf.api_client import APIClientError
 from zentral.contrib.jamf.preprocessors.webhook import WebhookEventPreprocessor
+
+
+LOGGER_NAME = "zentral.contrib.jamf.preprocessors.webhook"
 
 
 class WebhookEventPreprocessorTagsTestCase(TestCase):
@@ -88,3 +93,79 @@ class WebhookEventPreprocessorTagsTestCase(TestCase):
         client = self._make_mocked_client(sn, {tx.pk: [get_random_string(12)]})
         self._drain(self._make_preprocessor(), client)
         post_event.assert_not_called()
+
+
+class WebhookEventPreprocessorArchiveTestCase(TestCase):
+    # a fresh dict every time: committing a machine snapshot tree adds the mt hashes in place
+    @staticmethod
+    def _source_d():
+        return {"module": "zentral.contrib.jamf", "name": "jamf",
+                "config": {"host": "jamf.example.com", "path": "/JSSResource", "port": 443}}
+
+    def _make_client(self, machine_d_and_tags):
+        client = MagicMock()
+        client.source_repr = "jamf.example.com"
+        client.get_source_d.return_value = self._source_d()
+        client.machine_reference.side_effect = "{},{}".format
+        client.get_machine_d_and_tags.return_value = machine_d_and_tags
+        return client
+
+    def _commit_jamf_machine(self, jamf_id):
+        serial_number = get_random_string(12)
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
+            "source": self._source_d(),
+            "reference": "computer,{}".format(jamf_id),
+            "serial_number": serial_number,
+        })
+        return serial_number
+
+    def _drain(self, client, jamf_id):
+        return list(WebhookEventPreprocessor()._update_machine(client, "computer", jamf_id))
+
+    def test_machine_gone_from_jamf_is_archived(self):
+        serial_number = self._commit_jamf_machine(42)
+        qs = CurrentMachineSnapshot.objects.filter(serial_number=serial_number)
+        self.assertEqual(qs.count(), 1)
+
+        with self.assertLogs(LOGGER_NAME, level="INFO") as cm:
+            events = self._drain(self._make_client(None), 42)
+        self.assertIn("INFO:{}:Archive machine jamf.example.com computer 42".format(LOGGER_NAME),
+                      cm.output)
+
+        self.assertEqual(qs.count(), 0)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, ArchiveMachine)
+        self.assertEqual(event.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event.payload, {"sources": [self._source_d()]})
+
+    def test_machine_gone_from_jamf_keeps_the_other_sources(self):
+        serial_number = self._commit_jamf_machine(42)
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
+            "source": {"module": "tests.zentral.io", "name": "Zentral Tests"},
+            "serial_number": serial_number,
+        })
+
+        self._drain(self._make_client(None), 42)
+
+        remaining = list(CurrentMachineSnapshot.objects.filter(serial_number=serial_number)
+                                                       .select_related("source"))
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0].source.name, "Zentral Tests")
+
+    def test_machine_gone_from_jamf_without_current_snapshot(self):
+        # nothing is archived, so nothing says it was
+        with self.assertLogs(LOGGER_NAME, level="INFO") as cm:
+            self.assertEqual(self._drain(self._make_client(None), 4242), [])
+        self.assertEqual([r for r in cm.output if "Archive machine" in r], [])
+
+    def test_api_error_does_not_archive(self):
+        # only a 404 archives: any other failure must leave the inventory alone,
+        # so that a Jamf outage cannot drop the current snapshots of a whole fleet
+        serial_number = self._commit_jamf_machine(42)
+        client = self._make_client(None)
+        client.get_machine_d_and_tags.side_effect = APIClientError("boom")
+
+        self.assertEqual(self._drain(client, 42), [])
+
+        self.assertEqual(CurrentMachineSnapshot.objects.filter(serial_number=serial_number).count(), 1)
