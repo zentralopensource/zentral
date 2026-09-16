@@ -230,8 +230,8 @@ class SantaScopedClientModeTestCase(TestCase):
         tag = Tag.objects.create(name=get_random_string(12))
         self.force_scoped_client_mode(configuration, tags=[tag])
         machine = self.enrolled_machine(configuration, tags=[tag])
-        # the entries, then the tag prefetch
-        with self.assertNumQueries(2):
+        # the entries, and the tag presence rides along in the same SELECT
+        with self.assertNumQueries(1):
             configuration.get_sync_server_config(machine, (2022, 1))
 
     def test_without_the_annotations_the_method_asks(self):
@@ -246,8 +246,8 @@ class SantaScopedClientModeTestCase(TestCase):
         tag = Tag.objects.create(name=get_random_string(12))
         self.force_scoped_client_mode(configuration, tags=[tag])
         machine = force_enrolled_machine(configuration=configuration, tags=[tag])
-        # the exists, the tags, the entries, then the tag prefetch
-        with self.assertNumQueries(4):
+        # the exists, the tags, then the entries
+        with self.assertNumQueries(3):
             configuration.get_sync_server_config(machine, (2022, 1))
 
     # preflight view

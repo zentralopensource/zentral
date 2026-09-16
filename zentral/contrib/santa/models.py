@@ -790,7 +790,7 @@ class Configuration(models.Model):
                 ScopedClientMode.objects.for_machine(self,
                                                      enrolled_machine.serial_number,
                                                      enrolled_machine.primary_user,
-                                                     tag_ids)
+                                                     tag_ids).with_tag_presence()
             )
         client_mode = scoped_client_mode.client_mode if scoped_client_mode else self.client_mode
 
@@ -905,8 +905,19 @@ class ScopedConfigurationItemQuerySet(models.QuerySet):
             qs = qs.filter(Q(tags__isnull=True) | Q(tags__in=tag_ids)).exclude(excluded_tags__in=tag_ids)
         else:
             qs = qs.filter(tags__isnull=True)
-        # the join above only carries the tags that matched, precedence_rank() needs them all
-        return qs.distinct().prefetch_related("tags")
+        return qs.distinct()
+
+    def with_tag_presence(self):
+        # precedence_rank() only asks whether an entry is scoped on tags at all, and the join in
+        # for_machine() carries the tags that matched, not all of them. A boolean rides along in
+        # the same SELECT, where reading the tags themselves costs a second query.
+        return self.annotate(
+            has_tags=Exists(
+                self.model.tags.through.objects.filter(
+                    **{f"{self.model._meta.model_name}_id": OuterRef("pk")}
+                )
+            )
+        )
 
 
 class ScopedConfigurationItem(models.Model):
@@ -939,7 +950,11 @@ class ScopedConfigurationItem(models.Model):
             return self.RANK_SERIAL
         if self.primary_users:
             return self.RANK_USER
-        if self.tags.all():
+        # with_tag_presence() answers this without a query. Without it, the method asks.
+        has_tags = getattr(self, "has_tags", None)
+        if has_tags is None:
+            has_tags = self.tags.exists()
+        if has_tags:
             return self.RANK_TAG
         return self.RANK_ALL
 
