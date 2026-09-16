@@ -19,11 +19,12 @@ from .models import (
     Rule,
     RuleSet,
     ScopedClientMode,
+    ScopedPathRegex,
     Target,
     TargetState,
     VotingGroup,
 )
-from .validators import ConfigurationValidator, ScopedClientModeValidator
+from .validators import ConfigurationValidator, ScopedClientModeValidator, ScopedPathRegexValidator
 
 logger = logging.getLogger("zentral.contrib.santa.forms")
 
@@ -72,7 +73,7 @@ class ConfigurationForm(forms.ModelForm):
                 "'Block USB mount' must be set to use this option"
             )
 
-        for key, error in ConfigurationValidator(cleaned_data).validate().items():
+        for key, error in ConfigurationValidator(cleaned_data, self.instance).validate().items():
             self.add_error(key, error)
 
         return cleaned_data
@@ -105,7 +106,36 @@ class VotingGroupForm(forms.ModelForm):
         return super().save(*args, **kwargs)
 
 
-class ScopedClientModeForm(forms.ModelForm):
+class ScopedConfigurationItemForm(forms.ModelForm):
+    validator_class = None
+    scope_fields = (
+        "serial_numbers",
+        "excluded_serial_numbers",
+        "primary_users",
+        "excluded_primary_users",
+        "tags",
+        "excluded_tags",
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration")
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        validator = self.validator_class(self.configuration, cleaned_data, self.instance.pk)
+        for key, error in validator.validate().items():
+            self.add_error(key, error)
+        return cleaned_data
+
+    def save(self, *args, **kwargs):
+        self.instance.configuration = self.configuration
+        return super().save(*args, **kwargs)
+
+
+class ScopedClientModeForm(ScopedConfigurationItemForm):
+    validator_class = ScopedClientModeValidator
+
     class Meta:
         model = ScopedClientMode
         fields = (
@@ -115,29 +145,22 @@ class ScopedClientModeForm(forms.ModelForm):
             "event_detail_source",
             "event_detail_url",
             "event_detail_text",
-            "serial_numbers",
-            "excluded_serial_numbers",
-            "primary_users",
-            "excluded_primary_users",
-            "tags",
-            "excluded_tags",
-        )
+        ) + ScopedConfigurationItemForm.scope_fields
         widgets = {"event_detail_url": forms.Textarea(attrs={"cols": "40", "rows": "3"})}
 
-    def __init__(self, *args, **kwargs):
-        self.configuration = kwargs.pop("configuration")
-        super().__init__(*args, **kwargs)
 
-    def clean(self):
-        cleaned_data = super().clean()
-        validator = ScopedClientModeValidator(self.configuration, cleaned_data, self.instance.pk)
-        for key, error in validator.validate().items():
-            self.add_error(key, error)
-        return cleaned_data
+class ScopedPathRegexForm(ScopedConfigurationItemForm):
+    validator_class = ScopedPathRegexValidator
 
-    def save(self, *args, **kwargs):
-        self.instance.configuration = self.configuration
-        return super().save(*args, **kwargs)
+    class Meta:
+        model = ScopedPathRegex
+        fields = (
+            "name",
+            "description",
+            "policy",
+            "regex",
+        ) + ScopedConfigurationItemForm.scope_fields
+        widgets = {"regex": forms.Textarea(attrs={"cols": "40", "rows": "3"})}
 
 
 class EnrollmentForm(forms.ModelForm):

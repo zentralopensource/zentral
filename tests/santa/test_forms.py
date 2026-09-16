@@ -2,8 +2,9 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
-from zentral.contrib.santa.forms import ConfigurationForm, RuleForm, ScopedClientModeForm
-from zentral.contrib.santa.models import Configuration, Rule, ScopedClientMode
+from zentral.contrib.santa.forms import (ConfigurationForm, RuleForm, ScopedClientModeForm,
+                                         ScopedPathRegexForm)
+from zentral.contrib.santa.models import Configuration, Rule, ScopedClientMode, ScopedPathRegex
 from tests.santa.utils import force_configuration, force_realm
 
 
@@ -236,3 +237,129 @@ class ScopedClientModeFormTests(TestCase):
         self.assertEqual(str(scm), "yolo")
         self.assertEqual(scm.get_absolute_url(),
                          configuration.get_absolute_url() + f"#scoped-client-mode-{scm.pk}")
+
+
+class ScopedPathRegexFormTests(TestCase):
+    def form(self, configuration, **data):
+        data.setdefault("name", get_random_string(12))
+        data.setdefault("policy", ScopedPathRegex.Policy.ALLOW)
+        data.setdefault("regex", "/Library/Example/")
+        return ScopedPathRegexForm(configuration=configuration, data=data)
+
+    def test_valid(self):
+        self.assertTrue(self.form(force_configuration()).is_valid())
+
+    def test_scoped_inline_flags_are_allowed(self):
+        form = self.form(force_configuration(), regex="(?i:/library/)example/")
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_bare_inline_flags(self):
+        form = self.form(force_configuration(), regex="(?i)/library/")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["regex"],
+                         ["Scoped inline flags are required, for example (?i:abc)"])
+
+    def test_invalid_regex(self):
+        form = self.form(force_configuration(), regex="/Library/[")
+        self.assertFalse(form.is_valid())
+        self.assertIn("Invalid regex:", form.errors["regex"][0])
+
+    def test_capture_group(self):
+        form = self.form(force_configuration(), regex="/Library/(Example)/")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["regex"],
+                         ["Capture groups are not allowed, use a non capturing group: (?:abc)"])
+
+    def test_named_group(self):
+        form = self.form(force_configuration(), regex="/Library/(?P<name>Example)/")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["regex"],
+                         ["Capture groups are not allowed, use a non capturing group: (?:abc)"])
+
+    def test_non_capturing_group_is_allowed(self):
+        form = self.form(force_configuration(), regex="/Library/(?:Example|Other)/")
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_patterns_that_match_an_empty_path(self):
+        # one of these in the combination opens it to every path
+        for regex in ("^", "(?:)", "|", ".*", "a?", "(?:abc)?"):
+            with self.subTest(regex=regex):
+                form = self.form(force_configuration(), regex=regex)
+                self.assertFalse(form.is_valid())
+                self.assertEqual(
+                    form.errors["regex"],
+                    ["This pattern matches an empty path, so it matches every path. Use .+ and not .*"]
+                )
+
+    def test_a_pattern_that_matches_one_character_or_more(self):
+        form = self.form(force_configuration(), regex=".+/Downloads/")
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_conflicting_scope(self):
+        form = self.form(force_configuration(),
+                         serial_numbers="0123456789",
+                         excluded_serial_numbers="0123456789")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["excluded_serial_numbers"],
+                         ["Both included and excluded: 0123456789"])
+
+    def test_duplicate_name(self):
+        configuration = force_configuration()
+        ScopedPathRegex.objects.create(configuration=configuration, name="yolo",
+                                       policy=ScopedPathRegex.Policy.ALLOW, regex="/a/")
+        form = self.form(configuration, name="yolo")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["name"], ["A scoped path regex with this name already exists"])
+
+    def test_same_name_on_another_configuration(self):
+        ScopedPathRegex.objects.create(configuration=force_configuration(), name="yolo",
+                                       policy=ScopedPathRegex.Policy.ALLOW, regex="/a/")
+        form = self.form(force_configuration(), name="yolo")
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_save_sets_the_configuration(self):
+        configuration = force_configuration()
+        form = self.form(configuration, name="yolo")
+        self.assertTrue(form.is_valid())
+        spr = form.save()
+        self.assertEqual(spr.configuration, configuration)
+        self.assertEqual(str(spr), "yolo")
+
+
+class ConfigurationFormPathRegexValidationTests(TestCase):
+    form_data = dict(ConfigurationFormPathRegexTests.form_data, blocked_path_regex="")
+
+    def form(self, instance=None, **data):
+        return ConfigurationForm(data=dict(self.form_data, **data), instance=instance)
+
+    def test_a_new_pattern_that_does_not_compile_is_refused(self):
+        form = self.form(blocked_path_regex=r"/Users/\p{L}+/")
+        self.assertFalse(form.is_valid())
+        self.assertIn("Invalid regex:", form.errors["blocked_path_regex"][0])
+
+    def test_a_new_pattern_with_unscoped_inline_flags_is_refused(self):
+        form = self.form(blocked_path_regex="(?i)/downloads/")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["blocked_path_regex"],
+                         ["Scoped inline flags are required, for example (?i:abc)"])
+
+    def test_a_new_pattern_that_matches_an_empty_path_is_refused(self):
+        form = self.form(blocked_path_regex=".*")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors["blocked_path_regex"],
+            ["This pattern matches an empty path, so it matches every path. Use .+ and not .*"]
+        )
+
+    def test_a_pattern_stored_before_the_composition_does_not_block_another_edit(self):
+        # it is still enforced, so it must not stop an edit of another field
+        configuration = force_configuration(blocked_path_regex=r"/Users/\p{L}+/")
+        form = self.form(instance=configuration, name="renamed",
+                         blocked_path_regex=r"/Users/\p{L}+/")
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_changing_a_pattern_that_was_stored_before_the_composition_is_validated(self):
+        configuration = force_configuration(blocked_path_regex=r"/Users/\p{L}+/")
+        form = self.form(instance=configuration, blocked_path_regex=r"/Users/\p{L}+/Downloads/")
+        self.assertFalse(form.is_valid())
+        self.assertIn("Invalid regex:", form.errors["blocked_path_regex"][0])

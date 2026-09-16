@@ -234,6 +234,90 @@ permit (
 
 The configuration is the boundary. A role that can write the entries of a configuration can give any client mode to any of its machines.
 
+## Scoped path regexes
+
+A Santa configuration has one allow path regex and one block path regex for all its machines. A scoped path regex adds a pattern for some of them. Open the configuration in Setup > Santa configurations, and use the [Create] button of the Scoped path regex section.
+
+Santa accepts one pattern for each policy, so Zentral combines them when it answers the [preflight](#preflight). The machine applies the result during its next full synchronization.
+
+### Scope
+
+An entry has the same scope fields as a rule: `Serial numbers`, `Primary users` and `Tags`, each one with an exclusion. See [Rule scope](#rule-scope) for the fields.
+
+### Composition
+
+Zentral combines the pattern of the configuration and the patterns of the entries in scope into one pattern for each policy:
+
+```
+^(?:(?:the configuration)|(?:the first entry)|(?:the second entry))
+```
+
+There is no precedence. Every entry in scope is included.
+
+Three properties of the result:
+
+* **It is anchored at the start of the path.** Santa adds a `^` to a pattern that does not have one, so an unanchored alternation makes only the first alternative an anchored one. Use a leading `.*` to match a path segment in the middle, for example `.*/Downloads/`.
+* **The entries are in the alphabetical order of their names.** Santa removes all its decision caches when the pattern changes, so the order must be the same between two preflights.
+* **If no pattern applies, Zentral sends a pattern that cannot match.** Santa keeps the pattern it has if the key is not in the response, and it uses the pattern of the configuration profile if the key is empty.
+
+### Accepted patterns
+
+Santa uses the ICU regular expression syntax. Zentral compiles each pattern with Python, which is not the same syntax at the margins. Python does not accept `\p{…}`, `\X`, `\R` and `\Q…\E`. `[[:alpha:]]` is more dangerous: Python accepts it as a set in a set, which is not the POSIX class that ICU applies.
+
+Two limits come from the composition:
+
+* **No capture group.** Each entry becomes a group of the combined pattern, and a capture group changes the number of the groups after it. Use a group that does not capture: `(?:abc)`.
+* **Inline flags must have a scope.** Write `(?i:abc)`, not `(?i)abc`.
+* **The pattern must not match an empty path.** `(?:)`, `|`, `.*` and `(?:abc)?` all match an empty path. One of them in the combination makes it match every path, because the combination is anchored and an empty match is a match at the start. Use `.+` and not `.*`.
+
+### The order in the Santa agent
+
+Santa reads the block regex, then the allow regex, then the client mode. Each step gives an answer immediately. Two results come from that order:
+
+* **A path that the two regexes match is blocked.** An allow entry cannot make an exception to a block entry. Write a more accurate block pattern, or an allow rule for the identity of the binary, which Santa reads earlier.
+* **A rule is more important than a path.** A block rule for a binary blocks it also when an allow entry matches its path.
+
+Each policy has one mode where it is necessary, and one mode where it is a trap:
+
+| | Monitor | Lockdown |
+| --- | --- | --- |
+| **Block** | the only block by path | makes an exception to an allow path, and blocks scripts |
+| **Allow** | stops the reports, it does not permit | the mechanism for exceptions |
+
+In Lockdown mode a block entry is the only way to block a file that is not a Mach-O file by its path, because Santa permits such a file in all modes before it reads the client mode.
+
+In Monitor mode an unknown binary already runs, so an allow entry permits nothing. It changes the decision from `ALLOW_UNKNOWN` to `ALLOW_SCOPE`, and Santa sends only the first one. **An allow entry in Monitor mode stops the reports for the paths that it matches.** Use a scoped client mode if you want to see what runs.
+
+### Permissions
+
+Four PBAC actions manage the entries. `viewScopedPathRegex` is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups, and the three that write are members of `"AdminActions"` only. There is no Django permission for them, so a policy that names each action must be extended.
+
+`createScopedPathRegex` takes the configuration as its resource:
+
+```
+permit (
+  principal in Role::"6",
+  action == Santa::Action::"createScopedPathRegex",
+  resource == Santa::Configuration::"3"
+);
+```
+
+`viewScopedPathRegex`, `updateScopedPathRegex` and `deleteScopedPathRegex` take the entry, which has the configuration as its parent. One policy covers every entry of a configuration:
+
+```
+permit (
+  principal in Role::"6",
+  action in [Santa::Action::"viewScopedPathRegex",
+             Santa::Action::"updateScopedPathRegex",
+             Santa::Action::"deleteScopedPathRegex"],
+  resource in Santa::Configuration::"3"
+);
+```
+
+`resource in [A, B]` is a parse error, so a role that manages two configurations needs one policy for each of them.
+
+The configuration is the boundary. A role that can write the entries of a configuration can add an allow path or a block path for any of its machines.
+
 ## Santa sync
 
 The Santa agent is configured to sync periodically with the Zentral server. The `Full sync interval` can be adjusted for each Santa configuration – 10 min by default, cannot be shorter than 10 min. No need to distribute the updated Santa payload. The agent will apply the new interval during the next sync.

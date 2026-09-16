@@ -129,6 +129,8 @@ def force_configuration(
     event_detail_source=Configuration.EventDetailSource.LOCAL,
     event_detail_url="",
     event_detail_text="",
+    allowed_path_regex="",
+    blocked_path_regex="",
 ):
     if lockdown:
         client_mode = Configuration.LOCKDOWN_MODE
@@ -148,6 +150,8 @@ def force_configuration(
         event_detail_source=event_detail_source,
         event_detail_url=event_detail_url,
         event_detail_text=event_detail_text,
+        allowed_path_regex=allowed_path_regex,
+        blocked_path_regex=blocked_path_regex,
     )
 
 

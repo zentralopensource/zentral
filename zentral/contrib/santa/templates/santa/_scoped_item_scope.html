@@ -1,0 +1,7 @@
+{% load inventory_extras %}
+{% for tag in item.tags.all %}{% inventory_tag tag %}{% endfor %}
+{% for tag in item.excluded_tags.all %}-{% inventory_tag tag %}{% endfor %}
+{{ item.serial_numbers|join:", " }}
+{% if item.excluded_serial_numbers %}-{{ item.excluded_serial_numbers|join:", -" }}{% endif %}
+{{ item.primary_users|join:", " }}
+{% if item.excluded_primary_users %}-{{ item.excluded_primary_users|join:", -" }}{% endif %}

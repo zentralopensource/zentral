@@ -50,7 +50,9 @@ class SantaConfigurationTestCase(TestCase):
         self.assertEqual(local_config["BlockedPathRegex"], blocked_path_regex)
         self.assertTrue("AllowedPathRegex" not in local_config)
         sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (1, 14))
-        self.assertEqual(sync_server_config["blocked_path_regex"], blocked_path_regex)
+        # the configuration's own pattern is composed, anchored once, like any entry
+        self.assertEqual(sync_server_config["blocked_path_regex"],
+                         f"^(?:(?:{blocked_path_regex}))")
         self.assertEqual(sync_server_config["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
     def test_allowed_path_regex_default_blocked_path_regex(self):
@@ -61,7 +63,9 @@ class SantaConfigurationTestCase(TestCase):
         self.assertEqual(local_config["AllowedPathRegex"], allowed_path_regex)
         self.assertTrue("BlockedPathRegex" not in local_config)
         sync_server_config = config.get_sync_server_config(self.enrolled_machine(config), (1, 14))
-        self.assertEqual(sync_server_config["allowed_path_regex"], allowed_path_regex)
+        # the configuration's own pattern is composed, anchored once, like any entry
+        self.assertEqual(sync_server_config["allowed_path_regex"],
+                         f"^(?:(?:{allowed_path_regex}))")
         self.assertEqual(sync_server_config["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
     def test_non_matching_path_regex_stable_across_preflights(self):

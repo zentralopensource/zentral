@@ -15,12 +15,14 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          CDHashSearchForm, CertificateSearchForm,
                                          TeamIDSearchForm, SigningIDSearchForm,
                                          ConfigurationForm, EnrollmentForm,
-                                         ScopedClientModeForm, VotingGroupForm,
+                                         ScopedClientModeForm, ScopedPathRegexForm, VotingGroupForm,
                                          RuleForm, RuleSearchForm, UpdateRuleForm)
-from zentral.contrib.santa.models import (Configuration, Enrollment, Rule, ScopedClientMode, Target,
-                                          VotingGroup)
-from zentral.contrib.santa.pbac import (CreateScopedClientModeRequest, DeleteScopedClientModeRequest,
-                                        UpdateScopedClientModeRequest, ViewScopedClientModeRequest)
+from zentral.contrib.santa.models import (Configuration, Enrollment, Rule, ScopedClientMode,
+                                          ScopedPathRegex, Target, VotingGroup)
+from zentral.contrib.santa.pbac import (CreateScopedClientModeRequest, CreateScopedPathRegexRequest,
+                                        DeleteScopedClientModeRequest, DeleteScopedPathRegexRequest,
+                                        UpdateScopedClientModeRequest, UpdateScopedPathRegexRequest,
+                                        ViewScopedClientModeRequest, ViewScopedPathRegexRequest)
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
@@ -81,26 +83,36 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
                        .select_related("realm_group")
                        .order_by("realm_group__display_name")
         )
-        ctx.update(self.get_scoped_client_mode_context())
+        ctx.update(self.get_scoped_item_context(
+            "scoped_client_modes", "can_create_scoped_client_mode", "scopedclientmode_set",
+            CreateScopedClientModeRequest, ViewScopedClientModeRequest,
+            UpdateScopedClientModeRequest, DeleteScopedClientModeRequest,
+        ))
+        ctx.update(self.get_scoped_item_context(
+            "scoped_path_regexes", "can_create_scoped_path_regex", "scopedpathregex_set",
+            CreateScopedPathRegexRequest, ViewScopedPathRegexRequest,
+            UpdateScopedPathRegexRequest, DeleteScopedPathRegexRequest,
+        ))
         return ctx
 
-    def get_scoped_client_mode_context(self):
+    def get_scoped_item_context(self, items_key, can_create_key, item_set_name,
+                                create_request_class, view_request_class,
+                                update_request_class, delete_request_class):
         # a template cannot build a PBAC request
-        create_request = CreateScopedClientModeRequest(self.request.user, self.object)
-        scoped_client_modes = list(
-            self.object.scopedclientmode_set.prefetch_related("tags", "excluded_tags").order_by("name")
+        create_request = create_request_class(self.request.user, self.object)
+        items = list(
+            getattr(self.object, item_set_name).prefetch_related("tags", "excluded_tags").order_by("name")
         )
-        view_requests = [ViewScopedClientModeRequest(self.request.user, scm) for scm in scoped_client_modes]
-        update_requests = [UpdateScopedClientModeRequest(self.request.user, scm) for scm in scoped_client_modes]
-        delete_requests = [DeleteScopedClientModeRequest(self.request.user, scm) for scm in scoped_client_modes]
+        view_requests = [view_request_class(self.request.user, i) for i in items]
+        update_requests = [update_request_class(self.request.user, i) for i in items]
+        delete_requests = [delete_request_class(self.request.user, i) for i in items]
         engine.authorize_requests([create_request] + view_requests + update_requests + delete_requests)
         rows = [
-            {"scoped_client_mode": scm, "can_update": u.is_authorized, "can_delete": d.is_authorized}
-            for scm, v, u, d in zip(scoped_client_modes, view_requests, update_requests, delete_requests)
+            {"item": i, "can_update": u.is_authorized, "can_delete": d.is_authorized}
+            for i, v, u, d in zip(items, view_requests, update_requests, delete_requests)
             if v.is_authorized
         ]
-        return {"scoped_client_modes": rows,
-                "can_create_scoped_client_mode": create_request.is_authorized}
+        return {items_key: rows, can_create_key: create_request.is_authorized}
 
 
 class EventsMixin:
@@ -266,6 +278,73 @@ class DeleteScopedClientModeView(PBACViewMixin, DeleteViewWithAudit):
     def get_pbac_request_kwargs(self, kwargs):
         self.object = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
         return {"scoped_client_mode": self.object}
+
+    def get_queryset(self):
+        # the PBAC resource, the audit event and the success URL all read the configuration
+        return (super().get_queryset()
+                       .select_related("configuration")
+                       .filter(configuration__pk=self.kwargs["configuration_pk"]))
+
+    def get_success_url(self):
+        return reverse("santa:configuration", args=(self.object.configuration.pk,))
+
+
+# scoped path regexes
+
+
+class CreateScopedPathRegexView(PBACViewMixin, CreateViewWithAudit):
+    pbac_request_class = CreateScopedPathRegexRequest
+    model = ScopedPathRegex
+    form_class = ScopedPathRegexForm
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.configuration = get_object_or_404(Configuration, pk=kwargs["configuration_pk"])
+        return {"configuration": self.configuration}
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["configuration"] = self.configuration
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Create scoped path regex"
+        return ctx
+
+
+class UpdateScopedPathRegexView(PBACViewMixin, UpdateViewWithAudit):
+    pbac_request_class = UpdateScopedPathRegexRequest
+    model = ScopedPathRegex
+    form_class = ScopedPathRegexForm
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.object = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
+        return {"scoped_path_regex": self.object}
+
+    def get_queryset(self):
+        # the PBAC resource, the audit event and the success URL all read the configuration
+        return (super().get_queryset()
+                       .select_related("configuration")
+                       .filter(configuration__pk=self.kwargs["configuration_pk"]))
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["configuration"] = self.object.configuration
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Update scoped path regex"
+        return ctx
+
+
+class DeleteScopedPathRegexView(PBACViewMixin, DeleteViewWithAudit):
+    pbac_request_class = DeleteScopedPathRegexRequest
+    model = ScopedPathRegex
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.object = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
+        return {"scoped_path_regex": self.object}
 
     def get_queryset(self):
         # the PBAC resource, the audit event and the success URL all read the configuration

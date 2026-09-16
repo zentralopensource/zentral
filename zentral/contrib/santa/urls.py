@@ -51,6 +51,17 @@ urlpatterns = [
     path('configurations/<int:configuration_pk>/scoped_client_modes/<int:pk>/delete/',
          views.DeleteScopedClientModeView.as_view(),
          name='delete_scoped_client_mode'),
+    # scoped path regexes
+    path('configurations/<int:configuration_pk>/scoped_path_regexes/create/',
+         views.CreateScopedPathRegexView.as_view(),
+         name='create_scoped_path_regex'),
+    path('configurations/<int:configuration_pk>/scoped_path_regexes/<int:pk>/update/',
+         views.UpdateScopedPathRegexView.as_view(),
+         name='update_scoped_path_regex'),
+    path('configurations/<int:configuration_pk>/scoped_path_regexes/<int:pk>/delete/',
+         views.DeleteScopedPathRegexView.as_view(),
+         name='delete_scoped_path_regex'),
+
     # voting groups
     path('configurations/<int:configuration_pk>/voting_groups/create/',
          views.CreateVotingGroupView.as_view(),

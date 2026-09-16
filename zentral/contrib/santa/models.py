@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from collections import namedtuple
 
@@ -770,22 +771,61 @@ class Configuration(models.Model):
         )
         return ranked[0] if ranked else None
 
+    def compose_path_regex(self, baseline, patterns):
+        """The single pattern Santa gets for one policy, from the configuration's own and the entries.
+
+        Anchored once, around the whole alternation: Santa prepends ^ to a pattern that lacks one,
+        and a bare ^(?:a)|(?:b) would leave b unanchored. Each part is stripped of its own ^ and
+        wrapped, so an entry matches what it would match alone. An empty part is dropped, because
+        ICU compiles (?:) and it matches every path.
+        """
+        parts = [stripped for stripped in
+                 (p.removeprefix("^") for p in ([baseline] + patterns) if p)
+                 if stripped]
+        if not parts:
+            return self.NON_MATCHING_PATH_REGEX
+        composed = "^(?:" + "|".join(f"(?:{p})" for p in parts) + ")"
+        try:
+            re.compile(composed)
+        except re.error:
+            # The entries are validated when they are saved, so the pattern of the configuration
+            # is the one that can be valid ICU and not valid here - nothing validated it before
+            # the composition. Send it alone, which is what this configuration enforced until
+            # now. A pattern that cannot match would end a block that works today, and the sync
+            # state has priority over the configuration profile, so nothing would take over.
+            logger.error("Configuration %s: could not compile the composed path regex", self.pk)
+            return baseline or self.NON_MATCHING_PATH_REGEX
+        return composed
+
+    def _has_scoped_items(self, model, annotation, enrolled_machine):
+        # an optimisation: without the annotation, the method asks
+        has_items = getattr(enrolled_machine, annotation, None)
+        if has_items is None:
+            has_items = model.objects.filter(configuration=self).exists()
+        return has_items
+
+    @staticmethod
+    def _machine_tag_ids(enrolled_machine):
+        # an enrollment builds the machine without the annotations, and it applies the tags
+        # of the enrollment secret, which the first preflight must already match
+        tag_ids = getattr(enrolled_machine, "tag_ids", None)
+        if tag_ids is None:
+            tag_ids = list(MachineTag.objects.filter(serial_number=enrolled_machine.serial_number)
+                                             .values_list("tag_id", flat=True))
+        return tag_ids
+
     def get_sync_server_config(self, enrolled_machine, comparable_santa_version):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
 
-        # an optimisation: without the annotation, the method asks
-        has_scoped_client_modes = getattr(enrolled_machine, "has_scoped_client_modes", None)
-        if has_scoped_client_modes is None:
-            has_scoped_client_modes = ScopedClientMode.objects.filter(configuration=self).exists()
+        has_client_modes = self._has_scoped_items(ScopedClientMode, "has_scoped_client_modes",
+                                                  enrolled_machine)
+        has_path_regexes = self._has_scoped_items(ScopedPathRegex, "has_scoped_path_regexes",
+                                                  enrolled_machine)
+        tag_ids = self._machine_tag_ids(enrolled_machine) if has_client_modes or has_path_regexes else None
+
         scoped_client_mode = None
-        if has_scoped_client_modes:
-            # an enrollment builds the machine without the annotations, and it applies the tags
-            # of the enrollment secret, which the first preflight must already match
-            tag_ids = getattr(enrolled_machine, "tag_ids", None)
-            if tag_ids is None:
-                tag_ids = list(MachineTag.objects.filter(serial_number=enrolled_machine.serial_number)
-                                                 .values_list("tag_id", flat=True))
+        if has_client_modes:
             scoped_client_mode = self.resolve_scoped_client_mode(
                 ScopedClientMode.objects.for_machine(self,
                                                      enrolled_machine.serial_number,
@@ -793,6 +833,17 @@ class Configuration(models.Model):
                                                      tag_ids).with_tag_presence()
             )
         client_mode = scoped_client_mode.client_mode if scoped_client_mode else self.client_mode
+
+        scoped_path_regexes = []
+        if has_path_regexes:
+            # the composed pattern has to be byte for byte the same between preflights, or the
+            # client flushes all its decision caches. Without an order, it is not.
+            scoped_path_regexes = list(
+                ScopedPathRegex.objects.for_machine(self,
+                                                    enrolled_machine.serial_number,
+                                                    enrolled_machine.primary_user,
+                                                    tag_ids).order_by("name")
+            )
 
         # the voting portal URL is computed, not stored, so INHERIT resolves the one of the
         # configuration instead of copying its fields
@@ -805,11 +856,14 @@ class Configuration(models.Model):
         # translate client mode
         config['client_mode'] = self.get_preflight_client_mode(client_mode)
 
-        # provide non matching regexp if the regexp are empty
-        for attr in ("allowed_path_regex",
-                     "blocked_path_regex"):
-            if not config.get(attr):
-                config[attr] = self.NON_MATCHING_PATH_REGEX
+        # compose the path regexes. The configuration's own pattern is a part that always matches,
+        # so it keeps applying, anchored like every other part.
+        for attr, policy in (("allowed_path_regex", ScopedPathRegex.Policy.ALLOW),
+                             ("blocked_path_regex", ScopedPathRegex.Policy.BLOCK)):
+            config[attr] = self.compose_path_regex(
+                config.get(attr),
+                [spr.regex for spr in scoped_path_regexes if spr.policy == policy]
+            )
 
         # enable_all_event_upload
         config["enable_all_event_upload"] = (
@@ -1038,6 +1092,50 @@ class ScopedClientMode(ScopedConfigurationItem):
         return {"santa_configuration": ((self.configuration.pk,),)}
 
 
+class ScopedPathRegex(ScopedConfigurationItem):
+    class Policy(models.TextChoices):
+        ALLOW = "ALLOW", _("Allow")
+        BLOCK = "BLOCK", _("Block")
+
+    policy = models.CharField(
+        max_length=16,
+        choices=Policy.choices,
+        help_text="Santa evaluates the block regex before the allow regex, so a path matched by "
+                  "both is blocked. In Monitor mode an allow entry grants nothing, and it stops "
+                  "the executions it matches from being reported."
+    )
+    regex = models.TextField(
+        help_text="ICU pattern, matched against the path of the executable. It is anchored at the "
+                  "start of the path: use a leading .* to match anywhere. Capture groups are not "
+                  "allowed, because the entries of a policy are combined into one pattern."
+    )
+
+    class Meta:
+        unique_together = (("configuration", "name"),)
+
+    def get_absolute_url(self):
+        return (reverse("santa:configuration", args=(self.configuration_id,))
+                + f"#scoped-path-regex-{self.pk}")
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk, "name": self.name}
+        if keys_only:
+            return d
+        d.update({
+            "configuration": self.configuration.serialize_for_event(keys_only=True),
+            "description": self.description,
+            "policy": self.policy,
+            "regex": self.regex,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        d.update(self.serialize_scope_for_event())
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return {"santa_configuration": ((self.configuration.pk,),)}
+
+
 class VotingGroup(models.Model):
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     realm_group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE)
@@ -1103,9 +1201,12 @@ class EnrolledMachineManager(models.Manager):
             tag_ids=ArraySubquery(
                 MachineTag.objects.filter(serial_number=OuterRef("serial_number")).values("tag_id")
             ),
-            # most configurations have no entry, and then the query can only come back empty
+            # most configurations have no entry, and then the queries can only come back empty
             has_scoped_client_modes=Exists(
                 ScopedClientMode.objects.filter(configuration=OuterRef("enrollment__configuration"))
+            ),
+            has_scoped_path_regexes=Exists(
+                ScopedPathRegex.objects.filter(configuration=OuterRef("enrollment__configuration"))
             ),
         )
 

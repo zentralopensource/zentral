@@ -357,7 +357,7 @@
     </thead>
     <tbody>
       {% for row in scoped_client_modes %}
-      {% with scm=row.scoped_client_mode %}
+      {% with scm=row.item %}
       <tr class="data-row" id="scoped-client-mode-{{ scm.pk }}">
         <td>
           {{ scm.name }}
@@ -365,14 +365,7 @@
         </td>
         <td>{{ scm.get_client_mode_display }}</td>
         <td>{{ scm.get_event_detail_source_display }}</td>
-        <td>
-          {% for tag in scm.tags.all %}{% inventory_tag tag %}{% endfor %}
-          {% for tag in scm.excluded_tags.all %}-{% inventory_tag tag %}{% endfor %}
-          {{ scm.serial_numbers|join:", " }}
-          {% if scm.excluded_serial_numbers %}-{{ scm.excluded_serial_numbers|join:", -" }}{% endif %}
-          {{ scm.primary_users|join:", " }}
-          {% if scm.excluded_primary_users %}-{{ scm.excluded_primary_users|join:", -" }}{% endif %}
-        </td>
+        <td>{% include "santa/_scoped_item_scope.html" with item=scm %}</td>
         <td class="text-end py-0">
           {% if row.can_update %}
           {% url 'santa:update_scoped_client_mode' object.id scm.id as url %}
@@ -381,6 +374,63 @@
           {% if row.can_delete %}
           {% url 'santa:delete_scoped_client_mode' object.id scm.id as url %}
           {% button 'DELETE' url "Delete scoped client mode" %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
+{% if scoped_path_regexes or can_create_scoped_path_regex %}
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Scoped path regex{{ scoped_path_regexes|length|pluralize:"es" }} ({{ scoped_path_regexes|length }})</h2>
+    {% if can_create_scoped_path_regex %}
+        <div class="ms-auto">
+            {% url 'santa:create_scoped_path_regex' object.id as url %}
+            {% button 'CREATE' url "Create scoped path regex" %}
+        </div>
+    {% endif %}
+</div>
+
+{% if scoped_path_regexes %}
+<p class="text-secondary">
+  Santa reads the block regex before the allow regex, so a path matched by both is blocked.
+  In Monitor mode an allow entry grants nothing, and the executions it matches are not reported.
+</p>
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Policy</th>
+        <th>Regex</th>
+        <th>Scope</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in scoped_path_regexes %}
+      {% with spr=row.item %}
+      <tr class="data-row" id="scoped-path-regex-{{ spr.pk }}">
+        <td>
+          {{ spr.name }}
+          {% if spr.description %}<br><span class="text-secondary">{{ spr.description }}</span>{% endif %}
+        </td>
+        <td>{{ spr.get_policy_display }}</td>
+        <td><code class="badge text-bg-danger text-white fw-normal">{{ spr.regex }}</code></td>
+        <td>{% include "santa/_scoped_item_scope.html" with item=spr %}</td>
+        <td class="text-end py-0">
+          {% if row.can_update %}
+          {% url 'santa:update_scoped_path_regex' object.id spr.id as url %}
+          {% button 'UPDATE' url "Edit scoped path regex" %}
+          {% endif %}
+          {% if row.can_delete %}
+          {% url 'santa:delete_scoped_path_regex' object.id spr.id as url %}
+          {% button 'DELETE' url "Delete scoped path regex" %}
           {% endif %}
         </td>
       </tr>

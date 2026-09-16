@@ -12,7 +12,7 @@ from pbac.types import (
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
 
-from .models import EnrolledMachine, ScopedClientMode
+from .models import EnrolledMachine, ScopedClientMode, ScopedPathRegex
 
 
 # namespace
@@ -223,3 +223,104 @@ class UpdateScopedClientModeRequest(BaseScopedClientModeRequest):
 
 class DeleteScopedClientModeRequest(BaseScopedClientModeRequest):
     action = delete_scoped_client_mode_action
+
+
+# scoped path regex
+
+
+SCOPED_PATH_REGEX_RESOURCE_TYPE = ResourceType(
+    "ScopedPathRegex", get_namespace(),
+    parents=(CONFIGURATION_RESOURCE_TYPE,),
+)
+
+
+def get_scoped_path_regex_resource(scoped_path_regex) -> Resource:
+    return Resource(
+        SCOPED_PATH_REGEX_RESOURCE_TYPE.name, str(scoped_path_regex.pk),
+        SCOPED_PATH_REGEX_RESOURCE_TYPE.namespace,
+        [get_configuration_resource(scoped_path_regex.configuration)],
+    )
+
+
+create_scoped_path_regex_action = engine.register_action(
+    "createScopedPathRegex",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(CONFIGURATION_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Add a scoped path regex to a Santa configuration.",
+)
+
+
+view_scoped_path_regex_action = engine.register_action(
+    "viewScopedPathRegex",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(SCOPED_PATH_REGEX_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="See the scoped path regexes of a Santa configuration.",
+)
+
+
+update_scoped_path_regex_action = engine.register_action(
+    "updateScopedPathRegex",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(SCOPED_PATH_REGEX_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Change a scoped path regex.",
+)
+
+
+delete_scoped_path_regex_action = engine.register_action(
+    "deleteScopedPathRegex",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(SCOPED_PATH_REGEX_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Remove a scoped path regex from a Santa configuration.",
+)
+
+
+class CreateScopedPathRegexRequest(Request):
+    def __init__(self, user_obj, configuration) -> None:
+        super().__init__(
+            Principal.from_user(user_obj),
+            create_scoped_path_regex_action,
+            get_configuration_resource(configuration),
+        )
+
+
+class BaseScopedPathRegexRequest(Request):
+    action = None
+
+    def __init__(self, user_obj, scoped_path_regex: ScopedPathRegex) -> None:
+        super().__init__(
+            Principal.from_user(user_obj),
+            self.action,
+            get_scoped_path_regex_resource(scoped_path_regex),
+        )
+
+
+class ViewScopedPathRegexRequest(BaseScopedPathRegexRequest):
+    action = view_scoped_path_regex_action
+
+
+class UpdateScopedPathRegexRequest(BaseScopedPathRegexRequest):
+    action = update_scoped_path_regex_action
+
+
+class DeleteScopedPathRegexRequest(BaseScopedPathRegexRequest):
+    action = delete_scoped_path_regex_action

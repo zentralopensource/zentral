@@ -26,7 +26,7 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate(self, data):
-        errors = ConfigurationValidator(data).validate()
+        errors = ConfigurationValidator(data, self.instance).validate()
         if errors:
             raise serializers.ValidationError(errors)
         return data

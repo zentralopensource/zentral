@@ -1,0 +1,240 @@
+from accounts.models import User
+from django.contrib.auth.models import Group
+from django.db import connection
+from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
+from django.utils.crypto import get_random_string
+from pbac.engine import engine
+from pbac.entities import Entity
+from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.santa.models import ScopedPathRegex
+from zentral.contrib.santa.pbac import get_scoped_path_regex_resource
+from .utils import force_configuration
+
+
+class SantaScopedPathRegexPBACTestCase(TestCase, LoginCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("mothra", "mothra@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
+        cls.user.groups.set([cls.group])
+
+    def _get_group(self):
+        return self.group
+
+    def _get_user(self):
+        return self.user
+
+    def _get_url_namespace(self):
+        return "santa"
+
+    def force_scoped_path_regex(self, configuration):
+        return ScopedPathRegex.objects.create(
+            configuration=configuration,
+            name=get_random_string(12),
+            policy=ScopedPathRegex.Policy.ALLOW,
+            regex="/Library/Example/",
+        )
+
+    def policy(self, *statements):
+        # set_policy keeps one policy, so the legacy configuration permissions go in here too
+        role = str(Entity("Role", str(self._get_group().pk)))
+        legacy = [engine.legacy_perm_actions["santa.view_configuration"],
+                  engine.module_legacy_perm_actions["santa"]]
+        source = (
+            'permit (\n'
+            f'  principal in {role},\n'
+            f'  action in [{", ".join(str(a) for a in legacy)}],\n'
+            '  resource\n'
+            ');\n'
+        )
+        for statement in statements:
+            source += statement.replace("ROLE", role) + "\n"
+        return source
+
+    # resource
+
+    def test_resource(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        resource = get_scoped_path_regex_resource(scm)
+        self.assertEqual(str(resource), f'Santa::ScopedPathRegex::"{scm.pk}"')
+        self.assertEqual(resource.attrs, {})
+        self.assertEqual([str(p) for p in resource.parents],
+                         [f'Santa::Configuration::"{configuration.pk}"'])
+        self.assertEqual(resource.parents[0].attrs, {"name": configuration.name})
+
+    # create
+
+    def test_detail_page_hides_the_create_button_without_a_policy(self):
+        configuration = force_configuration()
+        self.login_with_policy(self.policy())
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertNotContains(response, reverse("santa:create_scoped_path_regex", args=(configuration.pk,)))
+
+    def test_detail_page_shows_the_create_button(self):
+        configuration = force_configuration()
+        self.login_with_policy(self.policy(
+            f'permit (principal in ROLE, action == Santa::Action::"createScopedPathRegex",'
+            f' resource == Santa::Configuration::"{configuration.pk}");'
+        ))
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertContains(response, reverse("santa:create_scoped_path_regex", args=(configuration.pk,)))
+
+    def test_create_denied_without_a_policy(self):
+        configuration = force_configuration()
+        self.login_with_policy(self.policy())
+        response = self.client.post(
+            reverse("santa:create_scoped_path_regex", args=(configuration.pk,)),
+            {"name": get_random_string(12),
+             "policy": ScopedPathRegex.Policy.BLOCK,
+             "regex": "/Library/Example/"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(ScopedPathRegex.objects.count(), 0)
+
+    def test_create(self):
+        configuration = force_configuration()
+        self.login_with_policy(self.policy(
+            f'permit (principal in ROLE, action == Santa::Action::"createScopedPathRegex",'
+            f' resource == Santa::Configuration::"{configuration.pk}");'
+        ))
+        url = reverse("santa:create_scoped_path_regex", args=(configuration.pk,))
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        name = get_random_string(12)
+        response = self.client.post(
+            url,
+            {"name": name,
+             "policy": ScopedPathRegex.Policy.BLOCK,
+             "regex": "/Library/Example/"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ScopedPathRegex.objects.filter(name=name).count(), 1)
+
+    def test_create_denied_on_another_configuration(self):
+        configuration = force_configuration()
+        other = force_configuration()
+        self.login_with_policy(self.policy(
+            f'permit (principal in ROLE, action == Santa::Action::"createScopedPathRegex",'
+            f' resource == Santa::Configuration::"{other.pk}");'
+        ))
+        response = self.client.get(reverse("santa:create_scoped_path_regex", args=(configuration.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    # update
+
+    def update_policy(self, configuration):
+        return self.policy(
+            f'permit (principal in ROLE, action == Santa::Action::"updateScopedPathRegex",'
+            f' resource in Santa::Configuration::"{configuration.pk}");',
+        )
+
+    def test_update_denied_without_a_policy(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        self.login_with_policy(self.policy())
+        response = self.client.get(
+            reverse("santa:update_scoped_path_regex", args=(configuration.pk, scm.pk))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_update(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        self.login_with_policy(self.update_policy(configuration))
+        url = reverse("santa:update_scoped_path_regex", args=(configuration.pk, scm.pk))
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(
+            url,
+            {"name": scm.name,
+             "policy": ScopedPathRegex.Policy.BLOCK,
+             "regex": "/Library/Example/"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        scm.refresh_from_db()
+        self.assertEqual(scm.policy, ScopedPathRegex.Policy.BLOCK)
+
+    def assert_the_entry_carries_its_configuration(self, url):
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([q["sql"] for q in ctx.captured_queries
+                          if 'FROM "santa_configuration"' in q["sql"]], [])
+
+    def test_the_entry_carries_its_configuration(self):
+        # the PBAC parent entity, the audit event and the success URL all read it
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        self.login_with_policy(self.policy(
+            f'permit (principal in ROLE, action in [Santa::Action::"updateScopedPathRegex",'
+            f' Santa::Action::"deleteScopedPathRegex"],'
+            f' resource in Santa::Configuration::"{configuration.pk}");'
+        ))
+        self.assert_the_entry_carries_its_configuration(
+            reverse("santa:update_scoped_path_regex", args=(configuration.pk, scm.pk))
+        )
+        self.assert_the_entry_carries_its_configuration(
+            reverse("santa:delete_scoped_path_regex", args=(configuration.pk, scm.pk))
+        )
+
+    def test_update_denied_on_another_configuration(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(force_configuration())
+        self.login_with_policy(self.update_policy(configuration))
+        response = self.client.get(
+            reverse("santa:update_scoped_path_regex", args=(scm.configuration.pk, scm.pk))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # view
+
+    def test_detail_page_hides_the_entries_without_a_policy(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        self.login_with_policy(self.policy())
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertNotContains(response, scm.name)
+
+    def test_detail_page_shows_the_entries(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        self.login_with_policy(self.policy(
+            f'permit (principal in ROLE, action == Santa::Action::"viewScopedPathRegex",'
+            f' resource in Santa::Configuration::"{configuration.pk}");'
+        ))
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertContains(response, scm.name)
+        self.assertNotContains(
+            response, reverse("santa:delete_scoped_path_regex", args=(configuration.pk, scm.pk))
+        )
+
+    # delete
+
+    def test_delete_denied_without_a_policy(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        self.login_with_policy(self.policy())
+        response = self.client.get(
+            reverse("santa:delete_scoped_path_regex", args=(configuration.pk, scm.pk))
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete(self):
+        configuration = force_configuration()
+        scm = self.force_scoped_path_regex(configuration)
+        self.login_with_policy(self.policy(
+            f'permit (principal in ROLE, action in [Santa::Action::"viewScopedPathRegex",'
+            f' Santa::Action::"deleteScopedPathRegex"],'
+            f' resource in Santa::Configuration::"{configuration.pk}");'
+        ))
+        url = reverse("santa:delete_scoped_path_regex", args=(configuration.pk, scm.pk))
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertContains(response, url)
+        response = self.client.post(url, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ScopedPathRegex.objects.filter(pk=scm.pk).count(), 0)

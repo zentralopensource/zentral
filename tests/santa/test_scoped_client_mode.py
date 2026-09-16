@@ -237,7 +237,8 @@ class SantaScopedClientModeTestCase(TestCase):
     def test_without_the_annotations_the_method_asks(self):
         configuration = force_configuration()
         machine = force_enrolled_machine(configuration=configuration)
-        with self.assertNumQueries(1):
+        # one exists per scoped model
+        with self.assertNumQueries(2):
             configuration.get_sync_server_config(machine, (2022, 1))
 
     def test_without_the_annotations_an_entry_costs_the_tags_too(self):
@@ -246,8 +247,8 @@ class SantaScopedClientModeTestCase(TestCase):
         tag = Tag.objects.create(name=get_random_string(12))
         self.force_scoped_client_mode(configuration, tags=[tag])
         machine = force_enrolled_machine(configuration=configuration, tags=[tag])
-        # the exists, the tags, then the entries
-        with self.assertNumQueries(3):
+        # the two exists, the tags, then the entries
+        with self.assertNumQueries(4):
             configuration.get_sync_server_config(machine, (2022, 1))
 
     # preflight view

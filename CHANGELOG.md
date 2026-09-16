@@ -108,9 +108,25 @@ Four new PBAC actions manage the entries. `Santa::Action::"createScopedClientMod
 
 The Santa configuration form accepts a blocked path regex in Lockdown mode now. The Santa agent evaluates the blocked path regex before the allowed path regex, and before the client mode. In Lockdown mode it is therefore the only way to block by path a file that the scope stage allows – a file that is not a Mach-O file is allowed in every mode. The rule also read the client mode of the configuration, which a scoped client mode changes for some of the machines.
 
+A Santa configuration can add a path allow or block regex for some of its machines now. A scoped path regex has the scope fields of a rule – serial numbers, primary users and tags, each one with an exclusion – a policy, Allow or Block, and a pattern. Santa accepts one pattern for each policy, so Zentral combines the pattern of the configuration and the patterns of the entries in scope when it answers the preflight. There is no precedence: every entry in scope is included.
+
+The combined pattern is anchored once, at the start of the path, and the entries are in the alphabetical order of their names so that the pattern is the same between two preflights. Zentral compiles each pattern when it is saved. A capture group and an inline flag group without a scope are refused, because the entries are combined: use `(?:abc)` and `(?i:abc)`.
+
+Four new PBAC actions manage the entries. `Santa::Action::"createScopedPathRegex"` takes the configuration as its resource. `"viewScopedPathRegex"`, `"updateScopedPathRegex"` and `"deleteScopedPathRegex"` take the entry, which has the configuration as its parent, so one policy covers every entry of a configuration. These actions have no Django permission. `"viewScopedPathRegex"` is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups, and the three actions that write are members of `"AdminActions"` only.
+
 
 ### Backward incompatibilities
 
+
+#### 🧨 Santa path regexes are anchored
+
+The path regexes of a Santa configuration are combined with the scoped path regexes now, and the combination is anchored at the start of the path. A configuration with no entry gets `^(?:(?:its pattern))`.
+
+Santa adds a `^` to a pattern that does not have one when it reads its state from the disk, so the enforcement after a restart of the agent does not change. But the pattern was a search in the session that received it, and it is a prefix in every session now. **Add a leading `.*` to a pattern that must match a path segment in the middle**, for example `.*/Downloads/`.
+
+Each machine removes its decision caches one time, when it receives the new pattern.
+
+A pattern that Python cannot compile keeps being distributed alone, without the scoped entries, and Zentral logs an error. Some ICU syntax is not Python syntax – `\p{…}`, `\X`, `\R`, `\Q…\E` – so a configuration can have a pattern that works in Santa and cannot be combined. Zentral validates a path regex of a configuration when it changes now, so a new pattern is refused at the form and in the API.
 
 #### 🧨 Osquery pack import events
 
