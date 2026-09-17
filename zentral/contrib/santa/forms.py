@@ -120,17 +120,19 @@ class ScopedConfigurationItemForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.configuration = kwargs.pop("configuration")
         super().__init__(*args, **kwargs)
+        # a disabled field keeps its initial value whatever the body carries, so an entry
+        # cannot be reparented and Django validates (configuration, name) itself
+        field = self.fields["configuration"]
+        field.disabled = True
+        field.widget = forms.HiddenInput()
+        self.initial["configuration"] = self.configuration.pk
 
     def clean(self):
         cleaned_data = super().clean()
-        validator = self.validator_class(self.configuration, cleaned_data, self.instance.pk)
+        validator = self.validator_class(self.configuration, cleaned_data)
         for key, error in validator.validate().items():
             self.add_error(key, error)
         return cleaned_data
-
-    def save(self, *args, **kwargs):
-        self.instance.configuration = self.configuration
-        return super().save(*args, **kwargs)
 
 
 class ScopedClientModeForm(ScopedConfigurationItemForm):
@@ -139,6 +141,7 @@ class ScopedClientModeForm(ScopedConfigurationItemForm):
     class Meta:
         model = ScopedClientMode
         fields = (
+            "configuration",
             "name",
             "description",
             "client_mode",
@@ -155,6 +158,7 @@ class ScopedPathRegexForm(ScopedConfigurationItemForm):
     class Meta:
         model = ScopedPathRegex
         fields = (
+            "configuration",
             "name",
             "description",
             "policy",

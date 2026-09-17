@@ -208,7 +208,8 @@ class ScopedClientModeFormTests(TestCase):
                                         client_mode=Configuration.MONITOR_MODE)
         form = self.form(configuration, name="yolo")
         self.assertFalse(form.is_valid())
-        self.assertEqual(form.errors["name"], ["A scoped client mode with this name already exists"])
+        self.assertEqual(form.errors["__all__"],
+                         ["Scoped client mode with this Configuration and Name already exists."])
 
     def test_same_name_on_another_configuration(self):
         ScopedClientMode.objects.create(configuration=force_configuration(), name="yolo",
@@ -309,7 +310,8 @@ class ScopedPathRegexFormTests(TestCase):
                                        policy=ScopedPathRegex.Policy.ALLOW, regex="/a/")
         form = self.form(configuration, name="yolo")
         self.assertFalse(form.is_valid())
-        self.assertEqual(form.errors["name"], ["A scoped path regex with this name already exists"])
+        self.assertEqual(form.errors["__all__"],
+                         ["Scoped path regex with this Configuration and Name already exists."])
 
     def test_same_name_on_another_configuration(self):
         ScopedPathRegex.objects.create(configuration=force_configuration(), name="yolo",

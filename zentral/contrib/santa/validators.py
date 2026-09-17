@@ -62,27 +62,13 @@ class ConfigurationValidator:
 
 
 class ScopedConfigurationItemValidator:
-    item_set_name = None
-    item_verbose_name = None
 
-    # the configuration is not a form field, so that an entry cannot be reparented
-    def __init__(self, configuration, data: dict[str, Any], pk=None):
+    def __init__(self, configuration, data: dict[str, Any]):
         self.configuration = configuration
         self.data = data
-        self.pk = pk
         self.errors = {}
 
     def validate(self):
-        # the configuration is excluded from the form, and Django drops every unique check that
-        # names an excluded field, so (configuration, name) is only enforced by the constraint
-        name = self.data.get("name")
-        if name:
-            qs = getattr(self.configuration, self.item_set_name).filter(name=name)
-            if self.pk:
-                qs = qs.exclude(pk=self.pk)
-            if qs.exists():
-                self.errors.update({"name": f"A {self.item_verbose_name} with this name already exists"})
-
         for attr in ("serial_numbers", "primary_users", "tags"):
             excluded_attr = f"excluded_{attr}"
             included = self.data.get(attr) or []
@@ -97,8 +83,6 @@ class ScopedConfigurationItemValidator:
 
 
 class ScopedClientModeValidator(ScopedConfigurationItemValidator):
-    item_set_name = "scopedclientmode_set"
-    item_verbose_name = "scoped client mode"
 
     def validate(self):
         super().validate()
@@ -117,8 +101,6 @@ class ScopedClientModeValidator(ScopedConfigurationItemValidator):
 
 
 class ScopedPathRegexValidator(ScopedConfigurationItemValidator):
-    item_set_name = "scopedpathregex_set"
-    item_verbose_name = "scoped path regex"
 
     def validate(self):
         super().validate()
