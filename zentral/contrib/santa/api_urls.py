@@ -2,7 +2,9 @@ from django.urls import path
 from .api_views import (EnrolledMachineList, ForceEnrolledMachineCleanSync, IngestFileInfo,
                         RuleList, RuleSetUpdate, TargetsExport, ConfigurationList,
                         ConfigurationDetail, EnrollmentList, EnrollmentDetail,
-                        EnrollmentPlist, EnrollmentConfigurationProfile, RuleDetail)
+                        EnrollmentPlist, EnrollmentConfigurationProfile, RuleDetail,
+                        ScopedClientModeList, ScopedClientModeDetail,
+                        ScopedPathRegexList, ScopedPathRegexDetail)
 
 
 app_name = "santa_api"
@@ -21,5 +23,9 @@ urlpatterns = [
     path('rules/', RuleList.as_view(), name="rules"),
     path('rules/<int:pk>/', RuleDetail.as_view(), name="rule"),
     path('rulesets/update/', RuleSetUpdate.as_view(), name="ruleset_update"),
+    path('scoped_client_modes/', ScopedClientModeList.as_view(), name="scoped_client_modes"),
+    path('scoped_client_modes/<int:pk>/', ScopedClientModeDetail.as_view(), name="scoped_client_mode"),
+    path('scoped_path_regexes/', ScopedPathRegexList.as_view(), name="scoped_path_regexes"),
+    path('scoped_path_regexes/<int:pk>/', ScopedPathRegexDetail.as_view(), name="scoped_path_regex"),
     path('targets/export/', TargetsExport.as_view(), name="targets_export"),
 ]

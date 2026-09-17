@@ -114,6 +114,8 @@ The combined pattern is anchored once, at the start of the path, and the entries
 
 Four new PBAC actions manage the entries. `Santa::Action::"createScopedPathRegex"` takes the configuration as its resource. `"viewScopedPathRegex"`, `"updateScopedPathRegex"` and `"deleteScopedPathRegex"` take the entry, which has the configuration as its parent, so one policy covers every entry of a configuration. These actions have no Django permission. `"viewScopedPathRegex"` is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups, and the three actions that write are members of `"AdminActions"` only.
 
+The scoped client modes and the scoped path regexes have a REST API now: `/api/santa/scoped_client_modes/` and `/api/santa/scoped_path_regexes/`, with the same four PBAC actions as the console and no Django permission. `configuration_id` is a required parameter of the two list endpoints, and an entry the caller is not allowed to see is absent from the results. An entry cannot change configuration: another one in the body of a `PUT` is a 400 – delete the entry and create it again. A `PUT` is a full update: the attributes Zentral validates together – the scope, and the event detail of a client mode – are required, so a check never reads a value the caller did not send.
+
 
 ### Backward incompatibilities
 

@@ -14,8 +14,10 @@ from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 
 from .events import post_santa_rule_update_event
 from .forms import cleanup_target_identifier
-from .models import Configuration, EnrolledMachine, Enrollment, Rule, Target
-from .validators import ConfigurationValidator
+from .models import (Configuration, EnrolledMachine, Enrollment, Rule,
+                     ScopedClientMode, ScopedPathRegex, Target)
+from .validators import (ConfigurationValidator, ScopedClientModeValidator,
+                         ScopedPathRegexValidator)
 
 logger = logging.getLogger("zentral.contrib.santa.serializers")
 
@@ -30,6 +32,80 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         return data
+
+
+class ScopedConfigurationItemResourceSerializer(serializers.Serializer):
+    """Reads the configuration of a create body, and nothing else.
+
+    The configuration is the resource of the PBAC decision, so it has to be read before the
+    decision. The create validates the rest of the body after it.
+    """
+    configuration = serializers.PrimaryKeyRelatedField(queryset=Configuration.objects.all())
+
+
+class ScopedConfigurationItemSerializer(serializers.ModelSerializer):
+    """Base for the scoped configuration item serializers.
+
+    The item validator checks what DRF cannot: the conflicts of the scope, the event detail
+    of a client mode and the pattern of a path regex.
+    """
+    validator_class = None
+
+    def validate(self, data):
+        if self.instance is None:
+            configuration = data["configuration"]
+        else:
+            configuration = self.instance.configuration
+            # the decision was taken on the stored entry, so writing this one to another
+            # configuration would write it where the engine never looked
+            if data.get("configuration", configuration) != configuration:
+                raise serializers.ValidationError(
+                    {"configuration": ["An entry cannot change configuration"]}
+                )
+        errors = self.validator_class(configuration, data).validate()
+        if errors:
+            raise serializers.ValidationError(errors)
+        return data
+
+
+class ScopedConfigurationItemUpdateSerializerMixin:
+    """Requires the fields the item validator reads with another one.
+
+    A field the body leaves out keeps its stored value, and a check that reads two fields
+    would then answer on a value the caller never sent.
+    """
+
+    def get_fields(self):
+        fields = super().get_fields()
+        for name in self.validator_class.required_fields:
+            fields[name].required = True
+        return fields
+
+
+class ScopedClientModeSerializer(ScopedConfigurationItemSerializer):
+    validator_class = ScopedClientModeValidator
+
+    class Meta:
+        model = ScopedClientMode
+        fields = "__all__"
+
+
+class ScopedClientModeUpdateSerializer(ScopedConfigurationItemUpdateSerializerMixin,
+                                       ScopedClientModeSerializer):
+    pass
+
+
+class ScopedPathRegexSerializer(ScopedConfigurationItemSerializer):
+    validator_class = ScopedPathRegexValidator
+
+    class Meta:
+        model = ScopedPathRegex
+        fields = "__all__"
+
+
+class ScopedPathRegexUpdateSerializer(ScopedConfigurationItemUpdateSerializerMixin,
+                                      ScopedPathRegexSerializer):
+    pass
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):

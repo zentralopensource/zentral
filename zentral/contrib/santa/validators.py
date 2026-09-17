@@ -62,6 +62,11 @@ class ConfigurationValidator:
 
 
 class ScopedConfigurationItemValidator:
+    scope_attrs = ("serial_numbers", "primary_users", "tags")
+    # an update has to carry what a check reads with something else, or the check reads a
+    # stored value the caller did not send. The serializers require these
+    required_fields = tuple(name for attr in scope_attrs
+                            for name in (attr, f"excluded_{attr}"))
 
     def __init__(self, configuration, data: dict[str, Any]):
         self.configuration = configuration
@@ -69,7 +74,7 @@ class ScopedConfigurationItemValidator:
         self.errors = {}
 
     def validate(self):
-        for attr in ("serial_numbers", "primary_users", "tags"):
+        for attr in self.scope_attrs:
             excluded_attr = f"excluded_{attr}"
             included = self.data.get(attr) or []
             excluded = self.data.get(excluded_attr) or []
@@ -83,6 +88,8 @@ class ScopedConfigurationItemValidator:
 
 
 class ScopedClientModeValidator(ScopedConfigurationItemValidator):
+    required_fields = (ScopedConfigurationItemValidator.required_fields
+                       + ("event_detail_source", "event_detail_url"))
 
     def validate(self):
         super().validate()

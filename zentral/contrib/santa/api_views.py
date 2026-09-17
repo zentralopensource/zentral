@@ -10,10 +10,12 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter
 from rest_framework.parsers import JSONParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
+from pbac.engine import engine
 from zentral.contrib.inventory.models import File, MetaMachine, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.core.events.base import AuditEvent
@@ -21,11 +23,20 @@ from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRe
                                ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
                                PBACPermission, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
-from .models import Configuration, EnrolledMachine, Rule, RuleSet, Target, Enrollment
-from .pbac import ForceCleanSyncRequest, ViewEnrolledMachineRequest
+from .models import (Configuration, EnrolledMachine, Rule, RuleSet, ScopedClientMode,
+                     ScopedPathRegex, Target, Enrollment)
+from .pbac import (CreateScopedClientModeRequest, CreateScopedPathRegexRequest,
+                   DeleteScopedClientModeRequest, DeleteScopedPathRegexRequest,
+                   ForceCleanSyncRequest, UpdateScopedClientModeRequest,
+                   UpdateScopedPathRegexRequest, ViewEnrolledMachineRequest,
+                   ViewScopedClientModeRequest, ViewScopedPathRegexRequest)
 from .serializers import (EnrolledMachineSerializer, ForceCleanSyncSerializer, RuleSerializer,
                           RuleSetUpdateSerializer, ConfigurationSerializer,
-                          EnrollmentSerializer, build_file_tree_from_santa_fileinfo)
+                          EnrollmentSerializer, ScopedClientModeSerializer,
+                          ScopedClientModeUpdateSerializer,
+                          ScopedConfigurationItemResourceSerializer, ScopedPathRegexSerializer,
+                          ScopedPathRegexUpdateSerializer,
+                          build_file_tree_from_santa_fileinfo)
 from .tasks import export_targets
 
 
@@ -205,6 +216,120 @@ class ForceEnrolledMachineCleanSync(generics.GenericAPIView):
         prev_value = self.enrolled_machine.serialize_for_event()
         changed = self.enrolled_machine.clear_forced_sync_type()
         return self._respond(request, prev_value, changed)
+
+
+class ScopedConfigurationItemFilter(filters.FilterSet):
+    configuration_id = filters.ModelChoiceFilter(field_name="configuration", required=True,
+                                                 queryset=Configuration.objects.all())
+
+
+class BaseScopedConfigurationItemList(ListCreateAPIViewWithAudit):
+    pagination_class = MaxLimitOffsetPagination
+    filterset_class = ScopedConfigurationItemFilter
+    create_pbac_request_class = None
+    view_pbac_request_class = None
+
+    def get_permissions(self):
+        # a create is one decision, on the configuration the body names. A list is one
+        # decision per entry, taken in filter_queryset()
+        if self.request.method == "POST":
+            return [PBACPermission()]
+        return [IsAuthenticated()]
+
+    def get_pbac_request(self, request):
+        # only the configuration is read before the decision, because it is the resource of
+        # that decision. The rest of the body is validated by the create, after it: the item
+        # validator reads the stored entries, and a caller the engine refuses would learn
+        # from a 400 that a name is taken
+        serializer = ScopedConfigurationItemResourceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self.create_pbac_request_class(request.user, serializer.validated_data["configuration"])
+
+    def get_queryset(self):
+        # the tags are prefetched for the serializer, which reads them for every row.
+        # Ordered on the queryset, and on the primary key too: a name is unique in a
+        # configuration, not across them, and an unordered page is silently the wrong page
+        return (self.model.objects.select_related("configuration")
+                                  .prefetch_related("tags", "excluded_tags")
+                                  .order_by("name", "pk"))
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        # one decision per entry, and the page is cut after them: a page cut first would drop
+        # an entry the caller is allowed to see. Hence a list, and not a queryset
+        items = list(queryset)
+        requests = [self.view_pbac_request_class(self.request.user, i) for i in items]
+        engine.authorize_requests(requests)
+        # an entry the caller cannot see and an entry that does not exist read the same way,
+        # so an empty list is the answer to a caller with no policy, not a 403
+        return [i for i, r in zip(items, requests) if r.is_authorized]
+
+
+class BaseScopedConfigurationItemDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+    permission_classes = [PBACPermission]
+    view_pbac_request_class = None
+    update_pbac_request_class = None
+    delete_pbac_request_class = None
+
+    def get_queryset(self):
+        # the PBAC resource reads the configuration. A prefetch of the tags saves no query: on
+        # a retrieve it costs as much as it saves, and set() drops the cache on a write
+        return self.model.objects.select_related("configuration")
+
+    def get_object(self):
+        # read once: the permission resolves it to build the request, the handler uses it
+        if not hasattr(self, "_object"):
+            self._object = super().get_object()
+        return self._object
+
+    def get_pbac_request(self, request):
+        request_class = {
+            "PUT": self.update_pbac_request_class,
+            "DELETE": self.delete_pbac_request_class,
+        }.get(request.method, self.view_pbac_request_class)
+        return request_class(request.user, self.get_object())
+
+
+class ScopedClientModeList(BaseScopedConfigurationItemList):
+    """
+    List the scoped client modes of a Santa configuration, or create one.
+    """
+    model = ScopedClientMode
+    serializer_class = ScopedClientModeSerializer
+    create_pbac_request_class = CreateScopedClientModeRequest
+    view_pbac_request_class = ViewScopedClientModeRequest
+
+
+class ScopedClientModeDetail(BaseScopedConfigurationItemDetail):
+    """
+    Retrieve, update or delete a scoped client mode.
+    """
+    model = ScopedClientMode
+    serializer_class = ScopedClientModeUpdateSerializer
+    view_pbac_request_class = ViewScopedClientModeRequest
+    update_pbac_request_class = UpdateScopedClientModeRequest
+    delete_pbac_request_class = DeleteScopedClientModeRequest
+
+
+class ScopedPathRegexList(BaseScopedConfigurationItemList):
+    """
+    List the scoped path regexes of a Santa configuration, or create one.
+    """
+    model = ScopedPathRegex
+    serializer_class = ScopedPathRegexSerializer
+    create_pbac_request_class = CreateScopedPathRegexRequest
+    view_pbac_request_class = ViewScopedPathRegexRequest
+
+
+class ScopedPathRegexDetail(BaseScopedConfigurationItemDetail):
+    """
+    Retrieve, update or delete a scoped path regex.
+    """
+    model = ScopedPathRegex
+    serializer_class = ScopedPathRegexUpdateSerializer
+    view_pbac_request_class = ViewScopedPathRegexRequest
+    update_pbac_request_class = UpdateScopedPathRegexRequest
+    delete_pbac_request_class = DeleteScopedPathRegexRequest
 
 
 class IngestFileInfo(APIView):

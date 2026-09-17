@@ -1398,6 +1398,223 @@ $ curl -X DELETE \
   https://$ZTL_FQDN/api/santa/configurations/1/
 ```
 
+### /api/santa/scoped_client_modes/
+
+The scoped client modes of a Santa configuration. See [Scoped client modes](#scoped-client-modes).
+
+#### List the scoped client modes of a configuration.
+
+* method: GET
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"viewScopedClientMode"`
+* Required filter parameter:
+    * `configuration_id`: the ID of the Santa configuration. An ID that names no configuration is a 400.
+
+The results are paginated, use the `limit` and the `offset` parameters to page through them. They are in the alphabetical order of the names.
+
+> **_NOTE:_** An entry the caller is not allowed to see is absent from the results. The endpoint does not answer with a 403.
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/santa/scoped_client_modes/?configuration_id=1" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "configuration": 1,
+      "name": "vendorcorp-rollout",
+      "description": "",
+      "client_mode": 1,
+      "event_detail_source": "INHERIT",
+      "event_detail_url": "",
+      "event_detail_text": "",
+      "serial_numbers": [],
+      "excluded_serial_numbers": [],
+      "primary_users": [],
+      "excluded_primary_users": [],
+      "tags": [3],
+      "excluded_tags": [],
+      "created_at": "2026-09-16T15:06:56.168151",
+      "updated_at": "2026-09-16T15:06:56.168154"
+    }
+  ]
+}
+```
+
+#### Add a scoped client mode.
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"createScopedClientMode"`, with the configuration as its resource.
+* Required attributes:
+    * `configuration`: the ID of the Santa configuration.
+    * `name`: unique in the configuration.
+    * `client_mode`: `1` for Monitor, `2` for Lockdown.
+* Optional attributes:
+    * `description`
+    * `event_detail_source`: where the button of the block notification comes from, for the machines in scope. One of `INHERIT` (default, the button of the configuration), `VOTING_PORTAL`, `CUSTOM` or `NONE`. `VOTING_PORTAL` requires a voting realm with the user portal enabled on the configuration, and `CUSTOM` requires `event_detail_url`.
+    * `event_detail_url`, `event_detail_text`
+    * `serial_numbers`, `excluded_serial_numbers`, `primary_users`, `excluded_primary_users`: arrays of strings.
+    * `tags`, `excluded_tags`: arrays of tag IDs.
+
+Example:
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"configuration": 1, "name": "vendorcorp-rollout", "client_mode": 1, "tags": [3]}' \
+  https://$ZTL_FQDN/api/santa/scoped_client_modes/ \
+  |python3 -m json.tool
+```
+
+### /api/santa/scoped_client_modes/`<int:pk>`/
+
+#### Get a scoped client mode.
+
+* method: GET
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"viewScopedClientMode"`
+
+#### Update a scoped client mode.
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"updateScopedClientMode"`
+* The attributes of the POST. `configuration`, the scope and the event detail are required here.
+
+`PUT` is a full update: send every attribute. An attribute that Zentral validates with another one is a 400 if it is missing, and the others keep their stored value. `PATCH` gives a 405, like everywhere else in the Zentral API.
+
+> **_NOTE:_** An entry cannot change configuration. A different one in the body of a `PUT` is a 400. Delete the entry and create it again on the other configuration.
+
+#### Delete a scoped client mode.
+
+* method: DELETE
+* PBAC action: `Santa::Action::"deleteScopedClientMode"`
+
+Example:
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/santa/scoped_client_modes/1/
+```
+
+### /api/santa/scoped_path_regexes/
+
+The scoped path regexes of a Santa configuration. See [Scoped path regexes](#scoped-path-regexes).
+
+#### List the scoped path regexes of a configuration.
+
+* method: GET
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"viewScopedPathRegex"`
+* Required filter parameter:
+    * `configuration_id`: the ID of the Santa configuration. An ID that names no configuration is a 400.
+
+The results are paginated and ordered like the [scoped client modes](#list-the-scoped-client-modes-of-a-configuration), and an entry the caller is not allowed to see is absent from them.
+
+Example:
+
+```bash
+$ curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/santa/scoped_path_regexes/?configuration_id=1" \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "configuration": 1,
+      "name": "vendorcorp-installer",
+      "description": "",
+      "policy": "ALLOW",
+      "regex": "/Library/VendorCorp/",
+      "serial_numbers": [],
+      "excluded_serial_numbers": [],
+      "primary_users": [],
+      "excluded_primary_users": [],
+      "tags": [3],
+      "excluded_tags": [],
+      "created_at": "2026-09-16T15:06:56.169657",
+      "updated_at": "2026-09-16T15:06:56.169659"
+    }
+  ]
+}
+```
+
+#### Add a scoped path regex.
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"createScopedPathRegex"`, with the configuration as its resource.
+* Required attributes:
+    * `configuration`: the ID of the Santa configuration.
+    * `name`: unique in the configuration.
+    * `policy`: `ALLOW` or `BLOCK`.
+    * `regex`: see [Accepted patterns](#accepted-patterns). A pattern that Zentral cannot compile, a capture group, an inline flag group without a scope and a pattern that matches an empty path are all a 400.
+* Optional attributes:
+    * `description`
+    * `serial_numbers`, `excluded_serial_numbers`, `primary_users`, `excluded_primary_users`: arrays of strings.
+    * `tags`, `excluded_tags`: arrays of tag IDs.
+
+Example:
+
+```bash
+$ curl -X POST \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"configuration": 1, "name": "vendorcorp-installer", "policy": "ALLOW", "regex": "/Library/VendorCorp/", "tags": [3]}' \
+  https://$ZTL_FQDN/api/santa/scoped_path_regexes/ \
+  |python3 -m json.tool
+```
+
+### /api/santa/scoped_path_regexes/`<int:pk>`/
+
+#### Get a scoped path regex.
+
+* method: GET
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"viewScopedPathRegex"`
+
+#### Update a scoped path regex.
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Santa::Action::"updateScopedPathRegex"`
+* The attributes of the POST, with the rules of a [scoped client mode](#update-a-scoped-client-mode): a full update, and another `configuration` in the body is a 400.
+
+#### Delete a scoped path regex.
+
+* method: DELETE
+* PBAC action: `Santa::Action::"deleteScopedPathRegex"`
+
+Example:
+
+```bash
+$ curl -X DELETE \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/santa/scoped_path_regexes/1/
+```
+
 ### /api/santa/enrollments/
 
 #### List all Santa enrollments.
