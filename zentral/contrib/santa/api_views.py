@@ -278,6 +278,7 @@ class RuleDetail(generics.RetrieveUpdateDestroyAPIView):
     """
     Retrieve, update or delete a Rule instance.
     """
+    http_method_names = RetrieveUpdateDestroyAPIViewWithAudit.http_method_names
     queryset = Rule.objects.select_related("configuration", "ruleset", "target")
     permission_classes = (DefaultDjangoModelPermissions,)
     serializer_class = RuleSerializer

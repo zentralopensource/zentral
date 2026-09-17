@@ -118,6 +118,17 @@ Four new PBAC actions manage the entries. `Santa::Action::"createScopedPathRegex
 ### Backward incompatibilities
 
 
+#### 🧨 The Santa rules endpoint refuses a PATCH
+
+`/api/santa/rules/<pk>/` answered a `PATCH`. Every other endpoint of the API refuses one,
+because Zentral only does full updates and the serializers read every declared field. A
+partial body was in fact a 500 on that endpoint, because the rule serializer reads the target
+the body did not carry. It gives a `405` now. Use `PUT` and send every attribute.
+
+A test walks the URL configuration and asserts that no endpoint answers a `PATCH`, so the
+restriction no longer depends on the base class a view inherits.
+
+
 #### 🧨 Santa path regexes are anchored
 
 The path regexes of a Santa configuration are combined with the scoped path regexes now, and the combination is anchored at the start of the path. A configuration with no entry gets `^(?:(?:its pattern))`.

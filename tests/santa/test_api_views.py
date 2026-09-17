@@ -1124,6 +1124,15 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                                       HTTP_AUTHORIZATION=f"Token {self.api_key}")
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
+    def test_rule_patch_method_not_allowed(self):
+        rule = self.force_rule()
+        self.set_permissions("santa.change_rule")
+        response = self.client.patch(reverse("santa_api:rule", args=(rule.pk,)),
+                                     data={"description": get_random_string(12)},
+                                     content_type="application/json",
+                                     HTTP_AUTHORIZATION=f"Token {self.api_key}")
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
     def test_rule_list(self):
         self.set_permissions("santa.view_rule")
         rule = self.force_rule()
