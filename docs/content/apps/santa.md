@@ -264,7 +264,7 @@ Three properties of the result:
 
 Santa uses the ICU regular expression syntax. Zentral compiles each pattern with Python, which is not the same syntax at the margins. Python does not accept `\p{…}`, `\X`, `\R` and `\Q…\E`. `[[:alpha:]]` is more dangerous: Python accepts it as a set in a set, which is not the POSIX class that ICU applies.
 
-Two limits come from the composition:
+Three limits come from the composition:
 
 * **No capture group.** Each entry becomes a group of the combined pattern, and a capture group changes the number of the groups after it. Use a group that does not capture: `(?:abc)`.
 * **Inline flags must have a scope.** Write `(?i:abc)`, not `(?i)abc`.
