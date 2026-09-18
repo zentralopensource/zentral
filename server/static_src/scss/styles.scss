@@ -400,6 +400,45 @@ td > p:last-child, td > table:last-child {
     font-family: var(--bs-font-monospace);
 }
 
+// Santa scoped configuration items
+
+// Six groups – tags, serial numbers and primary users, each with an exclusion – share
+// one table cell. A label column sized on its content aligns the values and keeps them
+// next to their label, whatever width the column gets. The two lists take that column
+// from the parent with subgrid, so the includes and the excludes line up although each
+// one carries its own labels.
+.scoped-item-scope {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: map-get($spacers, 3);
+
+    > * {
+        grid-column: 1 / -1;
+    }
+
+    > dl {
+        display: grid;
+        grid-template-columns: subgrid;
+    }
+
+    .scope-section {
+        font-weight: $font-weight-semibold;
+    }
+
+    .scope-section ~ .scope-section {
+        margin-top: map-get($spacers, 2);
+    }
+
+    dt {
+        font-weight: normal;
+        color: var(--bs-secondary-color);
+    }
+
+    dd {
+        margin-bottom: 0;
+    }
+}
+
 // Role permissions select
 
 select#id_permissions {

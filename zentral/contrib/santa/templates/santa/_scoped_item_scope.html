@@ -1,7 +1,42 @@
-{% load inventory_extras %}
-{% for tag in item.tags.all %}{% inventory_tag tag %}{% endfor %}
-{% for tag in item.excluded_tags.all %}-{% inventory_tag tag %}{% endfor %}
-{{ item.serial_numbers|join:", " }}
-{% if item.excluded_serial_numbers %}-{{ item.excluded_serial_numbers|join:", -" }}{% endif %}
-{{ item.primary_users|join:", " }}
-{% if item.excluded_primary_users %}-{{ item.excluded_primary_users|join:", -" }}{% endif %}
+{% load base_extras inventory_extras %}
+{% comment %}Scope of a ScopedConfigurationItem (`item`). An empty inclusion matches every machine, so an entry that only excludes is still in scope everywhere else.{% endcomment %}
+{% with tags=item.tags.all excluded_tags=item.excluded_tags.all %}
+<div class="scoped-item-scope">
+  <div class="scope-section">includes</div>
+  {% if not tags and not item.serial_numbers and not item.primary_users %}
+  <div class="text-secondary">all machines</div>
+  {% else %}
+  <dl>
+    {% if tags %}
+    <dt>tags</dt>
+    <dd class="d-flex flex-wrap gap-1">{% for tag in tags %}{% inventory_tag tag %}{% endfor %}</dd>
+    {% endif %}
+    {% if item.serial_numbers %}
+    <dt>serial number{{ item.serial_numbers|length|pluralize }}</dt>
+    <dd>{% for serial_number in item.serial_numbers %}{% if not forloop.first %}, {% endif %}{{ serial_number|privacywrapper }}{% endfor %}</dd>
+    {% endif %}
+    {% if item.primary_users %}
+    <dt>primary user{{ item.primary_users|length|pluralize }}</dt>
+    <dd>{{ item.primary_users|join:", " }}</dd>
+    {% endif %}
+  </dl>
+  {% endif %}
+  {% if excluded_tags or item.excluded_serial_numbers or item.excluded_primary_users %}
+  <div class="scope-section">excludes</div>
+  <dl>
+    {% if excluded_tags %}
+    <dt>tags</dt>
+    <dd class="d-flex flex-wrap gap-1">{% for tag in excluded_tags %}{% inventory_tag tag %}{% endfor %}</dd>
+    {% endif %}
+    {% if item.excluded_serial_numbers %}
+    <dt>serial number{{ item.excluded_serial_numbers|length|pluralize }}</dt>
+    <dd>{% for serial_number in item.excluded_serial_numbers %}{% if not forloop.first %}, {% endif %}{{ serial_number|privacywrapper }}{% endfor %}</dd>
+    {% endif %}
+    {% if item.excluded_primary_users %}
+    <dt>primary user{{ item.excluded_primary_users|length|pluralize }}</dt>
+    <dd>{{ item.excluded_primary_users|join:", " }}</dd>
+    {% endif %}
+  </dl>
+  {% endif %}
+</div>
+{% endwith %}
