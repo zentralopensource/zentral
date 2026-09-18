@@ -1329,6 +1329,26 @@ class EnrolledDevice(models.Model):
         return self.build_version_extra or self.build_version or ""
 
     @property
+    def software_update_status(self):
+        # the software update status items, with template-friendly keys
+        status_items = self.status_items if isinstance(self.status_items, dict) else {}
+        status = {}
+        for key, item in (("install_state", "softwareupdate.install-state"),
+                          ("pending_version", "softwareupdate.pending-version"),
+                          ("install_reason", "softwareupdate.install-reason"),
+                          ("failure_reason", "softwareupdate.failure-reason"),
+                          ("device_id", "softwareupdate.device-id"),
+                          ("beta_enrollment", "softwareupdate.beta-enrollment"),
+                          ("enforcement_declaration", "zentral.softwareupdate.enforcement-declaration")):
+            value = status_items.get(item)
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                value = {k.replace("-", "_"): v for k, v in value.items()}
+            status[key] = value
+        return status
+
+    @property
     def software_update_device_id(self):
         # the status item is pushed on change, the DeviceInformation query is polled
         for source, key in ((self.status_items, "softwareupdate.device-id"),
