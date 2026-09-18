@@ -2114,7 +2114,8 @@ class TestMDMArtifacts(TestCase):
         # first time, device notified
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             target.update_target_with_status_report(status_report)
-        self.assertEqual(len(callbacks), 1)
+        # notification + status items update event
+        self.assertEqual(len(callbacks), 2)
         send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
         self.assertEqual(target.client_capabilities,
                          status_report["StatusItems"]["management"]["client-capabilities"])
@@ -2136,7 +2137,8 @@ class TestMDMArtifacts(TestCase):
         # first time, device notified
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             target.update_target_with_status_report(status_report)
-        self.assertEqual(len(callbacks), 1)
+        # notification + status items update event
+        self.assertEqual(len(callbacks), 2)
         send_enrolled_user_notification.assert_called_once_with(self.enrolled_user)
         self.assertEqual(target.client_capabilities,
                          status_report["StatusItems"]["management"]["client-capabilities"])
@@ -2287,6 +2289,99 @@ class TestMDMArtifacts(TestCase):
         self.enrolled_device.refresh_from_db()
         self.assertEqual(self.enrolled_device.status_items, {})
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
+
+    # status items update event
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_status_items_update_event_device(self, send_enrolled_device_notification, post_event):
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(build_status_report())
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertEqual(event.event_type, "mdm_status_items_update")
+        self.assertEqual(
+            event.payload,
+            {"channel": "Device",
+             "status_items": self.enrolled_device.status_items,
+             "changed": self.SOFTWARE_UPDATE_STATUS_ITEMS,
+             "full_report": False}
+        )
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertNotIn("objects", metadata)
+        self.assertEqual(metadata["tags"], ["mdm"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_status_items_update_event_device_software_update_enforcement(
+        self, send_enrolled_device_notification, post_event
+    ):
+        sue = force_software_update_enforcement(os_version="15.1", local_datetime=naive_utcnow())
+        self.blueprint1.software_update_enforcements.add(sue)
+        target = Target(self.enrolled_device)
+        status_report = self._build_status_report_with_sue(target)
+        client_capabilities = status_report["StatusItems"]["management"]["client-capabilities"]
+        client_capabilities["supported-payloads"]["declarations"]["configurations"].append(
+            "com.apple.configuration.softwareupdate.enforcement.specific"
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(status_report)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertEqual(event.payload["software_update_enforcement"], {"pk": sue.pk, "name": sue.name})
+        self.assertEqual(event.payload["changed"],
+                         self.SOFTWARE_UPDATE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], {"mdm_software_update_enforcement": [str(sue.pk)]})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_status_items_update_event_device_errors_only(self, send_enrolled_device_notification, post_event):
+        target = Target(self.enrolled_device)
+        status_report = build_status_report()
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(status_report)
+        post_event.reset_mock()
+        reasons = [{"Code": "Error.Yolo"}]
+        status_report["Errors"] = [{"StatusItem": "softwareupdate.install-state", "Reasons": reasons}]
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(status_report)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertEqual(event.event_type, "mdm_status_items_update")
+        self.assertEqual(event.payload["changed"], [])
+        self.assertEqual(event.payload["errors"],
+                         [{"status_item": "softwareupdate.install-state", "reasons": reasons}])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_status_items_update_event_device_no_changes(self, send_enrolled_device_notification, post_event):
+        target = Target(self.enrolled_device)
+        status_report = build_status_report()
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(status_report)
+        post_event.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(status_report)
+        post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_user_notification")
+    def test_status_items_update_event_user(self, send_enrolled_user_notification, post_event):
+        target = Target(self.enrolled_device, self.enrolled_user)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(build_status_report())
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertEqual(event.payload["channel"], "User")
+        self.assertEqual(event.payload["enrolled_user"],
+                         {"pk": self.enrolled_user.pk, "user_id": self.enrolled_user.user_id})
+        self.assertNotIn("software_update_enforcement", event.payload)
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["machine_serial_number"], self.enrolled_device.serial_number)
+        self.assertEqual(metadata["objects"], {"mdm_enrolled_user": [str(self.enrolled_user.pk)]})
 
     # software update enforcement
 
