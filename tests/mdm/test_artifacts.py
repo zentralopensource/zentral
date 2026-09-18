@@ -1206,6 +1206,26 @@ class TestMDMArtifacts(TestCase):
             [c["Identifier"] for c in target.declaration_items["Declarations"]["Configurations"]],
         )
 
+    def test_device_software_update_enforcement_latest_status_item_device_id_advertised(self):
+        # no DeviceInformation yet, but the device reported its software update device ID in a status report
+        device_id = self.enrolled_device.device_information["SoftwareUpdateDeviceID"]
+        self.enrolled_device.device_information = None
+        self.enrolled_device.status_items = {"softwareupdate.device-id": device_id}
+        force_software_update(device_id=device_id,
+                              version="14.1.0",
+                              build="23B74",
+                              posting_date=date(2023, 10, 25))
+        self.enrolled_device.os_version = "14.1"
+        self.enrolled_device.build_version = "23B74"
+        self._force_latest_software_update_enforcement()
+        target = Target(self.enrolled_device)
+        identifier = f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific"
+        self.assertIn(identifier, target.activation["Payload"]["StandardConfigurations"])
+        self.assertIn(
+            identifier,
+            [c["Identifier"] for c in target.declaration_items["Declarations"]["Configurations"]],
+        )
+
     def test_device_software_update_enforcement_one_time_missing_delay_days_advertised(self):
         sue = force_software_update_enforcement(os_version="15.1", local_datetime=naive_utcnow())
         self.assertIsNone(sue.delay_days)
