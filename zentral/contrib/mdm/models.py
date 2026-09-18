@@ -1328,6 +1328,16 @@ class EnrolledDevice(models.Model):
     def current_build_version(self):
         return self.build_version_extra or self.build_version or ""
 
+    @property
+    def software_update_device_id(self):
+        # the status item is pushed on change, the DeviceInformation query is polled
+        for source, key in ((self.status_items, "softwareupdate.device-id"),
+                            (self.device_information, "SoftwareUpdateDeviceID")):
+            if isinstance(source, dict):
+                device_id = source.get(key)
+                if isinstance(device_id, str) and device_id:
+                    return device_id
+
     def get_architecture_for_display(self):
         if self.apple_silicon:
             return "Apple silicon"

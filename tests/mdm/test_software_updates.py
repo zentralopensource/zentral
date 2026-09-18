@@ -382,6 +382,25 @@ class MDMSoftwareUpdateTestCase(TestCase):
         self.assertIsNone(patch_update)
         self.assertIsNone(rsr_update)
 
+    def test_software_update_device_id_from_status_item(self):
+        enrolled_device = self._force_enrolled_device(device_id="J413AP")
+        enrolled_device.status_items = {"softwareupdate.device-id": "Mac15,6"}
+        self.assertEqual(enrolled_device.software_update_device_id, "Mac15,6")
+
+    def test_software_update_device_id_fallback_to_device_information(self):
+        enrolled_device = self._force_enrolled_device(device_id="J413AP")
+        for status_items in ({}, {"softwareupdate.device-id": ""}, {"softwareupdate.device-id": 123}):
+            with self.subTest(status_items=status_items):
+                enrolled_device.status_items = status_items
+                self.assertEqual(enrolled_device.software_update_device_id, "J413AP")
+
+    def test_software_update_device_id_missing(self):
+        enrolled_device = self._force_enrolled_device()
+        for device_information in (None, [], {}, {"SoftwareUpdateDeviceID": ""}, {"SoftwareUpdateDeviceID": 1}):
+            with self.subTest(device_information=device_information):
+                enrolled_device.device_information = device_information
+                self.assertIsNone(enrolled_device.software_update_device_id)
+
     def test_available_software_updates_empty_device_id_no_update(self):
         enrolled_device = self._force_enrolled_device(device_id="", os_version="12.6.1")
         force_software_update(
