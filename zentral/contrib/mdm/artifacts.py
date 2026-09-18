@@ -33,7 +33,9 @@ from .declarations import (
     get_status_report_scalar_status_items,
     get_status_report_target_artifacts_info,
 )
-from .events import post_device_lock_pin_clear_event, post_target_artifact_update_events
+from .events import (post_device_lock_pin_clear_event,
+                     post_status_items_update_event,
+                     post_target_artifact_update_events)
 from .models import (
     Artifact,
     ArtifactVersion,
@@ -1188,16 +1190,40 @@ class Target:
         self.target.status_items_updated_at = naive_utcnow()
         return ["status_items", "status_items_updated_at"], changed
 
+    def _queue_status_items_update_event(self, status_report, changed_status_items, errors):
+        payload = {
+            "channel": str(self.channel),
+            "status_items": self.target.status_items,
+            "changed": changed_status_items,
+            "full_report": bool(status_report.get("FullReport")),
+        }
+        if errors:
+            payload["errors"] = errors
+        if self.is_device:
+            if self.software_update_enforcement:
+                payload["software_update_enforcement"] = (
+                    self.software_update_enforcement.serialize_for_event(keys_only=True)
+                )
+        else:
+            payload["enrolled_user"] = {
+                "pk": self.enrolled_user.pk,
+                "user_id": self.enrolled_user.user_id,
+            }
+        transaction.on_commit(lambda: post_status_items_update_event(self, payload))
+
     def update_target_with_status_report(self, status_report):
         update_fields = self.update_os_info_with_status_report(status_report)
         update_fields.extend(self.update_client_capabilities_with_status_report(status_report))
-        status_items_update_fields, _ = self.update_status_items_with_status_report(status_report)
+        status_items_update_fields, changed_status_items = self.update_status_items_with_status_report(status_report)
         update_fields.extend(status_items_update_fields)
-        for error in get_status_report_errors(status_report):
+        errors = get_status_report_errors(status_report)
+        for error in errors:
             logger.warning("Target %s: status item %s error: %s",
                            self.target, error["status_item"], error["reasons"])
         if update_fields:
             self.target.save(update_fields=update_fields + ["updated_at"])
+        if changed_status_items or errors:
+            self._queue_status_items_update_event(status_report, changed_status_items, errors)
         target_artifacts_updated = self.update_target_artifacts_with_status_report(status_report)
         if update_fields or target_artifacts_updated:
             func = send_enrolled_device_notification if self.is_device else send_enrolled_user_notification
