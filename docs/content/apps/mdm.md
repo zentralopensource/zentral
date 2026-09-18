@@ -338,7 +338,9 @@ Zentral offers two variants for setting up a Software Update Enforcement configu
 
     A device only receives the enforcement when Zentral finds an update for it. A device already running a version *newer* than the one Zentral picked - because it is past the *Maximum target OS version*, or because it shipped above it - is left out, and is enforced again as soon as a newer update below the maximum is published. This mode depends on the software updates being synchronized from the *Apple Software Lookup Service*: while none are known, no device can be enforced, and Zentral logs an error for each of them.
 
-In both types, if a user does not install the update by the specified deadline, it is automatically enforced. Enforcement times are based on the device's local time zone, allowing a single configuration to work seamlessly across different regions.
+In both types, if a user does not install the update by the specified deadline, it is automatically enforced. Enforcement times are based on the device's local time zone, allowing a single configuration to work seamlessly across different regions. The device installs exactly the version specified: a *Target OS version* of `15.2` does not pick up a later `15.2.1` patch.
+
+Devices running macOS 14, iOS 17, tvOS 18.4 or later report the progress of the enforced update through the DDM status channel. Zentral stores the `softwareupdate.*` status items on the enrolled device, and shows them in the *Software update* row of the device page: the pending version and its local deadline, the install state (`downloading`, `prepared`, `installing`, `failed`), the reason the update was scheduled, the failure count and reason, and the beta program the device is enrolled in. When the device rejects the enforcement declaration, the reasons it reports are displayed too. The same information is available in the `status_items` attribute of the `/api/mdm/devices/` API endpoint, and every change is recorded as an `mdm_status_items_update` event.
 
 To read more about Apple's logic for enforcing software updates, refer to the [Apple Platform Deployment Guide](https://support.apple.com/en-gb/guide/deployment/depd30715cbb/1/web/1.0).
 
@@ -997,6 +999,8 @@ Response:
                 "long_name": "John Smith",
                 "short_name": "john",
                 "declarative_management": true,
+                "status_items": {},
+                "status_items_updated_at": null,
                 "last_ip": "1.1.1.1",
                 "last_seen_at": "2024-02-17T20:31:35.148923",
                 "created_at": "2023-08-06T14:44:02.829422",
@@ -1019,6 +1023,27 @@ Response:
             "blueprint": 1,
             "awaiting_configuration": false,
             "declarative_management": true,
+            "status_items": {
+                "softwareupdate.install-state": "downloading",
+                "softwareupdate.pending-version": {
+                    "os-version": "15.7.1",
+                    "build-version": "24G222",
+                    "target-local-date-time": "2025-09-25T09:30:00"
+                },
+                "softwareupdate.install-reason": {
+                    "reason": ["declaration"],
+                    "declaration-id": "zentral.blueprint.1.softwareupdate-enforcement-specific"
+                },
+                "softwareupdate.failure-reason": {"count": 0},
+                "softwareupdate.device-id": "Mac15,6",
+                "softwareupdate.beta-enrollment": "",
+                "zentral.softwareupdate.enforcement-declaration": {
+                    "active": true,
+                    "valid": "valid",
+                    "server-token": "0f4c3a9e6b2d1c8f7a5e4d3c2b1a0f9e8d7c6b5a"
+                }
+            },
+            "status_items_updated_at": "2025-09-04T14:33:05.817386",
             "dep_enrollment": true,
             "user_enrollment": false,
             "user_approved_enrollment": true,
@@ -1139,6 +1164,8 @@ Response:
       "long_name": "John Smith",
       "short_name": "john",
       "declarative_management": true,
+      "status_items": {},
+      "status_items_updated_at": null,
       "last_ip": "1.1.1.1",
       "last_seen_at": "2024-02-17T20:31:35.148923",
       "created_at": "2023-08-06T14:44:02.829422",
@@ -1156,6 +1183,8 @@ Response:
   "blueprint": 1,
   "awaiting_configuration": false,
   "declarative_management": true,
+  "status_items": {},
+  "status_items_updated_at": null,
   "dep_enrollment": true,
   "user_enrollment": false,
   "user_approved_enrollment": true,
@@ -1209,6 +1238,8 @@ Response:
       "long_name": "John Smith",
       "short_name": "john",
       "declarative_management": true,
+      "status_items": {},
+      "status_items_updated_at": null,
       "last_ip": "1.1.1.1",
       "last_seen_at": "2024-02-17T20:31:35.148923",
       "created_at": "2023-08-06T14:44:02.829422",
@@ -1226,6 +1257,8 @@ Response:
   "blueprint": 1,
   "awaiting_configuration": false,
   "declarative_management": true,
+  "status_items": {},
+  "status_items_updated_at": null,
   "dep_enrollment": true,
   "user_enrollment": false,
   "user_approved_enrollment": true,
