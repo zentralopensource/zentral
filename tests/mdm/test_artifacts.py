@@ -12,7 +12,8 @@ from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import (ForceArtifactInstallError, Target,
                                            update_blueprint_serialized_artifacts)
 from zentral.contrib.mdm.declarations import (build_target_management_status_subscriptions,
-                                             get_artifact_version_server_token)
+                                             get_artifact_version_server_token,
+                                             get_software_update_enforcement_specific_identifier)
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -2124,6 +2125,148 @@ class TestMDMArtifacts(TestCase):
             target.update_target_with_status_report(status_report)
         self.assertEqual(len(callbacks), 0)
         send_enrolled_user_notification.assert_called_once_with(self.enrolled_user)
+
+    # test update status items
+
+    SOFTWARE_UPDATE_STATUS_ITEMS = [
+        "softwareupdate.beta-enrollment",
+        "softwareupdate.device-id",
+        "softwareupdate.failure-reason",
+        "softwareupdate.install-reason",
+        "softwareupdate.install-state",
+        "softwareupdate.pending-version",
+    ]
+
+    @staticmethod
+    def _build_status_report_with_sue(target):
+        # the fixture identifiers are built with blueprint pk 1
+        status_report = build_status_report()
+        identifier = get_software_update_enforcement_specific_identifier(target)
+        for item in status_report["StatusItems"]["management"]["declarations"]["configurations"]:
+            if item["identifier"].endswith("softwareupdate-enforcement-specific"):
+                item["identifier"] = identifier
+        return status_report
+
+    def test_update_status_items_first_report(self):
+        target = Target(self.enrolled_device)
+        self.assertEqual(self.enrolled_device.status_items, {})
+        self.assertIsNone(self.enrolled_device.status_items_updated_at)
+        status_report = self._build_status_report_with_sue(target)
+        update_fields, changed = target.update_status_items_with_status_report(status_report)
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertEqual(changed,
+                         self.SOFTWARE_UPDATE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
+        status_items = self.enrolled_device.status_items
+        self.assertEqual(status_items["softwareupdate.install-state"], "downloading")
+        self.assertEqual(status_items["softwareupdate.pending-version"],
+                         {"os-version": "13.4", "build-version": "22F66",
+                          "target-local-date-time": "2023-06-01T09:30:00"})
+        self.assertEqual(status_items["softwareupdate.install-reason"]["reason"], ["declaration"])
+        self.assertEqual(status_items["softwareupdate.failure-reason"], {"count": 0})
+        self.assertEqual(status_items["softwareupdate.device-id"], "Macmini9,1")
+        self.assertEqual(status_items["softwareupdate.beta-enrollment"], "")
+        self.assertEqual(status_items["zentral.softwareupdate.enforcement-declaration"],
+                         {"active": True, "valid": "valid", "server-token": "3"})
+        self.assertIsNotNone(self.enrolled_device.status_items_updated_at)
+
+    def test_update_status_items_incremental_report(self):
+        target = Target(self.enrolled_device)
+        target.update_status_items_with_status_report(build_status_report())
+        updated_at = self.enrolled_device.status_items_updated_at
+        update_fields, changed = target.update_status_items_with_status_report(
+            {"StatusItems": {"softwareupdate": {"install-state": "installing"}}}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertEqual(changed, ["softwareupdate.install-state"])
+        status_items = self.enrolled_device.status_items
+        self.assertEqual(status_items["softwareupdate.install-state"], "installing")
+        # missing items are kept
+        self.assertEqual(status_items["softwareupdate.device-id"], "Macmini9,1")
+        self.assertEqual(len(status_items), 6)
+        self.assertGreater(self.enrolled_device.status_items_updated_at, updated_at)
+
+    def test_update_status_items_full_report(self):
+        target = Target(self.enrolled_device)
+        target.update_status_items_with_status_report(build_status_report())
+        update_fields, changed = target.update_status_items_with_status_report(
+            {"StatusItems": {"softwareupdate": {"install-state": "none"}}, "FullReport": True}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
+        # missing items are dropped
+        self.assertEqual(self.enrolled_device.status_items, {"softwareupdate.install-state": "none"})
+
+    def test_update_status_items_no_changes(self):
+        target = Target(self.enrolled_device)
+        status_report = self._build_status_report_with_sue(target)
+        target.update_status_items_with_status_report(status_report)
+        updated_at = self.enrolled_device.status_items_updated_at
+        self.assertEqual(target.update_status_items_with_status_report(status_report), ([], []))
+        self.assertEqual(self.enrolled_device.status_items_updated_at, updated_at)
+
+    def test_update_status_items_no_items(self):
+        target = Target(self.enrolled_device_no_blueprint)
+        status_report = build_status_report()
+        status_report["StatusItems"].pop("softwareupdate")
+        self.assertEqual(target.update_status_items_with_status_report(status_report), ([], []))
+        self.assertEqual(self.enrolled_device_no_blueprint.status_items, {})
+        self.assertIsNone(self.enrolled_device_no_blueprint.status_items_updated_at)
+
+    def test_update_status_items_enforcement_declaration_invalid(self):
+        target = Target(self.enrolled_device)
+        status_report = self._build_status_report_with_sue(target)
+        reasons = [{"code": "Error.Yolo", "description": "Fomo"}]
+        for item in status_report["StatusItems"]["management"]["declarations"]["configurations"]:
+            if item["identifier"].endswith("softwareupdate-enforcement-specific"):
+                item["active"] = False
+                item["valid"] = "invalid"
+                item["reasons"] = reasons
+        target.update_status_items_with_status_report(status_report)
+        self.assertEqual(self.enrolled_device.status_items["zentral.softwareupdate.enforcement-declaration"],
+                         {"active": False, "valid": "invalid", "server-token": "3", "reasons": reasons})
+
+    def test_update_status_items_user_channel(self):
+        target = Target(self.enrolled_device, self.enrolled_user)
+        update_fields, changed = target.update_status_items_with_status_report(build_status_report())
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        # no enforcement declaration on the user channel
+        self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
+        self.assertEqual(self.enrolled_user.status_items["softwareupdate.install-state"], "downloading")
+        self.assertIsNotNone(self.enrolled_user.status_items_updated_at)
+        self.assertEqual(self.enrolled_device.status_items, {})
+        self.assertIsNone(self.enrolled_device.status_items_updated_at)
+
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_update_target_with_status_report_saves_status_items(self, send_enrolled_device_notification):
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(build_status_report())
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.status_items["softwareupdate.install-state"], "downloading")
+        self.assertIsNotNone(self.enrolled_device.status_items_updated_at)
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_update_target_with_status_report_errors(self, send_enrolled_device_notification, logger_warning):
+        target = Target(self.enrolled_device)
+        status_report = build_status_report()
+        reasons = [{"Code": "Error.Yolo"}]
+        status_report["Errors"] = [{"StatusItem": "softwareupdate.install-state", "Reasons": reasons}]
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(status_report)
+        logger_warning.assert_called_once_with(
+            "Target %s: status item %s error: %s",
+            self.enrolled_device, "softwareupdate.install-state", reasons
+        )
+
+    def test_purge_state_resets_status_items(self):
+        target = Target(self.enrolled_device)
+        target.update_status_items_with_status_report(build_status_report())
+        self.enrolled_device.save()
+        self.enrolled_device.purge_state()
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.status_items, {})
+        self.assertIsNone(self.enrolled_device.status_items_updated_at)
 
     # software update enforcement
 
