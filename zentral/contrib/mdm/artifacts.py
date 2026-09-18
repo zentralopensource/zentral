@@ -21,11 +21,16 @@ from zentral.utils.time import naive_utcnow
 
 from .apns import send_enrolled_device_notification, send_enrolled_user_notification
 from .declarations import (
+    SOFTWARE_UPDATE_ENFORCEMENT_DECLARATION_STATUS_ITEM,
     build_specific_software_update_enforcement,
     build_target_management_status_subscriptions,
     get_artifact_identifier,
     get_artifact_version_server_token,
     get_blueprint_declaration_identifier,
+    get_software_update_enforcement_specific_identifier,
+    get_status_report_declaration_status,
+    get_status_report_errors,
+    get_status_report_scalar_status_items,
     get_status_report_target_artifacts_info,
 )
 from .events import post_device_lock_pin_clear_event, post_target_artifact_update_events
@@ -1157,9 +1162,40 @@ class Target:
                 self.target.client_capabilities = client_capabilities
         return update_fields
 
+    def update_status_items_with_status_report(self, status_report):
+        """Merge the scalar status items of a report into the target's status_items.
+
+        Return the update fields and the sorted names of the changed items. Reports are incremental, so
+        a missing item keeps its stored value, unless the report is flagged as a full report.
+        """
+        status_items = get_status_report_scalar_status_items(status_report)
+        if self.is_device and self.blueprint:
+            sue_declaration_status = get_status_report_declaration_status(
+                status_report, get_software_update_enforcement_specific_identifier(self)
+            )
+            if sue_declaration_status:
+                status_items[SOFTWARE_UPDATE_ENFORCEMENT_DECLARATION_STATUS_ITEM] = sue_declaration_status
+        current_status_items = self.target.status_items or {}
+        if not status_report.get("FullReport"):
+            status_items = {**current_status_items, **status_items}
+        changed = sorted(
+            name for name in set(current_status_items) | set(status_items)
+            if current_status_items.get(name) != status_items.get(name)
+        )
+        if not changed:
+            return [], changed
+        self.target.status_items = status_items
+        self.target.status_items_updated_at = naive_utcnow()
+        return ["status_items", "status_items_updated_at"], changed
+
     def update_target_with_status_report(self, status_report):
         update_fields = self.update_os_info_with_status_report(status_report)
         update_fields.extend(self.update_client_capabilities_with_status_report(status_report))
+        status_items_update_fields, _ = self.update_status_items_with_status_report(status_report)
+        update_fields.extend(status_items_update_fields)
+        for error in get_status_report_errors(status_report):
+            logger.warning("Target %s: status item %s error: %s",
+                           self.target, error["status_item"], error["reasons"])
         if update_fields:
             self.target.save(update_fields=update_fields + ["updated_at"])
         target_artifacts_updated = self.update_target_artifacts_with_status_report(status_report)

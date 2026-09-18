@@ -1388,6 +1388,11 @@ class MDMViewsTestCase(TestCase):
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
+        enrolled_device = session.enrolled_device
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.status_items["softwareupdate.install-state"], "downloading")
+        self.assertEqual(enrolled_device.status_items["softwareupdate.device-id"], "Macmini9,1")
+        self.assertIsNotNone(enrolled_device.status_items_updated_at)
 
     # legacy profile
 

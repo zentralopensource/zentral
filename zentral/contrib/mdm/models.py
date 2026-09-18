@@ -1037,6 +1037,9 @@ class EnrolledDevice(models.Model):
     # to the live scope walk.
     declaration_items_snapshot = models.JSONField(default=dict)
     client_capabilities = models.JSONField(null=True)
+    # status items, keyed by their name, as reported (see declarations/status_report.py)
+    status_items = models.JSONField(default=dict)
+    status_items_updated_at = models.DateTimeField(null=True)
 
     # information
     device_information = models.JSONField(null=True)
@@ -1250,6 +1253,8 @@ class EnrolledDevice(models.Model):
         # cleared together, otherwise a stale token/snapshot could survive a purge and be served/compared.
         self.declarations_token = ""
         self.declaration_items_snapshot = {}
+        self.status_items = {}
+        self.status_items_updated_at = None
         self.last_ip = None
         self.last_seen_at = None
         self.last_notified_at = None
@@ -1497,6 +1502,9 @@ class EnrolledUser(models.Model):
     # see EnrolledDevice.declaration_items_snapshot
     declaration_items_snapshot = models.JSONField(default=dict)
     client_capabilities = models.JSONField(null=True)
+    # see EnrolledDevice.status_items
+    status_items = models.JSONField(default=dict)
+    status_items_updated_at = models.DateTimeField(null=True)
 
     # notifications
     token = models.BinaryField()
