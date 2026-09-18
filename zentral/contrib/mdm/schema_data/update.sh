@@ -1,5 +1,5 @@
 #!/bin/bash
-GIT_REF="1548d422768fe7a125e4a6f30ee0cb121a0cc333"
+GIT_REF="09f249a06e7e3289930bf6d05f38fb562f748ebf"
 
 set -e
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
