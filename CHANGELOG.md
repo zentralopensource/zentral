@@ -201,6 +201,12 @@ A rule with the `ALLOWLIST_COMPILER` policy is rejected on a target that is not 
 
 A voting realm does not add the button by itself any more. You pick the source on the configuration now. Zentral sets the voting portal source on every configuration that has a voting realm with the user portal, so those configurations keep their button. A new configuration starts with the local source.
 
+On the API, a `PUT` carries `event_detail_source`, `event_detail_url` and `event_detail_text` together, or carries none of the three. One of them on its own cannot say what the button has to be, so Zentral answers 400 and names the attributes that are missing. The source decides the rest: `CUSTOM` needs a URL, and the other sources clear the URL. `LOCAL` and `NONE` clear the label too, because they send no button.
+
+`VOTING_PORTAL` needs a voting realm with the user portal. The realm is an attribute of the configuration and not of the button, so a `PUT` that does not name it points at the realm the configuration has. A `PUT` that clears the voting realm of a `VOTING_PORTAL` configuration is a 400. A `PUT` that names none of the four attributes does not change the button.
+
+The web console applies the same rules. Its form carries every attribute, so it never sends a part of the button on its own.
+
 #### 🧨 Privilege escalation hardening — task results
 
 A task belongs to the user or the service account that launched it, and `/api/task_result/<task_id>/` and `/api/task_result/<task_id>/download/` answer only for that principal. A superuser reads all of them, as before. Until now the two endpoints only asked for a valid session or API token: any authenticated principal that had a task ID could read the state of that task and download its file, and an export carries everything the principal that launched it was allowed to see. The state endpoint gives the `UNKNOWN` status for the task of a different principal, like it does for a task that does not exist, and the download endpoint gives a `404`. The task list and the task pages of the web console already applied this rule.

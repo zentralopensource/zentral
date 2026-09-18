@@ -28,6 +28,16 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate(self, data):
+        # on an update an attribute the body leaves out keeps its stored value, so one of these
+        # three on its own cannot say what the block notification button has to be: the body
+        # carries the three together, or leaves the three alone. On a create there is no stored
+        # value to read it against, and an attribute the body leaves out is the model default.
+        if self.instance is not None:
+            missing = [attr for attr in ConfigurationValidator.event_detail_attrs if attr not in data]
+            if missing and len(missing) < len(ConfigurationValidator.event_detail_attrs):
+                raise serializers.ValidationError(
+                    {attr: "This field is required when the event detail changes" for attr in missing}
+                )
         errors = ConfigurationValidator(data, self.instance).validate()
         if errors:
             raise serializers.ValidationError(errors)

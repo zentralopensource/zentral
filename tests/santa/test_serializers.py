@@ -7,7 +7,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.santa.models import Configuration, Enrollment, Target
 from zentral.contrib.santa.serializers import (ConfigurationSerializer, EnrollmentSerializer,
                                                RuleUpdateSerializer)
-from .utils import force_realm
+from .utils import force_configuration, force_realm
 
 
 class SantaSerializersTestCase(TestCase):
@@ -262,6 +262,131 @@ class SantaConfigurationSerializerTestCase(TestCase):
         serializer = ConfigurationSerializer(data={"name": get_random_string(12)})
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.save().event_detail_source, Configuration.EventDetailSource.LOCAL)
+
+    # an update carries the whole event detail, or none of it
+
+    def test_update_with_one_event_detail_attribute(self):
+        configuration = force_configuration()
+        serializer = ConfigurationSerializer(
+            configuration, data={"name": configuration.name, "event_detail_url": ""}
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(
+            {attr: [str(e) for e in errors] for attr, errors in serializer.errors.items()},
+            {"event_detail_source": ["This field is required when the event detail changes"],
+             "event_detail_text": ["This field is required when the event detail changes"]}
+        )
+
+    def test_update_with_the_whole_event_detail(self):
+        configuration = force_configuration()
+        serializer = ConfigurationSerializer(configuration, data={
+            "name": configuration.name,
+            "event_detail_source": Configuration.EventDetailSource.CUSTOM,
+            "event_detail_url": "https://www.example.com/santa",
+            "event_detail_text": "Why?",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_update_to_a_custom_source_without_an_url(self):
+        configuration = force_configuration()
+        serializer = ConfigurationSerializer(configuration, data={
+            "name": configuration.name,
+            "event_detail_source": Configuration.EventDetailSource.CUSTOM,
+            "event_detail_url": "",
+            "event_detail_text": "Why?",
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual([str(e) for e in serializer.errors["event_detail_url"]], ["This field is required"])
+
+    def test_update_that_leaves_the_event_detail_alone(self):
+        configuration = force_configuration()
+        serializer = ConfigurationSerializer(configuration, data={"name": get_random_string(12)})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_update_to_a_local_source_clears_the_url_and_the_label(self):
+        configuration = force_configuration(
+            event_detail_source=Configuration.EventDetailSource.CUSTOM,
+            event_detail_url="https://www.example.com/santa",
+            event_detail_text="Why?",
+        )
+        serializer = ConfigurationSerializer(configuration, data={
+            "name": configuration.name,
+            "event_detail_source": Configuration.EventDetailSource.LOCAL,
+            "event_detail_url": "https://www.example.com/santa",
+            "event_detail_text": "Why?",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        configuration = serializer.save()
+        self.assertEqual(configuration.event_detail_url, "")
+        self.assertEqual(configuration.event_detail_text, "")
+
+    def test_update_to_a_voting_portal_source_clears_the_url_and_keeps_the_label(self):
+        configuration = force_configuration(
+            voting_realm=force_realm(user_portal=True),
+            event_detail_source=Configuration.EventDetailSource.CUSTOM,
+            event_detail_url="https://www.example.com/santa",
+        )
+        serializer = ConfigurationSerializer(configuration, data={
+            "name": configuration.name,
+            "event_detail_source": Configuration.EventDetailSource.VOTING_PORTAL,
+            "event_detail_url": "https://www.example.com/santa",
+            "event_detail_text": "Why?",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        configuration = serializer.save()
+        self.assertEqual(configuration.event_detail_url, "")
+        self.assertEqual(configuration.event_detail_text, "Why?")
+
+    # the source and the voting realm are read against each other
+
+    def test_update_to_a_voting_portal_source_reads_the_stored_realm(self):
+        configuration = force_configuration(voting_realm=force_realm(user_portal=True))
+        serializer = ConfigurationSerializer(configuration, data={
+            "name": configuration.name,
+            "event_detail_source": Configuration.EventDetailSource.VOTING_PORTAL,
+            "event_detail_url": "",
+            "event_detail_text": "",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_update_to_a_voting_portal_source_without_a_stored_realm(self):
+        configuration = force_configuration()
+        serializer = ConfigurationSerializer(configuration, data={
+            "name": configuration.name,
+            "event_detail_source": Configuration.EventDetailSource.VOTING_PORTAL,
+            "event_detail_url": "",
+            "event_detail_text": "",
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(
+            [str(e) for e in serializer.errors["event_detail_source"]],
+            ["Requires a voting realm with the user portal enabled"]
+        )
+
+    def test_update_that_clears_the_realm_of_a_voting_portal_configuration(self):
+        configuration = force_configuration(
+            voting_realm=force_realm(user_portal=True),
+            event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL,
+        )
+        serializer = ConfigurationSerializer(
+            configuration, data={"name": configuration.name, "voting_realm": None}
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual(
+            [str(e) for e in serializer.errors["event_detail_source"]],
+            ["Requires a voting realm with the user portal enabled"]
+        )
+
+    def test_update_that_names_neither_side_does_not_read_them(self):
+        realm = force_realm(user_portal=True)
+        configuration = force_configuration(
+            voting_realm=realm,
+            event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL,
+        )
+        realm.user_portal = False
+        realm.save()
+        serializer = ConfigurationSerializer(configuration, data={"name": get_random_string(12)})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
 
     def test_event_detail_source_cannot_be_blank(self):
         serializer = ConfigurationSerializer(data={"name": get_random_string(12), "event_detail_source": ""})

@@ -147,6 +147,25 @@ class ConfigurationFormEventDetailTests(TestCase):
         )
         self.assertTrue(form.is_valid(), form.errors)
 
+    def test_local_source_clears_a_stored_url_and_label(self):
+        configuration = force_configuration(
+            event_detail_source=Configuration.EventDetailSource.CUSTOM,
+            event_detail_url="https://www.example.com/blocked/",
+            event_detail_text="Why?",
+        )
+        form = ConfigurationForm(
+            instance=configuration,
+            data=dict(self.form_data,
+                      name=configuration.name,
+                      event_detail_source=Configuration.EventDetailSource.LOCAL,
+                      event_detail_url="https://www.example.com/blocked/",
+                      event_detail_text="Why?")
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        configuration = form.save()
+        self.assertEqual(configuration.event_detail_url, "")
+        self.assertEqual(configuration.event_detail_text, "")
+
     def test_voting_portal_source_does_not_require_a_text(self):
         realm = force_realm(user_portal=True)
         form = ConfigurationForm(

@@ -2526,6 +2526,42 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(metadata["objects"], {"santa_configuration": [str(config.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["santa", "zentral"])
 
+    def test_update_configuration_with_a_partial_event_detail(self):
+        config = Configuration.objects.create(
+            name=get_random_string(12),
+            event_detail_source=Configuration.EventDetailSource.CUSTOM,
+            event_detail_url="https://www.example.com/santa",
+        )
+        self.set_permissions("santa.change_configuration")
+        response = self.put(reverse('santa_api:configuration', args=(config.pk,)),
+                            {"name": config.name, "event_detail_url": ""})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"event_detail_source": ["This field is required when the event detail changes"],
+             "event_detail_text": ["This field is required when the event detail changes"]}
+        )
+        config.refresh_from_db()
+        self.assertEqual(config.event_detail_url, "https://www.example.com/santa")
+
+    def test_update_configuration_to_a_local_event_detail_clears_the_url(self):
+        config = Configuration.objects.create(
+            name=get_random_string(12),
+            event_detail_source=Configuration.EventDetailSource.CUSTOM,
+            event_detail_url="https://www.example.com/santa",
+            event_detail_text="Why?",
+        )
+        self.set_permissions("santa.change_configuration")
+        response = self.put(reverse('santa_api:configuration', args=(config.pk,)),
+                            {"name": config.name,
+                             "event_detail_source": Configuration.EventDetailSource.LOCAL,
+                             "event_detail_url": "https://www.example.com/santa",
+                             "event_detail_text": "Why?"})
+        self.assertEqual(response.status_code, 200)
+        config.refresh_from_db()
+        self.assertEqual(config.event_detail_url, "")
+        self.assertEqual(config.event_detail_text, "")
+
     def test_update_configuration_name_exists(self):
         config0 = self.force_configuration()
         config1 = self.force_configuration()

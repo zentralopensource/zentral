@@ -1320,6 +1320,10 @@ Response:
 * PBAC action: `Santa::Action::"updateConfiguration"`
 * `<int:pk>`: the primary key of the configuration.
 
+`PUT` is a full update, but an attribute that is not in the body keeps its stored value. The block notification button is the exception: `event_detail_source`, `event_detail_url` and `event_detail_text` go together. Send the three, or send none of them. One of them on its own is a 400, because it cannot say what the button has to be.
+
+The source decides the rest. `CUSTOM` needs a URL. The other sources clear the URL, and `LOCAL` and `NONE` clear the label too. `VOTING_PORTAL` needs a voting realm with the user portal: the one in the body, or the one the configuration has when the body does not name it.
+
 Example
 
 configuration.json

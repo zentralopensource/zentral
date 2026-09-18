@@ -29,11 +29,24 @@ def validate_path_regex(regex):
 
 
 class ConfigurationValidator:
+    event_detail_attrs = ("event_detail_source", "event_detail_url", "event_detail_text")
 
     def __init__(self, data: dict[str, Any], instance=None):
         self.data = data
         self.instance = instance
         self.errors = {}
+
+    def _effective(self, attr):
+        """The value the write produces: the one in the body, or the stored one."""
+        if attr in self.data:
+            return self.data[attr]
+        if self.instance is not None:
+            return getattr(self.instance, attr)
+        return Configuration._meta.get_field(attr).get_default()
+
+    def _clear(self, attr):
+        if attr in self.data:
+            self.data[attr] = ""
 
     def validate(self):
         # path regexes. Only a pattern that changed is validated: a pattern stored before the
@@ -47,16 +60,25 @@ class ConfigurationValidator:
             if error:
                 self.errors.update({attr: error})
 
-        # event detail
-        event_detail_source = self.data.get("event_detail_source")
-        if event_detail_source == Configuration.EventDetailSource.VOTING_PORTAL:
-            if not voting_portal_event_detail_url(self.data.get("voting_realm")):
-                self.errors.update(
-                    {"event_detail_source": "Requires a voting realm with the user portal enabled"}
-                )
-        elif event_detail_source == Configuration.EventDetailSource.CUSTOM:
-            if not self.data.get("event_detail_url"):
-                self.errors.update({"event_detail_url": "This field is required"})
+        # event detail. The source decides what the block notification button carries. The
+        # voting realm is an attribute of the configuration and not of the button, so a body
+        # that names one side of the pair is read against the stored value of the other.
+        if any(attr in self.data for attr in self.event_detail_attrs + ("voting_realm",)):
+            event_detail_source = self._effective("event_detail_source")
+            if event_detail_source == Configuration.EventDetailSource.CUSTOM:
+                if not self._effective("event_detail_url"):
+                    self.errors.update({"event_detail_url": "This field is required"})
+            else:
+                # the other sources send no URL of their own: the voting portal computes one
+                self._clear("event_detail_url")
+                if event_detail_source == Configuration.EventDetailSource.VOTING_PORTAL:
+                    if not voting_portal_event_detail_url(self._effective("voting_realm")):
+                        self.errors.update(
+                            {"event_detail_source": "Requires a voting realm with the user portal enabled"}
+                        )
+                else:
+                    # LOCAL and NONE send no button, so there is nothing for a label to label
+                    self._clear("event_detail_text")
 
         return self.errors
 
