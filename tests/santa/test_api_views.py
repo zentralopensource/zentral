@@ -95,7 +95,6 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             target=target,
             policy=policy,
             configuration=configuration,
-            custom_msg="custom msg",
             description="description",
             primary_users=["yolo@example.com"]
         )
@@ -2014,6 +2013,25 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(rule.excluded_serial_numbers, [])
         self.assertEqual(rule.version, 1)
 
+    def test_update_rule_clears_the_scope_the_body_leaves_out(self):
+        configuration = self.force_configuration()
+        rule, _, _ = self.force_rule(configuration=configuration, force_tags=True)
+        self.set_permissions("santa.change_rule")
+        data = {
+            "configuration": configuration.pk,
+            "policy": Rule.Policy.ALLOWLIST,
+            "target_type": rule.target.type,
+            "target_identifier": rule.target.identifier,
+        }
+        response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rule.refresh_from_db()
+        self.assertEqual(rule.primary_users, [])
+        self.assertEqual(rule.tags.count(), 0)
+        self.assertEqual(rule.excluded_tags.count(), 0)
+        # no check reads the description with another attribute, so it keeps its stored value
+        self.assertEqual(rule.description, "description")
+
     def test_update_rule_tag_conflicts_error(self):
         configuration = self.force_configuration()
         target_identifier = get_random_string(length=64, allowed_chars='abcdef0123456789')
@@ -2148,7 +2166,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "serial_numbers": data["serial_numbers"],
             "excluded_serial_numbers": data["excluded_serial_numbers"],
             "tags": data["tags"],
-            "excluded_tags": [t.pk for t in initial_excluded_tags],
+            # the body does not name them, so they are cleared
+            "excluded_tags": [],
             "created_at": rule.created_at.isoformat(),
             "updated_at": rule.updated_at.isoformat(),
             "version": 2
@@ -2174,13 +2193,11 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                 'primary_users': rule.primary_users,
                 'excluded_primary_users': rule.excluded_primary_users,
                 'tags': [{'pk': t.pk, 'name': t.name} for t in rule.tags.all()],
-                'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in initial_excluded_tags],
             },
             'result': 'updated',
             'updates': {
                 'removed': {
                     'policy': 'ALLOWLIST',
-                    'custom_msg': 'custom msg',
                     'description': 'description',
                     'primary_users': ['yolo@example.com'],
                     'configuration': {
@@ -2188,6 +2205,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                         'name': configuration.name
                     },
                     'tags': [{'pk': t.pk, 'name': t.name} for t in initial_tags],
+                    'excluded_tags': [{'pk': t.pk, 'name': t.name} for t in initial_excluded_tags],
                     'target': {
                         'type': 'BINARY',
                         'sha256': target_identifier
@@ -2239,7 +2257,6 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                     'type': 'BINARY',
                     'sha256': rule.target.identifier
                 }, 'policy': 'ALLOWLIST',
-                'custom_msg': 'custom msg',
                 'primary_users': ['yolo@example.com']},
             'result': 'deleted'
         })

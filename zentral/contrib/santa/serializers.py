@@ -184,6 +184,19 @@ class RuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Rule
         exclude = ("target",)
+        # the policy decides the message and the expression, and each half of the scope is read
+        # with the other half. An attribute the body leaves out is cleared, and not kept: the
+        # checks below would not see a stored value, and the rule they write would be dead.
+        extra_kwargs = {attr: {"default": default}
+                        for attr, default in (("cel_expr", ""),
+                                              ("custom_msg", ""),
+                                              ("custom_url", ""),
+                                              ("serial_numbers", list),
+                                              ("excluded_serial_numbers", list),
+                                              ("primary_users", list),
+                                              ("excluded_primary_users", list),
+                                              ("tags", list),
+                                              ("excluded_tags", list))}
 
     def validate(self, data):
         target_type = data["target_type"] = data["target"].get("type")

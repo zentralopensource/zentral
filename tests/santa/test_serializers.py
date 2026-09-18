@@ -3,11 +3,11 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from zentral.conf import settings
-from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
-from zentral.contrib.santa.models import Configuration, Enrollment, Target
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.santa.models import Configuration, Enrollment, Rule, Target
 from zentral.contrib.santa.serializers import (ConfigurationSerializer, EnrollmentSerializer,
-                                               RuleUpdateSerializer)
-from .utils import force_configuration, force_realm
+                                               RuleSerializer, RuleUpdateSerializer)
+from .utils import force_configuration, force_realm, force_rule
 
 
 class SantaSerializersTestCase(TestCase):
@@ -392,3 +392,77 @@ class SantaConfigurationSerializerTestCase(TestCase):
         serializer = ConfigurationSerializer(data={"name": get_random_string(12), "event_detail_source": ""})
         self.assertFalse(serializer.is_valid())
         self.assertEqual([str(e) for e in serializer.errors["event_detail_source"]], ['"" is not a valid choice.'])
+
+
+class SantaRuleSerializerTestCase(TestCase):
+    def body(self, rule, **extra):
+        return {"configuration": rule.configuration.pk,
+                "policy": rule.policy,
+                "target_type": rule.target.type,
+                "target_identifier": rule.target.identifier,
+                **extra}
+
+    # an attribute the body leaves out is cleared
+
+    def test_update_clears_the_scope_the_body_leaves_out(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        rule = force_rule(serial_numbers=["ABCD"], primary_users=["yolo@example.com"])
+        rule.tags.set([tag])
+        serializer = RuleSerializer(rule, data=self.body(rule, description="updated"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        rule = serializer.save()
+        self.assertEqual(rule.serial_numbers, [])
+        self.assertEqual(rule.primary_users, [])
+        self.assertEqual(rule.tags.count(), 0)
+        self.assertEqual(rule.description, "updated")
+
+    def test_update_excluding_what_the_stored_rule_included(self):
+        rule = force_rule(serial_numbers=["ABCD"])
+        serializer = RuleSerializer(rule, data=self.body(rule, excluded_serial_numbers=["ABCD"]))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        rule = serializer.save()
+        self.assertEqual(rule.serial_numbers, [])
+        self.assertEqual(rule.excluded_serial_numbers, ["ABCD"])
+
+    def test_update_refuses_a_scope_the_body_puts_on_both_sides(self):
+        rule = force_rule()
+        serializer = RuleSerializer(rule, data=self.body(rule,
+                                                         serial_numbers=["ABCD"],
+                                                         excluded_serial_numbers=["ABCD"]))
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual([str(e) for e in serializer.errors["serial_numbers"]],
+                         ["'ABCD' in both included and excluded"])
+
+    def test_update_to_a_policy_that_refuses_a_custom_msg_clears_it(self):
+        rule = force_rule(policy=Rule.Policy.BLOCKLIST)
+        rule.custom_msg = "custom msg"
+        rule.save()
+        serializer = RuleSerializer(rule, data=self.body(rule, policy=Rule.Policy.ALLOWLIST))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        rule = serializer.save()
+        self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(rule.custom_msg, "")
+
+    def test_update_refuses_a_custom_msg_the_policy_does_not_accept(self):
+        rule = force_rule(policy=Rule.Policy.BLOCKLIST)
+        serializer = RuleSerializer(rule, data=self.body(rule,
+                                                         policy=Rule.Policy.ALLOWLIST,
+                                                         custom_msg="custom msg"))
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual([str(e) for e in serializer.errors["custom_msg"]],
+                         ["Cannot be set for this rule policy"])
+
+    def test_update_away_from_cel_clears_the_expression(self):
+        rule = force_rule(policy=Rule.Policy.CEL, cel_expr="target.signing_time_unix >= 1")
+        serializer = RuleSerializer(rule, data=self.body(rule, policy=Rule.Policy.BLOCKLIST))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        rule = serializer.save()
+        self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
+        self.assertEqual(rule.cel_expr, "")
+
+    def test_update_to_cel_without_the_expression(self):
+        rule = force_rule(policy=Rule.Policy.CEL, cel_expr="target.signing_time_unix >= 1")
+        serializer = RuleSerializer(rule, data=self.body(rule, description="updated"))
+        self.assertFalse(serializer.is_valid())
+        self.assertEqual([str(e) for e in serializer.errors["cel_expr"]],
+                         ["This field is required for CEL rules"])

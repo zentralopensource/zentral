@@ -743,6 +743,8 @@ Response:
 
 Use this endpoint to update a Santa rule.
 
+`PUT` is a full update. Send the whole rule: Zentral writes an empty value for `cel_expr`, `custom_msg`, `custom_url` and the six scope attributes when the body does not carry them. `description` is the exception, and keeps its stored value. `cel_expr` is required when the policy is `CEL`.
+
 > **_NOTEs:_** The `ruleset` attribute is read-only
 
 Example:

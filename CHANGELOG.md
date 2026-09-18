@@ -197,6 +197,12 @@ The `inventory_jmespath_check_created`, `inventory_jmespath_check_updated` and `
 
 A rule with the `ALLOWLIST_COMPILER` policy is rejected on a target that is not a cdhash, a binary or a signing ID, in the web console, the rule API and the ruleset API. The Santa client only accepts the compiler state on those three rule types. On a team ID or a certificate it drops the rule when it evaluates it, so the rule synchronized cleanly and then left its target with no rule at all, which blocks the target in lockdown mode. The rules already in the database keep their policy, but Zentral rejects each of them at the next write: a ruleset that you post again, a `PUT` on the rule API, a Terraform configuration that you apply again, and a change to any other attribute of the rule in the web console.
 
+#### 🧨 Santa rule updates clear what the body leaves out
+
+`PUT /api/santa/rules/<int:pk>/` writes an empty value for `cel_expr`, `custom_msg`, `custom_url` and the six scope attributes when the body does not carry them. Until now they kept their stored value, and the checks only read the body, so a `PUT` could write a rule that includes and excludes the same serial number, or a rule that keeps a custom message that its new policy does not accept. Those rules were dead: a scope that includes and excludes the same value never matches, and a policy that does not block has no notification to carry the message.
+
+Send the whole rule. `description` is not affected and keeps its stored value, because no check reads it with another attribute. The Terraform provider sends every attribute on each apply, so it is not affected. The web console is not affected either, because its form carries the whole rule.
+
 #### 🧨 Santa block notification button
 
 A voting realm does not add the button by itself any more. You pick the source on the configuration now. Zentral sets the voting portal source on every configuration that has a voting realm with the user portal, so those configurations keep their button. A new configuration starts with the local source.
