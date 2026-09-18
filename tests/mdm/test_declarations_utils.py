@@ -9,7 +9,12 @@ from zentral.contrib.mdm.declarations import (
     get_artifact_identifier,
     get_artifact_version_server_token,
 )
-from zentral.contrib.mdm.declarations.status_report import get_status_report_target_artifacts_info
+from zentral.contrib.mdm.declarations.status_report import (
+    get_status_report_declaration_status,
+    get_status_report_errors,
+    get_status_report_scalar_status_items,
+    get_status_report_target_artifacts_info,
+)
 from zentral.contrib.mdm.models import Artifact, Declaration, TargetArtifact
 from zentral.utils.payloads import get_payload_identifier
 
@@ -154,3 +159,79 @@ class MDMStatusReportTargetArtifactsInfoTestCase(TestCase):
         # every present status outranks every non-present one
         self.assertGreater(min(s.presence_rank for s in Status if s.present),
                            max(s.presence_rank for s in Status if not s.present))
+
+
+class MDMStatusReportItemsTestCase(TestCase):
+    def test_scalar_status_items(self):
+        report = {"StatusItems": {
+            "softwareupdate": {
+                "install-state": "downloading",
+                "pending-version": {"os-version": "15.7.1", "build-version": "24G222"},
+                "device-id": "Mac15,6",
+            },
+            "management": {"declarations": {"configurations": []}, "client-capabilities": {}},
+            "device": {"operating-system": {"version": "15.7"}, "model": {"family": "Mac"}},
+        }}
+        self.assertEqual(
+            get_status_report_scalar_status_items(report),
+            {"softwareupdate.install-state": "downloading",
+             "softwareupdate.pending-version": {"os-version": "15.7.1", "build-version": "24G222"},
+             "softwareupdate.device-id": "Mac15,6"},
+        )
+
+    def test_scalar_status_items_unknown_items_logged(self):
+        report = {"StatusItems": {"softwareupdate": {"yolo": 1}, "fomo": {"bar": {"baz": True}}}}
+        with self.assertLogs("zentral.contrib.mdm.declarations.status_report", level="DEBUG") as cm:
+            self.assertEqual(get_status_report_scalar_status_items(report), {})
+        prefix = "DEBUG:zentral.contrib.mdm.declarations.status_report:Unknown status item "
+        self.assertEqual(sorted(cm.output), [prefix + "fomo.bar.baz", prefix + "softwareupdate.yolo"])
+
+    def test_scalar_status_items_missing_or_invalid_status_items(self):
+        self.assertEqual(get_status_report_scalar_status_items({}), {})
+        self.assertEqual(get_status_report_scalar_status_items({"StatusItems": []}), {})
+
+    def test_errors(self):
+        report = {"Errors": [
+            {"StatusItem": "softwareupdate.install-state", "Reasons": [{"Code": "Error.Yolo"}]},
+            {"StatusItem": "softwareupdate.device-id"},
+            {"Reasons": []},
+            "yolo",
+        ]}
+        self.assertEqual(
+            get_status_report_errors(report),
+            [{"status_item": "softwareupdate.install-state", "reasons": [{"Code": "Error.Yolo"}]},
+             {"status_item": "softwareupdate.device-id", "reasons": []}],
+        )
+
+    def test_errors_missing(self):
+        self.assertEqual(get_status_report_errors({}), [])
+        self.assertEqual(get_status_report_errors({"Errors": None}), [])
+
+    def test_declaration_status(self):
+        report = {"StatusItems": {"management": {"declarations": {
+            "activations": [],
+            "configurations": [
+                {"identifier": "zentral.blueprint.1.activation", "server-token": "1",
+                 "active": True, "valid": "valid"},
+                {"identifier": "zentral.blueprint.1.softwareupdate-enforcement-specific",
+                 "server-token": "2", "active": False, "valid": "invalid",
+                 "reasons": [{"code": "Error.Yolo", "description": "Fomo"}]},
+            ],
+        }}}}
+        self.assertEqual(
+            get_status_report_declaration_status(report, "zentral.blueprint.1.softwareupdate-enforcement-specific"),
+            {"active": False, "valid": "invalid", "server-token": "2",
+             "reasons": [{"code": "Error.Yolo", "description": "Fomo"}]},
+        )
+        self.assertEqual(
+            get_status_report_declaration_status(report, "zentral.blueprint.1.activation"),
+            {"active": True, "valid": "valid", "server-token": "1"},
+        )
+
+    def test_declaration_status_missing(self):
+        self.assertIsNone(get_status_report_declaration_status({}, "yolo"))
+        self.assertIsNone(get_status_report_declaration_status({"StatusItems": {"management": {}}}, "yolo"))
+        report = {"StatusItems": {"management": {"declarations": {"configurations": [
+            {"identifier": "fomo", "server-token": "1", "active": True, "valid": "valid"},
+        ]}}}}
+        self.assertIsNone(get_status_report_declaration_status(report, "yolo"))
