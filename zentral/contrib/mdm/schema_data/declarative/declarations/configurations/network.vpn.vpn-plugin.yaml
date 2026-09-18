@@ -158,7 +158,7 @@ payloadkeys:
 
       In iOS, tvOS, and visionOS, the identifier is a bundle ID, for example, "com.example.app".
 
-      In macOS, the identifier is a composed identifier. The format of the composed identifier is either "Bundle-ID" or "Bundle-ID {Designated-Requirement}". "Bundle-ID" is the bundle identifier string of the provider. "Designated-Requirement" is the designated requirement string from the code signature of the provider. For example, "com.example.app" for the bundle ID format, or "com.example.app {anchor apple generic}" for the designated requirement format.
+      In macOS, the identifier is a composed identifier. The format of the composed identifier is either "Bundle-ID" or "Bundle-ID {Designated-Requirement}". "Bundle-ID" is the bundle identifier string of the provider. "Designated-Requirement" is the designated requirement string the device uses to match the code signature of the provider. For example, "com.example.app" for the bundle ID format, or "com.example.app {anchor apple generic}" for the designated requirement format.
 - key: NetworkRouting
   title: Network routing details
   supportedOS:
@@ -350,7 +350,7 @@ payloadkeys:
         presence: optional
         content: |-
           An array of domain names. This rule matches if any of the domain names in the specified list matches any domain in the device's search domains list.
-          The system supports a wildcard (`*`) prefix. For example, `*.example.com` matches against either `mydomain.example.com` or `yourdomain.example.com`.
+          The system supports a wildcard (`\*`) prefix. For example, `\*.example.com` matches against either `mydomain.example.com` or `yourdomain.example.com`.
         subkeys:
         - key: DNSDomainMatchElement
           title: DNS domain match element
@@ -361,7 +361,7 @@ payloadkeys:
         presence: optional
         content: |-
           An array of IP addresses. This rule matches if any of the network's specified DNS servers match any entry in the array.
-          The system supports matching with a single wildcard. For example, `17.*` matches any DNS server in the `17.0.0.0/8` subnet.
+          The system supports matching with a single wildcard. For example, `17.\*` matches any DNS server in the `17.0.0.0/8` subnet.
         subkeys:
         - key: DNSServerAddressMatchElement
           title: DNS server address match element
@@ -399,32 +399,6 @@ payloadkeys:
   presence: optional
   content: A dictionary to use for all VPN types.
   subkeys:
-  - key: Protocol
-    title: DNS protocol
-    type: <string>
-    presence: required
-    rangelist:
-    - Cleartext
-    - HTTPS
-    - TLS
-    content: The transport protocol to communicate with the DNS server.
-  - key: ServerURL
-    title: Server URL
-    type: <string>
-    presence: optional
-    content: The URI template of a DNS-over-HTTPS server, as defined in RFC 8484,
-      which needs to use the `https://` scheme. The system uses the hostname or address
-      in the URL to validate the server certificate. If `ServerAddresses` isn't specified,
-      the system uses the hostname or address in the URL to determine the server addresses.
-      This key is required if the `DNSProtocol` is `HTTPS`.
-  - key: ServerName
-    title: Server name
-    type: <string>
-    presence: optional
-    content: The hostname of a DNS-over-TLS server to validate the server certificate,
-      as defined in RFC 7858. If `ServerAddresses` isn't specified, the system uses
-      the hostname to determine the server addresses. This key is required if the
-      `DNSProtocol` is `TLS`.
   - key: ServerAddresses
     title: DNS server addresses
     type: <array>
@@ -578,7 +552,7 @@ payloadkeys:
       content: The identifier of an asset declaration that contains the credentials
         (user name and password) to authenticate with the proxy server.
 examples:
-  title: Configuration examples
+- title: Configuration examples
   files:
   - tab: Password
     description: This configuration sets up a VPN plugin using username and password
