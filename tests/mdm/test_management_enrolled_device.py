@@ -1,5 +1,6 @@
 import json
 import plistlib
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Group
@@ -367,6 +368,53 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             response,
             reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
         )
+
+    def test_enrolled_device_no_software_update_status(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertNotContains(response, "Software update")
+
+    def test_enrolled_device_software_update_status(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.status_items = {
+            "softwareupdate.install-state": "failed",
+            "softwareupdate.pending-version": {"os-version": "15.7.1", "build-version": "24G222",
+                                               "target-local-date-time": "2026-09-25T09:30:00"},
+            "softwareupdate.install-reason": {
+                "reason": ["declaration"],
+                "declaration-id": "zentral.blueprint.1.softwareupdate-enforcement-specific",
+            },
+            "softwareupdate.failure-reason": {
+                "count": 2, "reason": "Error.Yolo", "timestamp": "2026-09-24T10:00:00Z",
+            },
+            "softwareupdate.beta-enrollment": "macOS Developer Beta",
+            "zentral.softwareupdate.enforcement-declaration": {
+                "active": False, "valid": "invalid", "server-token": "1",
+                "reasons": [{"code": "Error.Fomo", "description": "Fomo description"}],
+            },
+        }
+        enrolled_device.status_items_updated_at = datetime(2026, 9, 24, 10, 1, 2)
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/enrolleddevice_detail.html")
+        self.assertContains(response, "Software update")
+        self.assertContains(response, "Pending: 15.7.1")
+        self.assertContains(response, "(24G222)")
+        self.assertContains(response, "enforced at 2026-09-25T09:30:00")
+        self.assertContains(response, '<span class="text-danger">failed</span>')
+        self.assertContains(response, "Reason: declaration")
+        self.assertContains(response, "zentral.blueprint.1.softwareupdate-enforcement-specific")
+        self.assertContains(response, "2 failures")
+        self.assertContains(response, "Error.Yolo")
+        self.assertContains(response, "Beta program: macOS Developer Beta")
+        self.assertContains(response, "Enforcement declaration invalid")
+        self.assertContains(response, "Error.Fomo: Fomo description")
 
     def test_enrolled_device_apple_silicon_none(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)

@@ -1373,6 +1373,7 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
             software_update for software_update in best_available_software_updates(self.object)
             if software_update
         ]
+        ctx["software_update_status"] = self.object.software_update_status
         ctx["dep_devices"] = (DEPDevice.objects.select_related("virtual_server", "enrollment")
                                                .filter(serial_number=self.object.serial_number)
                                                .order_by(F("last_op_date").desc(nulls_last=True)))
