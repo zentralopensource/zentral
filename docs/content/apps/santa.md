@@ -161,15 +161,36 @@ Using this information, it is possible to build a rule without knowing the ident
 
 ### Rule scope
 
-By default, a rule will be synced to all the machines enrolled on its Zentral Santa configuration.
+By default, a rule is synced to all the machines enrolled on its Zentral Santa configuration.
 
-Rules can be scoped to machine serial numbers. A list of serial numbers separated by `,` can be used in the `Serial numbers` field of the rule forms.
+A rule has three scope fields, each one with an exclusion: `Serial numbers` and `Excluded serial numbers`, `Primary users` and `Excluded primary users`, `Tags` and `Excluded tags`. The serial numbers and the primary users are lists separated by `,`. The tags are selected in the form.
 
-Rules can also be scoped to machine primary users. A list of primary user (id, emails, …) separated by `,` can be used in the `Primary users` field of the rule forms. If one of them matches the primary user reported by Santa, the rule will be in scope. For this to be effective, you need to configure the primary user reported by Santa using either the `MachineOwner` key of the Santa payload, or the combination of the `MachineOwnerPlist` and `MachineOwnerKey` keys, with local plists on each machine.
+The primary user is the one that Santa reports. Configure it with the `MachineOwner` key of the Santa payload, or with the `MachineOwnerPlist` and `MachineOwnerKey` keys and a local plist on each machine.
 
-Finally, rules can be scoped to machine tags. Select the matching tags in the rule forms.
+A field **matches** a machine when it contains the serial number, the primary user, or one of the tags of the machine. Zentral looks at the fields from the narrowest to the widest, and the first field that matches the machine decides:
 
-**IMPORTANT:** The rule is in scope if **any** serial number, primary user or tag is a match.
+1. The serial numbers. In `Serial numbers`, the rule is in scope. In `Excluded serial numbers`, it is not.
+2. The primary users, the same way.
+3. The tags. A machine can carry a tag of each field: the exclusion wins.
+4. If no field matches the machine, the rule is in scope only when it has no scope field at all. Such a rule is for every machine that its exclusions do not match.
+
+An exclusion removes the machine from that rule only. Another rule can still match the machine.
+
+| Rule | Machine | Decided by | In scope |
+| --- | --- | --- | --- |
+| serial numbers `S1`, tags `vip` | `S1`, no tag | the serial number | yes |
+| serial numbers `S1`, tags `vip` | `S2`, tag `vip` | the tag | yes |
+| serial numbers `S1`, tags `vip` | `S3`, no tag | nothing, and the rule has scope fields | no |
+| tags `fleet`, excluded serial numbers `S1` | `S1`, tag `fleet` | the excluded serial number | no |
+| serial numbers `S1`, excluded tags `contractors` | `S1`, tag `contractors` | the serial number, the tags are not looked at | yes |
+| tags `vip`, excluded tags `contractors` | `S6`, tags `vip` and `contractors` | the tags, the exclusion wins | no |
+| no scope field, excluded tags `contractors` | `S4`, tag `vip` | nothing, and the rule has no scope field | yes |
+| primary users `alice` | `S5`, no primary user | nothing, and the rule has scope fields | no |
+| tags `fleet`, excluded primary users `bob` | `S5`, tag `fleet`, no primary user | the tag | yes |
+
+A machine that reports no primary user is not matched by the primary user fields.
+
+An exception is written for one machine or one person, and a rule for a population. The order of the fields lets the exception win: a listed serial number keeps the rule when a tag excludes the machine, and an excluded serial number loses it when a tag matches the machine.
 
 ## Scoped client modes
 
@@ -181,13 +202,13 @@ Zentral resolves the mode of each machine when it answers the [preflight](#prefl
 
 An entry has the same scope fields as a rule: `Serial numbers`, `Primary users` and `Tags`, each one with an exclusion. See [Rule scope](#rule-scope) for the fields, and for the Santa payload keys that set the primary user.
 
-The entry is in scope if **any** serial number, primary user or tag is a match, and if **no** excluded serial number, excluded primary user or excluded tag is a match. An entry with no scope field at all matches every machine of the configuration.
+The scope of an entry is resolved like the scope of a rule: the first field that matches the machine decides, and an entry with no scope field at all is for every machine that its exclusions do not match.
 
 ### Resolution
 
 More than one entry can be in scope for a machine. Zentral sorts the entries that match, and applies the first one:
 
-1. The narrowest scope wins: serial numbers, then primary users, then tags, then no scope at all. Only the narrowest field of an entry counts – an entry with serial numbers and tags is a serial number entry.
+1. The narrowest match wins: the entry that its serial number decided, then its primary user, then a tag, then an entry with no scope field. An entry with serial numbers and tags is a serial number match for a listed machine, and a tag match for a machine it reaches by a tag.
 2. `Lockdown` wins over `Monitor`.
 3. The names are compared, and the first name in alphabetical order wins.
 
@@ -242,7 +263,7 @@ Santa accepts one pattern for each policy, so Zentral combines them when it answ
 
 ### Scope
 
-An entry has the same scope fields as a rule: `Serial numbers`, `Primary users` and `Tags`, each one with an exclusion. See [Rule scope](#rule-scope) for the fields.
+An entry has the same scope fields as a rule: `Serial numbers`, `Primary users` and `Tags`, each one with an exclusion. See [Rule scope](#rule-scope) for the fields, and for how the first field that matches the machine decides.
 
 ### Composition
 
@@ -252,7 +273,13 @@ Zentral combines the pattern of the configuration and the patterns of the entrie
 ^(?:(?:the configuration)|(?:the first entry)|(?:the second entry))
 ```
 
-There is no precedence. Every entry in scope is included.
+Two entries with the same pattern are two statements about one path, like two rules for one binary. For each pattern, Zentral keeps one entry for the machine: the narrowest match wins, and at equal match `Block` wins over `Allow`. A leading `^` does not make a different pattern, because the combination removes it. Every other entry in scope is included.
+
+| Entries for `/Users/.*/Downloads/` | Fleet machine | Machine with the tag `devs` |
+| --- | --- | --- |
+| `Block` with no scope field, `Allow` with the tag `devs` | in the block pattern | in the allow pattern |
+
+Without this step, the machine with the tag `devs` would get the pattern in its two regexes, and Santa would block the path: it checks the block regex first.
 
 Three properties of the result:
 
@@ -274,7 +301,7 @@ Three limits come from the composition:
 
 Santa reads the block regex, then the allow regex, then the client mode. Each step gives an answer immediately. Two results come from that order:
 
-* **A path that the two regexes match is blocked.** An allow entry cannot make an exception to a block entry. Write a more accurate block pattern, or an allow rule for the identity of the binary, which Santa reads earlier.
+* **A path that the two regexes match is blocked.** An allow entry with the same pattern as a block entry makes an exception for the machines it matches more precisely, see [Composition](#composition). An allow entry with another pattern cannot: write a more accurate block pattern, or an allow rule for the identity of the binary, which Santa reads earlier.
 * **A rule is more important than a path.** A block rule for a binary blocks it also when an allow entry matches its path.
 
 Each policy has one mode where it is necessary, and one mode where it is a trap:

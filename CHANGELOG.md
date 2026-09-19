@@ -102,13 +102,13 @@ The Santa configuration sets the button of the block notification now. Zentral s
 
 Local configuration does not remove a button that a machine already has. Force a clean sync to do that.
 
-A Santa configuration can give a different client mode to some of its machines now. A scoped client mode has the scope fields of a rule – serial numbers, primary users and tags, each one with an exclusion – a client mode, and its own block notification button. Zentral resolves one mode for each machine when it answers the preflight, so there is no payload to distribute, and the Santa agent keeps no scope of its own. If more than one entry is in scope, the narrowest one wins, then Lockdown, then the first name in alphabetical order.
+A Santa configuration can give a different client mode to some of its machines now. A scoped client mode has the scope fields of a rule – serial numbers, primary users and tags, each one with an exclusion – a client mode, and its own block notification button. Zentral resolves one mode for each machine when it answers the preflight, so there is no payload to distribute, and the Santa agent keeps no scope of its own. If more than one entry is in scope, the narrowest match wins, then Lockdown, then the first name in alphabetical order.
 
 Four new PBAC actions manage the entries. `Santa::Action::"createScopedClientMode"` takes the configuration as its resource. `"viewScopedClientMode"`, `"updateScopedClientMode"` and `"deleteScopedClientMode"` take the entry, which has the configuration as its parent, so one policy covers every entry of a configuration. The configuration is the boundary: a role that can write the entries of a configuration can give any client mode to any of its machines. These actions have no Django permission. `"viewScopedClientMode"` is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups, and the three actions that write are members of `"AdminActions"` only, like the actions on the rules. A policy that uses a group covers them, but a policy that names each action must be extended.
 
 The Santa configuration form accepts a blocked path regex in Lockdown mode now. The Santa agent evaluates the blocked path regex before the allowed path regex, and before the client mode. In Lockdown mode it is therefore the only way to block by path a file that the scope stage allows – a file that is not a Mach-O file is allowed in every mode. The rule also read the client mode of the configuration, which a scoped client mode changes for some of the machines.
 
-A Santa configuration can add a path allow or block regex for some of its machines now. A scoped path regex has the scope fields of a rule – serial numbers, primary users and tags, each one with an exclusion – a policy, Allow or Block, and a pattern. Santa accepts one pattern for each policy, so Zentral combines the pattern of the configuration and the patterns of the entries in scope when it answers the preflight. There is no precedence: every entry in scope is included.
+A Santa configuration can add a path allow or block regex for some of its machines now. A scoped path regex has the scope fields of a rule – serial numbers, primary users and tags, each one with an exclusion – a policy, Allow or Block, and a pattern. Santa accepts one pattern for each policy, so Zentral combines the pattern of the configuration and the patterns of the entries in scope when it answers the preflight. Two entries with the same pattern are two statements about one path: the narrowest match wins, and at equal match Block wins over Allow. Every other entry in scope is included.
 
 The combined pattern is anchored once, at the start of the path, and the entries are in the alphabetical order of their names so that the pattern is the same between two preflights. Zentral compiles each pattern when it is saved. A capture group and an inline flag group without a scope are refused, because the entries are combined: use `(?:abc)` and `(?i:abc)`.
 
@@ -118,6 +118,19 @@ The scoped client modes and the scoped path regexes have a REST API now: `/api/s
 
 
 ### Backward incompatibilities
+
+
+#### 🧨 The first scope field that matches a machine decides for a Santa rule
+
+A Santa rule has three scope fields, each one with an exclusion. Zentral looks at them from the narrowest to the widest – serial numbers, then primary users, then tags – and the first field that matches the machine decides: in the scope field, the rule is in scope, in the exclusion field, it is not. A machine can carry a tag of each field: the exclusion wins. A rule with no scope field is for every machine that its exclusions do not match. The scoped client modes and the scoped path regexes follow the same rule.
+
+Before, every scope field that was set had to match, and an exclusion in any field removed the rule. The documentation said the opposite since 2021. Three kinds of rules change:
+
+* A rule with two scope fields set, for example serial numbers and tags, reaches the union of the two lists now, not the machines in both.
+* A rule with a scope field and a wider exclusion, for example serial numbers and excluded tags, keeps the listed machines now, whatever their tags.
+* A rule with excluded primary users reaches the machines that report no primary user now. Before, such a machine got no rule with that field set.
+
+Review the rules and the entries that combine two fields before the upgrade: they are the ones whose reach changes.
 
 
 #### 🧨 The Santa rules endpoint refuses a PATCH

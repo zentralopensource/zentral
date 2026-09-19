@@ -7,7 +7,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.santa.models import (Configuration, EnrolledMachine, Enrollment,
-                                          MachineRule, Rule, Target)
+                                          MachineRule, Rule, ScopedClientMode, Target)
 from zentral.contrib.santa.forms import test_cdhash, test_signing_id_identifier
 from .utils import new_cdhash, new_sha256, new_team_id, new_signing_id_identifier
 
@@ -68,6 +68,7 @@ class SantaRuleEngineTestCase(TestCase):
             "custom_msg": "",
             "custom_url": "",
             "version": rule.version,
+            "match_rank": ScopedClientMode.RANK_ALL,
         }
         return target, rule, result
 
@@ -308,6 +309,7 @@ class SantaRuleEngineTestCase(TestCase):
         result3.pop("cel_expr", None)
         result3.pop("custom_msg", None)
         result3.pop("custom_url", None)
+        result3.pop("match_rank", None)
         result3["version"] = 1
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result3])
         # sync rule
@@ -335,6 +337,7 @@ class SantaRuleEngineTestCase(TestCase):
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
         rule.serial_numbers.append(self.enrolled_machine.serial_number)
         rule.save()
+        result["match_rank"] = ScopedClientMode.RANK_SERIAL
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
 
     def test_one_excluded_serial_number(self):
@@ -351,6 +354,7 @@ class SantaRuleEngineTestCase(TestCase):
         primary_user = get_random_string(15)
         rule.primary_users.append(primary_user)
         rule.save()
+        result["match_rank"] = ScopedClientMode.RANK_USER
         self.enrolled_machine.primary_user = primary_user
         self.enrolled_machine.save()
         self.enrolled_machine2.primary_user = primary_user
@@ -372,6 +376,7 @@ class SantaRuleEngineTestCase(TestCase):
         rule.save()
         self.enrolled_machine.primary_user = primary_user
         self.enrolled_machine.save()
+        result["match_rank"] = ScopedClientMode.RANK_USER
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
 
     def test_one_excluded_primary_user(self):
@@ -385,15 +390,16 @@ class SantaRuleEngineTestCase(TestCase):
         rule.excluded_primary_users = [get_random_string(12)]
         rule.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
-        # no rules if excluded_primary_users and the machine reports no primary user!!!
+        # a machine that reports no primary user is not matched by the exclusion
         self.enrolled_machine.primary_user = None
         self.enrolled_machine.save()
-        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
 
-    def test_two_serial_number_machines_one_excluded_primary_user(self):
+    def test_serial_number_machines_are_not_excluded_by_a_primary_user(self):
         target, rule, result = self.create_and_serialize_for_iter_rule()
         rule.serial_numbers = [self.enrolled_machine.serial_number, self.enrolled_machine2.serial_number]
         rule.save()
+        result["match_rank"] = ScopedClientMode.RANK_SERIAL
         primary_user1 = get_random_string(15)
         self.enrolled_machine.primary_user = primary_user1
         self.enrolled_machine.save()
@@ -402,15 +408,17 @@ class SantaRuleEngineTestCase(TestCase):
         self.enrolled_machine2.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine2, [])), [result])
+        # the serial number decides before the primary user, the wider exclusion is not looked at
         rule.excluded_primary_users = [primary_user1]
         rule.save()
-        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [result])
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine2, [])), [result])
 
     def test_iter_tag_new_rules(self):
         target, rule, result = self.create_and_serialize_for_iter_rule()
         tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
         rule.tags.set(tags)
+        result["match_rank"] = ScopedClientMode.RANK_TAG
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [tags[0].pk])), [result])
 
@@ -436,9 +444,17 @@ class SantaRuleEngineTestCase(TestCase):
         tags = [Tag.objects.create(name=get_random_string(32)) for _ in range(3)]
         tag_pks = [t.pk for t in tags]
         rule.tags.set(tags[:-1])
+        result["match_rank"] = ScopedClientMode.RANK_USER
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks)), [result])
+        # the primary user decides before the tags, the wider exclusion is not looked at
         rule.excluded_tags.add(tags[-1])
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks)), [result])
+        # a machine the primary users do not match is decided by its tags, and it carries the excluded one
+        self.enrolled_machine.primary_user = get_random_string(14)
+        self.enrolled_machine.save()
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks)), [])
+        result["match_rank"] = ScopedClientMode.RANK_TAG
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, tag_pks[:-1])), [result])
 
     def test_configuration_leakage(self):
         configuration2 = Configuration.objects.create(name=get_random_string(256))

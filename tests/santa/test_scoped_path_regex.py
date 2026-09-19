@@ -137,6 +137,45 @@ class SantaScopedPathRegexTestCase(TestCase):
         self.assertEqual(self.sync_config(configuration)["allowed_path_regex"],
                          Configuration.NON_MATCHING_PATH_REGEX)
 
+    # one entry per pattern
+
+    def test_the_narrowest_match_wins_the_pattern(self):
+        configuration = force_configuration()
+        tag = Tag.objects.create(name=get_random_string(12))
+        self.force_scoped_path_regex(configuration, "/Users/.*/Downloads/", name="fleet", block=True)
+        self.force_scoped_path_regex(configuration, "/Users/.*/Downloads/", name="devs", tags=[tag])
+        fleet = self.sync_config(configuration)
+        self.assertEqual(fleet["blocked_path_regex"], "^(?:(?:/Users/.*/Downloads/))")
+        self.assertEqual(fleet["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+        devs = self.sync_config(configuration, tags=[tag])
+        self.assertEqual(devs["allowed_path_regex"], "^(?:(?:/Users/.*/Downloads/))")
+        self.assertEqual(devs["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+
+    def test_block_wins_the_pattern_at_equal_match(self):
+        configuration = force_configuration()
+        tag = Tag.objects.create(name=get_random_string(12))
+        other_tag = Tag.objects.create(name=get_random_string(12))
+        self.force_scoped_path_regex(configuration, "/a/", name="a", tags=[tag])
+        self.force_scoped_path_regex(configuration, "/a/", name="b", block=True, tags=[other_tag])
+        config = self.sync_config(configuration, tags=[tag, other_tag])
+        self.assertEqual(config["blocked_path_regex"], "^(?:(?:/a/))")
+        self.assertEqual(config["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+
+    def test_a_leading_anchor_does_not_make_another_pattern(self):
+        configuration = force_configuration()
+        tag = Tag.objects.create(name=get_random_string(12))
+        self.force_scoped_path_regex(configuration, "^/a/", name="a", block=True)
+        self.force_scoped_path_regex(configuration, "/a/", name="b", tags=[tag])
+        config = self.sync_config(configuration, tags=[tag])
+        self.assertEqual(config["allowed_path_regex"], "^(?:(?:/a/))")
+        self.assertEqual(config["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+
+    def test_two_entries_with_the_same_pattern_and_policy_compose_it_once(self):
+        configuration = force_configuration()
+        self.force_scoped_path_regex(configuration, "/a/", name="a")
+        self.force_scoped_path_regex(configuration, "/a/", name="b")
+        self.assertEqual(self.sync_config(configuration)["allowed_path_regex"], "^(?:(?:/a/))")
+
     # determinism — the client flushes every decision cache when the pattern changes
 
     def test_the_entries_are_composed_in_a_stable_order(self):
@@ -169,7 +208,7 @@ class SantaScopedPathRegexTestCase(TestCase):
         configuration = force_configuration()
         self.force_scoped_path_regex(configuration, "/a/")
         machine = self.enrolled_machine(configuration)
-        # no tag prefetch: only the client mode ranks, and a path regex never does
+        # the entries, with the level that decided in the same SELECT
         with self.assertNumQueries(1):
             configuration.get_sync_server_config(machine, (2022, 1))
 

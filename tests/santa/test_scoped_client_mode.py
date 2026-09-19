@@ -57,12 +57,11 @@ class SantaScopedClientModeTestCase(TestCase):
         self.assertEqual(self.for_machine(configuration, primary_user="yolo"), [scm])
         self.assertEqual(self.for_machine(configuration, primary_user="fomo"), [])
 
-    def test_machine_without_primary_user_skips_every_user_scoped_entry(self):
-        # inherited from the rule download: an excluded list is enough to disqualify the machine
+    def test_machine_without_primary_user_is_not_matched_by_the_primary_user_fields(self):
         configuration = force_configuration()
         self.force_scoped_client_mode(configuration, primary_users=["yolo"])
-        self.force_scoped_client_mode(configuration, excluded_primary_users=["yolo"])
-        self.assertEqual(self.for_machine(configuration), [])
+        everyone_but_yolo = self.force_scoped_client_mode(configuration, excluded_primary_users=["yolo"])
+        self.assertEqual(self.for_machine(configuration), [everyone_but_yolo])
 
     def test_tags(self):
         configuration = force_configuration()
@@ -77,7 +76,7 @@ class SantaScopedClientModeTestCase(TestCase):
         tag = Tag.objects.create(name=get_random_string(12))
         self.force_scoped_client_mode(configuration, excluded_tags=[tag])
         self.assertEqual(self.for_machine(configuration, tag_ids=[tag.pk]), [])
-        # unlike the primary users, an excluded list alone does not disqualify a machine with no tag
+        # an entry with no scope field matches every machine its exclusions do not
         self.assertEqual(len(self.for_machine(configuration)), 1)
 
     def test_other_configuration(self):
@@ -87,7 +86,7 @@ class SantaScopedClientModeTestCase(TestCase):
 
     # precedence
 
-    def test_precedence_rank(self):
+    def test_match_rank_is_the_level_that_decided(self):
         configuration = force_configuration()
         tag = Tag.objects.create(name=get_random_string(12))
         for kwargs, rank in (
@@ -97,7 +96,28 @@ class SantaScopedClientModeTestCase(TestCase):
             ({}, ScopedClientMode.RANK_ALL),
         ):
             scm = self.force_scoped_client_mode(configuration, **kwargs)
-            self.assertEqual(scm.precedence_rank(), rank)
+            in_scope = self.for_machine(configuration, primary_user="yolo", tag_ids=[tag.pk])
+            self.assertEqual([e.match_rank for e in in_scope if e == scm], [rank])
+
+    def test_a_wider_match_does_not_borrow_the_rank_of_a_narrower_field(self):
+        configuration = force_configuration()
+        tag = Tag.objects.create(name=get_random_string(12))
+        other_tag = Tag.objects.create(name=get_random_string(12))
+        monitor = self.force_scoped_client_mode(configuration, serial_numbers=["0123456789"], tags=[tag])
+        lockdown = self.force_scoped_client_mode(configuration, lockdown=True, tags=[other_tag])
+        tag_ids = [tag.pk, other_tag.pk]
+        # the listed machine: its serial number decides for the Monitor entry, which wins
+        self.assertEqual(
+            Configuration.resolve_scoped_client_mode(self.for_machine(configuration, tag_ids=tag_ids)),
+            monitor
+        )
+        # another machine with the two tags: two tag matches, Lockdown wins
+        self.assertEqual(
+            Configuration.resolve_scoped_client_mode(
+                self.for_machine(configuration, serial_number="9876543210", tag_ids=tag_ids)
+            ),
+            lockdown
+        )
 
     def test_narrower_reach_wins_over_lockdown(self):
         configuration = force_configuration()
@@ -230,7 +250,7 @@ class SantaScopedClientModeTestCase(TestCase):
         tag = Tag.objects.create(name=get_random_string(12))
         self.force_scoped_client_mode(configuration, tags=[tag])
         machine = self.enrolled_machine(configuration, tags=[tag])
-        # the entries, and the tag presence rides along in the same SELECT
+        # the entries, with the level that decided in the same SELECT
         with self.assertNumQueries(1):
             configuration.get_sync_server_config(machine, (2022, 1))
 

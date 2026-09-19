@@ -12,7 +12,7 @@ from django.core.validators import (
     MinValueValidator,
 )
 from django.db import connection, models
-from django.db.models import Count, Exists, F, OuterRef, Q
+from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Q, Value, When
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
@@ -762,14 +762,33 @@ class Configuration(models.Model):
 
     @staticmethod
     def resolve_scoped_client_mode(scoped_client_modes):
-        # narrowest reach, then Lockdown (False sorts first), then the name
+        # the level that decided, then Lockdown (False sorts first), then the name
         ranked = sorted(
             scoped_client_modes,
-            key=lambda m: (m.precedence_rank(),
+            key=lambda m: (m.match_rank,
                            m.client_mode != Configuration.LOCKDOWN_MODE,
                            m.name),
         )
         return ranked[0] if ranked else None
+
+    @staticmethod
+    def resolve_scoped_path_regexes(scoped_path_regexes):
+        """One entry per pattern, in the alphabetical order of the names.
+
+        Two entries with the same pattern are two statements about one path, like two rules for
+        one binary: the level that decided, then Block before Allow. Without this step a pattern
+        present under both policies reaches the client in both of its regexes, and the client checks
+        the block one first, whatever the entry that matched the machine most precisely said. A
+        leading ^ does not make another pattern, the composition removes it.
+
+        The order of the names keeps the composed pattern byte for byte the same between two
+        preflights. Without it, the client flushes all its decision caches.
+        """
+        winners = {}
+        for spr in sorted(scoped_path_regexes,
+                          key=lambda e: (e.match_rank, e.policy != ScopedPathRegex.Policy.BLOCK, e.name)):
+            winners.setdefault(spr.regex.removeprefix("^"), spr)
+        return sorted(winners.values(), key=lambda e: e.name)
 
     def compose_path_regex(self, baseline, patterns):
         """The single pattern Santa gets for one policy, from the configuration's own and the entries.
@@ -830,19 +849,17 @@ class Configuration(models.Model):
                 ScopedClientMode.objects.for_machine(self,
                                                      enrolled_machine.serial_number,
                                                      enrolled_machine.primary_user,
-                                                     tag_ids).with_tag_presence()
+                                                     tag_ids)
             )
         client_mode = scoped_client_mode.client_mode if scoped_client_mode else self.client_mode
 
         scoped_path_regexes = []
         if has_path_regexes:
-            # the composed pattern has to be byte for byte the same between preflights, or the
-            # client flushes all its decision caches. Without an order, it is not.
-            scoped_path_regexes = list(
+            scoped_path_regexes = self.resolve_scoped_path_regexes(
                 ScopedPathRegex.objects.for_machine(self,
                                                     enrolled_machine.serial_number,
                                                     enrolled_machine.primary_user,
-                                                    tag_ids).order_by("name")
+                                                    tag_ids)
             )
 
         # the voting portal URL is computed, not stored, so INHERIT resolves the one of the
@@ -946,31 +963,46 @@ class Configuration(models.Model):
 
 
 class ScopedConfigurationItemQuerySet(models.QuerySet):
-    def for_machine(self, configuration, serial_number, primary_user, tag_ids):
-        qs = (self.filter(configuration=configuration)
-                  .filter(Q(serial_numbers__len=0) | Q(serial_numbers__contains=[serial_number]))
-                  .exclude(excluded_serial_numbers__contains=[serial_number]))
-        if primary_user:
-            qs = (qs.filter(Q(primary_users__len=0) | Q(primary_users__contains=[primary_user]))
-                    .exclude(excluded_primary_users__contains=[primary_user]))
-        else:
-            qs = qs.filter(primary_users__len=0, excluded_primary_users__len=0)
-        if tag_ids:
-            qs = qs.filter(Q(tags__isnull=True) | Q(tags__in=tag_ids)).exclude(excluded_tags__in=tag_ids)
-        else:
-            qs = qs.filter(tags__isnull=True)
-        return qs.distinct()
+    def _tags(self, field, **filters):
+        # a subquery: an OR across the many-to-many join would duplicate the rows
+        through = getattr(self.model, field).through
+        return Exists(
+            through.objects.filter(**{f"{self.model._meta.model_name}_id": OuterRef("pk")}, **filters)
+        )
 
-    def with_tag_presence(self):
-        # precedence_rank() only asks whether an entry is scoped on tags at all, and the join in
-        # for_machine() carries the tags that matched, not all of them. A boolean rides along in
-        # the same SELECT, where reading the tags themselves costs a second query.
-        return self.annotate(
-            has_tags=Exists(
-                self.model.tags.through.objects.filter(
-                    **{f"{self.model._meta.model_name}_id": OuterRef("pk")}
-                )
-            )
+    def for_machine(self, configuration, serial_number, primary_user, tag_ids):
+        """The entries in scope for the machine, with the level that decided as match_rank.
+
+        The first level that matches the machine decides: serial number, then primary user, then
+        tags. Matched by the scope field, the entry is in scope with the rank of the level. Matched by
+        the exclusion field, it is out. At the tag level the machine can carry a tag of each field,
+        and the exclusion wins. An entry with no scope field matches every machine its exclusions do
+        not. A machine that reports no primary user is not matched by the primary user fields.
+        """
+        model = self.model
+        out = Value(None, output_field=IntegerField())
+        whens = [
+            When(serial_numbers__contains=[serial_number], then=Value(model.RANK_SERIAL)),
+            When(excluded_serial_numbers__contains=[serial_number], then=out),
+        ]
+        if primary_user:
+            whens.extend([
+                When(primary_users__contains=[primary_user], then=Value(model.RANK_USER)),
+                When(excluded_primary_users__contains=[primary_user], then=out),
+            ])
+        if tag_ids:
+            whens.extend([
+                When(self._tags("excluded_tags", tag_id__in=tag_ids), then=out),
+                When(self._tags("tags", tag_id__in=tag_ids), then=Value(model.RANK_TAG)),
+            ])
+        whens.append(
+            When(serial_numbers__len=0, primary_users__len=0, has_tags=False, then=Value(model.RANK_ALL))
+        )
+        return (
+            self.filter(configuration=configuration)
+                .annotate(has_tags=self._tags("tags"))
+                .annotate(match_rank=Case(*whens, default=out, output_field=IntegerField()))
+                .filter(match_rank__isnull=False)
         )
 
 
@@ -998,19 +1030,6 @@ class ScopedConfigurationItem(models.Model):
 
     def __str__(self):
         return self.name
-
-    def precedence_rank(self):
-        if self.serial_numbers:
-            return self.RANK_SERIAL
-        if self.primary_users:
-            return self.RANK_USER
-        # with_tag_presence() answers this without a query. Without it, the method asks.
-        has_tags = getattr(self, "has_tags", None)
-        if has_tags is None:
-            has_tags = self.tags.exists()
-        if has_tags:
-            return self.RANK_TAG
-        return self.RANK_ALL
 
     def serialize_scope_for_event(self):
         d = {}
@@ -1694,15 +1713,26 @@ class MachineRuleManager(models.Manager):
             "  left join santa_rule_tags as srt on (srt.rule_id = r.id)"
             "  left join santa_rule_excluded_tags as sret on (sret.rule_id = r.id)"
             "  where r.configuration_id = %(configuration_pk)s"
-            "  group by r.target_id, r.policy, r.cel_expr, r.custom_msg, r.custom_url, r.version,"
-            "  r.serial_numbers, r.excluded_serial_numbers,"
-            "  r.primary_users, r.excluded_primary_users"
-            "), filtered_rules as ("  # filter the configured rules for the enrolled machine
-            "  select pr.target_id, pr.policy, pr.cel_expr, pr.custom_msg, pr.custom_url, pr.version"
+            "  group by r.id"
+            "), ranked_rules as ("  # the first level that matches the machine decides
+            "  select pr.target_id, pr.policy, pr.cel_expr, pr.custom_msg, pr.custom_url, pr.version,"
+            "  case"
+            "    when %(serial_number)s = any(pr.serial_numbers) then {rank_serial}"
+            "    when %(serial_number)s = any(pr.excluded_serial_numbers) then null"
+            # a null primary user makes its two clauses false, an empty tag array its two
+            "    when %(primary_user)s = any(pr.primary_users) then {rank_user}"
+            "    when %(primary_user)s = any(pr.excluded_primary_users) then null"
+            "    when %(tag_ids)s && pr.excluded_tag_ids then null"
+            "    when %(tag_ids)s && pr.tag_ids then {rank_tag}"
+            "    when cardinality(pr.serial_numbers) = 0"
+            "     and cardinality(pr.primary_users) = 0"
+            "     and cardinality(pr.tag_ids) = 0 then {rank_all}"
+            "  end as match_rank"
             "  from prepared_rules as pr"
-            "  where ("
-            "    {wheres}"
-            "  )"
+            "), filtered_rules as ("  # the rules in scope for the enrolled machine
+            "  select target_id, policy, cel_expr, custom_msg, custom_url, version, match_rank"
+            "  from ranked_rules"
+            "  where match_rank is not null{policy_where}"
             "), machine_rules as ("  # current enrolled machine machine rules
             "   select target_id, policy, version, staged_removal"
             "   from santa_machinerule"
@@ -1712,6 +1742,7 @@ class MachineRuleManager(models.Manager):
             "  fr.custom_msg as rule_custom_msg,"
             "  fr.custom_url as rule_custom_url,"
             "  fr.version as rule_version,"
+            "  fr.match_rank as rule_match_rank,"
             "  mr.target_id as machine_rule_target_id, mr.policy as machine_rule_policy,"
             "  mr.version as machine_rule_version, mr.staged_removal as machine_rule_staged_removal"
             "  from filtered_rules as fr"
@@ -1720,7 +1751,8 @@ class MachineRuleManager(models.Manager):
             "  select rule_target_id as target_id, rule_policy as policy, rule_cel_expr as cel_expr,"
             "  rule_custom_msg as custom_msg,"
             "  rule_custom_url as custom_url,"
-            "  rule_version as version"
+            "  rule_version as version,"
+            "  rule_match_rank as match_rank"
             "  from rule_product where ("
             "    (machine_rule_target_id is null)"
             # a rule back in scope after its removal was sent has to be sent again
@@ -1731,50 +1763,40 @@ class MachineRuleManager(models.Manager):
             "  union"
             # the removals already sent during the current session are not sent again
             "  select machine_rule_target_id as target_id, 4 as policy, null as cel_expr,"
-            "  null as custom_msg, null as custom_url, 1 as version"
+            "  null as custom_msg, null as custom_url, 1 as version, null as match_rank"
             "  from rule_product where rule_target_id is null and not machine_rule_staged_removal"
             ") "  # limit, order and join with target to get all the necessary info
             "select t.id as target_id, t.type as rule_type, t.identifier, cr.policy, cr.cel_expr,"
-            "cr.custom_msg, cr.custom_url, cr.version "
+            "cr.custom_msg, cr.custom_url, cr.version, cr.match_rank "
             "from changed_rules as cr "
             "join santa_target as t on (t.id = cr.target_id) "
             # one extra rule, to know if another batch is necessary without a second query
             "order by t.identifier limit %(batch_size)s + 1"
         )
         configuration = enrolled_machine.enrollment.configuration
-        # machine specific rules
-        wheres = ["(cardinality(pr.serial_numbers) = 0 or %(serial_number)s = ANY(pr.serial_numbers))",
-                  "%(serial_number)s <> ALL(pr.excluded_serial_numbers)"]
-        # skip rules with CEL policy if santa version is too old
-        if enrolled_machine.get_comparable_santa_version() < (2025, 6):
-            wheres.append(f"pr.policy != {Rule.Policy.CEL}")
         kwargs = {"configuration_pk": configuration.pk,
                   "serial_number": enrolled_machine.serial_number,
+                  "primary_user": enrolled_machine.primary_user or None,
+                  "tag_ids": list(tags) if tags else [],
                   "enrolled_machine_pk": enrolled_machine.pk,
-                  "batch_size": configuration.batch_size}
-        if enrolled_machine.primary_user:
-            # user specific rules
-            wheres.extend(["(cardinality(pr.primary_users) = 0 or %(primary_user)s = ANY(pr.primary_users))",
-                           "%(primary_user)s <> ALL(pr.excluded_primary_users)"])
-            kwargs["primary_user"] = enrolled_machine.primary_user
-        else:
-            wheres.extend(["cardinality(pr.primary_users) = 0",
-                           "cardinality(pr.excluded_primary_users) = 0"])
-        if tags:
-            # tag specific rules
-            wheres.extend(["(cardinality(pr.tag_ids) = 0 or %(tags)s && pr.tag_ids)",
-                           "not (%(tags)s && pr.excluded_tag_ids)"])
-            kwargs["tags"] = tags
-        else:
-            wheres.append("cardinality(pr.tag_ids) = 0")
+                  "batch_size": configuration.batch_size,
+                  "sync_session": enrolled_machine.sync_session}
+        # skip rules with CEL policy if santa version is too old
+        policy_where = ""
+        if enrolled_machine.get_comparable_santa_version() < (2025, 6):
+            policy_where = f" and policy != {Rule.Policy.CEL}"
         # during a clean sync, the client rebuilds its rule database from the rules of the
         # current session only, so the committed machine rules are ignored
         if enrolled_machine.sync_session_clean:
             machine_rule_wheres = "sync_session = %(sync_session)s"
         else:
             machine_rule_wheres = "sync_session is null or sync_session = %(sync_session)s"
-        kwargs["sync_session"] = enrolled_machine.sync_session
-        query = query.format(wheres=" and ".join(wheres), machine_rule_wheres=machine_rule_wheres)
+        query = query.format(rank_serial=ScopedConfigurationItem.RANK_SERIAL,
+                             rank_user=ScopedConfigurationItem.RANK_USER,
+                             rank_tag=ScopedConfigurationItem.RANK_TAG,
+                             rank_all=ScopedConfigurationItem.RANK_ALL,
+                             policy_where=policy_where,
+                             machine_rule_wheres=machine_rule_wheres)
         cursor = connection.cursor()
         cursor.execute(query, kwargs)
         columns = [col[0] for col in cursor.description]
@@ -1895,6 +1917,8 @@ class MachineRuleManager(models.Manager):
             if new_cursor is None:
                 new_cursor = get_random_string(8)
             target_id = rule.pop("target_id")
+            # the level that decided is for the server, the client only gets the policy
+            rule.pop("match_rank", None)
             policy = Rule.Policy(rule.pop("policy"))
             rule["policy"] = policy.name
             version = rule.pop("version")
