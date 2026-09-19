@@ -762,12 +762,11 @@ class Configuration(models.Model):
 
     @staticmethod
     def resolve_scoped_client_mode(scoped_client_modes):
-        # the level that decided, then Lockdown (False sorts first), then the name
+        # the level that decided, then Lockdown (False sorts first). One entry per mode and
+        # configuration, so two candidates never tie.
         ranked = sorted(
             scoped_client_modes,
-            key=lambda m: (m.match_rank,
-                           m.client_mode != Configuration.LOCKDOWN_MODE,
-                           m.name),
+            key=lambda m: (m.match_rank, m.client_mode != Configuration.LOCKDOWN_MODE),
         )
         return ranked[0] if ranked else None
 
@@ -776,18 +775,18 @@ class Configuration(models.Model):
         """One entry per pattern, in the alphabetical order of the names.
 
         Two entries with the same pattern are two statements about one path, like two rules for
-        one binary: the level that decided, then Block before Allow. Without this step a pattern
-        present under both policies reaches the client in both of its regexes, and the client checks
-        the block one first, whatever the entry that matched the machine most precisely said. A
-        leading ^ does not make another pattern, the composition removes it.
+        one binary: the level that decided, then Block before Allow. One entry per pattern and
+        policy, so two candidates never tie. Without this step a pattern present under both
+        policies reaches the client in both of its regexes, and the client checks the block one
+        first, whatever the entry that matched the machine most precisely said.
 
         The order of the names keeps the composed pattern byte for byte the same between two
         preflights. Without it, the client flushes all its decision caches.
         """
         winners = {}
         for spr in sorted(scoped_path_regexes,
-                          key=lambda e: (e.match_rank, e.policy != ScopedPathRegex.Policy.BLOCK, e.name)):
-            winners.setdefault(spr.regex.removeprefix("^"), spr)
+                          key=lambda e: (e.match_rank, e.policy != ScopedPathRegex.Policy.BLOCK)):
+            winners.setdefault(spr.regex, spr)
         return sorted(winners.values(), key=lambda e: e.name)
 
     def compose_path_regex(self, baseline, patterns):
@@ -1074,6 +1073,10 @@ class ScopedClientMode(ScopedConfigurationItem):
 
     class Meta:
         unique_together = (("configuration", "name"),)
+        constraints = [
+            models.UniqueConstraint(fields=["configuration", "client_mode"],
+                                    name="santa_scopedclientmode_one_per_mode"),
+        ]
 
     def get_absolute_url(self):
         return (reverse("santa:configuration", args=(self.configuration_id,))
@@ -1123,14 +1126,22 @@ class ScopedPathRegex(ScopedConfigurationItem):
                   "both is blocked. In Monitor mode an allow entry grants nothing, and it stops "
                   "the executions it matches from being reported."
     )
-    regex = models.TextField(
+    # the pattern is in a unique index, and a btree row holds about 2700 bytes: 512 characters of
+    # 4 bytes each stay under it with the other columns of the index
+    regex = models.CharField(
+        max_length=512,
         help_text="ICU pattern, matched against the path of the executable. It is anchored at the "
                   "start of the path: use a leading .* to match anywhere. Capture groups are not "
-                  "allowed, because the entries of a policy are combined into one pattern."
+                  "allowed, because the entries of a policy are combined into one pattern. "
+                  "At most 512 characters."
     )
 
     class Meta:
         unique_together = (("configuration", "name"),)
+        constraints = [
+            models.UniqueConstraint(fields=["configuration", "regex", "policy"],
+                                    name="santa_scopedpathregex_one_per_pattern_and_policy"),
+        ]
 
     def get_absolute_url(self):
         return (reverse("santa:configuration", args=(self.configuration_id,))
@@ -1628,6 +1639,16 @@ class Rule(models.Model):
         def rule_choices(cls):
             return [(member.value, member.label) for member in cls if not member.sync_only]
 
+        @classmethod
+        def strictest_first(cls):
+            # the order between the rules of one target at equal match rank
+            return [cls.BLOCKLIST, cls.SILENT_BLOCKLIST, cls.CEL, cls.ALLOWLIST, cls.ALLOWLIST_COMPILER]
+
+        @classmethod
+        def strictness_sql(cls, column):
+            whens = " ".join(f"when {policy.value} then {rank}" for rank, policy in enumerate(cls.strictest_first()))
+            return f"case {column} {whens} end"
+
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     ruleset = models.ForeignKey(RuleSet, on_delete=models.CASCADE, null=True)
 
@@ -1652,7 +1673,12 @@ class Rule(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = (("configuration", "target"),)
+        constraints = [
+            models.UniqueConstraint(fields=["configuration", "target", "policy"],
+                                    name="santa_rule_one_per_target_and_policy"),
+            models.UniqueConstraint(fields=["configuration", "target"], condition=Q(is_voting_rule=True),
+                                    name="santa_rule_one_voting_rule_per_target"),
+        ]
 
     def clean(self):
         # clean() also runs when the field validation failed, so the policy can be missing or unknown here
@@ -1729,10 +1755,12 @@ class MachineRuleManager(models.Manager):
             "     and cardinality(pr.tag_ids) = 0 then {rank_all}"
             "  end as match_rank"
             "  from prepared_rules as pr"
-            "), filtered_rules as ("  # the rules in scope for the enrolled machine
-            "  select target_id, policy, cel_expr, custom_msg, custom_url, version, match_rank"
+            "), filtered_rules as ("  # the winner per target for the enrolled machine
+            "  select distinct on (target_id)"
+            "  target_id, policy, cel_expr, custom_msg, custom_url, version, match_rank"
             "  from ranked_rules"
             "  where match_rank is not null{policy_where}"
+            "  order by target_id, match_rank, {policy_rank}"
             "), machine_rules as ("  # current enrolled machine machine rules
             "   select target_id, policy, version, staged_removal"
             "   from santa_machinerule"
@@ -1796,6 +1824,7 @@ class MachineRuleManager(models.Manager):
                              rank_tag=ScopedConfigurationItem.RANK_TAG,
                              rank_all=ScopedConfigurationItem.RANK_ALL,
                              policy_where=policy_where,
+                             policy_rank=Rule.Policy.strictness_sql("policy"),
                              machine_rule_wheres=machine_rule_wheres)
         cursor = connection.cursor()
         cursor.execute(query, kwargs)

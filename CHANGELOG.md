@@ -114,6 +114,8 @@ The combined pattern is anchored once, at the start of the path, and the entries
 
 Four new PBAC actions manage the entries. `Santa::Action::"createScopedPathRegex"` takes the configuration as its resource. `"viewScopedPathRegex"`, `"updateScopedPathRegex"` and `"deleteScopedPathRegex"` take the entry, which has the configuration as its parent, so one policy covers every entry of a configuration. These actions have no Django permission. `"viewScopedPathRegex"` is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups, and the three actions that write are members of `"AdminActions"` only.
 
+A target can have several rules in a configuration now, one per policy at most. Each rule is a statement about a population, and Zentral keeps one rule per target for each machine: the narrowest match wins, then the strictest policy – Blocklist, Silent blocklist, CEL, Allowlist, Allowlist compiler. An exception to a block rule for a population is an allow rule for that population on the same target, and it works in Lockdown, where an exclusion alone left the machine without a rule. Nested exceptions go inside the rules, each level narrower than the previous one. A target with a voting rule takes no other rule.
+
 The scoped client modes and the scoped path regexes have a REST API now: `/api/santa/scoped_client_modes/` and `/api/santa/scoped_path_regexes/`, with the same four PBAC actions as the console and no Django permission. `configuration_id` is a required parameter of the two list endpoints, and an entry the caller is not allowed to see is absent from the results. An entry cannot change configuration: another one in the body of a `PUT` is a 400 – delete the entry and create it again. A `PUT` is a full update: the attributes Zentral validates together – the scope, and the event detail of a client mode – are required, so a check never reads a value the caller did not send.
 
 
@@ -131,6 +133,16 @@ Before, every scope field that was set had to match, and an exclusion in any fie
 * A rule with excluded primary users reaches the machines that report no primary user now. Before, such a machine got no rule with that field set.
 
 Review the rules and the entries that combine two fields before the upgrade: they are the ones whose reach changes.
+
+
+#### 🧨 One scoped client mode per mode, one scoped path regex per pattern and policy
+
+A Santa configuration has one `Monitor` and one `Lockdown` scoped client mode at most, and one scoped path regex per pattern and policy. Two entries in scope for a machine then always differ on the mode, or on the policy, and the name is not a tiebreak anymore. A leading `^` is removed from a path regex when the entry is saved, so `^/tmp/` and `/tmp/` are one pattern, and a pattern has at most 512 characters. The migration refuses a configuration with two entries of the same mode, or two entries with the same pattern and policy: merge them first.
+
+
+#### 🧨 A Santa ruleset rule is keyed by its target and its policy
+
+A rule whose policy changes in a ruleset is a new rule now, and the old one is deleted, with a `created` and a `deleted` audit event instead of an `updated` one. Two rules on the same target with different policies are accepted in one ruleset, and a conflict with a rule outside the ruleset is per policy. The rule form and the rule API refuse a second rule with the same policy on a target, and any rule on a target that has a voting rule.
 
 
 #### 🧨 The Santa rules endpoint refuses a PATCH

@@ -447,20 +447,22 @@ class RuleSetUpdate(APIView):
                     for tag_name in serializer.all_tag_names()}
         for configuration in serializer.configurations:
             rules_created = rules_deleted = rules_present = rules_updated = 0
-            found_target_pks = []
+            found_rule_pks = []
             for rule_dict in data["rules"]:
                 rule_defaults = rule_dict.copy()
                 target, _ = Target.objects.get_or_create(type=rule_defaults.pop("rule_type"),
                                                          identifier=rule_defaults.pop("identifier"))
-                found_target_pks.append(target.pk)
                 tags = set(all_tags[n] for n in rule_defaults.pop("tags", []))
                 excluded_tags = set(all_tags[n] for n in rule_defaults.pop("excluded_tags", []))
+                # the policy is part of the key: a rule with another policy is another statement
                 rule, rule_created = Rule.objects.get_or_create(
                     configuration=configuration,
                     ruleset=ruleset,
                     target=target,
+                    policy=Rule.Policy(rule_defaults["policy"]),
                     defaults=rule_defaults
                 )
+                found_rule_pks.append(rule.pk)
                 if rule_created:
                     rule.tags.set(tags)
                     rule.excluded_tags.set(excluded_tags)
@@ -472,13 +474,6 @@ class RuleSetUpdate(APIView):
                 else:
                     rule_updated = False
                     rule_updates = {}
-                    rule_policy = Rule.Policy(rule.policy)
-                    rule_defaults_policy = Rule.Policy(rule_defaults["policy"])
-                    if rule_policy != rule_defaults_policy:
-                        rule_updates.setdefault("removed", {})["policy"] = rule_policy.name
-                        rule.policy = rule_defaults_policy
-                        rule_updates.setdefault("added", {})["policy"] = rule_defaults_policy.name
-                        rule_updated = True
                     custom_msg = rule_defaults.get("custom_msg", "")
                     if rule.custom_msg != custom_msg:
                         if rule.custom_msg:
@@ -585,7 +580,7 @@ class RuleSetUpdate(APIView):
             for rule in (Rule.objects.select_related("target")
                                      .prefetch_related("tags")
                                      .filter(configuration=configuration, ruleset=ruleset)
-                                     .exclude(target__pk__in=found_target_pks)):
+                                     .exclude(pk__in=found_rule_pks)):
                 rule_update_events.append({
                     "rule": rule.serialize_for_event(),
                     "result": "deleted"

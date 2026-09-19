@@ -107,13 +107,14 @@ class SantaScopeResolutionTestCase(TestCase):
         for description, statement, machine, expected_rank in SCOPE_CASES:
             with self.subTest(description):
                 fields, tags = self.split_statement(statement)
-                entry = ScopedClientMode.objects.create(configuration=self.configuration,
+                configuration = force_configuration()
+                entry = ScopedClientMode.objects.create(configuration=configuration,
                                                         name=get_random_string(12),
                                                         client_mode=Configuration.LOCKDOWN_MODE,
                                                         **fields)
                 for field, field_tags in tags.items():
                     getattr(entry, field).set(field_tags)
-                entries = ScopedClientMode.objects.for_machine(self.configuration,
+                entries = ScopedClientMode.objects.for_machine(configuration,
                                                                machine["serial_number"],
                                                                machine.get("primary_user"),
                                                                self.tag_ids(machine))

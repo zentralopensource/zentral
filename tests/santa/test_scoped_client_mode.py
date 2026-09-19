@@ -1,6 +1,7 @@
 import json
 import uuid
 
+from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -59,7 +60,7 @@ class SantaScopedClientModeTestCase(TestCase):
 
     def test_machine_without_primary_user_is_not_matched_by_the_primary_user_fields(self):
         configuration = force_configuration()
-        self.force_scoped_client_mode(configuration, primary_users=["yolo"])
+        self.force_scoped_client_mode(configuration, lockdown=True, primary_users=["yolo"])
         everyone_but_yolo = self.force_scoped_client_mode(configuration, excluded_primary_users=["yolo"])
         self.assertEqual(self.for_machine(configuration), [everyone_but_yolo])
 
@@ -87,7 +88,6 @@ class SantaScopedClientModeTestCase(TestCase):
     # precedence
 
     def test_match_rank_is_the_level_that_decided(self):
-        configuration = force_configuration()
         tag = Tag.objects.create(name=get_random_string(12))
         for kwargs, rank in (
             ({"serial_numbers": ["0123456789"]}, ScopedClientMode.RANK_SERIAL),
@@ -95,6 +95,7 @@ class SantaScopedClientModeTestCase(TestCase):
             ({"tags": [tag]}, ScopedClientMode.RANK_TAG),
             ({}, ScopedClientMode.RANK_ALL),
         ):
+            configuration = force_configuration()
             scm = self.force_scoped_client_mode(configuration, **kwargs)
             in_scope = self.for_machine(configuration, primary_user="yolo", tag_ids=[tag.pk])
             self.assertEqual([e.match_rank for e in in_scope if e == scm], [rank])
@@ -136,12 +137,12 @@ class SantaScopedClientModeTestCase(TestCase):
         self.assertEqual(Configuration.resolve_scoped_client_mode(self.for_machine(configuration)),
                          lockdown)
 
-    def test_name_breaks_the_last_tie(self):
+    def test_one_entry_per_mode(self):
+        # the constraint is what makes rank then Lockdown a total order
         configuration = force_configuration()
-        first = self.force_scoped_client_mode(configuration, name="a")
-        self.force_scoped_client_mode(configuration, name="b")
-        self.assertEqual(Configuration.resolve_scoped_client_mode(self.for_machine(configuration)),
-                         first)
+        self.force_scoped_client_mode(configuration, name="a")
+        with self.assertRaises(IntegrityError):
+            self.force_scoped_client_mode(configuration, name="b")
 
     def test_no_entry(self):
         self.assertIsNone(Configuration.resolve_scoped_client_mode([]))

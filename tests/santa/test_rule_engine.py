@@ -461,6 +461,58 @@ class SantaRuleEngineTestCase(TestCase):
         target, rule, _ = self.create_and_serialize_for_iter_rule(configuration=configuration2)
         self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
 
+    # one winner per target
+
+    def force_machine(self, serial_number):
+        return EnrolledMachine.objects.create(enrollment=self.enrollment, hardware_uuid=uuid.uuid4(),
+                                              serial_number=serial_number,
+                                              client_mode=Configuration.MONITOR_MODE, santa_version="2022.1")
+
+    def test_the_narrowest_match_wins_the_target(self):
+        # block the fleet, allow vip, but not the vip contractors, but yes for S1, a vip contractor
+        target, block, _ = self.create_and_serialize_for_iter_rule(policy=Rule.Policy.BLOCKLIST)
+        vip, contractors = (Tag.objects.create(name=get_random_string(12)) for _ in range(2))
+        allow = Rule.objects.create(configuration=self.configuration, target=target,
+                                    policy=Rule.Policy.ALLOWLIST, serial_numbers=["S1"])
+        allow.tags.set([vip])
+        allow.excluded_tags.set([contractors])
+        for serial_number, tag_ids, policy, match_rank in (
+            ("S0", [], Rule.Policy.BLOCKLIST, ScopedClientMode.RANK_ALL),
+            ("S2", [vip.pk], Rule.Policy.ALLOWLIST, ScopedClientMode.RANK_TAG),
+            ("S3", [vip.pk, contractors.pk], Rule.Policy.BLOCKLIST, ScopedClientMode.RANK_ALL),
+            ("S1", [vip.pk, contractors.pk], Rule.Policy.ALLOWLIST, ScopedClientMode.RANK_SERIAL),
+        ):
+            with self.subTest(serial_number=serial_number):
+                rules = list(MachineRule.objects._iter_new_rules(self.force_machine(serial_number), tag_ids))
+                self.assertEqual([(r["policy"], r["match_rank"]) for r in rules], [(policy, match_rank)])
+
+    def test_the_strictest_policy_wins_at_equal_match(self):
+        target, block, _ = self.create_and_serialize_for_iter_rule(policy=Rule.Policy.BLOCKLIST)
+        fleet, vip = (Tag.objects.create(name=get_random_string(12)) for _ in range(2))
+        block.tags.set([fleet])
+        allow = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.ALLOWLIST)
+        allow.tags.set([vip])
+        machine = self.force_machine("S9")
+        rules = list(MachineRule.objects._iter_new_rules(machine, [fleet.pk, vip.pk]))
+        self.assertEqual([r["policy"] for r in rules], [Rule.Policy.BLOCKLIST])
+        # at equal match, the exception is an exclusion on the stricter rule
+        block.excluded_tags.set([vip])
+        rules = list(MachineRule.objects._iter_new_rules(machine, [fleet.pk, vip.pk]))
+        self.assertEqual([r["policy"] for r in rules], [Rule.Policy.ALLOWLIST])
+
+    def test_a_winner_change_sends_the_new_policy(self):
+        target, block, _ = self.create_and_serialize_for_iter_rule(policy=Rule.Policy.BLOCKLIST)
+        vip = Tag.objects.create(name=get_random_string(12))
+        allow = Rule.objects.create(configuration=self.configuration, target=target, policy=Rule.Policy.ALLOWLIST)
+        allow.tags.set([vip])
+        MachineRule.objects.create(enrolled_machine=self.enrolled_machine, target=target,
+                                   policy=block.policy, version=block.version, cursor=None)
+        self.assertEqual(list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [])), [])
+        # the machine gets the tag: the allow rule wins over the block the ledger holds
+        rules = list(MachineRule.objects._iter_new_rules(self.enrolled_machine, [vip.pk]))
+        self.assertEqual([(r["policy"], r["match_rank"]) for r in rules],
+                         [(Rule.Policy.ALLOWLIST, ScopedClientMode.RANK_TAG)])
+
     def test_one_next_rule(self):
         target, rule, serialized_rule = self.create_and_serialize_rule()
         for _ in range(2):

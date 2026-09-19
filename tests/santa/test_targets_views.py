@@ -9,7 +9,7 @@ from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import File, Source
-from zentral.contrib.santa.models import Target, TargetCounter, TargetState
+from zentral.contrib.santa.models import Rule, Target, TargetCounter, TargetState
 from zentral.contrib.santa.urls import urlpatterns as santa_urlpatterns
 from zentral.contrib.santa.views.targets import EventsMixin
 from zentral.core.stores.conf import stores
@@ -469,6 +469,37 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
+
+    def test_binary_target_configuration_with_a_rule_keeps_the_add_rule_link(self):
+        # a target takes one rule per policy
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+        self.login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
+
+    def test_binary_target_configuration_with_a_voting_rule_has_no_add_rule_link(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST,
+                            is_voting_rule=True)
+        self.login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertNotIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
+
+    def test_binary_target_configuration_with_a_voting_rule_on_another_target_keeps_the_add_rule_link(self):
+        # the three conditions have to be met by one rule, not by a voting rule on another target
+        # and a rule of the same type on this one
+        configuration = force_configuration()
+        other_target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        Rule.objects.create(configuration=configuration, target=other_target, policy=Rule.Policy.ALLOWLIST,
+                            is_voting_rule=True)
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+        self.login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
     def test_binary_target_events_redirect(self):
         self.login_redirect("binary_events", self.file_sha256)

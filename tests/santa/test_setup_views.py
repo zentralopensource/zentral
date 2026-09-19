@@ -1583,15 +1583,38 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                          {"target_type": Target.Type.BINARY,
                           "target_identifier": binary_hash,
                           "policy": Rule.Policy.ALLOWLIST}, follow=True)
-        # conflict
+        # the same policy is a conflict
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.BINARY,
+                                     "target_identifier": binary_hash,
+                                     "policy": Rule.Policy.ALLOWLIST}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+        form = response.context["form"]
+        self.assertEqual(form.errors,
+                         {'__all__': ['A rule with the Allowlist policy already exists for this target']})
+        # another policy is another statement about the target
         response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
                                     {"target_type": Target.Type.BINARY,
                                      "target_identifier": binary_hash,
                                      "policy": Rule.Policy.BLOCKLIST}, follow=True)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "santa/rule_form.html")
-        form = response.context["form"]
-        self.assertEqual(form.errors, {'__all__': ['A rule for this target already exists']})
+        self.assertEqual(Rule.objects.filter(configuration=configuration, target__identifier=binary_hash).count(), 2)
+
+    def test_create_configuration_rule_on_a_target_with_a_voting_rule(self):
+        self.login("santa.add_configuration", "santa.view_configuration",
+                   "santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        voting_rule = self._force_rule(Target.Type.BINARY, configuration=configuration)
+        voting_rule.is_voting_rule = True
+        voting_rule.save()
+        response = self.client.post(reverse("santa:create_configuration_rule", args=(configuration.pk,)),
+                                    {"target_type": Target.Type.BINARY,
+                                     "target_identifier": voting_rule.target.identifier,
+                                     "policy": Rule.Policy.BLOCKLIST}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["form"].errors,
+                         {'__all__': ['This target has a voting rule. Reset the target first.']})
 
     def test_create_configuration_rule_scope_conflict(self):
         self.login("santa.add_configuration", "santa.view_configuration",
@@ -1617,6 +1640,21 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                                        'excluded_tags': [f"'{tags[0].name}' both included and excluded"]})
 
     # update configuration rule
+
+    def test_update_configuration_rule_to_a_policy_another_rule_has(self):
+        self.login("santa.change_rule", "santa.view_rule")
+        configuration = force_configuration()
+        allow_rule = self._force_rule(Target.Type.BINARY, configuration=configuration)
+        Rule.objects.create(configuration=configuration, target=allow_rule.target, policy=Rule.Policy.BLOCKLIST)
+        response = self.client.post(
+            reverse("santa:update_configuration_rule", args=(configuration.pk, allow_rule.pk)),
+            {"policy": Rule.Policy.BLOCKLIST}, follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["form"].errors,
+                         {"policy": ["A rule with the Blocklist policy already exists for this target"]})
+        allow_rule.refresh_from_db()
+        self.assertEqual(allow_rule.policy, Rule.Policy.ALLOWLIST)
 
     def test_update_configuration_rule(self):
         self.login("santa.add_configuration", "santa.view_configuration",
@@ -2010,8 +2048,23 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/pick_rule_binary.html")
         binaries = response.context["binaries"]
-        self.assertEqual(binaries, [(self.file, None)])
+        self.assertEqual(binaries, [(self.file, [])])
         self.assertContains(response, self.file.sha_256)
+
+    def test_pick_rule_binary_with_two_rules(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file.sha_256)
+        allow = Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.ALLOWLIST)
+        block = Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+        self.login("santa.add_rule")
+        response = self.client.get(reverse("santa:pick_rule_binary", args=(configuration.pk,)),
+                                   {"name": self.file_name})
+        self.assertEqual(response.status_code, 200)
+        # the strictest first
+        self.assertEqual(response.context["binaries"], [(self.file, [block, allow])])
+        self.assertContains(response, "Update Blocklist rule")
+        self.assertContains(response, "Update Allowlist rule")
+        self.assertContains(response, "Create rule")
 
     # pick rule cdhash
 
@@ -2058,7 +2111,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/pick_rule_certificate.html")
         certificates = response.context["certificates"]
-        self.assertEqual(certificates, [(self.file.signed_by, None)])
+        self.assertEqual(certificates, [(self.file.signed_by, [])])
 
     # pick rule team id
 

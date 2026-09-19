@@ -25,6 +25,7 @@ from .utils import (
     force_realm_group,
     force_realm_user,
     force_target,
+    force_target_state,
     force_voting_group,
 )
 
@@ -1129,6 +1130,23 @@ class SantaBallotBoxTestCase(TestCase):
                                   'type': 'TEAMID'}}}]
         )
         self.assertEqual(configuration.rule_set.count(), 0)
+
+    def test_update_voting_rules_skip_a_target_with_a_non_voting_rule(self):
+        configuration = force_configuration()
+        _, realm_user = force_realm_user()
+        force_target_state(configuration=configuration, target=self.cdhash_target,
+                           state=TargetState.State.PARTIALLY_ALLOWLISTED)
+        force_ballot(self.cdhash_target, realm_user, [(configuration, True, 1)])
+        Rule.objects.create(configuration=configuration, target=self.cdhash_target, policy=Rule.Policy.BLOCKLIST)
+        self.assertEqual(list(update_voting_rules([configuration])), [])
+        self.assertEqual(configuration.rule_set.count(), 1)
+        # without it, the vote makes a voting rule
+        Rule.objects.filter(configuration=configuration).delete()
+        self.assertEqual([p["result"] for p in update_voting_rules([configuration])], ["created"])
+        rule = configuration.rule_set.get()
+        self.assertTrue(rule.is_voting_rule)
+        self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST)
+        self.assertEqual(rule.primary_users, [realm_user.username])
 
     def test_update_voting_rules_keep_non_voting_rule(self):
         configuration = force_configuration()

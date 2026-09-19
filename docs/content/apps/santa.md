@@ -123,7 +123,7 @@ The payload is an array of [NotificationSettingItem](https://developer.apple.com
 
 A Zentral Santa rule combines a *target* and a *policy*. The target can be of type `cdhash`, `Binary`, `Signing ID`, `Certificate` or `Team ID`. A target is uniquely identified by its type, and its identifier: a sha256 hexdigest for `Binary` and `Certificate`, a 40 character hexdigest for `cdhash`, `TEAMID:SIGNINGID` for `Signing ID`, and the 10 character team ID for `Team ID`. `Bundle` is a sixth type that only exists in Zentral, see below. The policy can be one of `Allowlist`, `Allowlist compiler`, `Blocklist`, `Silent blocklist` and `CEL`.
 
-To avoid conflicts, there is at most **one rule per target** for each configuration.
+A configuration has at most **one rule per target and policy**. Several rules on one target are several statements about it, and [Rule resolution](#rule-resolution) picks one for each machine.
 
 **Rule precedence** applies. You can have a `Blocklist` rule on a certificate, and an `Allowlist` rule on one of the binaries signed using the certificate.
 
@@ -192,6 +192,41 @@ A machine that reports no primary user is not matched by the primary user fields
 
 An exception is written for one machine or one person, and a rule for a population. The order of the fields lets the exception win: a listed serial number keeps the rule when a tag excludes the machine, and an excluded serial number loses it when a tag matches the machine.
 
+### Rule resolution
+
+A target can have several rules in a configuration, one per policy at most. Each rule is a statement about a population. For one machine, Zentral keeps one rule per target, the first one in this order:
+
+1. The narrowest match: the rule that its serial number decided, then its primary user, then a tag, then a rule with no scope field.
+2. The strictest policy: `Blocklist`, `Silent blocklist`, `CEL`, `Allowlist`, `Allowlist compiler`.
+
+The candidates for one target all have different policies, so the second step never ties.
+
+| Order | Policy | Position |
+| --- | --- | --- |
+| 1 | `Blocklist` | The strictest. |
+| 2 | `Silent blocklist` | The same decision, without the notification. The loud block first, so a machine under both gets the message. |
+| 3 | `CEL` | Decides at run time, and can block: below an unconditional block, above an unconditional allow. |
+| 4 | `Allowlist` | |
+| 5 | `Allowlist compiler` | Allows the target and what the process writes: the most permissive. |
+
+Nested exceptions go inside the rules, each level narrower than the previous one. Four levels of intent for one Team ID: block the fleet, allow the tag `vip`, but not the `vip` machines that are `contractors`, but yes for `S1`, a vip contractor:
+
+| Rule | Policy | Fields |
+| --- | --- | --- |
+| A | `Blocklist` | none, every machine |
+| B | `Allowlist` | tags `vip`, serial numbers `S1`, excluded tags `contractors` |
+
+| Machine | B | Candidates | Winner | Result |
+| --- | --- | --- | --- | --- |
+| tag `fleet` | not matched | A | A | blocked |
+| tag `vip` | matched by the tag | A, B | B, the narrower match | runs |
+| tags `vip` and `contractors` | out, the exclusion wins at the tag level | A | A | blocked |
+| `S1`, tags `vip` and `contractors` | matched by the serial number | A, B | B, the narrower match | runs |
+
+An exception to a population rule needs no exclusion on it when it is narrower. At equal match the stricter policy wins: a `Blocklist` for the tag `fleet` and an `Allowlist` for the tag `vip` block a machine with the two tags, and the exception needs an excluded tag `vip` on the block rule.
+
+A target with a voting rule takes no other rule, and a target with a rule takes no vote. Reset the target to change that.
+
 ## Scoped client modes
 
 A Santa configuration gives the same client mode to all its machines. A scoped client mode gives a different mode to some of them. Open the configuration in Setup > Santa configurations, and use the [Create] button of the Scoped client mode section.
@@ -210,7 +245,8 @@ More than one entry can be in scope for a machine. Zentral sorts the entries tha
 
 1. The narrowest match wins: the entry that its serial number decided, then its primary user, then a tag, then an entry with no scope field. An entry with serial numbers and tags is a serial number match for a listed machine, and a tag match for a machine it reaches by a tag.
 2. `Lockdown` wins over `Monitor`.
-3. The names are compared, and the first name in alphabetical order wins.
+
+A configuration has one `Monitor` entry and one `Lockdown` entry at most, so two entries in scope for a machine always have different modes, and the second step never ties. Nested exceptions go inside the entry, each level narrower than the previous one, as for a [rule](#rule-scope).
 
 An exception is usually written for one machine or for one user, and a policy for a population. This order lets the exception win. If no entry is in scope, the machine keeps the client mode of the configuration.
 
@@ -273,7 +309,7 @@ Zentral combines the pattern of the configuration and the patterns of the entrie
 ^(?:(?:the configuration)|(?:the first entry)|(?:the second entry))
 ```
 
-Two entries with the same pattern are two statements about one path, like two rules for one binary. For each pattern, Zentral keeps one entry for the machine: the narrowest match wins, and at equal match `Block` wins over `Allow`. A leading `^` does not make a different pattern, because the combination removes it. Every other entry in scope is included.
+Two entries with the same pattern are two statements about one path, like two rules for one binary. A configuration has one entry per pattern and policy at most. For each pattern, Zentral keeps one entry for the machine: the narrowest match wins, and at equal match `Block` wins over `Allow`. A leading `^` is removed when the entry is saved, because the combination removes it: `^/tmp/` and `/tmp/` are one pattern. Every other entry in scope is included.
 
 | Entries for `/Users/.*/Downloads/` | Fleet machine | Machine with the tag `devs` |
 | --- | --- | --- |
@@ -293,6 +329,7 @@ Santa uses the ICU regular expression syntax. Zentral compiles each pattern with
 
 Three limits come from the composition:
 
+* **At most 512 characters.** A configuration has one entry per pattern and policy, and the pattern is part of that key. Split a long alternation into entries.
 * **No capture group.** Each entry becomes a group of the combined pattern, and a capture group changes the number of the groups after it. Use a group that does not capture: `(?:abc)`.
 * **Inline flags must have a scope.** Write `(?i:abc)`, not `(?i)abc`.
 * **The pattern must not match an empty path.** `(?:)`, `|`, `.*` and `(?:abc)?` all match an empty path. One of them in the combination makes it match every path, because the combination is anchored and an empty match is a match at the start. Use `.+` and not `.*`.
@@ -919,11 +956,11 @@ A ruleset is a set of rules, with a unique name, that can be applied to some Zen
 
 Ruleset updates are applied idempotently. Rules will be added, updated or deleted in the scoped configurations to match the definition of the posted ruleset.
 
-The key for each rule is the target (type, identifier). Only **one rule** can exist **for a given target** in a configuration.
+The key for each rule is the target (type, identifier) and the policy. Only **one rule** can exist **for a given target and policy** in a configuration. A rule whose policy changes in the ruleset is a new rule, and the old one is deleted.
 
 Ruleset allows to automatically manage a set of rules in a configuration, without modifying rules from a different ruleset, or manually created in Zentral.
 
-But if a manual rule or a rule from a different ruleset on a given target already exists, adding a rule on the same target in a ruleset will create a conflict, and the update will be rejected.
+But if a manual rule or a rule from a different ruleset on a given target and policy already exists, or a voting rule on the target, adding a rule on the same target and policy in a ruleset will create a conflict, and the update will be rejected.
 
 Finally, rules belonging to a ruleset cannot be manually edited in Zentral.
 
@@ -1603,7 +1640,7 @@ Response:
     * `configuration`: the ID of the Santa configuration.
     * `name`: unique in the configuration.
     * `policy`: `ALLOW` or `BLOCK`.
-    * `regex`: see [Accepted patterns](#accepted-patterns). A pattern that Zentral cannot compile, a capture group, an inline flag group without a scope and a pattern that matches an empty path are all a 400.
+    * `regex`: see [Accepted patterns](#accepted-patterns). A pattern that Zentral cannot compile, a capture group, an inline flag group without a scope, a pattern that matches an empty path and a pattern longer than 512 characters are all a 400. A leading `^` is removed.
 * Optional attributes:
     * `description`
     * `serial_numbers`, `excluded_serial_numbers`, `primary_users`, `excluded_primary_users`: arrays of strings.

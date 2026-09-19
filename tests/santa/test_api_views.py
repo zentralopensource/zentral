@@ -732,7 +732,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "rules": [
                 {"rule_type": "BINARY",
                  "identifier": data["rules"][0]["identifier"],
-                 "policy": "ALLOWLIST"}
+                 "policy": "BLOCKLIST"}
             ]
         }
         response = self.post(url, data2)
@@ -745,6 +745,16 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(self.configuration.rule_set.count(), 1)
         self.assertEqual(self.configuration2.rule_set.count(), 1)
         self.assertEqual(RuleSet.objects.filter(name=data2["name"]).count(), 0)
+
+        # another policy on the same target is another statement, not a conflict
+        data2["rules"][0]["policy"] = "ALLOWLIST"
+        response = self.post(url, data2)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self.configuration.rule_set.filter(target__identifier=data["rules"][0]["identifier"]).count(), 2
+        )
+        RuleSet.objects.get(name=data2["name"]).delete()
+        self.assertEqual(self.configuration.rule_set.count(), 1)
 
         # new scoped ruleset
         data2["rules"][0]["identifier"] = get_random_string(64, "0123456789abcdef")
@@ -817,7 +827,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         json_response = response.json()
         self.assertEqual(
             json_response,
-            {"rules": {"1": {"non_field_errors": [f'BINARY/{sha256}: duplicated']}}}
+            {"rules": {"1": {"non_field_errors": [f'BINARY/{sha256}/ALLOWLIST: duplicated']}}}
         )
 
         # BUNDLE not allowed
@@ -886,6 +896,32 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             json_response,
             {"rules": {"0": {"non_field_errors": ["Conflict between tags and excluded_tags"]}}}
         )
+
+    def test_ruleset_update_policy_change_is_a_new_rule(self):
+        # the policy is part of the key: the old statement goes, a new one comes
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+        url = reverse("santa_api:ruleset_update")
+        sha256 = get_random_string(64, "0123456789abcdef")
+        data = {"name": get_random_string(12),
+                "configurations": [self.configuration.name],
+                "rules": [{"rule_type": "BINARY", "identifier": sha256, "policy": "ALLOWLIST"}]}
+        response = self.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        allow_rule = self.configuration.rule_set.get(target__identifier=sha256)
+        data["rules"][0]["policy"] = "BLOCKLIST"
+        response = self.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        rule_results = response.json()["configurations"][0]["rule_results"]
+        self.assertEqual(rule_results, {"created": 1, "deleted": 1, "present": 0, "updated": 0})
+        block_rule = self.configuration.rule_set.get(target__identifier=sha256)
+        self.assertNotEqual(block_rule.pk, allow_rule.pk)
+        self.assertEqual(block_rule.policy, Rule.Policy.BLOCKLIST)
+        # two policies in one ruleset are two rules
+        data["rules"].append({"rule_type": "BINARY", "identifier": sha256, "policy": "ALLOWLIST"})
+        response = self.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.configuration.rule_set.filter(target__identifier=sha256).count(), 2)
 
     def test_ruleset_update_compiler_policy_rule_type_error(self):
         self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
@@ -1223,7 +1259,42 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         }
         response = self.post(reverse("santa_api:rules"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {'target': ['rule already exists for this target']})
+        self.assertEqual(
+            response.json(),
+            {'target': [f'A rule with the {Rule.Policy(rule.policy).label} policy already exists for this target']}
+        )
+        self.assertEqual(Rule.objects.count(), 1)
+
+    def test_create_rule_with_another_policy_on_the_same_target(self):
+        configuration = self.force_configuration()
+        rule = self.force_rule(configuration=configuration)
+        self.assertEqual(rule.policy, Rule.Policy.ALLOWLIST)
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": configuration.pk,
+            "policy": Rule.Policy.BLOCKLIST,
+            "target_type": rule.target.type,
+            "target_identifier": rule.target.identifier
+        }
+        response = self.post(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Rule.objects.filter(configuration=configuration, target=rule.target).count(), 2)
+
+    def test_create_rule_on_a_target_with_a_voting_rule_failed(self):
+        configuration = self.force_configuration()
+        rule = self.force_rule(configuration=configuration)
+        rule.is_voting_rule = True
+        rule.save()
+        self.set_permissions("santa.add_rule")
+        data = {
+            "configuration": configuration.pk,
+            "policy": Rule.Policy.ALLOWLIST,
+            "target_type": rule.target.type,
+            "target_identifier": rule.target.identifier
+        }
+        response = self.post(reverse("santa_api:rules"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {'target': ['This target has a voting rule. Reset the target first.']})
         self.assertEqual(Rule.objects.count(), 1)
 
     def test_create_rule_cdhash_failed(self):
@@ -1846,13 +1917,16 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("santa.change_rule")
         data = {
             "configuration": configuration2.pk,
-            "policy": Rule.Policy.ALLOWLIST,
+            "policy": rule2.policy,
             "target_type": rule2.target.type,
             "target_identifier": rule2.target.identifier,
         }
         response = self.put(reverse("santa_api:rule", args=(rule.pk,)), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {"target": ["rule already exists for this target"]})
+        self.assertEqual(
+            response.json(),
+            {"target": [f"A rule with the {Rule.Policy(rule2.policy).label} policy already exists for this target"]}
+        )
         rule.refresh_from_db()
         self.assertEqual(rule.version, 1)
 

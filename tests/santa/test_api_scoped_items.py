@@ -27,6 +27,8 @@ class ScopedItemAPITestMixin:
 
     # to be defined by the subclasses
     model = None
+    # the entries one configuration can hold in the list tests
+    list_item_count = 5
     list_url_name = None
     detail_url_name = None
     action_suffix = None
@@ -71,6 +73,9 @@ class ScopedItemAPITestMixin:
 
     def full_item_data(self, configuration, **kwargs):
         return {"configuration": configuration.pk, **self.update_defaults, **self.item_data(**kwargs)}
+
+    def duplicate_name_data(self, item):
+        return self.item_data(name=item.name)
 
     def force_item(self, configuration, **kwargs):
         tags = kwargs.pop("tags", None)
@@ -177,14 +182,14 @@ class ScopedItemAPITestMixin:
         configuration = force_configuration()
         # lowercase names sort the same way in python and in postgres
         items = [self.force_item(configuration, name=get_random_string(12, allowed_chars=ascii_lowercase))
-                 for _ in range(5)]
+                 for _ in range(self.list_item_count)]
         self.set_policy(self.all_actions_policy())
         expected = [i.pk for i in sorted(items, key=lambda i: i.name)]
         base_url = self.list_url() + f"?configuration_id={configuration.pk}"
         response = self.get(base_url)
         self.assertEqual(response.status_code, 200)
         self.assertEqual([r["id"] for r in response.json()["results"]], expected)
-        url = base_url + "&limit=2"
+        url = base_url + f"&limit={self.list_item_count // 2}"
         seen = []
         while url:
             response = self.get(url)
@@ -199,16 +204,16 @@ class ScopedItemAPITestMixin:
         # the decisions are taken before the page is cut, so a page is full of entries the
         # caller can see and not a page with the ones it cannot removed from it
         configuration = force_configuration()
-        items = [self.force_item(configuration) for _ in range(4)]
-        allowed = items[:2]
+        items = [self.force_item(configuration) for _ in range(self.list_item_count)]
+        allowed = items[:self.list_item_count // 2]
         self.set_policy("".join(
             self.policy("view", resource=f'resource == Santa::{self.model.__name__}::"{i.pk}"')
             for i in allowed
         ))
-        response = self.get(self.list_url() + f"?configuration_id={configuration.pk}&limit=2")
+        response = self.get(self.list_url() + f"?configuration_id={configuration.pk}&limit={len(allowed)}")
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["count"], len(allowed))
         self.assertIsNone(payload["next"])
         self.assertEqual(sorted(r["id"] for r in payload["results"]),
                          sorted(i.pk for i in allowed))
@@ -279,7 +284,7 @@ class ScopedItemAPITestMixin:
         item = self.force_item(configuration)
         self.set_policy(self.all_actions_policy())
         response = self.post(self.list_url(),
-                             {"configuration": configuration.pk, **self.item_data(name=item.name)})
+                             {"configuration": configuration.pk, **self.duplicate_name_data(item)})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"non_field_errors": [DUPLICATE_NAME]})
 
@@ -537,11 +542,42 @@ class SantaAPIScopedClientModeTestCase(ScopedItemAPITestMixin, TestCase, LoginCa
                            event_detail_source=ScopedClientMode.EventDetailSource.INHERIT,
                            event_detail_url="", event_detail_text="")
 
+    # one entry per mode: a configuration holds a Lockdown entry and a Monitor entry at most
+    list_item_count = 2
+
     def item_data(self, **kwargs):
         data = {"name": get_random_string(12),
                 "client_mode": Configuration.LOCKDOWN_MODE}
         data.update(kwargs)
         return data
+
+    def duplicate_name_data(self, item):
+        # only the name collides: the other mode is free
+        return self.item_data(name=item.name, client_mode=Configuration.MONITOR_MODE)
+
+    def force_item(self, configuration, **kwargs):
+        if "client_mode" not in kwargs and self.model.objects.filter(
+            configuration=configuration, client_mode=Configuration.LOCKDOWN_MODE
+        ).exists():
+            kwargs["client_mode"] = Configuration.MONITOR_MODE
+        return super().force_item(configuration, **kwargs)
+
+    def test_create_a_second_entry_with_the_same_mode_is_a_400(self):
+        configuration = force_configuration()
+        self.force_item(configuration)
+        self.set_policy(self.all_actions_policy())
+        response = self.post(self.list_url(), {"configuration": configuration.pk, **self.item_data()})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(),
+                         {"non_field_errors": ["The fields configuration, client_mode must make a unique set."]})
+
+    def test_create_the_other_mode(self):
+        configuration = force_configuration()
+        self.force_item(configuration)
+        self.set_policy(self.all_actions_policy())
+        response = self.post(self.list_url(), {"configuration": configuration.pk,
+                                               **self.item_data(client_mode=Configuration.MONITOR_MODE)})
+        self.assertEqual(response.status_code, 201)
 
     def test_create_a_custom_event_detail_without_a_url(self):
         configuration = force_configuration()
@@ -603,10 +639,18 @@ class SantaAPIScopedPathRegexTestCase(ScopedItemAPITestMixin, TestCase, LoginCas
     detail_url_name = "scoped_path_regex"
     action_suffix = "ScopedPathRegex"
 
+    def test_create_a_pattern_longer_than_512_characters_is_a_400(self):
+        configuration = force_configuration()
+        self.set_policy(self.all_actions_policy())
+        response = self.post(self.list_url(),
+                             {"configuration": configuration.pk, **self.item_data(regex="/a/" + "b" * 510)})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"regex": ["Ensure this field has no more than 512 characters."]})
+
     def item_data(self, **kwargs):
         data = {"name": get_random_string(12),
                 "policy": ScopedPathRegex.Policy.ALLOW,
-                "regex": "/Library/Example/"}
+                "regex": f"/Library/Example/{get_random_string(8)}/"}
         data.update(kwargs)
         return data
 

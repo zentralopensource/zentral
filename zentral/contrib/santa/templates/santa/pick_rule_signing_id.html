@@ -30,23 +30,22 @@
     </tr>
   </thead>
   <tbody>
-    {% for signing_id, rule in signing_ids %}
+    {% for signing_id, rules in signing_ids %}
     <tr>
       <td><code>{{ signing_id.signing_id }}</code></td>
       <td>
-        {% if rule %}
+        {% for rule in rules %}
         {% if not rule.ruleset %}
         <a class="btn btn-outline-secondary" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
-          Update rule
+          Update {{ rule.get_policy_display }} rule
         </a>
         {% else %}
-        Ruleset rule exists
+        <span class="text-secondary">{{ rule.get_policy_display }} ruleset rule</span>
         {% endif %}
-        {% else %}
+        {% endfor %}
         <a class="btn btn-primary" href="{% url 'santa:create_configuration_rule' configuration.pk %}?sig={{ signing_id.signing_id }}">
           Create rule
         </a>
-        {% endif %}
       </td>
     </tr>
     {% endfor %}

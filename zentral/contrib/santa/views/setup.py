@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from urllib.parse import urlencode
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import transaction
@@ -602,6 +603,20 @@ class DeleteConfigurationRuleView(PermissionRequiredMixin, DeleteView):
         return reverse("santa:configuration_rules", args=(self.kwargs["configuration_pk"],))
 
 
+def _rules_by_identifier(configuration, target_type, identifiers):
+    # a target has one rule per policy at most, shown strictest first
+    rules_by_identifier = defaultdict(list)
+    for rule in (Rule.objects.select_related("target", "ruleset")
+                             .filter(configuration=configuration,
+                                     target__type=target_type,
+                                     target__identifier__in=identifiers)):
+        rules_by_identifier[rule.target.identifier].append(rule)
+    strictest_first = Rule.Policy.strictest_first()
+    for rules in rules_by_identifier.values():
+        rules.sort(key=lambda rule: strictest_first.index(Rule.Policy(rule.policy)))
+    return rules_by_identifier
+
+
 class PickRuleBinaryView(PermissionRequiredMixin, TemplateView):
     permission_required = "santa.add_rule"
     template_name = "santa/pick_rule_binary.html"
@@ -616,14 +631,12 @@ class PickRuleBinaryView(PermissionRequiredMixin, TemplateView):
         form = BinarySearchForm(self.request.GET)
         form.is_valid()
         binaries = list(File.objects.search(**form.cleaned_data))
-        existing_rules = {
-            rule.target.identifier: rule
-            for rule in Rule.objects.select_related("target")
-                                    .filter(configuration=self.configuration,
-                                            target__type=Target.Type.BINARY,
-                                            target__identifier__in=[binary.sha_256 for binary in binaries])
-        }
-        ctx['binaries'] = [(binary, existing_rules.get(binary.sha_256)) for binary in binaries]
+        rules_by_identifier = _rules_by_identifier(
+            self.configuration, Target.Type.BINARY,
+            [binary.sha_256 for binary in binaries]
+        )
+        ctx['binaries'] = [(binary, rules_by_identifier.get(binary.sha_256, []))
+                           for binary in binaries]
         ctx['form'] = form
         return ctx
 
@@ -642,15 +655,12 @@ class PickRuleCertificateView(PermissionRequiredMixin, TemplateView):
         form = CertificateSearchForm(self.request.GET)
         form.is_valid()
         certificates = list(File.objects.search_certificates(**form.cleaned_data))
-        existing_rules = {
-            rule.target.identifier: rule
-            for rule in Rule.objects.select_related("target")
-                                    .filter(configuration=self.configuration,
-                                            target__type=Target.Type.CERTIFICATE,
-                                            target__identifier__in=[certificate.sha_256
-                                                                    for certificate in certificates])
-        }
-        ctx['certificates'] = [(certificate, existing_rules.get(certificate.sha_256)) for certificate in certificates]
+        rules_by_identifier = _rules_by_identifier(
+            self.configuration, Target.Type.CERTIFICATE,
+            [certificate.sha_256 for certificate in certificates]
+        )
+        ctx['certificates'] = [(certificate, rules_by_identifier.get(certificate.sha_256, []))
+                               for certificate in certificates]
         ctx['form'] = form
         return ctx
 
@@ -669,15 +679,12 @@ class PickRuleTeamIDView(PermissionRequiredMixin, TemplateView):
         form = TeamIDSearchForm(self.request.GET)
         form.is_valid()
         team_ids = Target.objects.search_teamid_objects(**form.cleaned_data)
-        existing_rules = {
-            rule.target.identifier: rule
-            for rule in Rule.objects.select_related("target")
-                                    .filter(configuration=self.configuration,
-                                            target__type=Target.Type.TEAM_ID,
-                                            target__identifier__in=[team_id.organizational_unit
-                                                                    for team_id in team_ids])
-        }
-        ctx['team_ids'] = [(team_id, existing_rules.get(team_id.organizational_unit)) for team_id in team_ids]
+        rules_by_identifier = _rules_by_identifier(
+            self.configuration, Target.Type.TEAM_ID,
+            [team_id.organizational_unit for team_id in team_ids]
+        )
+        ctx['team_ids'] = [(team_id, rules_by_identifier.get(team_id.organizational_unit, []))
+                           for team_id in team_ids]
         ctx['form'] = form
         return ctx
 
@@ -696,15 +703,12 @@ class PickRuleCDHashView(PermissionRequiredMixin, TemplateView):
         form = CDHashSearchForm(self.request.GET)
         form.is_valid()
         cdhashes = Target.objects.search_cdhash_objects(**form.cleaned_data)
-        existing_rules = {
-            rule.target.identifier: rule
-            for rule in Rule.objects.select_related("target")
-                                    .filter(configuration=self.configuration,
-                                            target__type=Target.Type.CDHASH,
-                                            target__identifier__in=[cdhash.cdhash
-                                                                    for cdhash in cdhashes])
-        }
-        ctx['cdhashes'] = [(cdhash, existing_rules.get(cdhash.cdhash)) for cdhash in cdhashes]
+        rules_by_identifier = _rules_by_identifier(
+            self.configuration, Target.Type.CDHASH,
+            [cdhash.cdhash for cdhash in cdhashes]
+        )
+        ctx['cdhashes'] = [(cdhash, rules_by_identifier.get(cdhash.cdhash, []))
+                           for cdhash in cdhashes]
         ctx['form'] = form
         return ctx
 
@@ -723,14 +727,11 @@ class PickRuleSigningIDView(PermissionRequiredMixin, TemplateView):
         form = SigningIDSearchForm(self.request.GET)
         form.is_valid()
         signing_ids = Target.objects.search_signingid_objects(**form.cleaned_data)
-        existing_rules = {
-            rule.target.identifier: rule
-            for rule in Rule.objects.select_related("target")
-                                    .filter(configuration=self.configuration,
-                                            target__type=Target.Type.SIGNING_ID,
-                                            target__identifier__in=[signing_id.signing_id
-                                                                    for signing_id in signing_ids])
-        }
-        ctx['signing_ids'] = [(signing_id, existing_rules.get(signing_id.signing_id)) for signing_id in signing_ids]
+        rules_by_identifier = _rules_by_identifier(
+            self.configuration, Target.Type.SIGNING_ID,
+            [signing_id.signing_id for signing_id in signing_ids]
+        )
+        ctx['signing_ids'] = [(signing_id, rules_by_identifier.get(signing_id.signing_id, []))
+                              for signing_id in signing_ids]
         ctx['form'] = form
         return ctx

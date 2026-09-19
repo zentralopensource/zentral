@@ -484,12 +484,19 @@ def update_voting_rules(configurations):
         "  from rule_target_states rts"
         "  group by rts.target_id, rts.configuration_id"
         "), rules as ("
-        "  select target_id, configuration_id,"
+        "  select ars.target_id, ars.configuration_id,"
         # ALLOWLIST or BLOCKLIST
-        "  case when state >= 50 then 1 else 2 end policy,"
+        "  case when ars.state >= 50 then 1 else 2 end policy,"
         # primary_users only for PARTIALLY_ALLOWLISTED
-        "  case when state = 50 then users else array[]::text[] end primary_users"
-        "  from aggregated_rule_target_states"
+        "  case when ars.state = 50 then ars.users else array[]::text[] end primary_users"
+        "  from aggregated_rule_target_states ars"
+        # a target with a non-voting rule takes no voting rule. The ballot box refuses the vote
+        # too, and this keeps a stale voting rule from surviving a rule added later.
+        "  where not exists ("
+        "    select 1 from santa_rule nvr"
+        "    where nvr.target_id = ars.target_id and nvr.configuration_id = ars.configuration_id"
+        "    and not nvr.is_voting_rule"
+        "  )"
         "), inserted as ("
         " insert into santa_rule"
         '  ("target_id", "configuration_id", "policy", "cel_expr",'
@@ -503,7 +510,8 @@ def update_voting_rules(configurations):
         "  '' custom_msg, '' custom_url, '' description, TRUE is_voting_rule,"
         "  1 version, transaction_timestamp() created_at, transaction_timestamp() updated_at"
         "  from rules"
-        '  on conflict ("target_id", "configuration_id") do update'
+        # the partial unique index: one voting rule per target and configuration
+        '  on conflict ("target_id", "configuration_id") where "is_voting_rule" do update'
         "  set policy = excluded.policy, cel_expr = excluded.cel_expr,"
         "  primary_users = excluded.primary_users, excluded_primary_users = excluded.excluded_primary_users,"
         "  custom_msg = excluded.custom_msg, custom_url = excluded.custom_url, version = santa_rule.version + 1,"

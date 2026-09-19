@@ -225,10 +225,21 @@ class ScopedClientModeFormTests(TestCase):
         configuration = force_configuration()
         ScopedClientMode.objects.create(configuration=configuration, name="yolo",
                                         client_mode=Configuration.MONITOR_MODE)
-        form = self.form(configuration, name="yolo")
+        form = self.form(configuration, name="yolo", client_mode=Configuration.LOCKDOWN_MODE)
         self.assertFalse(form.is_valid())
         self.assertEqual(form.errors["__all__"],
                          ["Scoped client mode with this Configuration and Name already exists."])
+
+    def test_one_entry_per_mode(self):
+        configuration = force_configuration()
+        ScopedClientMode.objects.create(configuration=configuration, name="yolo",
+                                        client_mode=Configuration.MONITOR_MODE)
+        form = self.form(configuration, client_mode=Configuration.MONITOR_MODE)
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["__all__"],
+                         ["Scoped client mode with this Configuration and Client mode already exists."])
+        form = self.form(configuration, client_mode=Configuration.LOCKDOWN_MODE)
+        self.assertTrue(form.is_valid(), form.errors)
 
     def test_same_name_on_another_configuration(self):
         ScopedClientMode.objects.create(configuration=force_configuration(), name="yolo",
@@ -331,6 +342,33 @@ class ScopedPathRegexFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertEqual(form.errors["__all__"],
                          ["Scoped path regex with this Configuration and Name already exists."])
+
+    def test_one_entry_per_pattern_and_policy(self):
+        configuration = force_configuration()
+        ScopedPathRegex.objects.create(configuration=configuration, name="yolo",
+                                       policy=ScopedPathRegex.Policy.ALLOW, regex="/a/")
+        form = self.form(configuration, regex="/a/")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["__all__"],
+                         ["Scoped path regex with this Configuration, Regex and Policy already exists."])
+        form = self.form(configuration, regex="/a/", policy=ScopedPathRegex.Policy.BLOCK)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_a_pattern_longer_than_512_characters_is_refused(self):
+        form = self.form(force_configuration(), regex="/a/" + "b" * 510)
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["regex"], ["Ensure this value has at most 512 characters (it has 513)."])
+
+    def test_a_leading_anchor_is_removed(self):
+        # the composition removes it, so ^/a/ and /a/ are one pattern
+        configuration = force_configuration()
+        form = self.form(configuration, regex="^/a/")
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.save().regex, "/a/")
+        form = self.form(configuration, regex="^/a/")
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors["__all__"],
+                         ["Scoped path regex with this Configuration, Regex and Policy already exists."])
 
     def test_same_name_on_another_configuration(self):
         ScopedPathRegex.objects.create(configuration=force_configuration(), name="yolo",

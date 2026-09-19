@@ -155,6 +155,11 @@ class ScopedClientModeForm(ScopedConfigurationItemForm):
 class ScopedPathRegexForm(ScopedConfigurationItemForm):
     validator_class = ScopedPathRegexValidator
 
+    def clean_regex(self):
+        # the composition removes it, so ^/a/ and /a/ are one pattern. A bare ^ stays, and is refused.
+        regex = self.cleaned_data["regex"]
+        return regex.removeprefix("^") or regex
+
     class Meta:
         model = ScopedPathRegex
         fields = (
@@ -433,12 +438,6 @@ class RuleForm(RuleFormMixin, forms.Form):
             target_type = cleaned_data.get("target_type")
             target_identifier = cleaned_data.get("target_identifier")
 
-        # duplicated rule
-        if target_type and target_identifier and Rule.objects.filter(configuration=self.configuration,
-                                                                     target__type=target_type,
-                                                                     target__identifier=target_identifier).count():
-            self.add_error(None, "A rule for this target already exists")
-
         # identifier
         if target_identifier:
             if "target_identifier" in self.fields:
@@ -455,6 +454,17 @@ class RuleForm(RuleFormMixin, forms.Form):
             policy = int(cleaned_data.get("policy"))
         except (TypeError, ValueError):
             pass
+
+        # one rule per target and policy, and none on a target with a voting rule
+        if target_type and target_identifier:
+            existing_rules = Rule.objects.filter(configuration=self.configuration,
+                                                 target__type=target_type,
+                                                 target__identifier=target_identifier)
+            if existing_rules.filter(is_voting_rule=True).exists():
+                self.add_error(None, "This target has a voting rule. Reset the target first.")
+            elif policy and existing_rules.filter(policy=policy).exists():
+                self.add_error(None,
+                               f"A rule with the {Rule.Policy(policy).label} policy already exists for this target")
 
         if policy:
             # compiler policy only on the target types the client accepts it on
@@ -530,6 +540,11 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
         except (TypeError, ValueError):
             pass
         else:
+            # one rule per target and policy
+            if (policy != self.instance.policy
+                    and Rule.objects.filter(configuration=self.instance.configuration,
+                                            target=self.instance.target, policy=policy).exists()):
+                self.add_error("policy", f"A rule with the {policy.label} policy already exists for this target")
             # custom message only on some rules
             if not policy.compatible_with_custom_msg_and_url:
                 custom_msg = cleaned_data.get("custom_msg")

@@ -1,6 +1,7 @@
 import json
 import uuid
 
+from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -161,20 +162,12 @@ class SantaScopedPathRegexTestCase(TestCase):
         self.assertEqual(config["blocked_path_regex"], "^(?:(?:/a/))")
         self.assertEqual(config["allowed_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
 
-    def test_a_leading_anchor_does_not_make_another_pattern(self):
-        configuration = force_configuration()
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.force_scoped_path_regex(configuration, "^/a/", name="a", block=True)
-        self.force_scoped_path_regex(configuration, "/a/", name="b", tags=[tag])
-        config = self.sync_config(configuration, tags=[tag])
-        self.assertEqual(config["allowed_path_regex"], "^(?:(?:/a/))")
-        self.assertEqual(config["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
-
-    def test_two_entries_with_the_same_pattern_and_policy_compose_it_once(self):
+    def test_one_entry_per_pattern_and_policy(self):
+        # the constraint is what makes rank then Block a total order
         configuration = force_configuration()
         self.force_scoped_path_regex(configuration, "/a/", name="a")
-        self.force_scoped_path_regex(configuration, "/a/", name="b")
-        self.assertEqual(self.sync_config(configuration)["allowed_path_regex"], "^(?:(?:/a/))")
+        with self.assertRaises(IntegrityError):
+            self.force_scoped_path_regex(configuration, "/a/", name="b")
 
     # determinism — the client flushes every decision cache when the pattern changes
 

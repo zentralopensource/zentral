@@ -108,8 +108,12 @@ class TargetView(PermissionRequiredMixin, TemplateView):
         query_dict = self.get_add_rule_link_qd()
         if not query_dict:
             return links
-        for configuration in (Configuration.objects.exclude(rule__target__type=self.target_type,
-                                                            rule__target__identifier=self.identifier)
+        # a target takes one rule per policy, and none next to a voting rule. A subquery, because
+        # the conditions of one exclude() on a multi-valued relation can be met by different rules.
+        voting_rule_configurations = Rule.objects.filter(target__type=self.target_type,
+                                                         target__identifier=self.identifier,
+                                                         is_voting_rule=True).values("configuration")
+        for configuration in (Configuration.objects.exclude(pk__in=voting_rule_configurations)
                                                    .exclude(voting_realm__isnull=False)
                                                    .order_by("name")):
             links.append((configuration.name,

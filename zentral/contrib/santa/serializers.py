@@ -4,7 +4,7 @@ from datetime import datetime
 from itertools import chain
 
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -107,6 +107,10 @@ class ScopedClientModeUpdateSerializer(ScopedConfigurationItemUpdateSerializerMi
 
 class ScopedPathRegexSerializer(ScopedConfigurationItemSerializer):
     validator_class = ScopedPathRegexValidator
+
+    def validate_regex(self, value):
+        # the composition removes it, so ^/a/ and /a/ are one pattern. A bare ^ stays, and is refused.
+        return value.removeprefix("^") or value
 
     class Meta:
         model = ScopedPathRegex
@@ -232,19 +236,23 @@ class RuleSerializer(serializers.ModelSerializer):
             if not target_identifier:
                 raise serializers.ValidationError({"target_identifier": f"Invalid {target_type} identifier"})
 
-        # Only one rule per target allowed for a given configuration
-        test_qs = Rule.objects.filter(
+        # policy
+        policy = Rule.Policy(data.get("policy"))
+
+        # one rule per target and policy, and none on a target with a voting rule
+        existing_rules = Rule.objects.filter(
             configuration=data["configuration"],
             target__type=target_type,
             target__identifier=target_identifier
         )
         if self.instance:
-            test_qs = test_qs.exclude(pk=self.instance.pk)
-        if test_qs.count():
-            raise serializers.ValidationError({"target": "rule already exists for this target"})
-
-        # policy
-        policy = Rule.Policy(data.get("policy"))
+            existing_rules = existing_rules.exclude(pk=self.instance.pk)
+        if existing_rules.filter(is_voting_rule=True).exists():
+            raise serializers.ValidationError({"target": "This target has a voting rule. Reset the target first."})
+        if existing_rules.filter(policy=policy).exists():
+            raise serializers.ValidationError(
+                {"target": f"A rule with the {policy.label} policy already exists for this target"}
+            )
         if not policy.compatible_with_target_type(target_type):
             raise serializers.ValidationError({"policy": Target.Type.compiler_policy_error()})
         if not policy.compatible_with_custom_msg_and_url:
@@ -443,15 +451,17 @@ class RuleSetUpdateSerializer(serializers.Serializer):
         keys = set([])
         rule_errors = {}
         for rule_id, rule in enumerate(data.get("rules", [])):
-            key = rule["rule_type"], rule["identifier"]
+            key = rule["rule_type"], rule["identifier"], rule["policy"]
             if key in keys:
                 rule_errors[str(rule_id)] = {
-                    "non_field_errors": ["{rule_type}/{identifier}: duplicated".format(**rule)]
+                    "non_field_errors": [f"{rule['rule_type']}/{rule['identifier']}/{rule['policy'].name}: duplicated"]
                 }
             keys.add(key)
+            # a rule outside the ruleset with the same policy, or a voting rule, holds the target
             # TODO: optimize
             if (Rule.objects.exclude(ruleset__name=data["name"])
                             .filter(
+                                Q(policy=rule["policy"]) | Q(is_voting_rule=True),
                                 configuration__in=self.configurations,
                                 target__type=rule["rule_type"], target__identifier=rule["identifier"]
                             ).exists()):

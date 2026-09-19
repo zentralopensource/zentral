@@ -30,7 +30,7 @@
     </tr>
   </thead>
   <tbody>
-    {% for binary, rule in binaries %}
+    {% for binary, rules in binaries %}
     <tr>
       <td>
         <p><code>{{ binary.sha_256 }}</code></p>
@@ -60,19 +60,18 @@
         </dl>
       </td>
       <td>
-        {% if rule %}
+        {% for rule in rules %}
         {% if not rule.ruleset %}
         <a class="btn btn-outline-secondary" href="{% url 'santa:update_configuration_rule' configuration.pk rule.pk %}">
-          Update rule
+          Update {{ rule.get_policy_display }} rule
         </a>
         {% else %}
-        Ruleset rule exists
+        <span class="text-secondary">{{ rule.get_policy_display }} ruleset rule</span>
         {% endif %}
-        {% else %}
+        {% endfor %}
         <a class="btn btn-primary" href="{% url 'santa:create_configuration_rule' configuration.id %}?bin={{ binary.id }}">
           Create rule
         </a>
-        {% endif %}
       </td>
     </tr>
     {% endfor %}
