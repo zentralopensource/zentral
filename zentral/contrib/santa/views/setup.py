@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from urllib.parse import urlencode
+from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import transaction
 from django.http import Http404, HttpResponseRedirect
@@ -17,7 +18,8 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          TeamIDSearchForm, SigningIDSearchForm,
                                          ConfigurationForm, EnrollmentForm,
                                          ScopedClientModeForm, ScopedPathRegexForm, VotingGroupForm,
-                                         RuleForm, RuleSearchForm, UpdateRuleForm)
+                                         RuleForm, RuleSearchForm, UpdateRuleForm,
+                                         fixed_target)
 from zentral.contrib.santa.models import (Configuration, Enrollment, Rule, ScopedClientMode,
                                           ScopedPathRegex, Target, VotingGroup)
 from zentral.contrib.santa.pbac import (CreateScopedClientModeRequest, CreateScopedPathRegexRequest,
@@ -487,6 +489,30 @@ class CreateConfigurationRuleView(PermissionRequiredMixin, FormView):
         except KeyError:
             pass
         return super().dispatch(request, *args, **kwargs)
+
+    def redirect_without_policy_left(self):
+        # from get() and post(), after the permission check of dispatch(): a stale link must not
+        # answer an unauthorized request with the state of the target
+        target_type, target_identifier = fixed_target(self)
+        if not target_type:
+            return None
+        rules = list(Rule.objects.filter(configuration=self.configuration,
+                                         target__type=target_type, target__identifier=target_identifier))
+        if Rule.Policy.available(target_type, rules):
+            return None
+        # the form would have no policy to offer, so it could not be submitted
+        if any(rule.is_voting_rule for rule in rules):
+            message = "This target has a voting rule. Reset the target first."
+        else:
+            message = "This target has a rule for every policy in this configuration."
+        messages.warning(self.request, message)
+        return redirect("santa:configuration_rules", self.configuration.pk)
+
+    def get(self, request, *args, **kwargs):
+        return self.redirect_without_policy_left() or super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        return self.redirect_without_policy_left() or super().post(request, *args, **kwargs)
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

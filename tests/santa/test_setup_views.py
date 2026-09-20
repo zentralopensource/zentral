@@ -1616,6 +1616,70 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["form"].errors,
                          {'__all__': ['This target has a voting rule. Reset the target first.']})
 
+    def test_create_configuration_rule_fixed_target_with_a_policy_left(self):
+        self.login("santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        team_id = new_team_id()
+        target = Target.objects.create(type=Target.Type.TEAM_ID, identifier=team_id)
+        Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+        response = self.client.get("{}?tea={}".format(
+            reverse("santa:create_configuration_rule", args=(configuration.pk,)), team_id))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/rule_form.html")
+
+    def test_create_configuration_rule_fixed_target_with_no_policy_left(self):
+        self.login("santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        team_id = new_team_id()
+        target = Target.objects.create(type=Target.Type.TEAM_ID, identifier=team_id)
+        for policy in Rule.Policy.available(Target.Type.TEAM_ID, []):
+            Rule.objects.create(configuration=configuration, target=target, policy=policy,
+                                cel_expr="true" if policy == Rule.Policy.CEL else "")
+        response = self.client.get("{}?tea={}".format(
+            reverse("santa:create_configuration_rule", args=(configuration.pk,)), team_id), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "This target has a rule for every policy in this configuration.")
+
+    def test_create_configuration_rule_fixed_target_with_a_voting_rule(self):
+        self.login("santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        team_id = new_team_id()
+        target = Target.objects.create(type=Target.Type.TEAM_ID, identifier=team_id)
+        Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST,
+                            is_voting_rule=True)
+        response = self.client.get("{}?tea={}".format(
+            reverse("santa:create_configuration_rule", args=(configuration.pk,)), team_id), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "This target has a voting rule. Reset the target first.")
+
+    def test_create_configuration_rule_fixed_target_with_no_policy_left_anonymous(self):
+        # the permission check comes first: a stale link does not answer an anonymous request
+        configuration = force_configuration()
+        team_id = new_team_id()
+        target = Target.objects.create(type=Target.Type.TEAM_ID, identifier=team_id)
+        for policy in Rule.Policy.available(Target.Type.TEAM_ID, []):
+            Rule.objects.create(configuration=configuration, target=target, policy=policy,
+                                cel_expr="true" if policy == Rule.Policy.CEL else "")
+        self.login_redirect("create_configuration_rule", configuration.pk, query_params={"tea": team_id})
+
+    def test_create_configuration_rule_fixed_target_with_no_policy_left_post(self):
+        # a stale form, posted after another admin took the last policy
+        self.login("santa.add_rule", "santa.view_rule")
+        configuration = force_configuration()
+        team_id = new_team_id()
+        target = Target.objects.create(type=Target.Type.TEAM_ID, identifier=team_id)
+        for policy in Rule.Policy.available(Target.Type.TEAM_ID, []):
+            Rule.objects.create(configuration=configuration, target=target, policy=policy,
+                                cel_expr="true" if policy == Rule.Policy.CEL else "")
+        response = self.client.post(
+            "{}?tea={}".format(reverse("santa:create_configuration_rule", args=(configuration.pk,)), team_id),
+            {"policy": Rule.Policy.ALLOWLIST}, follow=True
+        )
+        self.assertTemplateUsed(response, "santa/configuration_rules.html")
+        self.assertContains(response, "This target has a rule for every policy in this configuration.")
+
     def test_create_configuration_rule_scope_conflict(self):
         self.login("santa.add_configuration", "santa.view_configuration",
                    "santa.add_rule", "santa.view_rule")

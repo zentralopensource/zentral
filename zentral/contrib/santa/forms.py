@@ -363,6 +363,21 @@ def test_team_id(team_id):
     return re.match(r'^[0-9A-Z]{10}\Z', team_id) is not None
 
 
+def fixed_target(source):
+    # the create rule pages take the target from the query string, in one of five attributes
+    if source.binary:
+        return Target.Type.BINARY, source.binary.sha_256
+    if source.cdhash:
+        return Target.Type.CDHASH, source.cdhash
+    if source.certificate:
+        return Target.Type.CERTIFICATE, source.certificate.sha_256
+    if source.team_id:
+        return Target.Type.TEAM_ID, source.team_id
+    if source.signing_id:
+        return Target.Type.SIGNING_ID, source.signing_id
+    return None, None
+
+
 def cleanup_target_identifier(target_type, identifier):
     if target_type == Target.Type.CDHASH:
         validator = test_cdhash
@@ -404,7 +419,7 @@ class RuleForm(RuleFormMixin, forms.Form):
         self.team_id = kwargs.pop("team_id", None)
         self.signing_id = kwargs.pop("signing_id", None)
         super().__init__(*args, **kwargs)
-        target_type, target_identifier = self.fixed_target()
+        target_type, target_identifier = fixed_target(self)
         if target_type:
             del self.fields["target_type"]
             del self.fields["target_identifier"]
@@ -417,22 +432,9 @@ class RuleForm(RuleFormMixin, forms.Form):
             self.fields.pop("custom_msg", None)
             self.fields.pop("custom_url", None)
 
-    def fixed_target(self):
-        if self.binary:
-            return Target.Type.BINARY, self.binary.sha_256
-        if self.cdhash:
-            return Target.Type.CDHASH, self.cdhash
-        if self.certificate:
-            return Target.Type.CERTIFICATE, self.certificate.sha_256
-        if self.team_id:
-            return Target.Type.TEAM_ID, self.team_id
-        if self.signing_id:
-            return Target.Type.SIGNING_ID, self.signing_id
-        return None, None
-
     def clean(self):
         cleaned_data = super().clean()
-        target_type, target_identifier = self.fixed_target()
+        target_type, target_identifier = fixed_target(self)
         if target_type is None:
             target_type = cleaned_data.get("target_type")
             target_identifier = cleaned_data.get("target_identifier")
