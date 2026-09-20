@@ -104,7 +104,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
             return
         return urlencode({self.add_rule_link_key: getattr(self.objects[0], self.add_rule_link_attr)})
 
-    def get_add_rule_links(self):
+    def get_add_rule_links(self, rules):
         links = []
         query_dict = self.get_add_rule_link_qd()
         if not query_dict:
@@ -112,9 +112,9 @@ class TargetView(PermissionRequiredMixin, TemplateView):
         # a configuration gets a link when the target has a policy left in it: one rule per policy,
         # and none next to a voting rule
         rules_by_configuration = defaultdict(list)
-        for rule in Rule.objects.filter(target__type=self.target_type, target__identifier=self.identifier):
+        for rule in rules:
             rules_by_configuration[rule.configuration_id].append(rule)
-        for configuration in Configuration.objects.exclude(voting_realm__isnull=False).order_by("name"):
+        for configuration in Configuration.objects.order_by("name"):
             if not Rule.Policy.available(self.target_type, rules_by_configuration.get(configuration.pk, [])):
                 continue
             links.append((configuration.name,
@@ -224,11 +224,11 @@ class TargetView(PermissionRequiredMixin, TemplateView):
             ctx["show_ballots"] = False
 
         # rules
-        ctx["add_rule_links"] = self.get_add_rule_links()
-        if ctx["add_rule_links"]:
-            ctx["show_rules"] = True
-            ctx["rules"] = list(self.get_rules())
-            ctx["rule_count"] = len(ctx["rules"])
+        ctx["rules"] = list(self.get_rules())
+        ctx["rule_count"] = len(ctx["rules"])
+        ctx["add_rule_links"] = self.get_add_rule_links(ctx["rules"])
+        # the rules of a target stay visible when no configuration has a policy left for it
+        ctx["show_rules"] = bool(ctx["rules"] or ctx["add_rule_links"])
 
         # events
         if (

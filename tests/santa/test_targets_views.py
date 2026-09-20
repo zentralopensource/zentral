@@ -9,7 +9,7 @@ from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import File, Source
-from zentral.contrib.santa.models import Rule, Target, TargetCounter, TargetState
+from zentral.contrib.santa.models import Configuration, Rule, Target, TargetCounter, TargetState
 from zentral.contrib.santa.urls import urlpatterns as santa_urlpatterns
 from zentral.contrib.santa.views.targets import EventsMixin
 from zentral.core.stores.conf import stores
@@ -488,6 +488,29 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.login("santa.view_target", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertNotIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
+
+    def test_binary_target_with_no_policy_left_keeps_the_rules(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        policies = Rule.Policy.available(Target.Type.BINARY, [])
+        # every configuration, so that the target has no policy left anywhere
+        for target_configuration in Configuration.objects.all():
+            for policy in policies:
+                Rule.objects.create(configuration=target_configuration, target=target, policy=policy,
+                                    cel_expr="true" if policy == Rule.Policy.CEL else "")
+        self.login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertEqual(response.context["add_rule_links"], [])
+        self.assertTrue(response.context["show_rules"])
+        self.assertEqual(response.context["rule_count"], Configuration.objects.count() * len(policies))
+        self.assertContains(response, configuration.name)
+
+    def test_binary_target_configuration_with_a_voting_realm_has_an_add_rule_link(self):
+        # a rule can be added to a configuration with a voting realm, so it gets a link
+        configuration = force_configuration(voting_realm=force_realm())
+        self.login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
     def test_binary_target_configuration_with_a_voting_rule_has_no_add_rule_link(self):
         configuration = force_configuration()
