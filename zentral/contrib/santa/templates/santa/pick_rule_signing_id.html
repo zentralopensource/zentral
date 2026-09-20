@@ -30,7 +30,7 @@
     </tr>
   </thead>
   <tbody>
-    {% for signing_id, rules in signing_ids %}
+    {% for signing_id, rules, available_policies in signing_ids %}
     <tr>
       <td><code>{{ signing_id.signing_id }}</code></td>
       <td>
@@ -43,9 +43,11 @@
         <span class="text-secondary">{{ rule.get_policy_display }} ruleset rule</span>
         {% endif %}
         {% endfor %}
+        {% if available_policies %}
         <a class="btn btn-primary" href="{% url 'santa:create_configuration_rule' configuration.pk %}?sig={{ signing_id.signing_id }}">
           Create rule
         </a>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

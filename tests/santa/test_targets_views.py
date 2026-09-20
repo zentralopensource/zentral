@@ -479,6 +479,16 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
+    def test_binary_target_configuration_with_every_policy_taken_has_no_add_rule_link(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        for policy in Rule.Policy.available(Target.Type.BINARY, []):
+            Rule.objects.create(configuration=configuration, target=target, policy=policy,
+                                cel_expr="true" if policy == Rule.Policy.CEL else "")
+        self.login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertNotIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
+
     def test_binary_target_configuration_with_a_voting_rule_has_no_add_rule_link(self):
         configuration = force_configuration()
         target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)

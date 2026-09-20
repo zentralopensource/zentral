@@ -33,7 +33,7 @@
     </tr>
   </thead>
   <tbody>
-    {% for cert, rules in certificates %}
+    {% for cert, rules, available_policies in certificates %}
     <tr>
       <td>{{ cert.common_name|default:"-" }}</td>
       <td>{{ cert.organization|default:"-" }}</td>
@@ -49,9 +49,11 @@
         <span class="text-secondary">{{ rule.get_policy_display }} ruleset rule</span>
         {% endif %}
         {% endfor %}
+        {% if available_policies %}
         <a class="btn btn-primary" href="{% url 'santa:create_configuration_rule' configuration.pk %}?cert={{ cert.id }}">
           Create rule
         </a>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

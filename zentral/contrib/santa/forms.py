@@ -404,37 +404,36 @@ class RuleForm(RuleFormMixin, forms.Form):
         self.team_id = kwargs.pop("team_id", None)
         self.signing_id = kwargs.pop("signing_id", None)
         super().__init__(*args, **kwargs)
-        if (
-            self.binary
-            or self.cdhash
-            or self.certificate
-            or self.team_id
-            or self.signing_id
-        ):
+        target_type, target_identifier = self.fixed_target()
+        if target_type:
             del self.fields["target_type"]
             del self.fields["target_identifier"]
+            # the target is known, so the form offers the policies it has left in the configuration
+            self.fields["policy"].choices = [
+                (policy.value, policy.label)
+                for policy in Rule.objects.available_policies(self.configuration, target_type, target_identifier)
+            ]
         if not any(_policy_allows_custom(k) for k, _ in self.fields["policy"].choices):
             self.fields.pop("custom_msg", None)
             self.fields.pop("custom_url", None)
 
+    def fixed_target(self):
+        if self.binary:
+            return Target.Type.BINARY, self.binary.sha_256
+        if self.cdhash:
+            return Target.Type.CDHASH, self.cdhash
+        if self.certificate:
+            return Target.Type.CERTIFICATE, self.certificate.sha_256
+        if self.team_id:
+            return Target.Type.TEAM_ID, self.team_id
+        if self.signing_id:
+            return Target.Type.SIGNING_ID, self.signing_id
+        return None, None
+
     def clean(self):
         cleaned_data = super().clean()
-        if self.binary:
-            target_type = Target.Type.BINARY
-            target_identifier = self.binary.sha_256
-        elif self.cdhash:
-            target_type = Target.Type.CDHASH
-            target_identifier = self.cdhash
-        elif self.certificate:
-            target_type = Target.Type.CERTIFICATE
-            target_identifier = self.certificate.sha_256
-        elif self.team_id:
-            target_type = Target.Type.TEAM_ID
-            target_identifier = self.team_id
-        elif self.signing_id:
-            target_type = Target.Type.SIGNING_ID
-            target_identifier = self.signing_id
-        else:
+        target_type, target_identifier = self.fixed_target()
+        if target_type is None:
             target_type = cleaned_data.get("target_type")
             target_identifier = cleaned_data.get("target_identifier")
 
@@ -532,6 +531,18 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
             "description": forms.Textarea(attrs={"cols": "40", "rows": "2"})
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # the policies the target has left in the configuration, and the rule's own
+        other_rules = Rule.objects.filter(configuration=self.instance.configuration,
+                                          target=self.instance.target).exclude(pk=self.instance.pk)
+        available = Rule.Policy.available(self.instance.target.type, other_rules)
+        self.fields["policy"].choices = [
+            (policy.value, policy.label)
+            for policy in Rule.Policy
+            if policy == self.instance.policy or policy in available
+        ]
+
     def clean(self):
         cleaned_data = super().clean()
 
@@ -540,11 +551,6 @@ class UpdateRuleForm(RuleFormMixin, forms.ModelForm):
         except (TypeError, ValueError):
             pass
         else:
-            # one rule per target and policy
-            if (policy != self.instance.policy
-                    and Rule.objects.filter(configuration=self.instance.configuration,
-                                            target=self.instance.target, policy=policy).exists()):
-                self.add_error("policy", f"A rule with the {policy.label} policy already exists for this target")
             # custom message only on some rules
             if not policy.compatible_with_custom_msg_and_url:
                 custom_msg = cleaned_data.get("custom_msg")

@@ -1609,6 +1609,14 @@ class RuleSet(models.Model):
         return {"pk": self.pk, "name": self.name}
 
 
+class RuleManager(models.Manager):
+    def available_policies(self, configuration, target_type, target_identifier):
+        return Rule.Policy.available(
+            target_type,
+            self.filter(configuration=configuration, target__type=target_type, target__identifier=target_identifier)
+        )
+
+
 class Rule(models.Model):
     class Policy(models.IntegerChoices):
         ALLOWLIST = 1, _("Allowlist")
@@ -1649,6 +1657,22 @@ class Rule(models.Model):
             whens = " ".join(f"when {policy.value} then {rank}" for rank, policy in enumerate(cls.strictest_first()))
             return f"case {column} {whens} end"
 
+        @classmethod
+        def available(cls, target_type, rules):
+            """The policies a new rule on the target can take next to the existing rules.
+
+            One rule per policy, none next to a voting rule, and only the policies the target type
+            accepts. In the order of the rule forms.
+            """
+            rules = list(rules)
+            if any(rule.is_voting_rule for rule in rules):
+                return []
+            taken = {rule.policy for rule in rules}
+            return [policy for policy in cls
+                    if not policy.sync_only
+                    and policy.compatible_with_target_type(target_type)
+                    and policy not in taken]
+
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     ruleset = models.ForeignKey(RuleSet, on_delete=models.CASCADE, null=True)
 
@@ -1671,6 +1695,8 @@ class Rule(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = RuleManager()
 
     class Meta:
         constraints = [

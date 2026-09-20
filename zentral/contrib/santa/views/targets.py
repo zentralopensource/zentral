@@ -1,5 +1,6 @@
 import logging
 import math
+from collections import defaultdict
 from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
@@ -108,14 +109,14 @@ class TargetView(PermissionRequiredMixin, TemplateView):
         query_dict = self.get_add_rule_link_qd()
         if not query_dict:
             return links
-        # a target takes one rule per policy, and none next to a voting rule. A subquery, because
-        # the conditions of one exclude() on a multi-valued relation can be met by different rules.
-        voting_rule_configurations = Rule.objects.filter(target__type=self.target_type,
-                                                         target__identifier=self.identifier,
-                                                         is_voting_rule=True).values("configuration")
-        for configuration in (Configuration.objects.exclude(pk__in=voting_rule_configurations)
-                                                   .exclude(voting_realm__isnull=False)
-                                                   .order_by("name")):
+        # a configuration gets a link when the target has a policy left in it: one rule per policy,
+        # and none next to a voting rule
+        rules_by_configuration = defaultdict(list)
+        for rule in Rule.objects.filter(target__type=self.target_type, target__identifier=self.identifier):
+            rules_by_configuration[rule.configuration_id].append(rule)
+        for configuration in Configuration.objects.exclude(voting_realm__isnull=False).order_by("name"):
+            if not Rule.Policy.available(self.target_type, rules_by_configuration.get(configuration.pk, [])):
+                continue
             links.append((configuration.name,
                           reverse("santa:create_configuration_rule", args=(configuration.pk,)) + f"?{query_dict}"))
         return links

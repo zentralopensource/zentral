@@ -1651,8 +1651,11 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
             {"policy": Rule.Policy.BLOCKLIST}, follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["form"].errors,
-                         {"policy": ["A rule with the Blocklist policy already exists for this target"]})
+        # the form does not offer a policy another rule of the target holds
+        self.assertEqual(
+            response.context["form"].errors,
+            {"policy": [f"Select a valid choice. {Rule.Policy.BLOCKLIST.value} is not one of the available choices."]}
+        )
         allow_rule.refresh_from_db()
         self.assertEqual(allow_rule.policy, Rule.Policy.ALLOWLIST)
 
@@ -1832,6 +1835,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["form"], "cel_expr", "Can only be set on CEL rules")
 
     def test_update_configuration_rule_compiler_policy_target_type_error(self):
+        # the form does not offer the compiler policy on these target types
         self.login("santa.change_rule")
         for target_type in (Target.Type.TEAM_ID, Target.Type.CERTIFICATE):
             with self.subTest(target_type):
@@ -1843,7 +1847,11 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                 )
                 self.assertEqual(response.status_code, 200)
                 self.assertTemplateUsed(response, "santa/rule_form.html")
-                self.assertFormError(response.context["form"], "policy", Target.Type.compiler_policy_error())
+                self.assertFormError(
+                    response.context["form"], "policy",
+                    f"Select a valid choice. {Rule.Policy.ALLOWLIST_COMPILER.value} "
+                    "is not one of the available choices."
+                )
                 rule.refresh_from_db()
                 self.assertEqual(rule.policy, Rule.Policy.BLOCKLIST)
 
@@ -2048,7 +2056,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/pick_rule_binary.html")
         binaries = response.context["binaries"]
-        self.assertEqual(binaries, [(self.file, [])])
+        self.assertEqual(binaries, [(self.file, [], Rule.Policy.available(Target.Type.BINARY, []))])
         self.assertContains(response, self.file.sha_256)
 
     def test_pick_rule_binary_with_two_rules(self):
@@ -2060,11 +2068,26 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("santa:pick_rule_binary", args=(configuration.pk,)),
                                    {"name": self.file_name})
         self.assertEqual(response.status_code, 200)
-        # the strictest first
-        self.assertEqual(response.context["binaries"], [(self.file, [block, allow])])
+        # the strictest first, and the policies left for a new rule
+        self.assertEqual(response.context["binaries"],
+                         [(self.file, [block, allow],
+                           [Rule.Policy.SILENT_BLOCKLIST, Rule.Policy.ALLOWLIST_COMPILER, Rule.Policy.CEL])])
         self.assertContains(response, "Update Blocklist rule")
         self.assertContains(response, "Update Allowlist rule")
         self.assertContains(response, "Create rule")
+
+    def test_pick_rule_binary_with_every_policy_taken(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file.sha_256)
+        for policy in Rule.Policy.available(Target.Type.BINARY, []):
+            Rule.objects.create(configuration=configuration, target=target, policy=policy,
+                                cel_expr="true" if policy == Rule.Policy.CEL else "")
+        self.login("santa.add_rule")
+        response = self.client.get(reverse("santa:pick_rule_binary", args=(configuration.pk,)),
+                                   {"name": self.file_name})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["binaries"][0][2], [])
+        self.assertNotContains(response, "Create rule")
 
     # pick rule cdhash
 
@@ -2111,7 +2134,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "santa/pick_rule_certificate.html")
         certificates = response.context["certificates"]
-        self.assertEqual(certificates, [(self.file.signed_by, [])])
+        self.assertEqual(certificates,
+                         [(self.file.signed_by, [], Rule.Policy.available(Target.Type.CERTIFICATE, []))])
 
     # pick rule team id
 

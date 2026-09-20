@@ -603,6 +603,15 @@ class DeleteConfigurationRuleView(PermissionRequiredMixin, DeleteView):
         return reverse("santa:configuration_rules", args=(self.kwargs["configuration_pk"],))
 
 
+def _pick_rows(objects, identifier_attr, target_type, rules_by_identifier):
+    # per candidate: its rules, and the policies a new rule can still take
+    rows = []
+    for obj in objects:
+        rules = rules_by_identifier.get(getattr(obj, identifier_attr), [])
+        rows.append((obj, rules, Rule.Policy.available(target_type, rules)))
+    return rows
+
+
 def _rules_by_identifier(configuration, target_type, identifiers):
     # a target has one rule per policy at most, shown strictest first
     rules_by_identifier = defaultdict(list)
@@ -635,8 +644,7 @@ class PickRuleBinaryView(PermissionRequiredMixin, TemplateView):
             self.configuration, Target.Type.BINARY,
             [binary.sha_256 for binary in binaries]
         )
-        ctx['binaries'] = [(binary, rules_by_identifier.get(binary.sha_256, []))
-                           for binary in binaries]
+        ctx['binaries'] = _pick_rows(binaries, "sha_256", Target.Type.BINARY, rules_by_identifier)
         ctx['form'] = form
         return ctx
 
@@ -659,8 +667,7 @@ class PickRuleCertificateView(PermissionRequiredMixin, TemplateView):
             self.configuration, Target.Type.CERTIFICATE,
             [certificate.sha_256 for certificate in certificates]
         )
-        ctx['certificates'] = [(certificate, rules_by_identifier.get(certificate.sha_256, []))
-                               for certificate in certificates]
+        ctx['certificates'] = _pick_rows(certificates, "sha_256", Target.Type.CERTIFICATE, rules_by_identifier)
         ctx['form'] = form
         return ctx
 
@@ -683,8 +690,7 @@ class PickRuleTeamIDView(PermissionRequiredMixin, TemplateView):
             self.configuration, Target.Type.TEAM_ID,
             [team_id.organizational_unit for team_id in team_ids]
         )
-        ctx['team_ids'] = [(team_id, rules_by_identifier.get(team_id.organizational_unit, []))
-                           for team_id in team_ids]
+        ctx['team_ids'] = _pick_rows(team_ids, "organizational_unit", Target.Type.TEAM_ID, rules_by_identifier)
         ctx['form'] = form
         return ctx
 
@@ -707,8 +713,7 @@ class PickRuleCDHashView(PermissionRequiredMixin, TemplateView):
             self.configuration, Target.Type.CDHASH,
             [cdhash.cdhash for cdhash in cdhashes]
         )
-        ctx['cdhashes'] = [(cdhash, rules_by_identifier.get(cdhash.cdhash, []))
-                           for cdhash in cdhashes]
+        ctx['cdhashes'] = _pick_rows(cdhashes, "cdhash", Target.Type.CDHASH, rules_by_identifier)
         ctx['form'] = form
         return ctx
 
@@ -731,7 +736,6 @@ class PickRuleSigningIDView(PermissionRequiredMixin, TemplateView):
             self.configuration, Target.Type.SIGNING_ID,
             [signing_id.signing_id for signing_id in signing_ids]
         )
-        ctx['signing_ids'] = [(signing_id, rules_by_identifier.get(signing_id.signing_id, []))
-                              for signing_id in signing_ids]
+        ctx['signing_ids'] = _pick_rows(signing_ids, "signing_id", Target.Type.SIGNING_ID, rules_by_identifier)
         ctx['form'] = form
         return ctx

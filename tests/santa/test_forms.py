@@ -3,9 +3,9 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.santa.forms import (ConfigurationForm, RuleForm, ScopedClientModeForm,
-                                         ScopedPathRegexForm)
-from zentral.contrib.santa.models import Configuration, Rule, ScopedClientMode, ScopedPathRegex
-from tests.santa.utils import force_configuration, force_realm
+                                         ScopedPathRegexForm, UpdateRuleForm)
+from zentral.contrib.santa.models import Configuration, Rule, ScopedClientMode, ScopedPathRegex, Target
+from tests.santa.utils import force_configuration, force_realm, force_rule, new_team_id
 
 
 class RuleFormFieldPopTests(TestCase):
@@ -37,6 +37,56 @@ class RuleFormFieldPopTests(TestCase):
             self.assertIn("custom_url", form.fields)
         finally:
             field.choices = old_choices
+
+
+class RuleFormAvailablePoliciesTests(TestCase):
+    def policies(self, form):
+        return [Rule.Policy(value) for value, _ in form.fields["policy"].choices]
+
+    def test_a_free_target_offers_every_policy(self):
+        form = RuleForm(configuration=force_configuration())
+        self.assertEqual(self.policies(form), [Rule.Policy(value) for value, _ in Rule.Policy.rule_choices()])
+
+    def test_a_fixed_target_offers_the_policies_it_has_left(self):
+        configuration = force_configuration()
+        team_id = new_team_id()
+        force_rule(configuration=configuration, target_type=Target.Type.TEAM_ID, target_identifier=team_id,
+                   policy=Rule.Policy.BLOCKLIST)
+        form = RuleForm(configuration=configuration, team_id=team_id)
+        self.assertNotIn("target_type", form.fields)
+        # no Blocklist, taken, and no compiler policy on a Team ID
+        self.assertEqual(self.policies(form),
+                         [Rule.Policy.ALLOWLIST, Rule.Policy.SILENT_BLOCKLIST, Rule.Policy.CEL])
+
+    def test_a_fixed_target_with_a_voting_rule_offers_nothing(self):
+        configuration = force_configuration()
+        team_id = new_team_id()
+        force_rule(configuration=configuration, target_type=Target.Type.TEAM_ID, target_identifier=team_id,
+                   is_voting_rule=True)
+        form = RuleForm(configuration=configuration, team_id=team_id)
+        self.assertEqual(self.policies(form), [])
+
+    def test_a_fixed_target_pops_the_custom_fields_when_no_offered_policy_takes_them(self):
+        configuration = force_configuration()
+        team_id = new_team_id()
+        block_rule = force_rule(configuration=configuration, target_type=Target.Type.TEAM_ID,
+                                target_identifier=team_id, policy=Rule.Policy.BLOCKLIST)
+        Rule.objects.create(configuration=configuration, target=block_rule.target, policy=Rule.Policy.CEL,
+                            cel_expr="true")
+        form = RuleForm(configuration=configuration, team_id=team_id)
+        self.assertEqual(self.policies(form), [Rule.Policy.ALLOWLIST, Rule.Policy.SILENT_BLOCKLIST])
+        self.assertNotIn("custom_msg", form.fields)
+        self.assertNotIn("custom_url", form.fields)
+
+    def test_the_update_form_offers_the_rule_policy_and_the_ones_left(self):
+        configuration = force_configuration()
+        team_id = new_team_id()
+        allow_rule = force_rule(configuration=configuration, target_type=Target.Type.TEAM_ID,
+                                target_identifier=team_id, policy=Rule.Policy.ALLOWLIST)
+        Rule.objects.create(configuration=configuration, target=allow_rule.target, policy=Rule.Policy.BLOCKLIST)
+        form = UpdateRuleForm(instance=allow_rule)
+        self.assertEqual(self.policies(form),
+                         [Rule.Policy.ALLOWLIST, Rule.Policy.SILENT_BLOCKLIST, Rule.Policy.CEL])
 
 
 class ConfigurationFormClientCertAuthTests(TestCase):

@@ -227,6 +227,8 @@ An exception to a population rule needs no exclusion on it when it is narrower. 
 
 A target with a voting rule takes no other rule, and a target with a rule takes no vote. Reset the target to change that.
 
+The `Create a rule` menu of a target page offers a configuration when the target has a policy left in it, and the rule form then offers those policies only. The generic rule form, where you type the target, offers every policy and checks on submit.
+
 ## Scoped client modes
 
 A Santa configuration gives the same client mode to all its machines. A scoped client mode gives a different mode to some of them. Open the configuration in Setup > Santa configurations, and use the [Create] button of the Scoped client mode section.
