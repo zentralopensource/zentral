@@ -5,7 +5,9 @@ from datetime import date, datetime, time, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser
+from django.db import connection
 from django.test import RequestFactory, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
@@ -2174,10 +2176,12 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(self.enrolled_device.status_items, {})
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
         status_report = self._build_status_report_with_sue(target)
-        update_fields, changed = target.update_status_items_with_status_report(status_report)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(status_report)
         self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
         self.assertEqual(changed,
                          self.SOFTWARE_UPDATE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
+        self.assertEqual(cleared, [])
+        self.assertIsNone(self.enrolled_device.status_items_full_report_at)
         status_items = self.enrolled_device.status_items
         self.assertEqual(status_items["softwareupdate.install-state"], "downloading")
         self.assertEqual(status_items["softwareupdate.pending-version"],
@@ -2195,7 +2199,7 @@ class TestMDMArtifacts(TestCase):
         target = Target(self.enrolled_device)
         target.update_status_items_with_status_report(build_status_report())
         updated_at = self.enrolled_device.status_items_updated_at
-        update_fields, changed = target.update_status_items_with_status_report(
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
             {"StatusItems": {"softwareupdate": {"install-state": "installing"}}}
         )
         self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
@@ -2210,27 +2214,28 @@ class TestMDMArtifacts(TestCase):
     def test_update_status_items_full_report(self):
         target = Target(self.enrolled_device)
         target.update_status_items_with_status_report(build_status_report())
-        update_fields, changed = target.update_status_items_with_status_report(
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
             {"StatusItems": {"softwareupdate": {"install-state": "none"}}, "FullReport": True}
         )
-        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertEqual(update_fields, ["status_items_full_report_at", "status_items", "status_items_updated_at"])
         self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
         # missing items are dropped
         self.assertEqual(self.enrolled_device.status_items, {"softwareupdate.install-state": "none"})
+        self.assertIsNotNone(self.enrolled_device.status_items_full_report_at)
 
     def test_update_status_items_no_changes(self):
         target = Target(self.enrolled_device)
         status_report = self._build_status_report_with_sue(target)
         target.update_status_items_with_status_report(status_report)
         updated_at = self.enrolled_device.status_items_updated_at
-        self.assertEqual(target.update_status_items_with_status_report(status_report), ([], []))
+        self.assertEqual(target.update_status_items_with_status_report(status_report), ([], [], []))
         self.assertEqual(self.enrolled_device.status_items_updated_at, updated_at)
 
     def test_update_status_items_no_items(self):
         target = Target(self.enrolled_device_no_blueprint)
         status_report = build_status_report()
         status_report["StatusItems"].pop("softwareupdate")
-        self.assertEqual(target.update_status_items_with_status_report(status_report), ([], []))
+        self.assertEqual(target.update_status_items_with_status_report(status_report), ([], [], []))
         self.assertEqual(self.enrolled_device_no_blueprint.status_items, {})
         self.assertIsNone(self.enrolled_device_no_blueprint.status_items_updated_at)
 
@@ -2249,7 +2254,7 @@ class TestMDMArtifacts(TestCase):
 
     def test_update_status_items_user_channel(self):
         target = Target(self.enrolled_device, self.enrolled_user)
-        update_fields, changed = target.update_status_items_with_status_report(build_status_report())
+        update_fields, changed, cleared = target.update_status_items_with_status_report(build_status_report())
         self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
         # no enforcement declaration on the user channel
         self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
@@ -2289,6 +2294,28 @@ class TestMDMArtifacts(TestCase):
         self.enrolled_device.refresh_from_db()
         self.assertEqual(self.enrolled_device.status_items, {})
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
+        self.assertIsNone(self.enrolled_device.status_items_full_report_at)
+
+    def test_update_status_items_cleared(self):
+        target = Target(self.enrolled_device)
+        target.update_status_items_with_status_report(build_status_report())
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"softwareupdate": {"failure-reason": {}, "pending-version": {}, "install-state": "none"}}}
+        )
+        self.assertEqual(changed, ["softwareupdate.failure-reason", "softwareupdate.install-state",
+                                   "softwareupdate.pending-version"])
+        self.assertEqual(cleared, ["softwareupdate.failure-reason", "softwareupdate.pending-version"])
+        self.assertEqual(self.enrolled_device.status_items["softwareupdate.pending-version"], {})
+        self.assertEqual(self.enrolled_device.software_update_status["pending_version"], {})
+
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_update_target_with_status_report_locks_the_target(self, send_enrolled_device_notification):
+        target = Target(self.enrolled_device)
+        with CaptureQueriesContext(connection) as ctx, self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(build_status_report())
+        lock_queries = [q["sql"] for q in ctx.captured_queries if "FOR UPDATE" in q["sql"]]
+        self.assertEqual(len(lock_queries), 1)
+        self.assertIn('"mdm_enrolleddevice"', lock_queries[0])
 
     # status items update event
 
@@ -2354,6 +2381,23 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(event.payload["changed"], [])
         self.assertEqual(event.payload["errors"],
                          [{"status_item": "softwareupdate.install-state", "reasons": reasons}])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_status_items_update_event_device_cleared(self, send_enrolled_device_notification, post_event):
+        target = Target(self.enrolled_device)
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(build_status_report())
+        post_event.reset_mock()
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(
+                {"StatusItems": {"softwareupdate": {"pending-version": {}}}}
+            )
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertEqual(event.payload["changed"], ["softwareupdate.pending-version"])
+        self.assertEqual(event.payload["cleared"], ["softwareupdate.pending-version"])
+        self.assertEqual(event.payload["status_items"]["softwareupdate.pending-version"], {})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")

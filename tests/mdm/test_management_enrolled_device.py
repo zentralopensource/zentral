@@ -406,7 +406,7 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Software update")
         self.assertContains(response, "Pending: 15.7.1")
         self.assertContains(response, "(24G222)")
-        self.assertContains(response, "enforced at 2026-09-25T09:30:00")
+        self.assertContains(response, "enforced at 2026-09-25 09:30:00")
         self.assertContains(response, '<span class="text-danger">failed</span>')
         self.assertContains(response, "Reason: declaration")
         self.assertContains(response, "zentral.blueprint.1.softwareupdate-enforcement-specific")
@@ -415,6 +415,33 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Beta program: macOS Developer Beta")
         self.assertContains(response, "Enforcement declaration invalid")
         self.assertContains(response, "Error.Fomo: Fomo description")
+
+    def test_enrolled_device_software_update_status_cleared_pending_version(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.status_items = {
+            "softwareupdate.install-state": "none",
+            "softwareupdate.pending-version": {},
+        }
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pending: none")
+
+    def test_enrolled_device_software_update_status_deadline_with_offset(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.status_items = {
+            "softwareupdate.pending-version": {"os-version": "26.7", "build-version": "25G229",
+                                               "target-local-date-time": "2026-09-21 16:30:00 +0000"},
+        }
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "enforced at 2026-09-21 16:30:00\n")
+        self.assertNotContains(response, "enforced at 2026-09-21 16:30:00 +0000")
 
     def test_enrolled_device_apple_silicon_none(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)

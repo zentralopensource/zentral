@@ -81,12 +81,16 @@
           <th>Software update</th>
           <td>
             <ul class="list-unstyled mb-0">
-              {% if sus.pending_version %}
+              {% if sus.pending_version is not None %}
               <li>
-                Pending: {{ sus.pending_version.os_version|default:"-" }}
+                {% if sus.pending_version.os_version %}
+                Pending: {{ sus.pending_version.os_version }}
                 {% if sus.pending_version.build_version %}({{ sus.pending_version.build_version }}){% endif %}
-                {% if sus.pending_version.target_local_date_time %}
-                &ndash; enforced at {{ sus.pending_version.target_local_date_time }} (device local time)
+                {% if sus.pending_version.deadline %}
+                &ndash; enforced at {{ sus.pending_version.deadline }}
+                {% endif %}
+                {% else %}
+                Pending: none
                 {% endif %}
               </li>
               {% endif %}
