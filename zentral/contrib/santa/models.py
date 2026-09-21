@@ -300,6 +300,15 @@ class Target(models.Model):
         def rule_choices(cls):
             return [(member.value, member.label) for member in cls if member.is_native]
 
+        @classmethod
+        def rule_order(cls):
+            """The order the client reads the types in, narrowest first.
+
+            The Rules tab of a machine lists them in it, so a page reads like the precedence: a
+            cdhash rule answers before the Team ID rule of the same binary.
+            """
+            return [cls.CDHASH, cls.BINARY, cls.SIGNING_ID, cls.CERTIFICATE, cls.TEAM_ID]
+
         @property
         def compatible_with_compiler_policy(self):
             # the client only accepts the compiler state on these rule types
@@ -1798,36 +1807,167 @@ class Rule(models.Model):
         return d
 
 
+# The candidates of one machine: every rule of the configuration with the level that decided, or
+# a null rank when the rule is out. The rule download and the Rules tab of a machine read the same
+# text, so the page cannot disagree with what the next sync sends. The parameters are
+# configuration_pk, serial_number, primary_user and tag_ids, see candidate_rules_kwargs().
+CANDIDATE_RULES_SQL = (
+    "prepared_rules as ("  # aggregate the tag ids
+    "  select r.id as rule_id, r.target_id, r.policy, r.cel_expr, r.custom_msg, r.custom_url, r.version,"
+    "  r.is_voting_rule,"
+    "  r.serial_numbers, r.primary_users,"
+    "  array_remove(array_agg(srt.tag_id), null) as tag_ids,"
+    "  r.excluded_serial_numbers, r.excluded_primary_users,"
+    "  array_remove(array_agg(sret.tag_id), null) as excluded_tag_ids"
+    "  from santa_rule as r"
+    "  left join santa_rule_tags as srt on (srt.rule_id = r.id)"
+    "  left join santa_rule_excluded_tags as sret on (sret.rule_id = r.id)"
+    "  where r.configuration_id = %(configuration_pk)s"
+    "  group by r.id"
+    "), ranked_rules as ("  # the first level that matches the machine decides
+    "  select pr.rule_id, pr.target_id, pr.policy, pr.cel_expr, pr.custom_msg, pr.custom_url, pr.version,"
+    "  pr.is_voting_rule,"
+    "  case"
+    "    when %(serial_number)s = any(pr.serial_numbers) then {rank_serial}"
+    "    when %(serial_number)s = any(pr.excluded_serial_numbers) then null"
+    # a null primary user makes its two clauses false, an empty tag array its two
+    "    when %(primary_user)s = any(pr.primary_users) then {rank_user}"
+    "    when %(primary_user)s = any(pr.excluded_primary_users) then null"
+    "    when %(tag_ids)s && pr.excluded_tag_ids then null"
+    "    when %(tag_ids)s && pr.tag_ids then {rank_tag}"
+    "    when cardinality(pr.serial_numbers) = 0"
+    "     and cardinality(pr.primary_users) = 0"
+    "     and cardinality(pr.tag_ids) = 0 then {rank_all}"
+    "  end as match_rank"
+    "  from prepared_rules as pr"
+    ")"
+).format(rank_serial=ScopedConfigurationItem.RANK_SERIAL,
+         rank_user=ScopedConfigurationItem.RANK_USER,
+         rank_tag=ScopedConfigurationItem.RANK_TAG,
+         rank_all=ScopedConfigurationItem.RANK_ALL)
+
+
+def candidate_rules_kwargs(enrolled_machine, tags):
+    """The parameters CANDIDATE_RULES_SQL reads."""
+    return {"configuration_pk": enrolled_machine.enrollment.configuration.pk,
+            "serial_number": enrolled_machine.serial_number,
+            "primary_user": enrolled_machine.primary_user or None,
+            "tag_ids": list(tags) if tags else []}
+
+
+def skips_cel_rules(enrolled_machine):
+    """Whether the client is too old to evaluate a CEL rule, so the download leaves it out."""
+    return enrolled_machine.get_comparable_santa_version() < (2025, 6)
+
+
 class MachineRuleManager(models.Manager):
+    def candidates_for_machine(self, enrolled_machine, tags):
+        """Every rule in scope for the machine, the one that decides each target first.
+
+        The same candidates as the next rule download, from the same text. A CEL rule a client is
+        too old to evaluate sorts last and is marked: the download leaves it out, so it decides
+        nothing, and the page says why instead of hiding it.
+        """
+        query = (
+            "WITH " + CANDIDATE_RULES_SQL +
+            ", flagged_rules as ("
+            "  select rr.*, {skipped} as is_skipped,"
+            "  count(*) over (partition by rr.target_id) as rules_in_configuration"
+            "  from ranked_rules as rr"
+            "), candidates as ("
+            "  select rule_id, target_id, policy, version, is_voting_rule, match_rank, is_skipped,"
+            "  rules_in_configuration,"
+            "  row_number() over ("
+            "    partition by target_id order by is_skipped, match_rank, {policy_rank}"
+            "  ) as rank_in_target"
+            "  from flagged_rules"
+            "  where match_rank is not null"
+            ") "
+            "select c.rule_id, c.target_id, t.type as target_type, t.identifier, c.policy, c.version,"
+            "c.is_voting_rule, c.match_rank, c.is_skipped, c.rules_in_configuration, c.rank_in_target "
+            "from candidates as c "
+            "join santa_target as t on (t.id = c.target_id) "
+            "order by t.identifier, c.rank_in_target"
+        ).format(policy_rank=Rule.Policy.strictness_sql("policy"),
+                 skipped=(f"(policy = {Rule.Policy.CEL})" if skips_cel_rules(enrolled_machine) else "false"))
+        with connection.cursor() as cursor:
+            cursor.execute(query, candidate_rules_kwargs(enrolled_machine, tags))
+            columns = [col[0] for col in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    def rows_for_machine(self, enrolled_machine, tags):
+        """One row per target: what the server decided, what the device holds, and the state.
+
+        The trust test of the page: the rows in the states NOT_YET and STILL are exactly the rules
+        and the removals the next rule download sends.
+        """
+        targets = {}
+
+        def target_row(target_id, target_type, identifier):
+            return targets.setdefault(
+                target_id,
+                {"target_id": target_id, "target_type": Target.Type(target_type),
+                 "identifier": identifier, "winner": None, "skipped": [],
+                 "rules_in_configuration": 0, "ledger": None}
+            )
+
+        for candidate in self.candidates_for_machine(enrolled_machine, tags):
+            target = target_row(candidate["target_id"], candidate["target_type"], candidate["identifier"])
+            target["rules_in_configuration"] = candidate["rules_in_configuration"]
+            if candidate["is_skipped"]:
+                target["skipped"].append(candidate)
+            elif candidate["rank_in_target"] == 1:
+                target["winner"] = candidate
+        for machine_rule in self.filter(enrolled_machine=enrolled_machine).select_related("target"):
+            target = target_row(machine_rule.target_id, machine_rule.target.type,
+                                machine_rule.target.identifier)
+            target["ledger"] = machine_rule
+        rows = []
+        for target in targets.values():
+            state = self._row_state(target["winner"], target["ledger"], target["skipped"])
+            if state is None:
+                # the device holds nothing for the target and nothing is left to send: a removal
+                # staged over a rule staged by the same session
+                continue
+            target["state"] = state
+            target["device_policy"], target["device_version"] = self._device_rule(target["ledger"])
+            rows.append(target)
+        # the order the client reads the types in, then the identifier
+        type_order = {target_type: i for i, target_type in enumerate(Target.Type.rule_order())}
+        rows.sort(key=lambda r: (type_order.get(r["target_type"], len(type_order)), r["identifier"]))
+        return rows
+
+    @staticmethod
+    def _device_rule(machine_rule):
+        """The policy and the version the client confirmed, or (None, None) when it holds none."""
+        if machine_rule is None:
+            return None, None
+        if machine_rule.sync_session is None:
+            return machine_rule.policy, machine_rule.version
+        # a session staged a rule or a removal over what the client confirmed, and the committed
+        # columns are the only place where it still exists
+        return machine_rule.committed_policy, machine_rule.committed_version
+
+    @classmethod
+    def _row_state(cls, winner, machine_rule, skipped):
+        device_policy, device_version = cls._device_rule(machine_rule)
+        staged = machine_rule is not None and machine_rule.sync_session is not None
+        if winner is not None:
+            # a rule sent during the current session is not on the device yet: santa writes its
+            # database at the very end of the download
+            if not staged and (device_policy, device_version) == (winner["policy"], winner["version"]):
+                return MachineRule.State.ON_DEVICE
+            return MachineRule.State.NOT_YET
+        if device_policy is not None:
+            return MachineRule.State.STILL
+        # nothing decides and nothing is on the device: the only rules in scope are the ones the
+        # client cannot evaluate
+        return MachineRule.State.SKIPPED if skipped else None
+
     def _iter_new_rules(self, enrolled_machine, tags):
         query = (
-            "WITH prepared_rules as ("  # aggregate the tag ids
-            "  select r.target_id, r.policy, r.cel_expr, r.custom_msg, r.custom_url, r.version,"
-            "  r.serial_numbers, r.primary_users,"
-            "  array_remove(array_agg(srt.tag_id), null) as tag_ids,"
-            "  r.excluded_serial_numbers, r.excluded_primary_users,"
-            "  array_remove(array_agg(sret.tag_id), null) as excluded_tag_ids"
-            "  from santa_rule as r"
-            "  left join santa_rule_tags as srt on (srt.rule_id = r.id)"
-            "  left join santa_rule_excluded_tags as sret on (sret.rule_id = r.id)"
-            "  where r.configuration_id = %(configuration_pk)s"
-            "  group by r.id"
-            "), ranked_rules as ("  # the first level that matches the machine decides
-            "  select pr.target_id, pr.policy, pr.cel_expr, pr.custom_msg, pr.custom_url, pr.version,"
-            "  case"
-            "    when %(serial_number)s = any(pr.serial_numbers) then {rank_serial}"
-            "    when %(serial_number)s = any(pr.excluded_serial_numbers) then null"
-            # a null primary user makes its two clauses false, an empty tag array its two
-            "    when %(primary_user)s = any(pr.primary_users) then {rank_user}"
-            "    when %(primary_user)s = any(pr.excluded_primary_users) then null"
-            "    when %(tag_ids)s && pr.excluded_tag_ids then null"
-            "    when %(tag_ids)s && pr.tag_ids then {rank_tag}"
-            "    when cardinality(pr.serial_numbers) = 0"
-            "     and cardinality(pr.primary_users) = 0"
-            "     and cardinality(pr.tag_ids) = 0 then {rank_all}"
-            "  end as match_rank"
-            "  from prepared_rules as pr"
-            "), filtered_rules as ("  # the winner per target for the enrolled machine
+            "WITH " + CANDIDATE_RULES_SQL +
+            ", filtered_rules as ("  # the winner per target for the enrolled machine
             "  select distinct on (target_id)"
             "  target_id, policy, cel_expr, custom_msg, custom_url, version, match_rank"
             "  from ranked_rules"
@@ -1874,28 +2014,19 @@ class MachineRuleManager(models.Manager):
             "order by t.identifier limit %(batch_size)s + 1"
         )
         configuration = enrolled_machine.enrollment.configuration
-        kwargs = {"configuration_pk": configuration.pk,
-                  "serial_number": enrolled_machine.serial_number,
-                  "primary_user": enrolled_machine.primary_user or None,
-                  "tag_ids": list(tags) if tags else [],
-                  "enrolled_machine_pk": enrolled_machine.pk,
-                  "batch_size": configuration.batch_size,
-                  "sync_session": enrolled_machine.sync_session}
+        kwargs = candidate_rules_kwargs(enrolled_machine, tags)
+        kwargs.update({"enrolled_machine_pk": enrolled_machine.pk,
+                       "batch_size": configuration.batch_size,
+                       "sync_session": enrolled_machine.sync_session})
         # skip rules with CEL policy if santa version is too old
-        policy_where = ""
-        if enrolled_machine.get_comparable_santa_version() < (2025, 6):
-            policy_where = f" and policy != {Rule.Policy.CEL}"
+        policy_where = f" and policy != {Rule.Policy.CEL}" if skips_cel_rules(enrolled_machine) else ""
         # during a clean sync, the client rebuilds its rule database from the rules of the
         # current session only, so the committed machine rules are ignored
         if enrolled_machine.sync_session_clean:
             machine_rule_wheres = "sync_session = %(sync_session)s"
         else:
             machine_rule_wheres = "sync_session is null or sync_session = %(sync_session)s"
-        query = query.format(rank_serial=ScopedConfigurationItem.RANK_SERIAL,
-                             rank_user=ScopedConfigurationItem.RANK_USER,
-                             rank_tag=ScopedConfigurationItem.RANK_TAG,
-                             rank_all=ScopedConfigurationItem.RANK_ALL,
-                             policy_where=policy_where,
+        query = query.format(policy_where=policy_where,
                              policy_rank=Rule.Policy.strictness_sql("policy"),
                              machine_rule_wheres=machine_rule_wheres)
         cursor = connection.cursor()
@@ -2054,6 +2185,13 @@ class MachineRuleManager(models.Manager):
 
 
 class MachineRule(models.Model):
+    class State(models.TextChoices):
+        ON_DEVICE = "ON_DEVICE", _("On device")
+        NOT_YET = "NOT_YET", _("Not yet on device")
+        STILL = "STILL", _("Still on device")
+        # a CEL rule, on a client too old to evaluate one
+        SKIPPED = "SKIPPED", _("Skipped")
+
     enrolled_machine = models.ForeignKey(EnrolledMachine, on_delete=models.CASCADE)
     target = models.ForeignKey(Target, on_delete=models.PROTECT)
     policy = models.PositiveSmallIntegerField(choices=Rule.Policy.choices)
