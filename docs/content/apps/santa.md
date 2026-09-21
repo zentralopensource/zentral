@@ -437,6 +437,13 @@ of them: the others are wider, or less strict, see [Rule resolution](#rule-resol
 The filters — target type, policy, voting, state — and the identifier search give the count of each value
 next to it.
 
+### The Path regexes tab
+
+One row for each part of the two patterns Zentral sends: the patterns of the configuration itself, with `-`
+as their name and `Configuration` as what decided, and the entry that won each pattern, with what decided
+for the machine. The rows are in the order Zentral composes the patterns in. See
+[Scoped path regexes](#scoped-path-regexes). The table only gives the entries that you can view.
+
 ### Enrollments
 
 A serial number has one enrollment for each `(enrollment, hardware UUID)` pair. It gets a second one when the machine enrolls through another enrollment, or when a change of logic board gives it a new hardware UUID.

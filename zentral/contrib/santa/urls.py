@@ -154,6 +154,8 @@ urlpatterns = [
     path('machines/<str:urlsafe_serial_number>/', views.MachineView.as_view(), name="machine"),
     path('machines/<str:urlsafe_serial_number>/rules/',
          views.MachineRulesView.as_view(), name="machine_rules"),
+    path('machines/<str:urlsafe_serial_number>/path_regexes/',
+         views.MachinePathRegexesView.as_view(), name="machine_path_regexes"),
 
     # machine actions
     path('machine/<str:urlsafe_serial_number>/force_clean_sync/<str:sync_type>/',

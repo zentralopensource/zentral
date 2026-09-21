@@ -10,8 +10,10 @@ from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.santa.forms import EnrolledMachineSearchForm
 from zentral.contrib.santa.machine_actions import actions as machine_action_classes
 from zentral.contrib.santa.models import (Configuration, EnrolledMachine, MachineRule, Rule,
-                                          ScopedClientMode, ScopedConfigurationItem, Target)
-from zentral.contrib.santa.pbac import ViewEnrolledMachineRequest, ViewScopedClientModeRequest
+                                          ScopedClientMode, ScopedConfigurationItem,
+                                          ScopedPathRegex, Target)
+from zentral.contrib.santa.pbac import (ViewEnrolledMachineRequest, ViewScopedClientModeRequest,
+                                        ViewScopedPathRegexRequest)
 from zentral.utils.views import PBACViewMixin, UserPaginationListView
 
 
@@ -96,7 +98,8 @@ class BaseMachineView(PBACViewMixin, TemplateView):
             "tab": self.tab,
             "tabs": [(name, title, reverse(f"santa:{url_name}", args=(urlsafe_serial_number,)))
                      for name, title, url_name in (("overview", "Overview", "machine"),
-                                                   ("rules", "Rules", "machine_rules"))],
+                                                   ("rules", "Rules", "machine_rules"),
+                                                   ("path_regexes", "Path regexes", "machine_path_regexes"))],
             "actions": [
                 (action.get_url(), action.get_disabled(), action.title, action.display_class)
                 for action in (cls(self.machine.serial_number, self.request.user)
@@ -286,3 +289,48 @@ class MachineRulesView(MachineTabFiltersMixin, BaseMachineView):
         qd = self.request.GET.copy()
         qd["page"] = page_number
         return f"?{qd.urlencode()}"
+
+
+class MachinePathRegexesView(MachineTabFiltersMixin, BaseMachineView):
+    template_name = "santa/machine_path_regexes.html"
+    tab = "path_regexes"
+
+    FILTERS = (
+        ("policy", "Policy", "policy", lambda: ScopedPathRegex.Policy.choices),
+    )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        configuration = ctx["configuration"]
+        winners = Configuration.resolve_scoped_path_regexes(
+            ScopedPathRegex.objects.for_machine(
+                configuration,
+                self.enrolled_machine.serial_number,
+                self.enrolled_machine.primary_user,
+                [t.pk for t in self.machine.tags],
+            ).prefetch_related("tags", "excluded_tags")
+        )
+        # a template cannot build a PBAC request
+        requests = [ViewScopedPathRegexRequest(self.request.user, w) for w in winners]
+        engine.authorize_requests(requests)
+        visible_pks = {w.pk for w, r in zip(winners, requests) if r.is_authorized}
+        # the parts of each pattern Zentral composes, in the order it composes them: the pattern
+        # of the configuration first, then the entries. An entry the user may not view is left out
+        rows = []
+        for policy, baseline in ((ScopedPathRegex.Policy.ALLOW, configuration.allowed_path_regex),
+                                 (ScopedPathRegex.Policy.BLOCK, configuration.blocked_path_regex)):
+            if baseline:
+                rows.append({"name": None, "regex": baseline, "policy": policy.value,
+                             "policy_display": policy.label,
+                             "decided_by": "Configuration", "url": None})
+            for winner in winners:
+                if winner.policy != policy or winner.pk not in visible_pks:
+                    continue
+                rows.append({"name": winner.name, "regex": winner.regex,
+                             "policy": winner.policy,
+                             "policy_display": winner.get_policy_display(),
+                             "decided_by": MATCH_RANK_DISPLAY[winner.match_rank],
+                             "url": (winner.get_absolute_url()
+                                     if self.request.user.has_perm("santa.view_configuration") else None)})
+        ctx["rows"] = self._filtered_rows(ctx, rows, ("name", "regex"))
+        return ctx

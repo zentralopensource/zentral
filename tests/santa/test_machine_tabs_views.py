@@ -5,7 +5,9 @@ from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.santa.models import EnrolledMachine, MachineRule, Rule, Target
+from zentral.contrib.inventory.models import Tag
+from zentral.contrib.santa.models import (EnrolledMachine, MachineRule, Rule, ScopedPathRegex,
+                                          Target)
 
 from .utils import SantaSyncClient, force_configuration, force_enrolled_machine, force_rule, new_sha256
 
@@ -52,6 +54,9 @@ class SantaMachineTabsViewsTestCase(TestCase, LoginCase):
     def rules_url(self, enrolled_machine):
         return reverse("santa:machine_rules", args=(enrolled_machine.get_urlsafe_serial_number(),))
 
+    def path_regexes_url(self, enrolled_machine):
+        return reverse("santa:machine_path_regexes", args=(enrolled_machine.get_urlsafe_serial_number(),))
+
     def force_machine(self):
         configuration = force_configuration()
         return force_enrolled_machine(configuration=configuration), configuration
@@ -59,6 +64,19 @@ class SantaMachineTabsViewsTestCase(TestCase, LoginCase):
     def force_binary_rule(self, configuration, **kwargs):
         return force_rule(configuration=configuration, target_type=Target.Type.BINARY,
                           target_identifier=new_sha256(), **kwargs)
+
+    def force_path_regex(self, configuration, regex, block=True, name=None, tags=None,
+                         excluded_tags=None, **kwargs):
+        entry = ScopedPathRegex.objects.create(
+            configuration=configuration,
+            name=name or get_random_string(12),
+            regex=regex,
+            policy=ScopedPathRegex.Policy.BLOCK if block else ScopedPathRegex.Policy.ALLOW,
+            **kwargs,
+        )
+        entry.tags.set(tags or [])
+        entry.excluded_tags.set(excluded_tags or [])
+        return entry
 
     # the tab bar
 
@@ -69,8 +87,9 @@ class SantaMachineTabsViewsTestCase(TestCase, LoginCase):
                                            args=(enrolled_machine.get_urlsafe_serial_number(),)))
         self.assertEqual(response.context["tab"], "overview")
         self.assertEqual([name for name, _, _ in response.context["tabs"]],
-                         ["overview", "rules"])
+                         ["overview", "rules", "path_regexes"])
         self.assertContains(response, self.rules_url(enrolled_machine))
+        self.assertContains(response, self.path_regexes_url(enrolled_machine))
 
     # the rules tab
 
@@ -273,6 +292,100 @@ class SantaMachineTabsViewsTestCase(TestCase, LoginCase):
         response = self.client.get(self.rules_url(enrolled_machine))
         self.assertIsNone(response.context["rows"][0]["rule_url"])
         self.assertIsNone(response.context["rows"][0]["rules_url"])
+
+    # the path regexes tab
+
+    def test_machine_path_regexes_permission_denied(self):
+        enrolled_machine, _ = self.force_machine()
+        self.login()
+        response = self.client.get(self.path_regexes_url(enrolled_machine))
+        self.assertEqual(response.status_code, 403)
+
+    def test_machine_path_regexes_none(self):
+        enrolled_machine, _ = self.force_machine()
+        self.login_with_view_enrolled_machine()
+        response = self.client.get(self.path_regexes_url(enrolled_machine))
+        self.assertEqual(response.context["rows"], [])
+        self.assertContains(response, "No pattern.")
+
+    def test_machine_path_regexes_the_pattern_of_the_configuration(self):
+        configuration = force_configuration(blocked_path_regex="/tmp/")
+        enrolled_machine = force_enrolled_machine(configuration=configuration)
+        self.login_with_view_enrolled_machine()
+        response = self.client.get(self.path_regexes_url(enrolled_machine))
+        self.assertEqual(response.context["rows"],
+                         [{"name": None, "regex": "/tmp/", "policy": "BLOCK",
+                           "policy_display": "Block", "decided_by": "Configuration", "url": None}])
+
+    def test_machine_path_regexes_the_winner_of_each_pattern(self):
+        devs = Tag.objects.create(name=get_random_string(12))
+        configuration = force_configuration(blocked_path_regex="/opt/")
+        enrolled_machine = force_enrolled_machine(configuration=configuration, tags=[devs])
+        # the Downloads table of the design: the allow entry wins by rank, so the path is not
+        # blocked for a machine of the devs population, and the block entry is not a pattern
+        winner = self.force_path_regex(configuration, "/Users/.*/Downloads/", block=False, tags=[devs])
+        self.force_path_regex(configuration, "/Users/.*/Downloads/", block=True)
+        # and an entry the machine is out of
+        self.force_path_regex(configuration, "/tmp/", block=True, excluded_tags=[devs])
+        self.login_with_view_enrolled_machine(extra_actions=("viewScopedPathRegex",))
+        response = self.client.get(self.path_regexes_url(enrolled_machine))
+        # the patterns the machine gets, in the order they are composed: the configuration first
+        self.assertEqual(
+            [(row["name"], row["regex"], row["policy_display"], row["decided_by"])
+             for row in response.context["rows"]],
+            [(winner.name, "/Users/.*/Downloads/", "Allow", "Tag"),
+             (None, "/opt/", "Block", "Configuration")],
+        )
+
+    def test_machine_path_regexes_filter_policy(self):
+        devs = Tag.objects.create(name=get_random_string(12))
+        configuration = force_configuration(blocked_path_regex="/opt/")
+        enrolled_machine = force_enrolled_machine(configuration=configuration, tags=[devs])
+        allow = self.force_path_regex(configuration, "/Users/.*/Downloads/", block=False, tags=[devs])
+        self.login_with_view_enrolled_machine(extra_actions=("viewScopedPathRegex",))
+        response = self.client.get(self.path_regexes_url(enrolled_machine),
+                                   {"policy": ScopedPathRegex.Policy.ALLOW})
+        self.assertEqual([row["regex"] for row in response.context["rows"]], [allow.regex])
+        # every value of the filter carries its count, over the whole table
+        policy_filter = response.context["filters"][0]
+        self.assertEqual(policy_filter["label"], "Policy")
+        self.assertEqual({label: count for _, label, count in policy_filter["values"]},
+                         {"All": 2, "Allow": 1, "Block": 1})
+
+    def test_machine_path_regexes_search_the_name(self):
+        devs = Tag.objects.create(name=get_random_string(12))
+        configuration = force_configuration(blocked_path_regex="/opt/")
+        enrolled_machine = force_enrolled_machine(configuration=configuration, tags=[devs])
+        entry = self.force_path_regex(configuration, "/Users/.*/Downloads/", block=False,
+                                      name="Downloads for the devs", tags=[devs])
+        self.login_with_view_enrolled_machine(extra_actions=("viewScopedPathRegex",))
+        response = self.client.get(self.path_regexes_url(enrolled_machine), {"q": "for the devs"})
+        self.assertEqual([row["name"] for row in response.context["rows"]], [entry.name])
+
+    def test_machine_path_regexes_search_the_pattern(self):
+        configuration = force_configuration(blocked_path_regex="/opt/homebrew/")
+        enrolled_machine = force_enrolled_machine(configuration=configuration)
+        self.force_path_regex(configuration, "/tmp/", block=True)
+        self.login_with_view_enrolled_machine(extra_actions=("viewScopedPathRegex",))
+        # the pattern of the configuration has no name, and the search still finds it
+        response = self.client.get(self.path_regexes_url(enrolled_machine), {"q": "homebrew"})
+        self.assertEqual([(row["name"], row["regex"]) for row in response.context["rows"]],
+                         [(None, "/opt/homebrew/")])
+        self.assertEqual(response.context["row_count"], 1)
+
+    def test_machine_path_regexes_hidden_without_permission(self):
+        configuration = force_configuration()
+        enrolled_machine = force_enrolled_machine(configuration=configuration)
+        entry = self.force_path_regex(configuration, "/tmp/", block=True)
+        self.login_with_view_enrolled_machine()
+        response = self.client.get(self.path_regexes_url(enrolled_machine))
+        # the table only gives the entries the user may view. The machine still gets the pattern
+        self.assertEqual(response.context["rows"], [])
+        self.assertNotContains(response, entry.name)
+        self.assertEqual(
+            configuration.get_sync_server_config(enrolled_machine, (2026, 7))["blocked_path_regex"],
+            "^(?:(?:/tmp/))",
+        )
 
 
 class SantaMachineRuleStateChoicesTestCase(TestCase):

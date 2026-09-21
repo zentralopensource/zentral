@@ -1,0 +1,41 @@
+{% extends "santa/machine.html" %}
+{% load base_extras %}
+
+{% block tab_content %}
+{% include "santa/_machine_filters.html" with q_label="Name or pattern" %}
+
+<h3 class="fs-5">Pattern{{ row_count|pluralize }} ({{ row_count }})</h3>
+
+{% if rows %}
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Pattern</th>
+        <th>Policy</th>
+        <th>Decided by</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>
+          {% if row.url %}
+          <a href="{{ row.url }}">{{ row.name }}</a>
+          {% else %}
+          {{ row.name|default:"-" }}
+          {% endif %}
+        </td>
+        <td><code>{{ row.regex }}</code></td>
+        <td>{{ row.policy_display }}</td>
+        <td>{{ row.decided_by }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-secondary">No pattern.</p>
+{% endif %}
+{% endblock %}
