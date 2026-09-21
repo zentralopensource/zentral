@@ -122,11 +122,11 @@ class ProbeAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         )
 
     def test_create_probe_slug_error(self):
-        probe = force_probe_source()
+        force_probe_source(name="probe source")
         self.set_permissions("probes.add_probesource")
         response = self.post(
             reverse("probes_api:probes"),
-            {"name": probe.name.upper()},
+            {"name": "Probe Source"},
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -245,12 +245,12 @@ class ProbeAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_update_probe_slug_error(self):
-        probe_source_1 = force_probe_source()
+        force_probe_source(name="probe source")
         probe_source_2 = force_probe_source()
         self.set_permissions("probes.change_probesource")
         response = self.put(
             reverse("probes_api:probe", args=(probe_source_2.pk,)),
-            {"name": probe_source_1.name.upper()}
+            {"name": "Probe Source"}
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
