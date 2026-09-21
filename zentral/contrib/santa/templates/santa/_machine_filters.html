@@ -1,0 +1,20 @@
+{% comment %}The filter row of a machine tab: a select per filter with the count of each value, and a free text field.{% endcomment %}
+<form method="GET" class="mb-3">
+  <div class="d-flex flex-wrap gap-2 align-items-end">
+    {% for filter in filters %}
+    <div class="form-floating">
+      <select class="form-select" name="{{ filter.name }}" onchange="this.form.submit()">
+        {% for value, label, count in filter.values %}
+        <option value="{{ value }}"{% if value == filter.selected %} selected="selected"{% endif %}>{{ label }} ({{ count }})</option>
+        {% endfor %}
+      </select>
+      <label>{{ filter.label }}</label>
+    </div>
+    {% endfor %}
+    <div class="form-floating">
+      <input class="form-control" type="text" name="q" value="{{ q }}" placeholder="{{ q_label }}">
+      <label>{{ q_label }}</label>
+    </div>
+    <button type="submit" class="btn btn-link mb-2"><i class="bi bi-search"></i></button>
+  </div>
+</form>

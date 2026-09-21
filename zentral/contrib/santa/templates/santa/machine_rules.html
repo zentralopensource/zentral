@@ -1,0 +1,71 @@
+{% extends "santa/machine.html" %}
+{% load base_extras ui_extras %}
+
+{% block tab_content %}
+{% include "santa/_machine_filters.html" with q_label="Identifier" %}
+
+<h3 class="fs-5">Rule{{ row_count|pluralize }} ({{ row_count }})</h3>
+
+{% if rows %}
+{% pagination next_url previous_url %}
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Identifier</th>
+        <th>Server</th>
+        <th>Decided by</th>
+        <th>Device</th>
+        <th>State</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td>{{ row.target_type.label }}</td>
+        <td><a href="{{ row.target_url }}"><code>{{ row.identifier }}</code></a></td>
+        <td>
+          {% if row.policy_display %}
+          {% if row.rule_url %}<a href="{{ row.rule_url }}">{{ row.policy_display }}</a>
+          {% else %}{{ row.policy_display }}{% endif %}
+          <span class="text-secondary">v{{ row.policy_version }}</span>
+          {% if row.voting == "yes" %}<span class="badge text-bg-info">voting</span>{% endif %}
+          {% else %}
+          -
+          {% endif %}
+        </td>
+        <td>
+          {{ row.decided_by|default:"-" }}
+          {% if row.rules_url %}
+          <div><a href="{{ row.rules_url }}">{{ row.rules_in_configuration }} rules</a></div>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.device_policy_display %}
+          {{ row.device_policy_display }} <span class="text-secondary">v{{ row.device_version }}</span>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+        <td>
+          {% if row.state == "ON_DEVICE" %}
+          <span class="badge text-bg-success">On device</span>
+          {% elif row.state == "NOT_YET" %}
+          <span class="badge text-bg-warning">Not yet on device</span>
+          {% elif row.state == "SKIPPED" %}
+          <span class="badge text-bg-light">Skipped</span>
+          {% else %}
+          <span class="badge text-bg-secondary">Still on device</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% pagination next_url previous_url %}
+{% else %}
+<p class="text-secondary">No rule.</p>
+{% endif %}
+{% endblock %}

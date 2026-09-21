@@ -1,18 +1,33 @@
 import logging
+from django.core.paginator import Paginator
 from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.http import urlencode
 from django.views.generic import TemplateView
 from pbac.engine import engine
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.santa.forms import EnrolledMachineSearchForm
 from zentral.contrib.santa.machine_actions import actions as machine_action_classes
-from zentral.contrib.santa.models import Configuration, EnrolledMachine, ScopedClientMode
+from zentral.contrib.santa.models import (Configuration, EnrolledMachine, MachineRule, Rule,
+                                          ScopedClientMode, ScopedConfigurationItem, Target)
 from zentral.contrib.santa.pbac import ViewEnrolledMachineRequest, ViewScopedClientModeRequest
 from zentral.utils.views import PBACViewMixin, UserPaginationListView
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.machines')
+
+
+# a candidate is in scope, so the level that decided names the scope field of that level. A
+# statement with no scope field reaches every machine, which is what decided for this one. The
+# wording is the one the scope of an entry uses. Only a row with no statement at all decides
+# nothing: a rule the device still has, or one its Santa version cannot evaluate
+MATCH_RANK_DISPLAY = {
+    ScopedConfigurationItem.RANK_SERIAL: "Serial number",
+    ScopedConfigurationItem.RANK_USER: "Primary user",
+    ScopedConfigurationItem.RANK_TAG: "Tag",
+    ScopedConfigurationItem.RANK_ALL: "All machines",
+}
 
 
 class MachineListView(PBACViewMixin, UserPaginationListView):
@@ -50,9 +65,13 @@ class MachineListView(PBACViewMixin, UserPaginationListView):
         return ctx
 
 
-class MachineView(PBACViewMixin, TemplateView):
+class BaseMachineView(PBACViewMixin, TemplateView):
+    """The machine the tabs share: the current enrollment, and the tab bar.
+
+    A tab has its own URL, so its pagination and its filters live in the query string.
+    """
     pbac_request_class = ViewEnrolledMachineRequest
-    template_name = "santa/machine_overview.html"
+    tab = None
 
     def get_pbac_request_kwargs(self, kwargs):
         return {}
@@ -65,6 +84,32 @@ class MachineView(PBACViewMixin, TemplateView):
             raise Http404("Machine not enrolled")
         self.enrolled_machine = self.enrolled_machines[0]
         return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        urlsafe_serial_number = self.machine.get_urlsafe_serial_number()
+        ctx.update({
+            "machine": self.machine,
+            "enrolled_machine": self.enrolled_machine,
+            "enrolled_machines": self.enrolled_machines,
+            "configuration": self.enrolled_machine.enrollment.configuration,
+            "tab": self.tab,
+            "tabs": [(name, title, reverse(f"santa:{url_name}", args=(urlsafe_serial_number,)))
+                     for name, title, url_name in (("overview", "Overview", "machine"),
+                                                   ("rules", "Rules", "machine_rules"))],
+            "actions": [
+                (action.get_url(), action.get_disabled(), action.title, action.display_class)
+                for action in (cls(self.machine.serial_number, self.request.user)
+                               for cls in machine_action_classes)
+                if action.check_permissions()
+            ],
+        })
+        return ctx
+
+
+class MachineView(BaseMachineView):
+    template_name = "santa/machine_overview.html"
+    tab = "overview"
 
     def _client_mode(self, tag_ids):
         """The entry that decides the mode for the machine, and whether the user may view it."""
@@ -98,13 +143,9 @@ class MachineView(PBACViewMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        configuration = self.enrolled_machine.enrollment.configuration
+        configuration = ctx["configuration"]
         tags = self.machine.tags
         ctx.update({
-            "machine": self.machine,
-            "enrolled_machine": self.enrolled_machine,
-            "enrolled_machines": self.enrolled_machines,
-            "configuration": configuration,
             "tags": tags,
             # the resolution the preflight answers with, from the code that answers it
             "sync_config": configuration.get_sync_server_config(
@@ -133,10 +174,115 @@ class MachineView(PBACViewMixin, TemplateView):
                                   ) else None
         ctx["event_detail_source"] = (button_entry or configuration).get_event_detail_source_display()
         ctx["event_detail_source_link"] = self._source(configuration, button_entry, winner_visible)
-        ctx["actions"] = [
-            (action.get_url(), action.get_disabled(), action.title, action.display_class)
-            for action in (cls(self.machine.serial_number, self.request.user)
-                           for cls in machine_action_classes)
-            if action.check_permissions()
-        ]
         return ctx
+
+
+class MachineTabFiltersMixin:
+    """The filter row of a machine tab: a select per filter, and a free text field.
+
+    Each value carries its count, computed over the rows the other filters keep, so the row is
+    the summary of the tab. FILTERS holds the query parameter, its label, the row key it reads,
+    and the choices.
+    """
+    FILTERS = ()
+
+    def _selected(self):
+        return {name: self.request.GET.get(name) or "" for name, _, _, _ in self.FILTERS}
+
+    def _matches(self, row, selected, skip=None):
+        return all(selected[name] == row[key]
+                   for name, _, key, _ in self.FILTERS
+                   if selected[name] and name != skip)
+
+    def _filters(self, rows, selected):
+        filters = []
+        for name, label, key, choices in self.FILTERS:
+            others = [row for row in rows if self._matches(row, selected, skip=name)]
+            values = [("", "All", len(others))]
+            for value, value_label in choices():
+                values.append((value, value_label, sum(1 for row in others if row[key] == value)))
+            filters.append({"name": name, "label": label,
+                            "selected": selected[name], "values": values})
+        return filters
+
+    def _filtered_rows(self, ctx, rows, search_keys):
+        """The rows the filters and the free text field keep, with the filter row to render."""
+        selected = self._selected()
+        ctx["filters"] = self._filters(rows, selected)
+        search = (self.request.GET.get("q") or "").strip()
+        ctx["q"] = search
+        rows = [row for row in rows if self._matches(row, selected)]
+        if search:
+            rows = [row for row in rows
+                    if any(search.lower() in (row[key] or "").lower() for key in search_keys)]
+        ctx["row_count"] = len(rows)
+        return rows
+
+
+class MachineRulesView(MachineTabFiltersMixin, BaseMachineView):
+    template_name = "santa/machine_rules.html"
+    tab = "rules"
+
+    FILTERS = (
+        # the query parameter, its label, the row key it reads, and the choices with their label
+        ("target_type", "Target type", "target_type",
+         lambda: [(t.value, t.label) for t in Target.Type.rule_order()]),
+        ("policy", "Policy", "policy",
+         lambda: [(str(p.value), p.label) for p in Rule.Policy.strictest_first()]),
+        ("voting", "Voting", "voting",
+         lambda: [("yes", "Yes"), ("no", "No")]),
+        ("state", "State", "state",
+         lambda: MachineRule.State.choices),
+    )
+
+    def _rules_url(self, **filters):
+        query = urlencode(filters)
+        configuration_pk = self.enrolled_machine.enrollment.configuration.pk
+        return f"{reverse('santa:configuration_rules', args=(configuration_pk,))}?{query}"
+
+    def _rows(self):
+        rows = MachineRule.objects.rows_for_machine(self.enrolled_machine,
+                                                    [t.pk for t in self.machine.tags])
+        can_view_rule = self.request.user.has_perm("santa.view_rule")
+        for row in rows:
+            winner = row["winner"]
+            row["target_url"] = reverse(row["target_type"].url_name, args=(row["identifier"],))
+            row["policy"] = str(winner["policy"]) if winner else None
+            row["voting"] = ("yes" if winner["is_voting_rule"] else "no") if winner else "no"
+            row["policy_display"] = Rule.Policy(winner["policy"]).label if winner else None
+            row["policy_version"] = winner["version"] if winner else None
+            row["decided_by"] = MATCH_RANK_DISPLAY[winner["match_rank"]] if winner else None
+            row["device_policy_display"] = (Rule.Policy(row["device_policy"]).label
+                                            if row["device_policy"] is not None else None)
+            row["rule_url"] = None
+            row["rules_url"] = None
+            if can_view_rule:
+                if winner:
+                    # the policy links to the rule that decided, alone: the type, the target and
+                    # the policy. Every rule in scope has one, a rule for everyone included
+                    row["rule_url"] = self._rules_url(target_type=row["target_type"].value,
+                                                      identifier=row["identifier"],
+                                                      policy=winner["policy"])
+                if row["rules_in_configuration"] > 1:
+                    # the field that decided links to every rule the configuration has for the
+                    # target: the others are wider, or less strict
+                    row["rules_url"] = self._rules_url(target_type=row["target_type"].value,
+                                                       identifier=row["identifier"])
+        return rows
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        rows = self._filtered_rows(ctx, self._rows(), ("identifier",))
+        page = Paginator(rows, self.request.user.items_per_page).get_page(self.request.GET.get("page"))
+        ctx["page_obj"] = page
+        ctx["rows"] = page.object_list
+        if page.has_next():
+            ctx["next_url"] = self._page_url(page.next_page_number())
+        if page.has_previous():
+            ctx["previous_url"] = self._page_url(page.previous_page_number())
+        return ctx
+
+    def _page_url(self, page_number):
+        qd = self.request.GET.copy()
+        qd["page"] = page_number
+        return f"?{qd.urlencode()}"

@@ -413,6 +413,30 @@ The page describes the current enrollment of the machine, see [Enrollments](#enr
 
 The page uses the tags of now. The last synchronization used the tags of its preflight.
 
+### The Rules tab
+
+One row for each target the machine has a rule for, on the server, on the device, or on both. The
+candidates come from the statement the rule download itself reads, so the tab cannot disagree with what
+the next synchronization sends:
+
+| State | Meaning | The next synchronization |
+| --- | --- | --- |
+| On device | The device confirmed the rule of the server, with the same policy and the same version. | sends nothing |
+| Not yet on device | The server has a rule the device does not have, or has with another policy or another version. A rule sent during the current session is in this state until the postflight: Santa writes its database at the end of the download. | sends the rule |
+| Still on device | The device has a rule the server does not have anymore, because the rule was deleted or the machine went out of its scope. | sends the removal |
+| Skipped | The only rules in scope for the target have the `CEL` policy, and the Santa version of the machine is too old to evaluate one. | sends nothing |
+
+The columns are the target type, the identifier, the policy and the version of the server, what decided for
+the machine — `Serial number`, `Primary user`, `Tag`, or `All machines` for a rule with no scope field — the
+policy and the version of the device, and the state. The two read the same way, so a version that differs
+is as visible as a policy that differs. Only a row with no rule on the server decides nothing, and gives
+`-`: a rule the device still has, or one that is skipped. The policy links to the rule that decided. When
+the configuration has more than one rule for the target, the column gives their number with a link to all
+of them: the others are wider, or less strict, see [Rule resolution](#rule-resolution).
+
+The filters — target type, policy, voting, state — and the identifier search give the count of each value
+next to it.
+
 ### Enrollments
 
 A serial number has one enrollment for each `(enrollment, hardware UUID)` pair. It gets a second one when the machine enrolls through another enrollment, or when a change of logic board gives it a new hardware UUID.

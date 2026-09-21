@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load base_extras %}
+{% comment %}The layout the machine tabs share: breadcrumbs, header, actions and the tab bar.{% endcomment %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:machines' %}">Machines</a></li>
+  <li class="breadcrumb-item active">{{ machine.serial_number|privacywrapper }}</li>
+</ol>
+
+<div class="d-flex align-items-center mb-1">
+  <h2 class="m-0">{{ machine.serial_number|privacywrapper }}</h2>
+  <div class="ms-auto">
+    {% if perms.inventory.view_machinesnapshot %}
+    <a class="btn btn-outline-secondary" href="{% url 'inventory:machine' machine.get_urlsafe_serial_number %}">
+      Inventory machine
+    </a>
+    {% endif %}
+    {% if actions %}
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        Action <span class="caret"></span>
+      </button>
+      <ul class="dropdown-menu">
+        {% for link, disabled, anchor_text, display_class in actions %}
+        <li>
+          <a href="{{ link }}" class="dropdown-item{% if disabled %} disabled{% endif %}{% if display_class %} text-{{ display_class }}{% endif %}">{{ anchor_text }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  {% for name, title, url in tabs %}
+  <li class="nav-item">
+    <a class="nav-link{% if name == tab %} active{% endif %}" href="{{ url }}">{{ title }}</a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% block tab_content %}{% endblock %}
+{% endblock %}
