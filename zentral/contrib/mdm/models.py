@@ -1040,6 +1040,8 @@ class EnrolledDevice(models.Model):
     # status items, keyed by their name, as reported (see declarations/status_report.py)
     status_items = models.JSONField(default=dict)
     status_items_updated_at = models.DateTimeField(null=True)
+    # the last report flagged FullReport, i.e. the device's daily safety sync
+    status_items_full_report_at = models.DateTimeField(null=True)
 
     # information
     device_information = models.JSONField(null=True)
@@ -1255,6 +1257,7 @@ class EnrolledDevice(models.Model):
         self.declaration_items_snapshot = {}
         self.status_items = {}
         self.status_items_updated_at = None
+        self.status_items_full_report_at = None
         self.last_ip = None
         self.last_seen_at = None
         self.last_notified_at = None
@@ -1345,6 +1348,10 @@ class EnrolledDevice(models.Model):
                 continue
             if isinstance(value, dict):
                 value = {k.replace("-", "_"): v for k, v in value.items()}
+                deadline = value.get("target_local_date_time")
+                if isinstance(deadline, str):
+                    # "2026-09-21 08:30:00", "2026-09-21 16:30:00 +0000" or "2026-09-21T08:30:00"
+                    value["deadline"] = deadline.replace("T", " ").removesuffix(" +0000")
             status[key] = value
         return status
 
@@ -1535,6 +1542,7 @@ class EnrolledUser(models.Model):
     # see EnrolledDevice.status_items
     status_items = models.JSONField(default=dict)
     status_items_updated_at = models.DateTimeField(null=True)
+    status_items_full_report_at = models.DateTimeField(null=True)
 
     # notifications
     token = models.BinaryField()
