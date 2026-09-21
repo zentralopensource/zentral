@@ -1240,12 +1240,36 @@ class EnrolledMachineManager(models.Manager):
             ),
         )
 
-    def get_for_serial_number(self, serial_number):
-        return list(
-            self.select_related("enrollment__configuration")
-            .filter(serial_number=serial_number)
-            .order_by("-updated_at")
-        )
+    @staticmethod
+    def _current_first():
+        """The order that puts the row the device talks to first.
+
+        The last preflight is the last time a device spoke to the server through that row. Nulls
+        last: the column arrived without a backfill, so a row that never preflighted since is
+        stale. Not updated_at, which is auto_now: queueing a clean sync on a stale row would make
+        it the current one.
+        """
+        return (F("last_preflight_at").desc(nulls_last=True), "-created_at", "-pk")
+
+    def for_serial_number(self, serial_number):
+        """The enrollments of a serial number, current first. The others are its history."""
+        return (self.select_related("enrollment__configuration")
+                    .filter(serial_number=serial_number)
+                    .order_by(*self._current_first()))
+
+    def current_for_serial_number(self, serial_number):
+        return self.for_serial_number(serial_number).first()
+
+    def current_for_serial_numbers(self):
+        """One row per serial number, its current enrollment: a machine is a serial number.
+
+        A DISTINCT ON cuts before a filter, so the rows come back through a subquery. A filter and
+        an order on the result then apply to the current rows only, and a stale row never matches.
+        """
+        current_pks = (self.order_by("serial_number", *self._current_first())
+                           .distinct("serial_number")
+                           .values("pk"))
+        return self.filter(pk__in=current_pks)
 
     def current_for_primary_user(self, primary_user, max_age_days=90):
         query = (

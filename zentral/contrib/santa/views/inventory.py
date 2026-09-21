@@ -9,25 +9,24 @@ logger = logging.getLogger('zentral.contrib.santa.views.inventory')
 class InventoryMachineSubview:
     template_name = "santa/_inventory_machine_subview.html"
     source_key = ("zentral.contrib.santa", "Santa")
-    err_message = None
     enrolled_machine = None
 
     def __init__(self, serial_number, user):
         self.user = user
-        enrolled_machines = EnrolledMachine.objects.get_for_serial_number(serial_number)
-        count = len(enrolled_machines)
-        if count > 1:
-            self.err_message = f"{count} machines found!!!"
-        if count > 0:
+        enrolled_machines = list(EnrolledMachine.objects.for_serial_number(serial_number))
+        if enrolled_machines:
+            # the row the device talks to. The others are the history of the machine: it
+            # enrolled through another enrollment, or its hardware UUID changed
             self.enrolled_machine = enrolled_machines[0]
+            self.other_enrollment_count = len(enrolled_machines) - 1
 
     def render(self):
-        ctx = {"err_message": self.err_message}
+        ctx = {}
         if self.enrolled_machine:
             em = self.enrolled_machine
             ctx.update({
                 "enrolled_machine": em,
-                "err_message": self.err_message,
+                "other_enrollment_count": self.other_enrollment_count,
                 # a template cannot tell an unknown state from a mismatch
                 "sync_ok": "-" if em.last_sync_ok is None else "yes" if em.last_sync_ok else "no",
                 "binary_rule_count": "-" if em.binary_rule_count is None else em.binary_rule_count,

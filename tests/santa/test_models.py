@@ -1,6 +1,7 @@
 import datetime
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils.crypto import get_random_string
 from zentral.contrib.santa.models import EnrolledMachine, Rule, Target
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from .utils import (add_file_to_test_class, force_ballot, force_configuration, force_enrolled_machine,
@@ -191,3 +192,53 @@ class SantaRuleModelTestCase(TestCase):
                                (force_target(Target.Type.TEAM_ID), 42)):
             with self.subTest(policy=policy, target=target):
                 Rule(configuration=force_configuration(), target=target, policy=policy).clean()
+
+
+class SantaCurrentEnrollmentTestCase(TestCase):
+    """A machine is a serial number, and its current enrollment is the row the device talks to."""
+
+    @staticmethod
+    def at(day):
+        return datetime.datetime(2026, 9, day, tzinfo=datetime.UTC)
+
+    def test_no_enrolled_machine(self):
+        self.assertIsNone(EnrolledMachine.objects.current_for_serial_number(get_random_string(12)))
+
+    def test_last_preflight_decides_not_last_save(self):
+        serial_number = get_random_string(12)
+        current = force_enrolled_machine(serial_number=serial_number, last_preflight_at=self.at(2))
+        stale = force_enrolled_machine(serial_number=serial_number, last_preflight_at=self.at(1))
+        # an admin queueing a clean sync on the stale row saves it, and updated_at is auto_now
+        stale.save()
+        self.assertEqual(EnrolledMachine.objects.current_for_serial_number(serial_number), current)
+        self.assertEqual(list(EnrolledMachine.objects.for_serial_number(serial_number)), [current, stale])
+
+    def test_row_without_preflight_is_last(self):
+        serial_number = get_random_string(12)
+        never = force_enrolled_machine(serial_number=serial_number)
+        current = force_enrolled_machine(serial_number=serial_number, last_preflight_at=self.at(1))
+        self.assertEqual(EnrolledMachine.objects.current_for_serial_number(serial_number), current)
+        self.assertEqual(list(EnrolledMachine.objects.for_serial_number(serial_number)), [current, never])
+
+    def test_rows_without_preflight_ordered_by_creation(self):
+        serial_number = get_random_string(12)
+        first = force_enrolled_machine(serial_number=serial_number)
+        last = force_enrolled_machine(serial_number=serial_number)
+        self.assertEqual(EnrolledMachine.objects.current_for_serial_number(serial_number), last)
+        self.assertEqual(list(EnrolledMachine.objects.for_serial_number(serial_number)), [last, first])
+
+    def test_current_for_serial_numbers_one_row_per_serial(self):
+        serial_number = get_random_string(12)
+        current = force_enrolled_machine(serial_number=serial_number, last_preflight_at=self.at(2))
+        force_enrolled_machine(serial_number=serial_number, last_preflight_at=self.at(1))
+        other = force_enrolled_machine(last_preflight_at=self.at(3))
+        self.assertEqual(
+            set(EnrolledMachine.objects.current_for_serial_numbers().values_list("pk", flat=True)),
+            {current.pk, other.pk},
+        )
+        # a filter on the result applies to the current rows, not to the stale ones
+        self.assertEqual(
+            [em.pk for em in EnrolledMachine.objects.current_for_serial_numbers()
+                                                    .filter(serial_number=serial_number)],
+            [current.pk],
+        )

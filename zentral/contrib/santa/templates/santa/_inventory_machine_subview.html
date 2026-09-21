@@ -1,9 +1,6 @@
 {% load base_extras %}
 {% if enrolled_machine %}
 <h3>Santa</h3>
-{% if err_message %}
-<p class="text-danger">{{ err_message }}</p>
-{% endif %}
 <dl class="row">
   {% if configuration %}
   <dt class="col-sm-3 text-md-end">Configuration</dt>
@@ -34,6 +31,12 @@
   <dd class="col-sm-9">
     <span class="text-warning">{{ enrolled_machine.get_forced_sync_type_display }} queued</span>
     <span class="text-secondary">since {{ enrolled_machine.forced_sync_type_at }}, applied at the next preflight</span>
+  </dd>
+  {% endif %}
+  {% if other_enrollment_count %}
+  <dt class="col-sm-3 text-md-end">Enrollments</dt>
+  <dd class="col-sm-9">
+    current, and {{ other_enrollment_count }} older one{{ other_enrollment_count|pluralize }}
   </dd>
   {% endif %}
   <dt class="col-sm-3 text-md-end">Last preflight</dt>

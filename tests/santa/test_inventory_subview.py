@@ -1,3 +1,5 @@
+import datetime
+
 from accounts.models import User
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -40,3 +42,21 @@ class SantaInventoryMachineSubviewTestCase(TestCase):
         response = self.render_for(enrolled_machine)
         self.assertIn("Clean all queued", response)
         self.assertIn("applied at the next preflight", response)
+
+    # the current enrollment, and the older rows
+
+    def test_one_enrollment(self):
+        enrolled_machine = force_enrolled_machine()
+        self.assertNotIn("older one", self.render_for(enrolled_machine))
+
+    def test_current_enrollment_and_history(self):
+        serial_number = get_random_string(12)
+        current = force_enrolled_machine(serial_number=serial_number, santa_version="2026.7",
+                                         last_preflight_at=datetime.datetime(2026, 9, 2, tzinfo=datetime.UTC))
+        stale = force_enrolled_machine(serial_number=serial_number, santa_version="2024.5",
+                                       last_preflight_at=datetime.datetime(2026, 9, 1, tzinfo=datetime.UTC))
+        stale.save()
+        response = self.render_for(current)
+        self.assertIn("2026.7", response)
+        self.assertNotIn("2024.5", response)
+        self.assertIn("current, and 1 older one", response)

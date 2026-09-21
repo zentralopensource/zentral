@@ -165,6 +165,7 @@ def force_enrolled_machine(
     primary_user=None,
     last_seen=None,
     last_sync_ok=None,
+    last_preflight_at=None,
     last_postflight_at=None,
     forced_sync_type=None,
     serial_number=None,
@@ -188,6 +189,7 @@ def force_enrolled_machine(
         santa_version=santa_version,
         primary_user=primary_user,
         last_sync_ok=last_sync_ok,
+        last_preflight_at=last_preflight_at,
         last_postflight_at=last_postflight_at,
         forced_sync_type=forced_sync_type,
         forced_sync_type_at=(datetime.datetime(2026, 8, 20, 12, tzinfo=datetime.UTC)

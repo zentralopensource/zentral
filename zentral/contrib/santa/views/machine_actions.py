@@ -25,10 +25,9 @@ class BaseCleanSyncView(PBACViewMixin, TemplateView):
 
     def get_pbac_request_kwargs(self, kwargs):
         self.machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
-        enrolled_machines = EnrolledMachine.objects.get_for_serial_number(self.machine.serial_number)
-        if not enrolled_machines:
+        self.enrolled_machine = EnrolledMachine.objects.current_for_serial_number(self.machine.serial_number)
+        if self.enrolled_machine is None:
             raise Http404("Machine not enrolled")
-        self.enrolled_machine = enrolled_machines[0]
         return {"machine": self.machine,
                 "enrolled_machine": self.enrolled_machine,
                 "sync_type": self.get_sync_type()}

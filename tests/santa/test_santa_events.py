@@ -658,19 +658,19 @@ class SantaEventTestCase(TestCase):
                 2 * configuration.full_sync_interval
             )
 
-    @patch("zentral.contrib.santa.events.logger.warning")
-    def test_sync_event_heartbeat_timeout_multiple_enrolled_machines(self, logger_warning):
+    def test_sync_event_heartbeat_timeout_current_enrollment(self):
         enrolled_machine = force_enrolled_machine()
-        # a second enrollment of the same machine, in another configuration
+        # a second enrollment of the same machine, in another configuration, saved last
         other = force_enrolled_machine()
+        Configuration.objects.filter(pk=other.enrollment.configuration.pk).update(full_sync_interval=1200)
         EnrolledMachine.objects.filter(pk=other.pk).update(serial_number=enrolled_machine.serial_number)
-        # the most recently updated one is used
-        self.assertEqual(
-            SantaPreflightEvent.get_machine_heartbeat_timeout(enrolled_machine.serial_number),
-            2 * other.enrollment.configuration.full_sync_interval
-        )
-        logger_warning.assert_called_once_with("Multiple enrolled machines found for %s",
-                                               enrolled_machine.serial_number)
+        # the interval of the configuration the device syncs with, not of the row saved last
+        EnrolledMachine.objects.filter(pk=enrolled_machine.pk).update(last_preflight_at=naive_utcnow())
+        for event_cls in (SantaPreflightEvent, SantaPostflightEvent):
+            self.assertEqual(
+                event_cls.get_machine_heartbeat_timeout(enrolled_machine.serial_number),
+                2 * enrolled_machine.enrollment.configuration.full_sync_interval
+            )
 
     def test_ballot_linked_objects(self):
         # a ballot carries one vote per configuration its target was voted on in, and every one of

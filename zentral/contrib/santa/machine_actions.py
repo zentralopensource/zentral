@@ -11,8 +11,7 @@ class BaseCleanSyncAction(MachineAction):
 
     def __init__(self, serial_number, user):
         super().__init__(serial_number, user)
-        enrolled_machines = EnrolledMachine.objects.get_for_serial_number(serial_number)
-        self.enrolled_machine = enrolled_machines[0] if enrolled_machines else None
+        self.enrolled_machine = EnrolledMachine.objects.current_for_serial_number(serial_number)
 
     def get_sync_type(self):
         return self.sync_type

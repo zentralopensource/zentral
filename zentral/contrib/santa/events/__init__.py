@@ -61,13 +61,11 @@ class BaseSantaSyncEvent(ConfigurationEventMixin, BaseEvent):
 
     @classmethod
     def get_machine_heartbeat_timeout(cls, serial_number):
-        enrolled_machines = EnrolledMachine.objects.get_for_serial_number(serial_number)
-        count = len(enrolled_machines)
-        if not count:
+        # the current enrollment: the interval of the configuration the device syncs with
+        enrolled_machine = EnrolledMachine.objects.current_for_serial_number(serial_number)
+        if enrolled_machine is None:
             return
-        if count > 1:
-            logger.warning("Multiple enrolled machines found for %s", serial_number)
-        timeout = 2 * enrolled_machines[0].enrollment.configuration.full_sync_interval
+        timeout = 2 * enrolled_machine.enrollment.configuration.full_sync_interval
         logger.debug("Santa %s event heartbeat timeout for machine %s: %s", cls.event_type, serial_number, timeout)
         return timeout
 
