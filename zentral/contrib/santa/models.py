@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmGroup, RealmUser
 
 from zentral.conf import api_base_url, settings
-from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, MachineTag, Tag
+from zentral.contrib.inventory.models import BaseEnrollment, Certificate, File, MachineTag, MetaMachine, Tag
 from zentral.core.incidents.models import Severity
 from zentral.utils.text import shard
 
@@ -492,7 +492,9 @@ class ConfigurationManager(models.Manager):
         query = (
             "select c.id as pk, c.name, c.created_at,"
             "(select count(*) from santa_enrollment where configuration_id = c.id) as enrollment_count,"
-            "(select count(*) from santa_enrolledmachine as m "
+            # distinct: a machine that enrolled twice is one machine, and the count links to
+            # the machine list, which gives one row per serial number
+            "(select count(distinct m.serial_number) from santa_enrolledmachine as m "
             " join santa_enrollment as e on (m.enrollment_id = e.id) "
             " where e.configuration_id = c.id) as machine_count,"
             "(select count(*) from santa_rule where configuration_id = c.id) as rule_count "
@@ -1219,6 +1221,13 @@ class Enrollment(BaseEnrollment):
         return {"santa_configuration": ((self.configuration.pk,),)}
 
 
+def comparable_santa_version(santa_version):
+    try:
+        return tuple(int(i) for i in santa_version.split("."))
+    except ValueError:
+        return ()
+
+
 class EnrolledMachineManager(models.Manager):
     def for_sync(self):
         """The enrolled machine as the sync views read it."""
@@ -1405,11 +1414,24 @@ class EnrolledMachine(models.Model):
     def linked_objects_keys_for_event(self):
         return {"santa_configuration": ((self.enrollment.configuration.pk,),)}
 
+    def get_urlsafe_serial_number(self):
+        return MetaMachine.make_urlsafe_serial_number(self.serial_number)
+
     def get_comparable_santa_version(self):
-        try:
-            return tuple(int(i) for i in self.santa_version.split("."))
-        except ValueError:
-            return ()
+        return comparable_santa_version(self.santa_version)
+
+    @property
+    def reported_rule_count(self):
+        """The number of rules in the client database at the last preflight, transitive included.
+
+        None until the machine preflights: the enrollment creates the row with null counts, and a
+        preflight always writes the seven of them.
+        """
+        counts = [getattr(self, f"{prefix}_rule_count")
+                  for prefix in ("binary", "cdhash", "certificate", "signingid", "teamid")]
+        if all(count is None for count in counts):
+            return None
+        return sum(count or 0 for count in counts)
 
     def _synced_rule_counts(self, qs):
         return {

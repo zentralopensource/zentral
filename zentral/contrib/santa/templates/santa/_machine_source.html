@@ -1,0 +1,4 @@
+{% comment %}Where a resolved value comes from, as a (label, url) pair. No url: the user cannot open it.{% endcomment %}
+{% with label=source.0 url=source.1 %}
+{% if url %}<a href="{{ url }}">{{ label }}</a>{% else %}<span class="text-secondary">{{ label }}</span>{% endif %}
+{% endwith %}

@@ -25,7 +25,8 @@ from zentral.contrib.santa.models import (Configuration, Enrollment, Rule, Scope
 from zentral.contrib.santa.pbac import (CreateScopedClientModeRequest, CreateScopedPathRegexRequest,
                                         DeleteScopedClientModeRequest, DeleteScopedPathRegexRequest,
                                         UpdateScopedClientModeRequest, UpdateScopedPathRegexRequest,
-                                        ViewScopedClientModeRequest, ViewScopedPathRegexRequest)
+                                        ViewEnrolledMachineRequest, ViewScopedClientModeRequest,
+                                        ViewScopedPathRegexRequest)
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
@@ -86,6 +87,10 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
                        .select_related("realm_group")
                        .order_by("realm_group__display_name")
         )
+        # a template cannot build a PBAC request
+        view_enrolled_machine_request = ViewEnrolledMachineRequest(self.request.user)
+        engine.authorize_request(view_enrolled_machine_request)
+        ctx["can_view_machines"] = view_enrolled_machine_request.is_authorized
         ctx.update(self.get_scoped_item_context(
             "scoped_client_modes", "can_create_scoped_client_mode", "scopedclientmode_set",
             CreateScopedClientModeRequest, ViewScopedClientModeRequest,

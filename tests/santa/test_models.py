@@ -242,3 +242,27 @@ class SantaCurrentEnrollmentTestCase(TestCase):
                                                     .filter(serial_number=serial_number)],
             [current.pk],
         )
+
+    def test_comparable_santa_version(self):
+        self.assertEqual(force_enrolled_machine(santa_version="2026.7").get_comparable_santa_version(),
+                         (2026, 7))
+
+    def test_comparable_santa_version_not_a_number(self):
+        self.assertEqual(force_enrolled_machine(santa_version="yolo").get_comparable_santa_version(), ())
+
+    # the reported rule count of the machine list
+
+    def test_reported_rule_count_none_before_the_first_preflight(self):
+        self.assertIsNone(force_enrolled_machine().reported_rule_count)
+
+    def test_reported_rule_count(self):
+        enrolled_machine = force_enrolled_machine()
+        EnrolledMachine.objects.filter(pk=enrolled_machine.pk).update(
+            binary_rule_count=3, cdhash_rule_count=1, certificate_rule_count=0,
+            # the compiler and transitive counts are not rules of their own: a compiler rule is
+            # counted in the count of its type, and a transitive rule in the binary count
+            compiler_rule_count=1, transitive_rule_count=2,
+            signingid_rule_count=5, teamid_rule_count=2,
+        )
+        enrolled_machine.refresh_from_db()
+        self.assertEqual(enrolled_machine.reported_rule_count, 11)

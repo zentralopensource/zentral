@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import re
@@ -6,15 +7,17 @@ from dateutil import parser
 from django import forms
 from django.contrib.postgres.forms import SimpleArrayField
 from django.db import connection, transaction
-from django.db.models import Count, F
+from django.db.models import Count, F, Q
 from django.urls import NoReverseMatch, reverse
 
 from zentral.conf import settings
 from zentral.contrib.inventory.models import Tag
+from zentral.utils.time import naive_utcnow
 
 from .events import post_santa_rule_update_event
 from .models import (
     Configuration,
+    EnrolledMachine,
     Enrollment,
     Rule,
     RuleSet,
@@ -23,6 +26,7 @@ from .models import (
     Target,
     TargetState,
     VotingGroup,
+    comparable_santa_version,
 )
 from .validators import ConfigurationValidator, ScopedClientModeValidator, ScopedPathRegexValidator
 
@@ -186,6 +190,100 @@ class EnrollmentForm(forms.ModelForm):
         # hide configuration dropdown if configuration if fixed
         if self.configuration:
             self.fields["configuration"].widget = forms.HiddenInput()
+
+
+class EnrolledMachineSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+
+    # the boundaries of the metrics buckets. The list counts machines and the metrics count
+    # rows, so the two only agree on the young buckets, where a machine has one row
+    LAST_SYNC_CHOICES = (
+        ("", "…"),
+        ("1", "24 hours"),
+        ("7", "7 days"),
+        ("14", "14 days"),
+        ("30", "30 days"),
+        ("45", "45 days"),
+        ("90", "90 days"),
+        ("older", "Older"),
+        ("never", "Never"),
+    )
+    SYNC_STATE_CHOICES = (
+        ("", "…"),
+        ("ok", "OK"),
+        ("mismatch", "Mismatch"),
+        ("unknown", "Never synced"),
+        ("queued", "Clean sync queued"),
+    )
+
+    q = forms.CharField(
+        label="Search", required=False,
+        widget=forms.TextInput(attrs={"placeholder": "Serial number, primary user", "autofocus": True})
+    )
+    configuration = forms.ModelChoiceField(queryset=Configuration.objects.all(), required=False, empty_label="…")
+    last_sync = forms.ChoiceField(label="Last sync", choices=LAST_SYNC_CHOICES, required=False)
+    client_mode = forms.ChoiceField(label="Client mode",
+                                    choices=[("", "…")] + list(Configuration.CLIENT_MODE_CHOICES),
+                                    required=False)
+    santa_version = forms.ChoiceField(label="Santa version", choices=[], required=False)
+    sync_state = forms.ChoiceField(label="Sync state", choices=SYNC_STATE_CHOICES, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # the versions of the machines, not of every row: a version only a stale row reports
+        # would be offered and match nothing
+        versions = sorted(
+            set(EnrolledMachine.objects.current_for_serial_numbers()
+                                       .values_list("santa_version", flat=True)),
+            key=comparable_santa_version,
+        )
+        self.fields["santa_version"].choices = [("", "…")] + [(v, v) for v in versions]
+
+    def get_queryset(self):
+        # the primary key breaks the ties: last_postflight_at is null until a machine completes
+        # a sync, so the machines that never did would shuffle between the pages
+        qs = (EnrolledMachine.objects.current_for_serial_numbers()
+                                     .select_related("enrollment__configuration")
+                                     .order_by(F("last_postflight_at").desc(nulls_last=True), "-pk"))
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(Q(serial_number__icontains=q) | Q(primary_user__icontains=q))
+        configuration = self.cleaned_data.get("configuration")
+        if configuration:
+            qs = qs.filter(enrollment__configuration=configuration)
+        last_sync = self.cleaned_data.get("last_sync")
+        if last_sync == "never":
+            qs = qs.filter(last_postflight_at__isnull=True)
+        elif last_sync == "older":
+            qs = qs.filter(last_postflight_at__lt=naive_utcnow() - datetime.timedelta(days=90))
+        elif last_sync:
+            qs = qs.filter(last_postflight_at__gte=naive_utcnow() - datetime.timedelta(days=int(last_sync)))
+        client_mode = self.cleaned_data.get("client_mode")
+        if client_mode:
+            qs = qs.filter(client_mode=client_mode)
+        santa_version = self.cleaned_data.get("santa_version")
+        if santa_version:
+            qs = qs.filter(santa_version=santa_version)
+        sync_state = self.cleaned_data.get("sync_state")
+        if sync_state == "queued":
+            qs = qs.filter(forced_sync_type__isnull=False)
+        elif sync_state == "unknown":
+            qs = qs.filter(last_sync_ok__isnull=True)
+        elif sync_state:
+            qs = qs.filter(last_sync_ok=sync_state == "ok")
+        return qs
+
+    def get_redirect_to(self):
+        """The page of the machine when a search has only one result.
+
+        Only for a search: a fleet with one machine would never get a list otherwise. The URL,
+        not the object, because the enrolled machine model has no absolute URL of its own - the
+        page is per serial number, and the rows of a serial number share it.
+        """
+        if self.has_changed():
+            qs = self.get_queryset()
+            if qs.count() == 1:
+                return reverse("santa:machine", args=(qs.first().get_urlsafe_serial_number(),))
 
 
 class BinarySearchForm(forms.Form):

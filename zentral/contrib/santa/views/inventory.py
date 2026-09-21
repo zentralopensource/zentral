@@ -1,6 +1,10 @@
 import logging
 from django.template.loader import render_to_string
+from django.urls import reverse
+from pbac.engine import engine
+from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.santa.models import EnrolledMachine
+from zentral.contrib.santa.pbac import ViewEnrolledMachineRequest
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.inventory')
@@ -13,6 +17,7 @@ class InventoryMachineSubview:
 
     def __init__(self, serial_number, user):
         self.user = user
+        self.serial_number = serial_number
         enrolled_machines = list(EnrolledMachine.objects.for_serial_number(serial_number))
         if enrolled_machines:
             # the row the device talks to. The others are the history of the machine: it
@@ -26,6 +31,7 @@ class InventoryMachineSubview:
             em = self.enrolled_machine
             ctx.update({
                 "enrolled_machine": em,
+                "serial_number": self.serial_number,
                 "other_enrollment_count": self.other_enrollment_count,
                 # a template cannot tell an unknown state from a mismatch
                 "sync_ok": "-" if em.last_sync_ok is None else "yes" if em.last_sync_ok else "no",
@@ -39,4 +45,12 @@ class InventoryMachineSubview:
             })
             if self.user.has_perm("santa.view_configuration"):
                 ctx["configuration"] = em.enrollment.configuration
+            # a template cannot build a PBAC request
+            pbac_request = ViewEnrolledMachineRequest(self.user)
+            engine.authorize_request(pbac_request)
+            if pbac_request.is_authorized:
+                ctx["machine_url"] = reverse(
+                    "santa:machine",
+                    args=(MetaMachine.make_urlsafe_serial_number(self.serial_number),)
+                )
         return render_to_string(self.template_name, ctx)

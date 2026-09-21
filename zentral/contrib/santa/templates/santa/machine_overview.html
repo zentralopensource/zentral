@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load base_extras inventory_extras ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:machines' %}">Machines</a></li>
+  <li class="breadcrumb-item active">{{ machine.serial_number|privacywrapper }}</li>
+</ol>
+
+<div class="object-details">
+  <div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">{{ machine.serial_number|privacywrapper }}</h2>
+    <div class="ms-auto">
+      {% if perms.inventory.view_machinesnapshot %}
+      <a class="btn btn-outline-secondary" href="{% url 'inventory:machine' machine.get_urlsafe_serial_number %}">
+        Inventory machine
+      </a>
+      {% endif %}
+      {% if actions %}
+      <div class="btn-group">
+        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          Action <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu">
+          {% for link, disabled, anchor_text, display_class in actions %}
+          <li>
+            <a href="{{ link }}" class="dropdown-item{% if disabled %} disabled{% endif %}{% if display_class %} text-{{ display_class }}{% endif %}">{{ anchor_text }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex align-items-center mb-3">
+    <h3 class="m-0 fs-5 text-secondary">Santa machine</h3>
+  </div>
+  <table class="table-object-properties">
+    <tbody>
+      <tr>
+        <th style="width:300px">Configuration</th>
+        <td>
+          {% if perms.santa.view_configuration %}
+          <a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration }}</a>
+          {% else %}
+          {{ configuration }}
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Primary user</th>
+        <td>{{ enrolled_machine.primary_user|default:"-" }}</td>
+      </tr>
+      <tr>
+        <th>Tags</th>
+        <td class="d-flex flex-wrap gap-1">
+          {% for tag in tags %}{% inventory_tag tag %}{% empty %}-{% endfor %}
+        </td>
+      </tr>
+      <tr>
+        <th>Reported client mode</th>
+        <td>{{ enrolled_machine.get_client_mode_display }}</td>
+      </tr>
+      <tr>
+        <th>Configured client mode</th>
+        <td>
+          {{ configured_client_mode }}
+          {% include "santa/_machine_source.html" with source=client_mode_source %}
+        </td>
+      </tr>
+      <tr>
+        <th>Block notification button</th>
+        <td>
+          {{ event_detail_source }}
+          {% include "santa/_machine_source.html" with source=event_detail_source_link %}
+        </td>
+      </tr>
+      <tr>
+        <th>Santa version</th>
+        <td>{{ enrolled_machine.santa_version }}</td>
+      </tr>
+      <tr>
+        <th>Rules in sync</th>
+        <td>
+          {% if enrolled_machine.last_sync_ok is None %}
+          <span class="text-secondary">Never synced</span>
+          {% elif enrolled_machine.last_sync_ok %}
+          <span class="text-success">Yes</span>
+          {% else %}
+          <span class="text-danger">No</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <th>Reported rules</th>
+        <td>
+          {% with total=enrolled_machine.reported_rule_count %}
+          {% if total is None %}
+          -
+          {% else %}
+          {{ total }}
+          <br>
+          <span class="text-secondary">
+            {% for label, count in reported_rule_counts %}{% if not forloop.first %}, {% endif %}{{ count|default_if_none:0 }} {{ label }}{% endfor %}
+          </span>
+          {% endif %}
+          {% endwith %}
+        </td>
+      </tr>
+      {% if enrolled_machine.forced_sync_type %}
+      <tr>
+        <th>Clean sync</th>
+        <td>
+          <span class="text-warning">{{ enrolled_machine.get_forced_sync_type_display }} queued</span>
+          <br><span class="text-secondary">since {{ enrolled_machine.forced_sync_type_at }}, applied at the next preflight</span>
+        </td>
+      </tr>
+      {% endif %}
+      <tr>
+        <th>Last preflight</th>
+        <td>{{ enrolled_machine.last_preflight_at|default:"-" }}</td>
+      </tr>
+      <tr>
+        <th>Last postflight</th>
+        <td>{{ enrolled_machine.last_postflight_at|default:"-" }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  {% created_updated_at enrolled_machine %}
+
+</div>
+
+<div class="d-flex justify-content-between mb-3">
+  <h2 class="m-0">Enrollment{{ enrolled_machines|length|pluralize }} ({{ enrolled_machines|length }})</h2>
+</div>
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      <tr>
+        <th></th>
+        <th>Configuration</th>
+        <th>Hardware UUID</th>
+        <th>Created</th>
+        <th>Last preflight</th>
+        <th>Last postflight</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for em in enrolled_machines %}
+      <tr{% if not forloop.first %} class="text-secondary"{% endif %}>
+        <td>{% if forloop.first %}<span class="badge text-bg-primary">Current</span>{% endif %}</td>
+        <td>
+          {% if perms.santa.view_configuration %}
+          <a href="{% url 'santa:configuration' em.enrollment.configuration.pk %}">{{ em.enrollment.configuration }}</a>
+          {% else %}
+          {{ em.enrollment.configuration }}
+          {% endif %}
+        </td>
+        <td>{{ em.hardware_uuid|privacywrapper }}</td>
+        <td>{{ em.created_at }}</td>
+        <td>{{ em.last_preflight_at|default:"-" }}</td>
+        <td>{{ em.last_postflight_at|default:"-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

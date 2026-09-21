@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load base_extras ui_extras %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  {% for url, anchor_text in breadcrumbs %}
+  {% if url %}
+  <li class="breadcrumb-item"><a href="{{ url }}">{{ anchor_text }}</a></li>
+  {% else %}
+  <li class="breadcrumb-item active">{{ anchor_text }}</li>
+  {% endif %}
+  {% endfor %}
+  <li class="breadcrumb-item active">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</li>
+</ol>
+
+<div class="d-flex justify-content-between mb-3">
+  <h2 class="m-0">Machine{{ page_obj.paginator.count|pluralize }} ({{ page_obj.paginator.count }})</h2>
+</div>
+
+<div class="d-flex flex-wrap align-items-center mb-1">
+  <form method="GET" class="search-form">
+    {{ form }}
+    <button type="submit" class="btn btn-link mb-2">
+      <i class="bi bi-search"></i>
+    </button>
+  </form>
+</div>
+
+{% if object_list %}
+
+{% pagination next_url previous_url %}
+
+<table class="table table-striped align-middle table-hover">
+  <thead>
+    <tr>
+      <th>Serial number</th>
+      <th>Primary user</th>
+      <th>Configuration</th>
+      <th>Mode</th>
+      <th>Version</th>
+      <th>Rules</th>
+      <th>Last preflight</th>
+      <th>Last postflight</th>
+      <th>Sync</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for enrolled_machine in object_list %}
+    {% with enrolled_machine.get_urlsafe_serial_number as urlsafe_serial_number %}
+    <tr>
+      <td>
+        <a href="{% url 'santa:machine' urlsafe_serial_number %}">{{ enrolled_machine.serial_number|privacywrapper }}</a>
+        {% if perms.inventory.view_machinesnapshot %}
+        <a href="{% url 'inventory:machine' urlsafe_serial_number %}" title="Inventory machine">
+          <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+        </a>
+        {% endif %}
+      </td>
+      <td>{{ enrolled_machine.primary_user|default:"-" }}</td>
+      <td>
+        {% if perms.santa.view_configuration %}
+        <a href="{% url 'santa:configuration' enrolled_machine.enrollment.configuration.pk %}">{{ enrolled_machine.enrollment.configuration }}</a>
+        {% else %}
+        {{ enrolled_machine.enrollment.configuration }}
+        {% endif %}
+      </td>
+      <td>{{ enrolled_machine.get_client_mode_display }}</td>
+      <td>{{ enrolled_machine.santa_version }}</td>
+      <td>{{ enrolled_machine.reported_rule_count|default_if_none:"-" }}</td>
+      <td>{{ enrolled_machine.last_preflight_at|default:"-" }}</td>
+      <td>{{ enrolled_machine.last_postflight_at|default:"-" }}</td>
+      <td>
+        {% if enrolled_machine.last_sync_ok is None %}
+        <span class="badge text-bg-secondary">Never synced</span>
+        {% elif enrolled_machine.last_sync_ok %}
+        <span class="badge text-bg-success">OK</span>
+        {% else %}
+        <span class="badge text-bg-danger">Mismatch</span>
+        {% endif %}
+        {% if enrolled_machine.forced_sync_type %}
+        <span class="badge text-bg-warning">{{ enrolled_machine.get_forced_sync_type_display }} queued</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endwith %}
+    {% endfor %}
+  </tbody>
+</table>
+
+{% pagination next_url previous_url %}
+
+{% else %}
+{% no_entities "Machines" %}
+{% endif %}
+
+{% endblock %}

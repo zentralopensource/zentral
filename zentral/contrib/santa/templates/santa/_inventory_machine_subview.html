@@ -1,6 +1,13 @@
 {% load base_extras %}
 {% if enrolled_machine %}
-<h3>Santa</h3>
+<div class="d-flex align-items-center mb-1">
+  <h3 class="m-0">Santa</h3>
+  {% if machine_url %}
+  <div class="ms-auto">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ machine_url }}">Santa machine</a>
+  </div>
+  {% endif %}
+</div>
 <dl class="row">
   {% if configuration %}
   <dt class="col-sm-3 text-md-end">Configuration</dt>

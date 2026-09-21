@@ -384,6 +384,57 @@ permit (
 
 The configuration is the boundary. A role that can write the entries of a configuration can add an allow path or a block path for any of its machines.
 
+## Machines
+
+A machine is a serial number. Santa > Machines lists the machines that are enrolled, and each row opens a page that shows what the machine gets from Zentral, and why.
+
+### The list
+
+One row for each serial number, with its primary user, its configuration, the client mode and the Santa version it reported, the number of rules in its rule database, the time of its last preflight and of its last postflight, and its synchronization state. The filters:
+
+| Filter | Values |
+| --- | --- |
+| Search | a part of the serial number or of the primary user |
+| Configuration | one of the Santa configurations |
+| Last sync | the age of the last postflight: at most 1, 7, 14, 30, 45 or 90 days, older, or never |
+| Client mode | the mode the machine reported at its last preflight, not the mode Zentral resolved for it |
+| Santa version | one of the versions the machines report |
+| Sync state | OK, mismatch, never synced, or clean sync queued |
+
+The age buckets are the buckets of the Prometheus metrics. The young ones hold the same machines. The old ones do not: the metrics count enrollments, and the list counts machines.
+
+The Santa index has the same link on the machine count of each configuration.
+
+A search that has only one result opens the page of that machine.
+
+### The machine page
+
+The page describes the current enrollment of the machine, see [Enrollments](#enrollments). It gives what the machine reported at its last preflight — the client mode, the Santa version, the rule counts, the time of the last preflight and of the last postflight, the result of the last rule comparison and the clean sync that is queued — the inputs of the scope — the serial number, the primary user and the tags — and what Zentral configured for the machine: its client mode and its block notification button, each one with a link to where it comes from, the configuration or the [scoped client mode](#scoped-client-modes) that decided. The Action menu queues a clean sync, or cancels the one that is queued.
+
+The page uses the tags of now. The last synchronization used the tags of its preflight.
+
+### Enrollments
+
+A serial number has one enrollment for each `(enrollment, hardware UUID)` pair. It gets a second one when the machine enrolls through another enrollment, or when a change of logic board gives it a new hardware UUID.
+
+The current enrollment is the one with the most recent preflight: the row the device talks to. The Enrollments section of the machine page gives all of them, the current one first. The list, the machine page, the clean sync actions and the Santa section of the inventory machine page all use the current one.
+
+The API endpoints work on one enrollment, not on one machine, see [/api/santa/enrolled_machines/](#apisantaenrolled_machines).
+
+### Permissions
+
+The `Santa::Action::"viewEnrolledMachine"` PBAC action opens the list and the machine page. It is a member of the `Santa::Action::"AdminActions"`, `"UserActions"` and `"ViewerActions"` groups. There is no Django permission for it, so a policy that names each action must be extended.
+
+The decision is not scoped to a machine: the action takes `System` as its resource, so a role that has it sees every machine that is enrolled. The [note on the list endpoint](#list-the-enrolled-machines) explains why.
+
+```
+permit (
+  principal in Role::"6",
+  action == Santa::Action::"viewEnrolledMachine",
+  resource
+);
+```
+
 ## Santa sync
 
 The Santa agent is configured to sync periodically with the Zentral server. The `Full sync interval` can be adjusted for each Santa configuration – 10 min by default, cannot be shorter than 10 min. No need to distribute the updated Santa payload. The agent will apply the new interval during the next sync.
@@ -422,7 +473,7 @@ Zentral answers the preflight with the type of sync Santa has to perform:
 
 Zentral asks for a clean sync when the machine has just enrolled or re-enrolled, when the machine asks for one itself (`santactl sync --clean`), when the machine reports no rule at all although some were synced with it, when a clean sync session was lost before the machine could confirm it, and when an operator queued one.
 
-To queue one, open the machine in the inventory and pick *Force clean sync* or *Force clean all sync* in the Action menu. The Santa section of the machine reports the queued sync until the machine preflights, and *Cancel queued clean sync* takes it back. The same is available on the [API](#apisantaenrolled_machinesintpkforce_clean_sync).
+To queue one, open the machine in the inventory or in [Santa > Machines](#machines) and pick *Force clean sync* or *Force clean all sync* in the Action menu. The two pages report the queued sync until the machine preflights, and *Cancel queued clean sync* takes it back. The same is available on the [API](#apisantaenrolled_machinesintpkforce_clean_sync).
 
 A few properties of the protocol are worth knowing:
 

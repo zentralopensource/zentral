@@ -1,7 +1,9 @@
 import datetime
 
-from accounts.models import User
+from accounts.models import Policy, User
+from django.contrib.auth.models import Group
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.santa.models import EnrolledMachine
@@ -14,9 +16,21 @@ class SantaInventoryMachineSubviewTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
+        cls.user.groups.set([cls.group])
 
     def render_for(self, enrolled_machine):
         return InventoryMachineSubview(enrolled_machine.serial_number, self.user).render()
+
+    def set_view_enrolled_machine_policy(self):
+        Policy.objects.update_or_create(
+            name="Santa tests",
+            defaults={"source": ("permit ("
+                                 f' principal in Role::"{self.group.pk}",'
+                                 ' action == Santa::Action::"viewEnrolledMachine",'
+                                 "  resource"
+                                 ");\n")},
+        )
 
     def test_rules_in_sync(self):
         enrolled_machine = force_enrolled_machine(last_sync_ok=True)
@@ -60,3 +74,17 @@ class SantaInventoryMachineSubviewTestCase(TestCase):
         self.assertIn("2026.7", response)
         self.assertNotIn("2024.5", response)
         self.assertIn("current, and 1 older one", response)
+
+    # the link to the machine page
+
+    def test_machine_page_link(self):
+        enrolled_machine = force_enrolled_machine()
+        self.set_view_enrolled_machine_policy()
+        self.assertIn(
+            reverse("santa:machine", args=(enrolled_machine.get_urlsafe_serial_number(),)),
+            self.render_for(enrolled_machine),
+        )
+
+    def test_no_machine_page_link_without_permission(self):
+        enrolled_machine = force_enrolled_machine()
+        self.assertNotIn("Santa machine</a>", self.render_for(enrolled_machine))

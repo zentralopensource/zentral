@@ -24,6 +24,12 @@
                     <i class="bi bi-list"></i>
                 </a>
             {% endif %}
+            {% if can_view_machines %}
+                <a type="button" href="{% url 'santa:machines' %}?configuration={{ object.pk }}" class="btn btn-link"
+                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Machines">
+                    <i class="bi bi-laptop"></i>
+                </a>
+            {% endif %}
             {% for link, anchor_text in store_links  %}
                 {% button 'LINK' link anchor_text %}
             {% endfor %}

@@ -118,6 +118,12 @@ A target can have several rules in a configuration now, one per policy at most. 
 
 The scoped client modes and the scoped path regexes have a REST API now: `/api/santa/scoped_client_modes/` and `/api/santa/scoped_path_regexes/`, with the same four PBAC actions as the console and no Django permission. `configuration_id` is a required parameter of the two list endpoints, and an entry the caller is not allowed to see is absent from the results. An entry cannot change configuration: another one in the body of a `PUT` is a 400 – delete the entry and create it again. A `PUT` is a full update: the attributes Zentral validates together – the scope, and the event detail of a client mode – are required, so a check never reads a value the caller did not send.
 
+Santa > Machines lists the machines that are enrolled, with filters on the configuration, the age of the last synchronization, the client mode, the Santa version and the synchronization state. One row is one machine: one serial number. A search that has only one result opens the page of that machine. The page of a machine gives what it reported at its last preflight, the inputs of the scope – serial number, primary user and tags – and the client mode and the block notification button Zentral configured for it, each one with a link to where it comes from: the configuration, or the scoped client mode that decided. The existing `Santa::Action::"viewEnrolledMachine"` PBAC action opens both pages.
+
+The machine count of a Santa configuration counts machines now, not enrollments: a machine that enrolled twice was counted twice on the Santa index. The count links to the machine list, filtered on the configuration.
+
+A serial number with several enrollments has one current enrollment now: the one with the most recent preflight, the row the device talks to. The machine page lists the others as history. The Santa section of the inventory machine page and the clean sync actions use it too. Before, they took the row that was saved last, and an operator who queued a clean sync on an old row made it the one they read. The Santa section said "N machines found!!!" instead.
+
 
 ### Backward incompatibilities
 

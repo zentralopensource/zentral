@@ -51,7 +51,13 @@
           <td><a href="{% url 'santa:configuration' configuration.pk %}">{{ configuration.name }}</a></td>
           <td>{{ configuration.rule_count }}</td>
           <td>{{ configuration.enrollment_count }}</td>
-          <td>{{ configuration.machine_count }}</td>
+          <td>
+            {% if can_view_machines %}
+            <a href="{% url 'santa:machines' %}?configuration={{ configuration.pk }}">{{ configuration.machine_count }}</a>
+            {% else %}
+            {{ configuration.machine_count }}
+            {% endif %}
+          </td>
         </tr>
         {% empty %}
             {% if perms.jamf.add_jamfinstance %}

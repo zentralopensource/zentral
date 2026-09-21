@@ -149,6 +149,10 @@ urlpatterns = [
     path('targets/signingid/<str:identifier>/events/store_redirect/',
          views.SigningIDEventsStoreRedirectView.as_view(), name="signingid_events_store_redirect"),
 
+    # machines
+    path('machines/', views.MachineListView.as_view(), name="machines"),
+    path('machines/<str:urlsafe_serial_number>/', views.MachineView.as_view(), name="machine"),
+
     # machine actions
     path('machine/<str:urlsafe_serial_number>/force_clean_sync/<str:sync_type>/',
          views.ForceMachineCleanSyncView.as_view(),
@@ -167,6 +171,10 @@ modules_menu_cfg = {
     'items': (
         ('index', 'Overview', False, ('santa',)),
         ('configuration_list', 'Configurations', False, ('santa.view_configuration',)),
+        # viewEnrolledMachine has no Django permission to gate the entry with, and the menu only
+        # reads those. It is a member of the three action groups, so a role with access to the
+        # module has it in every standard policy
+        ('machines', 'Machines', False, ('santa',)),
         ('targets', 'Targets', False, ('santa.view_target',)),
         ('ballots', 'Ballots', False, ('santa.view_ballot',)),
     ),
