@@ -426,6 +426,11 @@ the next synchronization sends:
 | Still on device | The device has a rule the server does not have anymore, because the rule was deleted or the machine went out of its scope. | sends the removal |
 | Skipped | The only rules in scope for the target have the `CEL` policy, and the Santa version of the machine is too old to evaluate one. | sends nothing |
 
+The column is what a synchronization that starts now sends. A synchronization that is already running has
+sent some of it: a rule or a removal it sent in an earlier batch is not sent again, because the device
+holds nothing new for it until its postflight. During a clean synchronization every rule of the server is
+on its way back, because the client rebuilds its database from that session alone.
+
 The columns are the target type, the identifier, the policy and the version of the server, what decided for
 the machine — `Serial number`, `Primary user`, `Tag`, or `All machines` for a rule with no scope field — the
 policy and the version of the device, and the state. The two read the same way, so a version that differs
@@ -437,12 +442,18 @@ of them: the others are wider, or less strict, see [Rule resolution](#rule-resol
 The filters — target type, policy, voting, state — and the identifier search give the count of each value
 next to it.
 
+The tab gives the policy and the version of every rule the machine has, with `viewEnrolledMachine` alone:
+they are the state of the machine, like the client mode of the Overview. `view_rule` is only necessary for
+the two links, which open the rules of the configuration. The Path regexes tab works the same way: the
+patterns are what the machine enforces, and the name of an entry needs `viewScopedPathRegex`.
+
 ### The Path regexes tab
 
 One row for each part of the two patterns Zentral sends: the patterns of the configuration itself, with `-`
 as their name and `Configuration` as what decided, and the entry that won each pattern, with what decided
 for the machine. The rows are in the order Zentral composes the patterns in. See
-[Scoped path regexes](#scoped-path-regexes). The table only gives the entries that you can view.
+[Scoped path regexes](#scoped-path-regexes). An entry you cannot view has no name and no link, and its
+pattern is there: it is part of what the machine enforces.
 
 ### Enrollments
 

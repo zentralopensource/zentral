@@ -1922,9 +1922,14 @@ class MachineRuleManager(models.Manager):
             target = target_row(machine_rule.target_id, machine_rule.target.type,
                                 machine_rule.target.identifier)
             target["ledger"] = machine_rule
+        # during a clean sync the client rebuilds its rule database from the rules of the session,
+        # so the download ignores the committed rows and sends every winner again
+        clean_session = (enrolled_machine.sync_session is not None
+                         and enrolled_machine.sync_session_clean)
         rows = []
         for target in targets.values():
-            state = self._row_state(target["winner"], target["ledger"], target["skipped"])
+            state = self._row_state(target["winner"], target["ledger"], target["skipped"],
+                                    clean_session)
             if state is None:
                 # the device holds nothing for the target and nothing is left to send: a removal
                 # staged over a rule staged by the same session
@@ -1949,13 +1954,15 @@ class MachineRuleManager(models.Manager):
         return machine_rule.committed_policy, machine_rule.committed_version
 
     @classmethod
-    def _row_state(cls, winner, machine_rule, skipped):
+    def _row_state(cls, winner, machine_rule, skipped, clean_session=False):
         device_policy, device_version = cls._device_rule(machine_rule)
         staged = machine_rule is not None and machine_rule.sync_session is not None
         if winner is not None:
             # a rule sent during the current session is not on the device yet: santa writes its
-            # database at the very end of the download
-            if not staged and (device_policy, device_version) == (winner["policy"], winner["version"]):
+            # database at the very end of the download. A clean session sends every winner again,
+            # so a rule the client confirmed before it is on its way back
+            if (not staged and not clean_session
+                    and (device_policy, device_version) == (winner["policy"], winner["version"])):
                 return MachineRule.State.ON_DEVICE
             return MachineRule.State.NOT_YET
         if device_policy is not None:

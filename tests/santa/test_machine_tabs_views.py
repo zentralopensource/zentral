@@ -327,7 +327,8 @@ class SantaMachineTabsViewsTestCase(TestCase, LoginCase):
         self.force_path_regex(configuration, "/Users/.*/Downloads/", block=True)
         # and an entry the machine is out of
         self.force_path_regex(configuration, "/tmp/", block=True, excluded_tags=[devs])
-        self.login_with_view_enrolled_machine(extra_actions=("viewScopedPathRegex",))
+        self.login_with_view_enrolled_machine("santa.view_configuration",
+                                              extra_actions=("viewScopedPathRegex",))
         response = self.client.get(self.path_regexes_url(enrolled_machine))
         # the patterns the machine gets, in the order they are composed: the configuration first
         self.assertEqual(
@@ -373,19 +374,17 @@ class SantaMachineTabsViewsTestCase(TestCase, LoginCase):
                          [(None, "/opt/homebrew/")])
         self.assertEqual(response.context["row_count"], 1)
 
-    def test_machine_path_regexes_hidden_without_permission(self):
+    def test_machine_path_regexes_the_name_needs_the_permission(self):
         configuration = force_configuration()
         enrolled_machine = force_enrolled_machine(configuration=configuration)
         entry = self.force_path_regex(configuration, "/tmp/", block=True)
         self.login_with_view_enrolled_machine()
         response = self.client.get(self.path_regexes_url(enrolled_machine))
-        # the table only gives the entries the user may view. The machine still gets the pattern
-        self.assertEqual(response.context["rows"], [])
+        # the pattern is what the machine enforces, so it is here. The name of the entry is not
+        self.assertEqual([(row["name"], row["regex"], row["url"])
+                          for row in response.context["rows"]],
+                         [(None, "/tmp/", None)])
         self.assertNotContains(response, entry.name)
-        self.assertEqual(
-            configuration.get_sync_server_config(enrolled_machine, (2026, 7))["blocked_path_regex"],
-            "^(?:(?:/tmp/))",
-        )
 
 
 class SantaMachineRuleStateChoicesTestCase(TestCase):

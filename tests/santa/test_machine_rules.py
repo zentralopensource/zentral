@@ -205,6 +205,20 @@ class SantaMachineRulesTestCase(TestCase):
         # a skipped rule sends nothing, so it is not in the trust test
         self.assert_trust_test(enrolled_machine, client)
 
+    def test_a_clean_session_puts_every_rule_back_on_its_way(self):
+        client, configuration, enrolled_machine = self.force_client()
+        rule = self.force_binary_rule(configuration)
+        client.sync()
+        self.assertEqual(self.states(enrolled_machine),
+                         {rule.target.identifier: MachineRule.State.ON_DEVICE})
+        # the client rebuilds its database from the rules of a clean session, so the download
+        # ignores what it confirmed before and sends the rule again
+        client.preflight(request_clean_sync=True)
+        enrolled_machine.refresh_from_db()
+        self.assertEqual(self.states(enrolled_machine),
+                         {rule.target.identifier: MachineRule.State.NOT_YET})
+        self.assert_trust_test(enrolled_machine, client)
+
     # the rules of the configuration for a target
 
     def test_rules_in_configuration(self):

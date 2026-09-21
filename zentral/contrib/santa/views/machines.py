@@ -314,8 +314,10 @@ class MachinePathRegexesView(MachineTabFiltersMixin, BaseMachineView):
         requests = [ViewScopedPathRegexRequest(self.request.user, w) for w in winners]
         engine.authorize_requests(requests)
         visible_pks = {w.pk for w, r in zip(winners, requests) if r.is_authorized}
+        can_view_configuration = self.request.user.has_perm("santa.view_configuration")
         # the parts of each pattern Zentral composes, in the order it composes them: the pattern
-        # of the configuration first, then the entries. An entry the user may not view is left out
+        # of the configuration first, then the entries. A pattern is what the machine enforces, so
+        # every part is here. Only the name of an entry, and the link to it, need its permission
         rows = []
         for policy, baseline in ((ScopedPathRegex.Policy.ALLOW, configuration.allowed_path_regex),
                                  (ScopedPathRegex.Policy.BLOCK, configuration.blocked_path_regex)):
@@ -324,13 +326,15 @@ class MachinePathRegexesView(MachineTabFiltersMixin, BaseMachineView):
                              "policy_display": policy.label,
                              "decided_by": "Configuration", "url": None})
             for winner in winners:
-                if winner.policy != policy or winner.pk not in visible_pks:
+                if winner.policy != policy:
                     continue
-                rows.append({"name": winner.name, "regex": winner.regex,
+                visible = winner.pk in visible_pks
+                rows.append({"name": winner.name if visible else None,
+                             "regex": winner.regex,
                              "policy": winner.policy,
                              "policy_display": winner.get_policy_display(),
                              "decided_by": MATCH_RANK_DISPLAY[winner.match_rank],
                              "url": (winner.get_absolute_url()
-                                     if self.request.user.has_perm("santa.view_configuration") else None)})
+                                     if visible and can_view_configuration else None)})
         ctx["rows"] = self._filtered_rows(ctx, rows, ("name", "regex"))
         return ctx
