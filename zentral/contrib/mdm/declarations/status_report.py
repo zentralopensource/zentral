@@ -25,7 +25,11 @@ SCALAR_STATUS_ITEMS = frozenset((
     "softwareupdate.pending-version",
 ))
 
-# status item groups with a dedicated reader, or not consumed yet
+# status item groups that are not scalar items:
+# - device.operating-system: Target.update_os_info_with_status_report
+# - management.client-capabilities: Target.update_client_capabilities_with_status_report
+# - management.declarations: get_status_report_target_artifacts_info and get_status_report_declaration_status
+# - device.identifier, device.model: not consumed, DeviceInformation is the source of the same values
 KNOWN_STATUS_ITEM_GROUPS = frozenset((
     "device.identifier",
     "device.model",
