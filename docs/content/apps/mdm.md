@@ -956,6 +956,9 @@ Response:
      * `excluded_tags`
      * `short_name`
      * `email`
+     * `filevault_enabled`
+     * `passcode_compliant`
+     * `lockdown_mode`
  * available orderings:
      * `created_at`
      * `last_seen_at`
@@ -969,7 +972,7 @@ Use this endpoint to list the MDM enrolled devices.
 `tags` and `excluded_tags` can be repeated to specify multiple machine tags. The `ID` of the tags must be used.
 `short_name` is the username of the MDM managed device user account.
 `email` is the email of the realm user who authenticated during the MDM enrollment.
-sessions.
+`filevault_enabled`, `passcode_compliant` and `lockdown_mode` are booleans matched against the state the device reported through the DDM status channel (`filevault_enabled` falls back to the `SecurityInfo` query result). A device that never reported the item does not match either value.
 
 Example:
 

@@ -416,6 +416,41 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Enforcement declaration invalid")
         self.assertContains(response, "Error.Fomo: Fomo description")
 
+    def test_enrolled_device_no_device_state(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "<h4>Device state</h4>")
+
+    def test_enrolled_device_device_state(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.status_items = {
+            "passcode.is-present": True,
+            "passcode.is-compliant": False,
+            "security.lockdown-mode": True,
+            "device.power.battery-health": "service-recommended",
+            "device.system.health": {"Camera": "ok", "Display": "non-genuine"},
+            "diskmanagement.filevault.enabled": True,
+        }
+        enrolled_device.security_info = {"FDE_Enabled": False}
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<h4>Device state</h4>")
+        self.assertContains(response, "Passcode present?")
+        self.assertContains(response, '<span class="text-danger">no</span>')
+        self.assertContains(response, "Lockdown mode?")
+        self.assertContains(response, '<span class="text-danger">service-recommended</span>')
+        self.assertContains(response, "Camera:")
+        self.assertContains(response, '<span class="text-danger">non-genuine</span>')
+        self.assertNotContains(response, "Shared iPad?")
+        # the FDE row follows the status item, not the SecurityInfo result
+        self.assertContains(response, "<h4>FDE</h4>")
+        self.assertTrue(enrolled_device.filevault_enabled)
+
     def test_enrolled_device_software_update_status_cleared_pending_version(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
         enrolled_device = session.enrolled_device

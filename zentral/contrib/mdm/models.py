@@ -1356,6 +1356,24 @@ class EnrolledDevice(models.Model):
         return status
 
     @property
+    def device_state_status(self):
+        # the device state status items, with template-friendly keys
+        status_items = self.status_items if isinstance(self.status_items, dict) else {}
+        status = {}
+        for key, item in (("passcode_present", "passcode.is-present"),
+                          ("passcode_compliant", "passcode.is-compliant"),
+                          ("lockdown_mode", "security.lockdown-mode"),
+                          ("battery_health", "device.power.battery-health"),
+                          ("system_health", "device.system.health"),
+                          ("return_to_service", "mdm.is-return-to-service"),
+                          ("shared_ipad", "mdm.is-shared-ipad")):
+            value = status_items.get(item)
+            if value is None:
+                continue
+            status[key] = value
+        return status
+
+    @property
     def software_update_device_id(self):
         # the status item is pushed on change, the DeviceInformation query is polled
         for source, key in ((self.status_items, "softwareupdate.device-id"),
