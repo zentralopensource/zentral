@@ -2191,11 +2191,16 @@ class TestMDMArtifacts(TestCase):
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
         status_report = self._build_status_report_with_sue(target)
         update_fields, changed, cleared = target.update_status_items_with_status_report(status_report)
-        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at",
+                                         "awaiting_configuration", "supervised", "user_enrollment"])
         self.assertEqual(changed,
                          self.FIXTURE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
         self.assertEqual(cleared, [])
         self.assertIsNone(self.enrolled_device.status_items_full_report_at)
+        # synced from the mdm.* items
+        self.assertFalse(self.enrolled_device.awaiting_configuration)
+        self.assertTrue(self.enrolled_device.supervised)
+        self.assertFalse(self.enrolled_device.user_enrollment)
         status_items = self.enrolled_device.status_items
         self.assertEqual(status_items["softwareupdate.install-state"], "downloading")
         self.assertEqual(status_items["softwareupdate.pending-version"],
@@ -2310,6 +2315,47 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(self.enrolled_device.status_items, {})
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
         self.assertIsNone(self.enrolled_device.status_items_full_report_at)
+
+    def test_update_status_items_awaiting_configuration_cleared(self):
+        target = Target(self.enrolled_device_awaiting_configuration)
+        self.assertTrue(target.awaiting_configuration)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"is-awaiting-configuration": False}}}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at", "awaiting_configuration"])
+        self.assertEqual(changed, ["mdm.is-awaiting-configuration"])
+        self.assertFalse(self.enrolled_device_awaiting_configuration.awaiting_configuration)
+
+    def test_update_status_items_enrollment_type_user(self):
+        self.enrolled_device.supervised = True
+        self.enrolled_device.user_enrollment = False
+        target = Target(self.enrolled_device)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"enrollment-type": "user"}}}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at", "supervised", "user_enrollment"])
+        self.assertFalse(self.enrolled_device.supervised)
+        self.assertTrue(self.enrolled_device.user_enrollment)
+
+    def test_update_status_items_enrollment_type_unknown_value(self):
+        self.enrolled_device.supervised = True
+        target = Target(self.enrolled_device)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"enrollment-type": "none", "is-awaiting-configuration": "yes"}}}
+        )
+        # stored, but the device fields are left alone
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertTrue(self.enrolled_device.supervised)
+        self.assertIsNone(self.enrolled_device.awaiting_configuration)
+
+    def test_update_status_items_user_channel_no_device_fields(self):
+        target = Target(self.enrolled_device, self.enrolled_user)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"enrollment-type": "user", "is-awaiting-configuration": True}}}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertIsNone(self.enrolled_device.supervised)
+        self.assertIsNone(self.enrolled_device.awaiting_configuration)
 
     def test_filevault_enabled_from_status_item(self):
         self.enrolled_device.security_info = {"FDE_Enabled": False}
