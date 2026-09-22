@@ -13,11 +13,11 @@
     {% endif %}
     {% if item.serial_numbers %}
     <dt>serial number{{ item.serial_numbers|length|pluralize }}</dt>
-    <dd>{% for serial_number in item.serial_numbers %}{% if not forloop.first %}, {% endif %}{{ serial_number|privacywrapper }}{% endfor %}</dd>
+    <dd>{% for serial_number in item.serial_numbers %}{% if not forloop.first %}, {% endif %}<span class="scope-value">{{ serial_number|privacywrapper }}</span>{% endfor %}</dd>
     {% endif %}
     {% if item.primary_users %}
     <dt>primary user{{ item.primary_users|length|pluralize }}</dt>
-    <dd>{{ item.primary_users|join:", " }}</dd>
+    <dd>{% for primary_user in item.primary_users %}{% if not forloop.first %}, {% endif %}<span class="scope-value">{{ primary_user }}</span>{% endfor %}</dd>
     {% endif %}
   </dl>
   {% endif %}
@@ -30,11 +30,11 @@
     {% endif %}
     {% if item.excluded_serial_numbers %}
     <dt>serial number{{ item.excluded_serial_numbers|length|pluralize }}</dt>
-    <dd>{% for serial_number in item.excluded_serial_numbers %}{% if not forloop.first %}, {% endif %}{{ serial_number|privacywrapper }}{% endfor %}</dd>
+    <dd>{% for serial_number in item.excluded_serial_numbers %}{% if not forloop.first %}, {% endif %}<span class="scope-value">{{ serial_number|privacywrapper }}</span>{% endfor %}</dd>
     {% endif %}
     {% if item.excluded_primary_users %}
     <dt>primary user{{ item.excluded_primary_users|length|pluralize }}</dt>
-    <dd>{{ item.excluded_primary_users|join:", " }}</dd>
+    <dd>{% for primary_user in item.excluded_primary_users %}{% if not forloop.first %}, {% endif %}<span class="scope-value">{{ primary_user }}</span>{% endfor %}</dd>
     {% endif %}
   </dl>
   {% endif %}

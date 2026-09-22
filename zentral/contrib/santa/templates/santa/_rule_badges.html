@@ -1,0 +1,7 @@
+<span class="badge text-bg-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
+  {{ rule.get_policy_display }}
+</span>
+{% if rule.is_voting_rule %}<span class="badge text-bg-info">voting</span>{% endif %}
+{% if perms.santa.view_ruleset and rule.ruleset %}
+<span class="badge text-bg-secondary">{{ rule.ruleset }}</span>
+{% endif %}

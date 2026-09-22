@@ -374,7 +374,8 @@ class RuleSearchForm(forms.Form):
         )
 
     def get_queryset(self):
-        qs = (Rule.objects.select_related("target")
+        qs = (Rule.objects.select_related("target", "ruleset")
+                          .prefetch_related("tags", "excluded_tags")
                           .filter(configuration=self.configuration)
                           .order_by("-pk"))
         ruleset = self.cleaned_data.get("ruleset")

@@ -63,231 +63,55 @@
 
     {% pagination next_url previous_url %}
 
-    {% for rule in page_obj %}
-    {% with rule.target as target %}
-    <div class="panel panel-default px-2 py-3">
-    <table class="table table-striped align-middle table-hover">
+    <div class="table-responsive mb-3">
+    <table class="table table-striped align-top">
+      <thead>
         <tr>
-            <td class="col-2">Policy</td>
-            <td class="d-flex align-items-center">
-                <div class="w-100">
-                    <span class="badge text-bg-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
-                    {{ rule.get_policy_display }}
-                    </span>
-                </div>
-                <div class="flex-shrink-1">
-                {% if not rule.ruleset and not rule.is_voting_rule %}
-                {% if perms.santa.change_rule or perms.santa.delete_rule %}
-                    <div class="btn-group" role="group">
-                    {% if perms.santa.change_rule %}
-                        {% url 'santa:update_configuration_rule' configuration.pk rule.pk as url %}
-                        {% button 'UPDATE' url "Edit rule" %}
-                    {% endif %}
-                    {% if perms.santa.delete_rule %}
-                        {% url 'santa:delete_configuration_rule' configuration.pk rule.pk as url %}
-                        {% button 'DELETE' url "Delete rule" %}
-                    {% endif %}
-                    </div>
-                {% endif %}
-                {% endif %}
-                </div>
-            </td>
+          <th>Rule</th>
+          <th>Scope</th>
+          {% if perms.santa.change_rule or perms.santa.delete_rule %}<th></th>{% endif %}
         </tr>
+      </thead>
+      <tbody>
+        {% for rule in page_obj %}
+        {% with target=rule.target %}
         <tr>
-          <td>Voting rule?</td>
-          <td>{{ rule.is_voting_rule|yesno }}</td>
-        </tr>
-        <tr>
-            <td>{{ target.get_type_display }}</td>
-        <td>
-            {% if perms.santa.view_target %}
-                <a href="{{ target.get_absolute_url }}"><code>{{ target.identifier }}</code></a>
-            {% else %}
-                <code>{{ target.identifier }}</code>
+          <td>
+            <div class="d-flex flex-wrap align-items-baseline column-gap-2">
+              {% include "santa/_rule_badges.html" %}
+              <span class="text-secondary">{{ target.get_type_display }}</span>
+              {% if rule.target_display_str %}<span>{{ rule.target_display_str }}</span>{% endif %}
+            </div>
+            <div>
+              {% if perms.santa.view_target %}
+              <a href="{{ target.get_absolute_url }}"><code class="rule-target-identifier">{{ target.identifier }}</code></a>
+              {% else %}
+              <code class="rule-target-identifier">{{ target.identifier }}</code>
+              {% endif %}
+            </div>
+            {% include "santa/_rule_texts.html" %}
+          </td>
+          <td>{% include "santa/_scoped_item_scope.html" with item=rule %}</td>
+          {% if perms.santa.change_rule or perms.santa.delete_rule %}
+          <td class="text-end text-nowrap py-0" style="width:1%">
+            {% if not rule.ruleset and not rule.is_voting_rule %}
+            {% if perms.santa.change_rule %}
+            {% url 'santa:update_configuration_rule' configuration.pk rule.pk as url %}
+            {% button 'UPDATE' url "Edit rule" %}
             {% endif %}
-            {% for file in target.files %}
-            <dl class="row">
-                <dt class="col-2 text-md-end">name</dt>
-                <dd class="col-6">{{ file.name }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">path</dt>
-                <dd class="col-6">{{ file.path }}</dd>
-            </dl>
-            {% if file.bundle %}
-            <dl class="row">
-                <dt class="col-2 text-md-end">bundle id</dt>
-                <dd class="col-6">{{ file.bundle.bundle_id }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">bundle name</dt>
-                <dd class="col-6">{{ file.bundle.bundle_name }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">bundle version</dt>
-                <dd class="col-6">{{ file.bundle.bundle_version_str }}</dd>
-            </dl>
-            {% if file.bundle_path %}
-            <dl class="row">
-                <dt class="col-2 text-md-end">bundle path</dt>
-                <dd class="col-6">{{ file.bundle_path }}</dd>
-            </dl>
+            {% if perms.santa.delete_rule %}
+            {% url 'santa:delete_configuration_rule' configuration.pk rule.pk as url %}
+            {% button 'DELETE' url "Delete rule" %}
             {% endif %}
             {% endif %}
-
-            {% endfor %}
-            {% if target.type == "BUNDLE" %}
-            {% with target.bundle as bundle %}
-            <dl class="row">
-                <dt class="col-2 text-md-end">id</dt>
-                <dd class="col-6">{{ bundle.bundle_id }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">name</dt>
-                <dd class="col-6">{{ bundle.name }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">version</dt>
-                <dd class="col-6">{{ bundle.version_str }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">binaries</dt>
-                <dd class="col-6">{{ bundle.binary_targets.count }}</dd>
-            </dl>
-            {% endwith %}
-            {% endif %}
-            {% if target.type == "CERTIFICATE" %}
-            {% for cert in target.certificates %}
-            <dl class="row">
-                <dt class="col-2 text-md-end">common name</dt>
-                <dd class="col-6">{{ cert.common_name|default:"-" }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">organization</dt>
-                <dd class="col-6">{{ cert.organization|default:"-" }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">organizational_unit</dt>
-                <dd class="col-6">{{ cert.organizational_unit|default:"-" }}</dd>
-            </dl>
-            <dl class="row">
-                <dt class="col-2 text-md-end">validity</dt>
-                <dd class="col-6">{{ cert.valid_from }} - {{ cert.valid_until }}</dd>
-            </dl>
-            {% endfor %}
-            {% endif %}
-            {% if target.type == "TEAMID" or target.type == "SIGNINGID" %}
-            {% for team_id in target.team_ids %}
-            <dl class="row">
-                <dt class="col-2 text-md-end">organization</dt>
-                <dd class="col-6">{{ team_id.organization|default:"-" }}</dd>
-            </dl>
-            {% endfor %}
-            {% endif %}
-        </td>
+          </td>
+          {% endif %}
         </tr>
-        {% if rule.cel_expr %}
-        <tr>
-        <td>CEL expression</td>
-        <td>
-          <pre>{{ rule.cel_expr }}</pre>
-        </td>
-        </tr>
-        {% endif %}
-        {% if rule.custom_msg %}
-        <tr>
-        <td>Custom message</td>
-        <td>{{ rule.custom_msg }}</td>
-        </tr>
-        {% endif %}
-        {% if rule.description %}
-        <tr>
-        <td>Description</td>
-        <td>{{ rule.description|linebreaks }}</td>
-        </tr>
-        {% endif %}
-        {% if rule.serial_numbers %}
-        <tr>
-        <td>Serial number{{ rule.serial_numbers|length|pluralize }}</td>
-        <td>
-            <ul>
-            {% for serial_number in rule.serial_numbers %}
-            <li>{{ serial_number|privacywrapper }}</li>
-            {% endfor %}
-            </ul>
-        </td>
-        </tr>
-        {% endif %}
-        {% if rule.excluded_serial_numbers %}
-        <tr>
-        <td>Excluded serial number{{ rule.excluded_serial_numbers|length|pluralize }}</td>
-        <td>
-            <ul>
-            {% for serial_number in rule.excluded_serial_numbers %}
-            <li>{{ serial_number|privacywrapper }}</li>
-            {% endfor %}
-            </ul>
-        </td>
-        </tr>
-        {% endif %}
-        {% if rule.primary_users %}
-        <tr>
-        <td>Primary user{{ rule.primary_users|length|pluralize }}</td>
-        <td>
-            <ul>
-            {% for primary_user in rule.primary_users %}
-            <li>{{ primary_user }}</li>
-            {% endfor %}
-            </ul>
-        </td>
-        </tr>
-        {% endif %}
-        {% if rule.excluded_primary_users %}
-        <tr>
-        <td>Excluded primary user{{ rule.excluded_primary_users|length|pluralize }}</td>
-        <td>
-            <ul>
-            {% for primary_user in rule.excluded_primary_users %}
-            <li>{{ primary_user }}</li>
-            {% endfor %}
-            </ul>
-        </td>
-        </tr>
-        {% endif %}
-        {% with rule.tags.count as tag_count %}
-        {% if tag_count %}
-        <tr>
-        <td>Tag{{ tag_count|pluralize }}</td>
-        <td>
-            {% for tag in rule.tags.all %}
-            {% inventory_tag tag %}
-            {% endfor %}
-        </td>
-        </tr>
-        {% endif %}
         {% endwith %}
-        {% with rule.excluded_tags.count as excluded_tag_count %}
-        {% if excluded_tag_count %}
-        <tr>
-        <td>Excluded tag{{ excluded_tag_count|pluralize }}</td>
-        <td>
-            {% for tag in rule.excluded_tags.all %}
-            {% inventory_tag tag %}
-            {% endfor %}
-        </td>
-        </tr>
-        {% endif %}
-        {% endwith %}
-        {% if perms.santa.view_ruleset and rule.ruleset %}
-        <tr>
-        <td>Ruleset</td>
-        <td>{{ rule.ruleset }}</td>
-        </tr>
-        {% endif %}
+        {% endfor %}
+      </tbody>
     </table>
     </div>
-    {% endwith %}
-    {% endfor %}
 
     {% pagination next_url previous_url %}
 

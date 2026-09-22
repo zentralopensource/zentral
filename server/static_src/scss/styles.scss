@@ -409,7 +409,8 @@ td > p:last-child, td > table:last-child {
 // one carries its own labels.
 .scoped-item-scope {
     display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
+    // 1fr and not minmax(0, 1fr): a zero minimum lets the values paint outside a table cell
+    grid-template-columns: max-content 1fr;
     column-gap: map-get($spacers, 3);
 
     > * {
@@ -437,6 +438,27 @@ td > p:last-child, td > table:last-child {
     dd {
         margin-bottom: 0;
     }
+
+    // one token per value: a line breaks between the values, never inside one
+    .scope-value {
+        white-space: nowrap;
+    }
+
+    // a tag badge carries its own overflow:hidden, so its minimum width is zero
+    .badge {
+        flex: none;
+    }
+}
+
+// 40 characters: a cdhash fits whole, and a sha256 does not set the width of the column
+
+.rule-target-identifier {
+    display: inline-block;
+    max-width: 40ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
 }
 
 // Role permissions select

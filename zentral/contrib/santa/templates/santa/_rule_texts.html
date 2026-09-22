@@ -1,0 +1,15 @@
+{% if rule.cel_expr %}<div><code>{{ rule.cel_expr }}</code></div>{% endif %}
+{% if rule.custom_msg or rule.custom_url %}
+<div>
+  <span class="fw-semibold">custom message</span>
+  <span class="text-secondary">{{ rule.custom_msg }}
+    {% if rule.custom_url %}<a href="{{ rule.custom_url }}">{{ rule.custom_url }}</a>{% endif %}
+  </span>
+</div>
+{% endif %}
+{% if rule.description %}
+<div>
+  <span class="fw-semibold">description</span>
+  <span class="text-secondary">{{ rule.description }}</span>
+</div>
+{% endif %}

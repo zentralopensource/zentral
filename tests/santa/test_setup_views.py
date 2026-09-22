@@ -6,7 +6,9 @@ from unittest.mock import patch
 
 from accounts.models import User
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
@@ -14,7 +16,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MetaBusinessUnit, Tag
 from zentral.contrib.santa.events import SantaRuleUpdateEvent
-from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, Target
+from zentral.contrib.santa.models import Bundle, Configuration, Enrollment, Rule, RuleSet, Target
 from zentral.core.events.base import AuditEvent
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
@@ -1082,6 +1084,118 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
             response,
             reverse("santa:delete_configuration_rule", args=(voting_rule.configuration.pk, voting_rule.pk))
         )
+
+    def test_configuration_rules_cell(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        rule = Rule.objects.create(configuration=configuration, target=target,
+                                   policy=Rule.Policy.BLOCKLIST)
+        self.login("santa.view_rule", "santa.view_target")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertContains(response, rule.get_policy_display())
+        self.assertContains(response, rule.target.get_type_display())
+        self.assertContains(response, self.file_sha256)
+        self.assertContains(response, rule.target.get_absolute_url())
+        # one name for the target, not one line per file behind it
+        self.assertContains(response, self.file_name, count=1)
+
+    def test_configuration_rules_target_link_needs_the_permission(self):
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        rule = Rule.objects.create(configuration=force_configuration(), target=target,
+                                   policy=Rule.Policy.BLOCKLIST)
+        self.login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(rule.configuration.pk,)))
+        self.assertContains(response, self.file_sha256)
+        self.assertNotContains(response, rule.target.get_absolute_url())
+
+    def test_configuration_rules_texts(self):
+        configuration = force_configuration()
+        rule = force_rule(configuration=configuration, policy=Rule.Policy.BLOCKLIST,
+                          description="A DESCRIPTION")
+        rule.custom_msg = "A CUSTOM MESSAGE"
+        rule.custom_url = "https://www.example.com/custom-url"
+        rule.save()
+        self.login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertContains(response, ">custom message</span>")
+        self.assertContains(response, "A CUSTOM MESSAGE")
+        self.assertContains(response, rule.custom_url)
+        self.assertContains(response, ">description</span>")
+        self.assertContains(response, "A DESCRIPTION")
+
+    def test_configuration_rules_cel_expression(self):
+        configuration = force_configuration()
+        force_rule(configuration=configuration, policy=Rule.Policy.CEL,
+                   cel_expr="target.is_development_build")
+        self.login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertContains(response, "target.is_development_build")
+
+    def test_configuration_rules_ruleset_badge_needs_the_permission(self):
+        configuration = force_configuration()
+        ruleset = RuleSet.objects.create(name=get_random_string(12))
+        rule = force_rule(configuration=configuration)
+        rule.ruleset = ruleset
+        rule.save()
+        badge = f'text-bg-secondary">{ruleset.name}</span>'
+        self.login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        # the Ruleset filter names it whatever the permission, the badge does not
+        self.assertNotContains(response, badge)
+        self.login("santa.view_rule", "santa.view_ruleset")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertContains(response, badge)
+
+    def test_configuration_rules_scope(self):
+        configuration = force_configuration()
+        tag = Tag.objects.create(name=get_random_string(12))
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+        rule = force_rule(configuration=configuration,
+                          serial_numbers=["INCLUDEDSERIAL"],
+                          excluded_serial_numbers=["EXCLUDEDSERIAL"],
+                          primary_users=["included@example.com"],
+                          excluded_primary_users=["excluded@example.com"])
+        rule.tags.set([tag])
+        rule.excluded_tags.set([excluded_tag])
+        self.login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertContains(response, ">includes</div>")
+        self.assertContains(response, ">excludes</div>")
+        for value in ("INCLUDEDSERIAL", "EXCLUDEDSERIAL", "included@example.com",
+                      "excluded@example.com", tag.name, excluded_tag.name):
+            self.assertContains(response, value)
+
+    def test_configuration_rules_scope_of_a_global_rule(self):
+        configuration = force_configuration()
+        force_rule(configuration=configuration)
+        self.login("santa.view_rule")
+        response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
+        self.assertContains(response, "all machines")
+        self.assertNotContains(response, ">excludes</div>")
+
+    def test_configuration_rules_queries_do_not_grow_with_the_rules(self):
+        configuration = force_configuration()
+        ruleset = RuleSet.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(name=get_random_string(12))
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+
+        def add_rule():
+            rule = force_rule(configuration=configuration)
+            rule.ruleset = ruleset
+            rule.save()
+            rule.tags.set([tag])
+            rule.excluded_tags.set([excluded_tag])
+
+        self.login("santa.view_rule", "santa.view_ruleset", "santa.view_target")
+        url = reverse("santa:configuration_rules", args=(configuration.pk,))
+        add_rule()
+        with CaptureQueriesContext(connection) as one_rule:
+            self.assertEqual(self.client.get(url).status_code, 200)
+        for _ in range(4):
+            add_rule()
+        with CaptureQueriesContext(connection) as five_rules:
+            self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(len(one_rule.captured_queries), len(five_rules.captured_queries))
 
     def test_configuration_rules_no_result(self):
         rule = self._force_rule(target_type=Target.Type.BINARY)

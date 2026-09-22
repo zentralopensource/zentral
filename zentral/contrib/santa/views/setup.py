@@ -457,6 +457,13 @@ class ConfigurationRulesView(PermissionRequiredMixin, UserPaginationListView):
         ctx["configuration"] = self.configuration
         ctx["form"] = self.form
         page = ctx["page_obj"]
+        display_strings = Target.objects.get_targets_display_strings(
+            {(Target.Type(rule.target.type), rule.target.identifier) for rule in page}
+        )
+        for rule in page:
+            rule.target_display_str = display_strings.get(
+                (Target.Type(rule.target.type), rule.target.identifier)
+            )
         if page.number > 1:
             qd = self.request.GET.copy()
             qd.pop('page', None)
