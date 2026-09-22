@@ -17,6 +17,22 @@ logger = logging.getLogger("zentral.contrib.mdm.declarations.status_report")
 
 # https://github.com/apple/device-management/tree/release/declarative/status
 SCALAR_STATUS_ITEMS = frozenset((
+    "device.identifier.serial-number",
+    "device.identifier.udid",
+    "device.model.family",
+    "device.model.identifier",
+    "device.model.marketing-name",
+    "device.model.number",
+    "device.power.battery-health",
+    "device.system.health",
+    "diskmanagement.filevault.enabled",
+    "mdm.enrollment-type",
+    "mdm.is-awaiting-configuration",
+    "mdm.is-return-to-service",
+    "mdm.is-shared-ipad",
+    "passcode.is-compliant",
+    "passcode.is-present",
+    "security.lockdown-mode",
     "softwareupdate.beta-enrollment",
     "softwareupdate.device-id",
     "softwareupdate.failure-reason",
@@ -29,10 +45,7 @@ SCALAR_STATUS_ITEMS = frozenset((
 # - device.operating-system: Target.update_os_info_with_status_report
 # - management.client-capabilities: Target.update_client_capabilities_with_status_report
 # - management.declarations: get_status_report_target_artifacts_info and get_status_report_declaration_status
-# - device.identifier, device.model: not consumed, DeviceInformation is the source of the same values
 KNOWN_STATUS_ITEM_GROUPS = frozenset((
-    "device.identifier",
-    "device.model",
     "device.operating-system",
     "management.client-capabilities",
     "management.declarations",
