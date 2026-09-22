@@ -2,7 +2,6 @@ import json
 import os.path
 from unittest.mock import Mock, patch
 
-from celery.exceptions import MaxRetriesExceededError, Retry
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
@@ -11,7 +10,6 @@ from zentral.contrib.mdm.dep import DEPClientError
 from zentral.contrib.mdm.dep_client import CursorIterator
 from zentral.contrib.mdm.tasks import (
     assign_dep_virtual_server_default_enrollment_task,
-    dep_throttled_countdown,
     bulk_assign_location_asset_task,
     sync_dep_virtual_server_devices_task,
     sync_software_updates_task,
@@ -302,120 +300,36 @@ class MDMTasksTestCase(TestCase):
             },
         )
 
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
     @patch("zentral.contrib.mdm.tasks.try_lock_dep_virtual_server_sync")
     @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_already_running_retries(
-        self, assign, try_lock, retry
-    ):
+    def test_assign_dep_virtual_server_default_enrollment_task_already_running_skipped(self, assign, try_lock):
         try_lock.return_value = False
-        retry.side_effect = Retry()
         dep_virtual_server = force_dep_virtual_server()
-        # waiting for the next synchronization to schedule this again would delay the assignment
-        # by a whole interval, and the work list is derived from the database
-        with self.assertRaises(Retry):
-            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
-        assign.assert_not_called()
-
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
-    @patch("zentral.contrib.mdm.tasks.try_lock_dep_virtual_server_sync")
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_skipped_after_the_last_retry(
-        self, assign, try_lock, retry
-    ):
-        try_lock.return_value = False
-        retry.side_effect = MaxRetriesExceededError()
-        dep_virtual_server = force_dep_virtual_server()
-        # the next synchronization schedules it again, so giving up is not losing the work
+        # the synchronization holding the lock schedules an assignment of its own when it commits
         result = assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
         self.assertEqual(result["status"], "SKIPPED")
         self.assertEqual(result["operations"],
                          {"assigned": 0, "throttled": 0, "failed": 0, "retry_after_seconds": None})
         assign.assert_not_called()
 
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
     @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_retries_throttled(self, assign, retry):
-        dep_virtual_server = force_dep_virtual_server()
-        error = DEPClientError("Too many requests", status_code=429)
-        assign.side_effect = error
-        retry.side_effect = Retry()
-        with self.assertRaises(Retry):
-            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
-        self.assertEqual(retry.call_args.kwargs["exc"], error)
-
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_retries_when_apple_throttles(self, assign, retry):
+    def test_assign_dep_virtual_server_default_enrollment_task_throttled(self, assign):
         dep_virtual_server = force_dep_virtual_server()
         assign.return_value = {"assigned": 2, "throttled": 1, "failed": 0, "retry_after_seconds": 120}
-        retry.side_effect = Retry()
-        with self.assertRaises(Retry):
-            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
-        # Apple says when to come back
-        self.assertEqual(retry.call_args.kwargs["countdown"], 120)
-        # and the next attempt knows what this one already assigned
-        self.assertEqual(
-            retry.call_args.kwargs["kwargs"],
-            {"prev_operations": {"assigned": 2, "throttled": 1, "failed": 0, "retry_after_seconds": 120}}
-        )
-
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_without_a_delay_backs_off(self, assign, retry):
-        dep_virtual_server = force_dep_virtual_server()
-        # Apple answers a delay from the 10th version of its protocol only
-        assign.return_value = {"assigned": 0, "throttled": 1, "failed": 0, "retry_after_seconds": None}
-        retry.side_effect = Retry()
-        with self.assertRaises(Retry):
-            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
-        self.assertEqual(retry.call_args.kwargs["countdown"], 60)
-
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_accumulates_the_assignments(self, assign, retry):
-        dep_virtual_server = force_dep_virtual_server()
-        assign.return_value = {"assigned": 2, "throttled": 0, "failed": 1, "retry_after_seconds": None}
-        result = assign_dep_virtual_server_default_enrollment_task(
-            dep_virtual_server.pk,
-            prev_operations={"assigned": 5, "throttled": 3, "failed": 0, "retry_after_seconds": 60}
-        )
-        retry.assert_not_called()
-        self.assertEqual(result["status"], "SUCCESS")
-        # only the assignments accumulate, the rest is the state of this attempt
-        self.assertEqual(result["operations"],
-                         {"assigned": 7, "throttled": 0, "failed": 1, "retry_after_seconds": None})
-
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_throttled_after_the_last_retry(self, assign, retry):
-        dep_virtual_server = force_dep_virtual_server()
-        assign.return_value = {"assigned": 1, "throttled": 2, "failed": 0, "retry_after_seconds": 30}
-        retry.side_effect = MaxRetriesExceededError()
-        result = assign_dep_virtual_server_default_enrollment_task(
-            dep_virtual_server.pk,
-            prev_operations={"assigned": 4, "throttled": 3, "failed": 0, "retry_after_seconds": 30}
-        )
-        # the next synchronization schedules it again, so giving up is not losing the work
+        # the throttled device keeps its place in the work list, the next synchronization finds it
+        result = assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
         self.assertEqual(result["status"], "THROTTLED")
         self.assertEqual(result["operations"],
-                         {"assigned": 5, "throttled": 2, "failed": 0, "retry_after_seconds": 30})
+                         {"assigned": 2, "throttled": 1, "failed": 0, "retry_after_seconds": 120})
 
-    def test_dep_throttled_countdown(self):
-        # Apple decides, within reason
-        self.assertEqual(dep_throttled_countdown(120, 0), 120)
-        self.assertEqual(dep_throttled_countdown(100000, 0), 3600)
-        self.assertEqual(dep_throttled_countdown(0, 2), 240)
-        self.assertEqual(dep_throttled_countdown(None, 3), 480)
-
-    @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment_task.retry")
     @patch("zentral.contrib.mdm.tasks.assign_dep_virtual_server_default_enrollment")
-    def test_assign_dep_virtual_server_default_enrollment_task_does_not_retry_rejected(self, assign, retry):
+    def test_assign_dep_virtual_server_default_enrollment_task_raises_the_client_errors(self, assign):
         dep_virtual_server = force_dep_virtual_server()
-        assign.side_effect = DEPClientError("Nope", status_code=400)
-        with self.assertRaises(DEPClientError):
-            assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
-        retry.assert_not_called()
+        # a throttled request and a rejected payload both wait for the next synchronization
+        for status_code in (429, 400):
+            assign.side_effect = DEPClientError("Nope", status_code=status_code)
+            with self.assertRaises(DEPClientError):
+                assign_dep_virtual_server_default_enrollment_task(dep_virtual_server.pk)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("zentral.contrib.mdm.software_updates.requests.get")

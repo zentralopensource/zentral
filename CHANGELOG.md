@@ -281,7 +281,7 @@ The OpenSearch event store signs its requests with the access key and secret con
 
 The task that pushes an updated DEP profile to Apple Business Manager belongs to the user who saved the enrollment now. It was the only task that a user launched with no record of the user, so it was not in the task list of that user, and only a superuser saw its result.
 
-A retried task does not write an error to the logs about its user record anymore. Celery publishes a retry with the same task ID, Zentral tried to write the record a second time, and the unique constraint refused it. The task that assigns the default enrollment of a DEP virtual server retries when Apple throttles it.
+A retried task does not write an error to the logs about its user record anymore. Celery publishes a retry with the same task ID, Zentral tried to write the record a second time, and the unique constraint refused it.
 
 The task list of the web console reads the user of each task together with the tasks now. It made one more query for each row of the page, and a superuser sees the tasks of all the users.
 
@@ -342,6 +342,8 @@ An MDM token update that has no `UserShortName` does not give a 500 anymore. App
 The MDM software update enforcement API rejects a null delay in days or local time when a maximum target OS version is set. A latest enforcement needs both fields to calculate the target date of its declaration. If you omit them, the defaults of 14 days and 09:30 apply, as before.
 
 A DEP enrollment with a maximum required OS version does not ask a device to install an update at or above that version anymore. Zentral read the maximum only to decide to look for an update, then asked the device to install the most recent update available for it. It selects the most recent update below the maximum now, as the enrollment page shows.
+
+The task that assigns the default enrollment of a DEP virtual server does not retry anymore when Apple throttles an assignment. Celery keeps a task with a countdown in the memory of a worker, and its message stays unacknowledged in the broker. With the SQS broker, the queue makes the message visible again after the visibility timeout, and a second worker receives a copy of it. Each copy runs the task and publishes a retry of its own. One throttled device was enough to put tens of thousands of messages in the celery queue, and the other tasks waited behind them. The task stops now. Its result gives the number of throttled devices, and the logs name each one. The `sync_dep_devices` command, which is the cron entry point of the synchronization, assigns the devices that are left.
 
 Fixed the scope of a Monolith sub manifest package that uses the *Default Installs* key. Zentral put the package in the `default_installs` of every machine, and ignored the excluded tags and the shards. A machine out of scope kept a self-serve entry that can install the package later, with no request from the user. The web console form also removed the excluded tags and the shards from a package that uses the *Managed Updates* key.
 
