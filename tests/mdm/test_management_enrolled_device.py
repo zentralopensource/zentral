@@ -416,6 +416,18 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Enforcement declaration invalid")
         self.assertContains(response, "Error.Fomo: Fomo description")
 
+    def test_enrolled_device_last_full_status_report(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertContains(response, "Last full status report")
+        self.assertContains(response, "<th>Last full status report</th>\n          <td>-</td>", html=False)
+        enrolled_device.status_items_full_report_at = datetime(2026, 9, 21, 8, 23, 57)
+        enrolled_device.save()
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertContains(response, "09/21/2026 8:23 a.m.")
+
     def test_enrolled_device_no_device_state(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
         self.login("mdm.view_enrolleddevice")
