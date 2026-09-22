@@ -176,7 +176,8 @@ class MDMStatusReportItemsTestCase(TestCase):
             get_status_report_scalar_status_items(report),
             {"softwareupdate.install-state": "downloading",
              "softwareupdate.pending-version": {"os-version": "15.7.1", "build-version": "24G222"},
-             "softwareupdate.device-id": "Mac15,6"},
+             "softwareupdate.device-id": "Mac15,6",
+             "device.model.family": "Mac"},
         )
 
     def test_scalar_status_items_unknown_items_logged(self):

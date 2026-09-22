@@ -86,7 +86,8 @@
       "model": {
         "identifier": "Macmini9,1",
         "family": "Mac",
-        "marketing-name": "Mac mini (M1, 2020)"
+        "marketing-name": "Mac mini (M1, 2020)",
+        "number": "MGNR3D/A"
       },
       "identifier": {
         "serial-number": "000000000000",
@@ -101,6 +102,9 @@
           "build-version": "22E772610a"
         },
         "version": "13.3.1"
+      },
+      "power": {
+        "battery-health": "unsupported"
       }
     },
     "softwareupdate": {
@@ -121,6 +125,22 @@
       },
       "device-id": "Macmini9,1",
       "beta-enrollment": ""
+    },
+    "diskmanagement": {
+      "filevault": {
+        "enabled": true
+      }
+    },
+    "passcode": {
+      "is-present": true,
+      "is-compliant": true
+    },
+    "security": {
+      "lockdown-mode": false
+    },
+    "mdm": {
+      "enrollment-type": "supervised",
+      "is-awaiting-configuration": false
     }
   },
   "Errors": []

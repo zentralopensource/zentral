@@ -2152,7 +2152,21 @@ class TestMDMArtifacts(TestCase):
 
     # test update status items
 
-    SOFTWARE_UPDATE_STATUS_ITEMS = [
+    # every scalar status item of the testdata/status_report.json fixture
+    FIXTURE_STATUS_ITEMS = [
+        "device.identifier.serial-number",
+        "device.identifier.udid",
+        "device.model.family",
+        "device.model.identifier",
+        "device.model.marketing-name",
+        "device.model.number",
+        "device.power.battery-health",
+        "diskmanagement.filevault.enabled",
+        "mdm.enrollment-type",
+        "mdm.is-awaiting-configuration",
+        "passcode.is-compliant",
+        "passcode.is-present",
+        "security.lockdown-mode",
         "softwareupdate.beta-enrollment",
         "softwareupdate.device-id",
         "softwareupdate.failure-reason",
@@ -2179,7 +2193,7 @@ class TestMDMArtifacts(TestCase):
         update_fields, changed, cleared = target.update_status_items_with_status_report(status_report)
         self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
         self.assertEqual(changed,
-                         self.SOFTWARE_UPDATE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
+                         self.FIXTURE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
         self.assertEqual(cleared, [])
         self.assertIsNone(self.enrolled_device.status_items_full_report_at)
         status_items = self.enrolled_device.status_items
@@ -2208,7 +2222,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(status_items["softwareupdate.install-state"], "installing")
         # missing items are kept
         self.assertEqual(status_items["softwareupdate.device-id"], "Macmini9,1")
-        self.assertEqual(len(status_items), 6)
+        self.assertEqual(len(status_items), len(self.FIXTURE_STATUS_ITEMS))
         self.assertGreater(self.enrolled_device.status_items_updated_at, updated_at)
 
     def test_update_status_items_full_report(self):
@@ -2218,7 +2232,7 @@ class TestMDMArtifacts(TestCase):
             {"StatusItems": {"softwareupdate": {"install-state": "none"}}, "FullReport": True}
         )
         self.assertEqual(update_fields, ["status_items_full_report_at", "status_items", "status_items_updated_at"])
-        self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
+        self.assertEqual(changed, self.FIXTURE_STATUS_ITEMS)
         # missing items are dropped
         self.assertEqual(self.enrolled_device.status_items, {"softwareupdate.install-state": "none"})
         self.assertIsNotNone(self.enrolled_device.status_items_full_report_at)
@@ -2234,7 +2248,8 @@ class TestMDMArtifacts(TestCase):
     def test_update_status_items_no_items(self):
         target = Target(self.enrolled_device_no_blueprint)
         status_report = build_status_report()
-        status_report["StatusItems"].pop("softwareupdate")
+        # only the sections with a dedicated reader
+        status_report["StatusItems"] = {"management": status_report["StatusItems"]["management"]}
         self.assertEqual(target.update_status_items_with_status_report(status_report), ([], [], []))
         self.assertEqual(self.enrolled_device_no_blueprint.status_items, {})
         self.assertIsNone(self.enrolled_device_no_blueprint.status_items_updated_at)
@@ -2257,7 +2272,7 @@ class TestMDMArtifacts(TestCase):
         update_fields, changed, cleared = target.update_status_items_with_status_report(build_status_report())
         self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
         # no enforcement declaration on the user channel
-        self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
+        self.assertEqual(changed, self.FIXTURE_STATUS_ITEMS)
         self.assertEqual(self.enrolled_user.status_items["softwareupdate.install-state"], "downloading")
         self.assertIsNotNone(self.enrolled_user.status_items_updated_at)
         self.assertEqual(self.enrolled_device.status_items, {})
@@ -2332,7 +2347,7 @@ class TestMDMArtifacts(TestCase):
             event.payload,
             {"channel": "Device",
              "status_items": self.enrolled_device.status_items,
-             "changed": self.SOFTWARE_UPDATE_STATUS_ITEMS,
+             "changed": self.FIXTURE_STATUS_ITEMS,
              "full_report": False}
         )
         metadata = event.metadata.serialize()
@@ -2359,7 +2374,7 @@ class TestMDMArtifacts(TestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertEqual(event.payload["software_update_enforcement"], {"pk": sue.pk, "name": sue.name})
         self.assertEqual(event.payload["changed"],
-                         self.SOFTWARE_UPDATE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
+                         self.FIXTURE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_software_update_enforcement": [str(sue.pk)]})
 
