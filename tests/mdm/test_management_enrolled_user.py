@@ -1,4 +1,5 @@
 import plistlib
+from datetime import datetime
 from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.test import TestCase
@@ -65,6 +66,17 @@ class EnrolledUserManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Artifacts (0)")
         self.assertNotContains(response, "Last commands")
         self.assertNotContains(response, "See all commands")
+        self.assertContains(response, "Declarative management")
+        self.assertContains(response, "Last full status report")
+
+    def test_enrolled_user_last_full_status_report(self):
+        enrolled_user, enrolled_device = self._force_enrolled_user()
+        enrolled_user.status_items_full_report_at = datetime(2026, 9, 21, 8, 24, 14)
+        enrolled_user.save()
+        self.login("mdm.view_enrolleduser")
+        response = self.client.get(reverse("mdm:enrolled_user", args=(enrolled_device.pk, enrolled_user.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "09/21/2026 8:24 a.m.")
 
     def test_enrolled_user_one_command(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
