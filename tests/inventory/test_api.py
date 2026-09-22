@@ -505,6 +505,16 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
             kwargs={"tables": ["machine"], "export_format": "PARQUET", "task_user": self.user.id}
         )
 
+    @patch("zentral.contrib.inventory.api_views.export_full_inventory.apply_async")
+    def test_full_export_csv_format(self, apply_async):
+        apply_async.return_value.id = str(uuid.uuid4())
+        self.set_permissions("inventory.view_machinesnapshot")
+        response = self.post(reverse('inventory_api:full_export'), {"export_format": "CSV", "tables": ["machine"]})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        apply_async.assert_called_once_with(
+            kwargs={"tables": ["machine"], "export_format": "CSV", "task_user": self.user.id}
+        )
+
     def test_full_export_unknown_format(self):
         self.set_permissions("inventory.view_machinesnapshot")
         response = self.post(reverse('inventory_api:full_export'), {"export_format": "YOLO"})

@@ -810,7 +810,7 @@ Use this endpoint to start a full inventory export. The export is a ZIP archive 
 
 The optional `tables` attribute limits the export to a list of tables. An unknown table, or an empty list, gives a `400` response that lists the valid tables.
 
-The optional `export_format` attribute selects the format: `JSONL`, the default, or `PARQUET`. See [the Parquet export](#the-parquet-export) below.
+The optional `export_format` attribute selects the format: `JSONL`, the default, `PARQUET`, or `CSV`. See [the Parquet export](#the-parquet-export) and [the CSV export](#the-csv-export) below.
 
 | Tables | Content |
 |---|---|
@@ -932,3 +932,32 @@ Task result, when the task is done (see [`/api/task_result/<uuid:task_id>/`](cor
 ```
 
 With the `JSONL` format, the result also carries the headers of the ZIP archive, the keys of `files` are the names of the `.jsonl` files in the archive, and the columns have no type.
+
+#### The CSV export
+
+With `"export_format": "CSV"`, each table is a set of `.csv` files in a directory of the storage, like the Parquet export. The manifest gives the `location` of the directory, and the files keyed by their path in the directory: `machine/machine-00001.csv`, `machine/machine-00002.csv`, … The directory also contains the manifest, as `manifest.json`.
+
+Each file starts with the header row. You can open one file of a table on its own, and a reader that skips the header of each file reads all the files of a table together. The `rows` of a file in the manifest counts the data rows; the `size` and the `sha256` cover the whole file, with its header. A table without a row has one file with the header and no data row. The columns of a table have no type in the manifest: they are the names of the header row, in the same order.
+
+The files follow RFC 4180: a comma separates the values, a `"` quotes a value that needs it, a quote in a value is doubled, and a line break ends each row. The files are UTF-8, without a byte order mark. The values:
+
+| PostgreSQL type | CSV value |
+|---|---|
+| `text`, `varchar`, `inet` | the value |
+| `integer`, `bigint` | the number |
+| `boolean` | `true` or `false` |
+| `timestamp` | ISO 8601 in UTC, for example `2026-09-11T10:00:00.123456Z` |
+| `json`, `jsonb` | the JSON text |
+
+An empty field is a `NULL` **or** an empty string. A CSV does not make the difference; use the Parquet export if you need it.
+
+A value can contain a line break, for example the name of a computer. The file quotes such a value, as RFC 4180 asks. DuckDB and the `csv` module of Python read it; a reader that splits the file on the line breaks, for example the Hive SerDes of Athena, does not.
+
+Download the files with the task result endpoint, like the Parquet files: [`/api/task_result/<uuid:task_id>/download/`](core.md#apitask_resultuuidtask_iddownload) gives the manifest with a download URL for each file, and `?file=<key>` downloads one file. With an S3 or a GCS bucket, the manifest also gives the URL of each file in the storage.
+
+```sql
+-- DuckDB, with the URLs of the manifest
+SELECT platform, count(*) FROM read_csv(['https://…/machine/machine-00001.csv']) GROUP BY 1;
+-- DuckDB, with the downloaded files
+SELECT * FROM read_csv('machine/*.csv');
+```

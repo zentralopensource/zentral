@@ -12,6 +12,7 @@ from django.core.files.storage import default_storage
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connections, transaction
 
+from zentral.utils.csv import iter_csv_parts
 from zentral.utils.db import get_read_only_database
 from zentral.utils.parquet import arrow_schema, iter_parquet_parts, record_batch
 from zentral.utils.time import naive_utcnow
@@ -144,12 +145,14 @@ FULL_EXPORT_QUERIES = [
 
 
 FULL_EXPORT_TABLE_NAMES = [name for name, _ in FULL_EXPORT_QUERIES]
-FULL_EXPORT_FORMATS = ("JSONL", "PARQUET")
+FULL_EXPORT_FORMATS = ("JSONL", "PARQUET", "CSV")
 
 JSONL_WINDOW_SIZE = 5000
 JSONL_MAX_TEMP_FILE_SIZE = 2**30
 PARQUET_WINDOW_SIZE = 65536
 PARQUET_MAX_PART_SIZE = 128 * 2**20
+CSV_WINDOW_SIZE = 5000
+CSV_MAX_PART_SIZE = 128 * 2**20
 
 
 def normalize_tables(tables):
@@ -313,22 +316,30 @@ def save_export_object(name, content):
         raise RuntimeError(f"Export object {name} saved as {saved_name}")
 
 
-def export_parquet(tables, manifest, max_part_size, window_size):
+def parquet_table_parts(description, batches, max_part_size):
+    schema = arrow_schema(description)
+    columns = [{"name": field.name, "type": str(field.type), "nullable": field.nullable} for field in schema]
+    arrow_batches = (record_batch(schema, description, rows) for rows in batches)
+    return columns, iter_parquet_parts(schema, arrow_batches, lambda index: TempFile(), max_part_size)
+
+
+def csv_table_parts(description, batches, max_part_size):
+    # a CSV has no types, like the JSONL export
+    columns = [{"name": column.name} for column in description]
+    return columns, iter_csv_parts(description, batches, lambda index: TempFile(), max_part_size)
+
+
+def export_to_location(tables, manifest, table_parts, extension, max_part_size, window_size):
     location = f"exports/inventory/{manifest['export_id']}/"
     manifest["location"] = location
     # The files are saved from inside the export transaction, so the transaction on the read-only database
     # lasts for the uploads too. The alternative, one local copy of the whole export, is the JSONL design.
     for table, description, batches in iter_tables(tables, window_size):
-        schema = arrow_schema(description)
-        table_manifest = {
-            "rows": 0,
-            "columns": [{"name": field.name, "type": str(field.type), "nullable": field.nullable} for field in schema],
-            "files": [],
-        }
-        arrow_batches = (record_batch(schema, description, rows) for rows in batches)
-        for index, rows, sink in iter_parquet_parts(schema, arrow_batches, lambda index: TempFile(), max_part_size):
+        columns, parts = table_parts(description, batches, max_part_size)
+        table_manifest = {"rows": 0, "columns": columns, "files": []}
+        for index, rows, sink in parts:
             sink.close()
-            key = f"{table}/{table}-{index:05d}.parquet"
+            key = f"{table}/{table}-{index:05d}.{extension}"
             with open(sink.path, "rb") as f:
                 save_export_object(location + key, f)
             os.unlink(sink.path)
@@ -342,12 +353,16 @@ def export_parquet(tables, manifest, max_part_size, window_size):
 
 
 def do_full_export(tables=None, export_format="JSONL",
-                   max_temp_file_size=JSONL_MAX_TEMP_FILE_SIZE, max_part_size=PARQUET_MAX_PART_SIZE,
+                   max_temp_file_size=JSONL_MAX_TEMP_FILE_SIZE, max_part_size=None,
                    window_size=None):
     tables = normalize_tables(tables)
     if export_format not in FULL_EXPORT_FORMATS:
         raise ValueError(f"Unknown export format: {export_format}")
     manifest = new_manifest(export_format)
     if export_format == "PARQUET":
-        return export_parquet(tables, manifest, max_part_size, window_size or PARQUET_WINDOW_SIZE)
+        return export_to_location(tables, manifest, parquet_table_parts, "parquet",
+                                  max_part_size or PARQUET_MAX_PART_SIZE, window_size or PARQUET_WINDOW_SIZE)
+    if export_format == "CSV":
+        return export_to_location(tables, manifest, csv_table_parts, "csv",
+                                  max_part_size or CSV_MAX_PART_SIZE, window_size or CSV_WINDOW_SIZE)
     return export_jsonl(tables, manifest, max_temp_file_size, window_size or JSONL_WINDOW_SIZE)

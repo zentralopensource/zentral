@@ -9,7 +9,7 @@ logger = logging.getLogger("zentral.contrib.inventory.management.commands.export
 
 
 class Command(BaseCommand):
-    help = "Export the full inventory, as a ZIP archive of .jsonl files, or as Parquet files"
+    help = "Export the full inventory, as a ZIP archive of .jsonl files, or as Parquet or CSV files"
 
     def add_arguments(self, parser):
         parser.add_argument("--format", dest="export_format", choices=FULL_EXPORT_FORMATS, default="JSONL",

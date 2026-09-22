@@ -26,6 +26,8 @@ The full inventory export can be limited to a list of tables, with the `tables` 
 
 The full inventory export has a `PARQUET` format, with the `export_format` attribute of the API request or the `--format` option of the command. Each table is a set of Parquet files in a directory of the storage, with typed columns. The task result carries the manifest, with the location of the directory, the columns of each table and the files. The task result endpoint downloads the files one by one, and a tool with access to the storage reads them in place.
 
+The full inventory export has a `CSV` format too. Each table is a set of `.csv` files in a directory of the storage, like the Parquet export, and the task result carries the same manifest. Each file starts with the header row: you can open one file of a table on its own, and a reader that skips the header of each file reads all the files of a table together. A `NULL` and an empty string are both an empty field, because a CSV does not make the difference. Use the Parquet export when you need the types.
+
 Zentral publishes an `archive_machine` event when it removes the current machine snapshots of a machine. The event carries the list of the inventory sources it removed, and the machine serial number. The web console and the `machines/archive/` API endpoint publish it with the user that made the request. Before, an archive operation left no trace.
 
 

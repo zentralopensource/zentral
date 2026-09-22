@@ -246,7 +246,8 @@ class InventoryExportsTests(TestCase):
             ],
             "android_apps": [{"display_name": f"Android {marker}", "version_name": f"{index}.0"}],
             "deb_packages": [{"name": f"deb-{marker}", "version": f"{index}.0"}],
-            "ios_apps": [{"name": f"iOS {marker}", "version": f"{index}.0"}],
+            "ios_apps": [{"name": f"iOS {marker}", "version": f"{index}.0",
+                          "ad_hoc_signed": True, "beta_app": False}],
             "program_instances": [{"program": {"name": f"Program {marker}", "version": f"{index}.0"},
                                    "install_location": f"C:\\Program Files\\{marker}"}],
             "extra_facts": {"marker": marker},
@@ -491,6 +492,8 @@ class InventoryExportsTests(TestCase):
         self.assertEqual(next(row for row in tables["disk"] if row["name"] == "/dev/disk-V2")["size"], 62826479616)
         self.assertEqual(next(row for row in tables["network_interface"] if row["address"] == "10.0.0.2")["mask"],
                          "255.255.255.0")
+        ios_app = next(row for row in tables["ios_app"] if row["name"] == "iOS V2")
+        self.assertEqual((ios_app["ad_hoc_signed"], ios_app["beta_app"]), (True, False))
 
     def test_full_export_parquet_empty_table(self):
         # no Debian packages in this tree
@@ -566,6 +569,100 @@ class InventoryExportsTests(TestCase):
             with connection.cursor() as cursor:
                 cursor.execute("show transaction_isolation")
                 self.assertEqual(cursor.fetchone()[0], "read committed")
+
+    # CSV
+
+    def read_csv_export(self, result):
+        manifest = result["manifest"]
+        location = manifest["location"]
+        tables = {}
+        for key, file_manifest in manifest["files"].items():
+            with default_storage.open(location + key) as f:
+                content = f.read()
+            default_storage.delete(location + key)
+            self.assertEqual(file_manifest["size"], len(content))
+            self.assertEqual(file_manifest["sha256"], hashlib.sha256(content).hexdigest())
+            rows = list(csv.reader(io.StringIO(content.decode("utf-8"))))
+            table_manifest = manifest["tables"][file_manifest["table"]]
+            self.assertIn(key, table_manifest["files"])
+            # each file starts with the header, and rows counts the data rows
+            columns = [c["name"] for c in table_manifest["columns"]]
+            self.assertEqual(rows[0], columns)
+            self.assertEqual(len(rows) - 1, file_manifest["rows"])
+            tables.setdefault(file_manifest["table"], []).extend(dict(zip(columns, row)) for row in rows[1:])
+        with default_storage.open(location + "manifest.json") as f:
+            self.assertEqual(json.load(f), manifest)
+        default_storage.delete(location + "manifest.json")
+        return tables
+
+    def test_full_export_csv(self):
+        serial_number = get_random_string(12)
+        self.commit_full_tree(serial_number, 1)
+        ms2 = self.commit_full_tree(serial_number, 2)
+        ms3 = self.commit_full_tree(get_random_string(12), 3, source_name="Zentral Tests Bis")
+        result = do_full_export(export_format="CSV")
+        self.assertEqual(set(result), {"manifest"})
+        manifest = result["manifest"]
+        self.assertEqual(manifest["format"], "CSV")
+        self.assertEqual(manifest["location"], f"exports/inventory/{manifest['export_id']}/")
+        self.assertEqual(set(manifest["tables"]), set(FULL_EXPORT_TABLE_NAMES))
+        self.assertNotIn("manifest.json", manifest["files"])
+        for key, file_manifest in manifest["files"].items():
+            self.assertEqual(key, f"{file_manifest['table']}/{file_manifest['table']}-00001.csv")
+        tables = self.read_csv_export(result)
+        for table, table_manifest in manifest["tables"].items():
+            self.assertEqual(len(tables[table]), table_manifest["rows"], table)
+            self.assertTrue(table_manifest["rows"] > 0, table)
+            # a CSV has no types
+            self.assertTrue(all(set(c) == {"name"} for c in table_manifest["columns"]), table)
+        # the current snapshots only
+        self.assertEqual({row["ms_id"] for row in tables["machine"]}, {str(ms2.pk), str(ms3.pk)})
+        row = next(row for row in tables["machine"] if row["ms_id"] == str(ms2.pk))
+        # timestamps are UTC, JSON is text
+        self.assertEqual(row["mt_created_at"], f"{ms2.mt_created_at.isoformat()}Z")
+        self.assertEqual(json.loads(row["extra_facts"]), {"marker": "V2"})
+        # inet values are text
+        self.assertEqual(row["public_ip_address"], "203.0.113.2")
+        # a NULL is an empty field
+        self.assertEqual(row["imei"], "")
+        self.assertEqual(next(row for row in tables["disk"] if row["name"] == "/dev/disk-V2")["size"], "62826479616")
+        ios_app = next(row for row in tables["ios_app"] if row["name"] == "iOS V2")
+        self.assertEqual((ios_app["ad_hoc_signed"], ios_app["beta_app"]), ("true", "false"))
+
+    def test_full_export_csv_empty_table(self):
+        # no Debian packages in this tree
+        self.commit_machine_snapshot()
+        result = do_full_export(tables=["deb_package"], export_format="CSV")
+        manifest = result["manifest"]
+        key = "deb_package/deb_package-00001.csv"
+        # a table without a row keeps its columns in one file
+        self.assertEqual(manifest["tables"]["deb_package"]["rows"], 0)
+        self.assertEqual(manifest["tables"]["deb_package"]["files"], [key])
+        self.assertEqual(manifest["files"][key]["rows"], 0)
+        self.assertIn({"name": "name"}, manifest["tables"]["deb_package"]["columns"])
+        self.assertEqual(self.read_csv_export(result), {"deb_package": []})
+
+    def test_full_export_csv_rolls_the_parts(self):
+        self.commit_full_tree(get_random_string(12), 1)
+        self.commit_full_tree(get_random_string(12), 2)
+        result = do_full_export(tables=["machine"], export_format="CSV", max_part_size=1, window_size=1)
+        manifest = result["manifest"]
+        self.assertEqual(manifest["tables"]["machine"]["files"],
+                         ["machine/machine-00001.csv", "machine/machine-00002.csv"])
+        self.assertEqual([f["rows"] for f in manifest["files"].values()], [1, 1])
+        # read_csv_export checks the header of each file
+        self.assertEqual(len(self.read_csv_export(result)["machine"]), 2)
+
+    def test_full_export_csv_quoting(self):
+        computer_name = 'comma, "quote" and\nline break'
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
+            "source": {"module": "tests.zentral.io", "name": "Zentral Tests"},
+            "serial_number": get_random_string(12),
+            "system_info": {"computer_name": computer_name},
+        })
+        result = do_full_export(tables=["system_info"], export_format="CSV")
+        tables = self.read_csv_export(result)
+        self.assertEqual([row["computer_name"] for row in tables["system_info"]], [computer_name])
 
     def test_export_machine_snapshots(self):
         serial_number = self.commit_machine_snapshot()

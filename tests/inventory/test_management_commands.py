@@ -75,6 +75,17 @@ class InventoryManagementCommandsTest(TestCase):
                          "Manifest: exports/inventory/yolo/manifest.json\n"
                          "File: exports/inventory/yolo/machine/machine-00001.parquet\n")
 
+    @patch("zentral.contrib.inventory.management.commands.export_full_inventory.do_full_export")
+    def test_export_full_inventory_csv(self, do_full_export):
+        do_full_export.return_value = {"manifest": {"location": "exports/inventory/yolo/",
+                                                    "files": {"machine/machine-00001.csv": {}}}}
+        out = StringIO()
+        call_command('export_full_inventory', '--format', 'CSV', stdout=out)
+        do_full_export.assert_called_once_with(tables=None, export_format="CSV")
+        self.assertEqual(out.getvalue(),
+                         "Manifest: exports/inventory/yolo/manifest.json\n"
+                         "File: exports/inventory/yolo/machine/machine-00001.csv\n")
+
     @patch("zentral.contrib.inventory.management.commands.export_full_inventory.file_storage_has_signed_urls")
     @patch("zentral.contrib.inventory.management.commands.export_full_inventory.do_full_export")
     def test_export_full_inventory_parquet_download(self, do_full_export, file_storage_has_signed_urls):
