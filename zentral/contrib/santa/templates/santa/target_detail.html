@@ -236,32 +236,30 @@
     {% endif %}
 
     {% if rule_count %}
-    <table class="table table-striped align-middle">
+    <div class="table-responsive mb-3">
+    <table class="table table-striped align-top">
       <thead>
-        <th>Configuration</th>
-        <th>Ruleset</th>
-        <th>Policy</th>
+        <tr>
+          <th>Rule</th>
+          <th>Scope</th>
+        </tr>
       </thead>
       <tbody>
         {% for rule in rules %}
         <tr>
           <td>
-            {% if perms.santa.view_rule %}
-            <a href="{{ rule.get_absolute_url }}">{{ rule.configuration }}</a>
-            {% else %}
-            {{ rule.configuration }}
-            {% endif %}
+            <div class="d-flex flex-wrap align-items-baseline column-gap-2">
+              {% include "santa/_rule_badges.html" %}
+              <a href="{{ rule.get_absolute_url }}">{{ rule.configuration }}</a>
+            </div>
+            {% include "santa/_rule_texts.html" %}
           </td>
-          <td>{{ rule.ruleset|default:"-" }}</td>
-          <td>
-            <span class="label label-{% if rule.is_blocking_rule %}danger{% else %}success{% endif %}">
-              {{ rule.get_policy_display }}
-            </span>
-          </td>
+          <td>{% include "santa/_scoped_item_scope.html" with item=rule %}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
     {% endif %}
   </div>
   {% endif %}

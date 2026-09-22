@@ -94,6 +94,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
     def get_rules(self):
         return (
             Rule.objects.select_related("configuration", "ruleset", "target")
+                        .prefetch_related("tags", "excluded_tags")
                         .filter(target__type=self.target_type, target__identifier=self.identifier)
         )
 
@@ -224,11 +225,15 @@ class TargetView(PermissionRequiredMixin, TemplateView):
             ctx["show_ballots"] = False
 
         # rules
-        ctx["rules"] = list(self.get_rules())
-        ctx["rule_count"] = len(ctx["rules"])
-        ctx["add_rule_links"] = self.get_add_rule_links(ctx["rules"])
-        # the rules of a target stay visible when no configuration has a policy left for it
-        ctx["show_rules"] = bool(ctx["rules"] or ctx["add_rule_links"])
+        # the view asks for santa.view_target only, and this tab is a list of rules
+        if self.request.user.has_perm("santa.view_rule"):
+            ctx["rules"] = list(self.get_rules())
+            ctx["rule_count"] = len(ctx["rules"])
+            ctx["add_rule_links"] = self.get_add_rule_links(ctx["rules"])
+            # the rules of a target stay visible when no configuration has a policy left for it
+            ctx["show_rules"] = bool(ctx["rules"] or ctx["add_rule_links"])
+        else:
+            ctx["show_rules"] = False
 
         # events
         if (

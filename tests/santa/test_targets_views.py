@@ -3,13 +3,17 @@ from unittest.mock import patch
 
 from accounts.models import User
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import resolve, reverse
 from django.utils.crypto import get_random_string
+from django.utils.html import escape
 
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.inventory.models import File, Source
-from zentral.contrib.santa.models import Configuration, Rule, Target, TargetCounter, TargetState
+from zentral.contrib.inventory.models import File, Source, Tag
+from zentral.contrib.santa.models import (Configuration, Rule, RuleSet, Target, TargetCounter,
+                                          TargetState)
 from zentral.contrib.santa.urls import urlpatterns as santa_urlpatterns
 from zentral.contrib.santa.views.targets import EventsMixin
 from zentral.core.stores.conf import stores
@@ -465,7 +469,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_binary_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
@@ -475,7 +479,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         configuration = force_configuration()
         target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
         Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
@@ -485,7 +489,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         for policy in Rule.Policy.available(Target.Type.BINARY, []):
             Rule.objects.create(configuration=configuration, target=target, policy=policy,
                                 cel_expr="true" if policy == Rule.Policy.CEL else "")
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertNotIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
@@ -498,17 +502,89 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
             for policy in policies:
                 Rule.objects.create(configuration=target_configuration, target=target, policy=policy,
                                     cel_expr="true" if policy == Rule.Policy.CEL else "")
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertEqual(response.context["add_rule_links"], [])
         self.assertTrue(response.context["show_rules"])
         self.assertEqual(response.context["rule_count"], Configuration.objects.count() * len(policies))
         self.assertContains(response, configuration.name)
 
+    def test_binary_target_rules_tab_cell(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        tag = Tag.objects.create(name=get_random_string(12))
+        rule = Rule.objects.create(configuration=configuration, target=target,
+                                   policy=Rule.Policy.BLOCKLIST,
+                                   custom_msg="A CUSTOM MESSAGE",
+                                   custom_url="https://www.example.com/custom-url",
+                                   description="A DESCRIPTION",
+                                   serial_numbers=["INCLUDEDSERIAL"])
+        rule.tags.set([tag])
+        self.login("santa.view_target", "santa.view_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertContains(response, configuration.name)
+        self.assertContains(response, escape(rule.get_absolute_url()))
+        self.assertContains(response, rule.get_policy_display())
+        self.assertContains(response, ">custom message</span>")
+        self.assertContains(response, "A CUSTOM MESSAGE")
+        self.assertContains(response, rule.custom_url)
+        self.assertContains(response, ">description</span>")
+        self.assertContains(response, "A DESCRIPTION")
+        self.assertContains(response, ">includes</div>")
+        self.assertContains(response, "INCLUDEDSERIAL")
+        self.assertContains(response, tag.name)
+
+    def test_binary_target_rules_tab_ruleset_badge_needs_the_permission(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        ruleset = RuleSet.objects.create(name=get_random_string(12))
+        Rule.objects.create(configuration=configuration, target=target,
+                            policy=Rule.Policy.BLOCKLIST, ruleset=ruleset)
+        self.login("santa.view_target", "santa.view_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertNotContains(response, ruleset.name)
+        self.login("santa.view_target", "santa.view_rule", "santa.view_ruleset")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertContains(response, ruleset.name)
+
+    def test_binary_target_rules_tab_queries_do_not_grow_with_the_rules(self):
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        ruleset = RuleSet.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(name=get_random_string(12))
+        excluded_tag = Tag.objects.create(name=get_random_string(12))
+
+        def add_rule():
+            rule = Rule.objects.create(configuration=force_configuration(), target=target,
+                                       policy=Rule.Policy.BLOCKLIST, ruleset=ruleset)
+            rule.tags.set([tag])
+            rule.excluded_tags.set([excluded_tag])
+
+        self.login("santa.view_target", "santa.view_rule", "santa.view_ruleset")
+        url = reverse("santa:binary", args=(self.file_sha256,))
+        add_rule()
+        with CaptureQueriesContext(connection) as one_rule:
+            self.assertEqual(self.client.get(url).status_code, 200)
+        for _ in range(4):
+            add_rule()
+        with CaptureQueriesContext(connection) as five_rules:
+            self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(len(one_rule.captured_queries), len(five_rules.captured_queries))
+
+    def test_binary_target_rules_tab_needs_the_view_rule_permission(self):
+        configuration = force_configuration()
+        target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
+        Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
+        self.login("santa.view_target", "santa.add_rule")
+        response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
+        self.assertFalse(response.context["show_rules"])
+        self.assertNotIn("rules", response.context)
+        self.assertNotIn("add_rule_links", response.context)
+        self.assertNotContains(response, configuration.name)
+
     def test_binary_target_configuration_with_a_voting_realm_has_an_add_rule_link(self):
         # a rule can be added to a configuration with a voting realm, so it gets a link
         configuration = force_configuration(voting_realm=force_realm())
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
@@ -517,7 +593,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
         Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST,
                             is_voting_rule=True)
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertNotIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
@@ -530,7 +606,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
                             is_voting_rule=True)
         target, _ = Target.objects.get_or_create(type=Target.Type.BINARY, identifier=self.file_sha256)
         Rule.objects.create(configuration=configuration, target=target, policy=Rule.Policy.BLOCKLIST)
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
@@ -602,7 +678,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, configuration.name)
 
     def test_bundle_target_configuration_add_rule_perm(self):
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:bundle", args=(self.bundle_target.identifier,)))
         self.assertNotContains(response, "createRule")
 
@@ -627,7 +703,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, configuration.name)
 
     def test_metabundle_target_configuration_add_rule_perm(self):
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:metabundle", args=(self.metabundle_sha256,)))
         self.assertNotContains(response, "createRule")
 
@@ -653,7 +729,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_cdhash_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:cdhash", args=(self.cdhash,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
@@ -724,7 +800,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_certificate_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:certificate", args=(self.file_cert_sha256,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
@@ -795,7 +871,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_team_id_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:teamid", args=(self.file_team_id,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
@@ -866,7 +942,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_signing_id_target_configuration_add_rule_perm(self):
         configuration = force_configuration()
-        self.login("santa.view_target", "santa.add_rule")
+        self.login("santa.view_target", "santa.view_rule", "santa.add_rule")
         response = self.client.get(reverse("santa:signingid", args=(self.file_signing_id,)))
         self.assertContains(response, "createRule")
         self.assertContains(response, configuration.name)
