@@ -2311,6 +2311,23 @@ class TestMDMArtifacts(TestCase):
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
         self.assertIsNone(self.enrolled_device.status_items_full_report_at)
 
+    def test_filevault_enabled_from_status_item(self):
+        self.enrolled_device.security_info = {"FDE_Enabled": False}
+        self.enrolled_device.status_items = {"diskmanagement.filevault.enabled": True}
+        self.assertTrue(self.enrolled_device.filevault_enabled)
+
+    def test_filevault_enabled_fallback_to_security_info(self):
+        self.enrolled_device.security_info = {"FDE_Enabled": True}
+        for status_items in ({}, {"diskmanagement.filevault.enabled": "yes"}, None):
+            with self.subTest(status_items=status_items):
+                self.enrolled_device.status_items = status_items
+                self.assertTrue(self.enrolled_device.filevault_enabled)
+
+    def test_filevault_enabled_unknown(self):
+        self.enrolled_device.security_info = None
+        self.enrolled_device.status_items = {}
+        self.assertIsNone(self.enrolled_device.filevault_enabled)
+
     def test_update_status_items_cleared(self):
         target = Target(self.enrolled_device)
         target.update_status_items_with_status_report(build_status_report())

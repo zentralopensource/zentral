@@ -1468,6 +1468,11 @@ class EnrolledDevice(models.Model):
 
     @property
     def filevault_enabled(self):
+        # the status item is pushed on change, the SecurityInfo query is polled
+        if isinstance(self.status_items, dict):
+            enabled = self.status_items.get("diskmanagement.filevault.enabled")
+            if isinstance(enabled, bool):
+                return enabled
         try:
             return self.security_info["FDE_Enabled"]
         except (KeyError, TypeError):
