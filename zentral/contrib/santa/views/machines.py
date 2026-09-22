@@ -3,7 +3,6 @@ from django.core.paginator import Paginator
 from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.utils.http import urlencode
 from django.views.generic import TemplateView
 from pbac.engine import engine
 from zentral.contrib.inventory.models import MetaMachine
@@ -238,14 +237,10 @@ class MachineRulesView(MachineTabFiltersMixin, BaseMachineView):
          lambda: MachineRule.State.choices),
     )
 
-    def _rules_url(self, **filters):
-        query = urlencode(filters)
-        configuration_pk = self.enrolled_machine.enrollment.configuration.pk
-        return f"{reverse('santa:configuration_rules', args=(configuration_pk,))}?{query}"
-
     def _rows(self):
         rows = MachineRule.objects.rows_for_machine(self.enrolled_machine,
                                                     [t.pk for t in self.machine.tags])
+        configuration_pk = self.enrolled_machine.enrollment.configuration.pk
         can_view_rule = self.request.user.has_perm("santa.view_rule")
         for row in rows:
             winner = row["winner"]
@@ -263,14 +258,13 @@ class MachineRulesView(MachineTabFiltersMixin, BaseMachineView):
                 if winner:
                     # the policy links to the rule that decided, alone: the type, the target and
                     # the policy. Every rule in scope has one, a rule for everyone included
-                    row["rule_url"] = self._rules_url(target_type=row["target_type"].value,
-                                                      identifier=row["identifier"],
-                                                      policy=winner["policy"])
+                    row["rule_url"] = Rule.rules_url(configuration_pk, row["target_type"].value,
+                                                     row["identifier"], winner["policy"])
                 if row["rules_in_configuration"] > 1:
                     # the field that decided links to every rule the configuration has for the
                     # target: the others are wider, or less strict
-                    row["rules_url"] = self._rules_url(target_type=row["target_type"].value,
-                                                       identifier=row["identifier"])
+                    row["rules_url"] = Rule.rules_url(configuration_pk, row["target_type"].value,
+                                                      row["identifier"])
         return rows
 
     def get_context_data(self, **kwargs):

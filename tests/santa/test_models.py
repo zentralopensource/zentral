@@ -1,11 +1,16 @@
 import datetime
+from urllib.parse import parse_qsl, urlparse
 from django.core.exceptions import ValidationError
+from django.http import QueryDict
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
+from zentral.contrib.santa.forms import RuleSearchForm
 from zentral.contrib.santa.models import EnrolledMachine, Rule, Target
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
 from .utils import (add_file_to_test_class, force_ballot, force_configuration, force_enrolled_machine,
-                    force_realm_user, force_target, force_target_state, force_voting_group)
+                    force_realm_user, force_rule, force_target, force_target_state,
+                    force_voting_group)
 
 
 class SantaTargetModelTestCase(TestCase):
@@ -266,3 +271,38 @@ class SantaCurrentEnrollmentTestCase(TestCase):
         )
         enrolled_machine.refresh_from_db()
         self.assertEqual(enrolled_machine.reported_rule_count, 11)
+
+
+class SantaRuleURLTestCase(TestCase):
+    """The link to a rule is a search, because the rules of a configuration are paginated."""
+
+    def test_rule_url_is_a_search_on_the_target_and_the_policy(self):
+        rule = force_rule(target_type=Target.Type.BINARY, policy=Rule.Policy.BLOCKLIST)
+        url = rule.get_absolute_url()
+        self.assertTrue(
+            url.startswith(reverse("santa:configuration_rules", args=(rule.configuration_id,)))
+        )
+        self.assertEqual(
+            dict(parse_qsl(urlparse(url).query)),
+            {"target_type": "BINARY",
+             "identifier": rule.target.identifier,
+             "policy": str(Rule.Policy.BLOCKLIST.value)},
+        )
+        # no anchor: the rules of a configuration are paginated
+        self.assertNotIn("#", url)
+
+    def test_rules_url_without_a_policy(self):
+        rule = force_rule(target_type=Target.Type.TEAM_ID)
+        url = Rule.rules_url(rule.configuration_id, Target.Type.TEAM_ID, rule.target.identifier)
+        self.assertEqual(dict(parse_qsl(urlparse(url).query)),
+                         {"target_type": "TEAMID", "identifier": rule.target.identifier})
+
+    def test_the_search_finds_the_rule(self):
+        rule = force_rule(target_type=Target.Type.BINARY, policy=Rule.Policy.ALLOWLIST)
+        Rule.objects.create(configuration=rule.configuration, target=rule.target,
+                            policy=Rule.Policy.BLOCKLIST)
+        force_rule(configuration=rule.configuration, target_type=Target.Type.BINARY)
+        form = RuleSearchForm(QueryDict(urlparse(rule.get_absolute_url()).query),
+                              configuration=rule.configuration)
+        self.assertTrue(form.is_valid())
+        self.assertEqual(list(form.get_queryset()), [rule])

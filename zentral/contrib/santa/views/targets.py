@@ -93,7 +93,7 @@ class TargetView(PermissionRequiredMixin, TemplateView):
 
     def get_rules(self):
         return (
-            Rule.objects.select_related("configuration", "ruleset")
+            Rule.objects.select_related("configuration", "ruleset", "target")
                         .filter(target__type=self.target_type, target__identifier=self.identifier)
         )
 

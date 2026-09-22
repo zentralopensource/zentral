@@ -16,6 +16,7 @@ from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Q, 
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from django.utils.functional import cached_property
+from django.utils.http import urlencode
 from django.utils.translation import gettext_lazy as _
 from realms.models import Realm, RealmGroup, RealmUser
 
@@ -1770,8 +1771,16 @@ class Rule(models.Model):
     def is_blocking_rule(self):
         return self.policy in (self.Policy.BLOCKLIST, self.Policy.SILENT_BLOCKLIST)
 
+    @staticmethod
+    def rules_url(configuration_id, target_type, identifier, policy=None):
+        query = {"target_type": target_type, "identifier": identifier}
+        if policy is not None:
+            query["policy"] = policy
+        return reverse("santa:configuration_rules", args=(configuration_id,)) + "?" + urlencode(query)
+
     def get_absolute_url(self):
-        return reverse("santa:configuration_rules", args=(self.configuration_id,)) + f"#rule-{self.pk}"
+        return self.rules_url(self.configuration_id, self.target.type, self.target.identifier,
+                              self.policy)
 
     def get_translated_policy(self):
         return self.Policy(int(self.policy)).name
