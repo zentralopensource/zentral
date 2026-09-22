@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from accounts.api_authentication import APITokenAuthentication
 from django.db import transaction
-from django.db.models import Exists, JSONField, OuterRef
+from django.db.models import Exists, JSONField, OuterRef, Q
 from django.db.models.expressions import RawSQL
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
@@ -64,6 +64,29 @@ class EnrolledDeviceFilter(filters.FilterSet):
     email = filters.CharFilter(
         method="filter_email",
     )
+    filevault_enabled = filters.BooleanFilter(method="filter_filevault_enabled")
+    passcode_compliant = filters.BooleanFilter(method="filter_status_item")
+    lockdown_mode = filters.BooleanFilter(method="filter_status_item")
+
+    STATUS_ITEM_FILTERS = {
+        "passcode_compliant": "passcode.is-compliant",
+        "lockdown_mode": "security.lockdown-mode",
+    }
+
+    def filter_status_item(self, queryset, name, value):
+        if value is None:
+            return queryset
+        return queryset.filter(status_items__contains={self.STATUS_ITEM_FILTERS[name]: value})
+
+    def filter_filevault_enabled(self, queryset, name, value):
+        # same precedence as EnrolledDevice.filevault_enabled: the status item, then the SecurityInfo query
+        if value is None:
+            return queryset
+        key = "diskmanagement.filevault.enabled"
+        return queryset.filter(
+            Q(status_items__has_key=key, status_items__contains={key: value})
+            | Q(~Q(status_items__has_key=key), security_info__contains={"FDE_Enabled": value})
+        )
 
     def filter_tags(self, queryset, name, value):
         if not value:
@@ -101,7 +124,8 @@ class EnrolledDeviceFilter(filters.FilterSet):
 
     class Meta:
         model = EnrolledDevice
-        fields = ["udid", "serial_number", "tags", "excluded_tags", "short_name", "email"]
+        fields = ["udid", "serial_number", "tags", "excluded_tags", "short_name", "email",
+                  "filevault_enabled", "passcode_compliant", "lockdown_mode"]
 
 
 class EnrolledDeviceList(ListAPIView):

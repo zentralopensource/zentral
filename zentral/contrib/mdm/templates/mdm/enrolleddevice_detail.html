@@ -298,6 +298,76 @@
         </tr>
       </tbody>
     </table>
+    {% if device_state_status %}
+      <h4>Device state</h4>
+      <table class="table-object-properties mb-5">
+        <tbody>
+          {% if device_state_status.passcode_present is not None %}
+          <tr>
+            <th width="300px">Passcode present?</th>
+            <td>{{ device_state_status.passcode_present|yesno }}</td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.passcode_compliant is not None %}
+          <tr>
+            <th width="300px">Passcode compliant?</th>
+            <td>
+              {% if device_state_status.passcode_compliant %}
+                yes
+              {% else %}
+                <span class="text-danger">no</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.lockdown_mode is not None %}
+          <tr>
+            <th width="300px">Lockdown mode?</th>
+            <td>{{ device_state_status.lockdown_mode|yesno }}</td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.battery_health %}
+          <tr>
+            <th width="300px">Battery health</th>
+            <td>
+              {% if device_state_status.battery_health == "normal" or device_state_status.battery_health == "unsupported" %}
+                {{ device_state_status.battery_health }}
+              {% else %}
+                <span class="text-danger">{{ device_state_status.battery_health }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.system_health %}
+          <tr>
+            <th width="300px">System health</th>
+            <td>
+              <ul class="list-unstyled mb-0">
+                {% for component, state in device_state_status.system_health.items %}
+                <li>
+                  {{ component }}:
+                  {% if state == "ok" %}{{ state }}{% else %}<span class="text-danger">{{ state }}</span>{% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.shared_ipad is not None %}
+          <tr>
+            <th width="300px">Shared iPad?</th>
+            <td>{{ device_state_status.shared_ipad|yesno }}</td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.return_to_service is not None %}
+          <tr>
+            <th width="300px">Return to service?</th>
+            <td>{{ device_state_status.return_to_service|yesno }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    {% endif %}
     {% if object.platform == "macOS" %}
       <h4>Bootstrap token</h4>
       <table class="table-object-properties mb-5">
@@ -406,7 +476,7 @@
             <tbody>
               <tr>
                 <th width="300px">Enabled?</th>
-                <td>{{ security_info.FDE_Enabled|yesno }}</td>
+                <td>{{ object.filevault_enabled|yesno }}</td>
               </tr>
               <tr>
                 <th>Personal recovery key</th>
