@@ -1,6 +1,7 @@
 import logging
 import threading
-from itertools import islice
+import time
+from itertools import batched, islice
 from urllib.parse import urljoin
 
 import psycopg2.extras
@@ -53,6 +54,8 @@ class AppsBooksClient:
     base_url = "https://vpp.itunes.apple.com/mdm/v2/"
     timeout = 5
     retries = 2
+    # Apple can change the limits and the URLs without notice, and asks to read them again every 5 minutes
+    service_config_max_age_seconds = 300
 
     def __init__(
         self,
@@ -76,6 +79,7 @@ class AppsBooksClient:
         self.platform = platform or "enterprisestore"
         self.country_code = (country_code or "us").lower()
         self._service_config = None
+        self._service_config_ts = None
         self.location = location
 
     @classmethod
@@ -147,8 +151,12 @@ class AppsBooksClient:
     # service config
 
     def get_service_config(self):
-        if not self._service_config:
+        if (
+            not self._service_config
+            or time.monotonic() - self._service_config_ts > self.service_config_max_age_seconds
+        ):
             self._service_config = self.make_request("service/config")
+            self._service_config_ts = time.monotonic()
         return self._service_config
 
     # assets
@@ -257,15 +265,20 @@ class AppsBooksClient:
             "serialNumbers": serial_numbers,
         }
 
+    def iter_manage_assets_requests(self, assets, serial_numbers):
+        limits = self.get_service_config()["limits"]
+        asset_batches = list(batched(assets, limits["maxAssets"]))
+        # serial numbers in the outer loop: they can come from a database cursor, which can be read only once
+        for serial_number_batch in batched(serial_numbers, limits["maxSerialNumbers"]):
+            for asset_batch in asset_batches:
+                yield self.build_manage_assets_request(asset_batch, list(serial_number_batch))
+
     def post_raw_associations(self,  manage_assets_request):
         response = self.make_request("assets/associate", json=manage_assets_request)
         event_id = response.get("eventId")
         if not event_id:
             raise AppsBooksAPIError("No event id")
         return event_id
-
-    def post_device_associations(self, serial_number, assets):
-        return self.post_raw_associations(self.build_manage_assets_request(assets, [serial_number]))
 
     def post_device_disassociation(self, serial_number, asset):
         return self.make_request(
@@ -315,22 +328,16 @@ location_cache = SimpleLazyObject(lambda: LocationCache())
 
 def bulk_assign_location_asset(location_asset, dep_virtual_servers):
     _, client = location_cache.get(location_asset.location.mdm_info_id)
-    chunk_size = client.get_service_config()["limits"]["maxSerialNumbers"]
     sni = DEPDevice.objects.filter(
         virtual_server__in=dep_virtual_servers
     ).values_list(
         "serial_number", flat=True
-    ).iterator(
-        chunk_size=chunk_size
-    )
+    ).iterator()
     total_assignments = 0
     assets = [(location_asset.asset.adam_id, location_asset.asset.pricing_param)]
-    while True:
-        serial_numbers = list(islice(sni, chunk_size))
-        if not serial_numbers:
-            break
-        client.post_raw_associations(client.build_manage_assets_request(assets, serial_numbers))
-        total_assignments += len(serial_numbers)
+    for manage_assets_request in client.iter_manage_assets_requests(assets, sni):
+        client.post_raw_associations(manage_assets_request)
+        total_assignments += len(manage_assets_request["serialNumbers"])
     return total_assignments
 
 
@@ -364,13 +371,13 @@ def ensure_target_asset_assignments(target):
     for mdm_info_id, assets in missing_assets.items():
         try:
             _, client = location_cache.get(mdm_info_id)
-            event_id = client.post_device_associations(target.serial_number, assets)
+            for manage_assets_request in client.iter_manage_assets_requests(assets, [target.serial_number]):
+                event_id = client.post_raw_associations(manage_assets_request)
+                # The cache key indicates that the event is for on-the-fly assignments.
+                # The device will be poked when a successful notification is received.
+                cache.set(get_otf_association_cache_key(event_id), "1", 14400)
         except Exception:
             logger.exception("Could not post device %s associations", target.serial_number)
-        else:
-            # The cache key indicates that the event is for on-the-fly assignments.
-            # The device will be poked when a successful notification is received.
-            cache.set(get_otf_association_cache_key(event_id), "1", 14400)
 
 
 # assets & assignments sync

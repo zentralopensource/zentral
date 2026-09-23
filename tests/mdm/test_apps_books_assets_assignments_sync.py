@@ -1,5 +1,6 @@
 from unittest.mock import call, patch, Mock
 import uuid
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.apps_books import (_sync_asset_d,
@@ -7,9 +8,12 @@ from zentral.contrib.mdm.apps_books import (_sync_asset_d,
                                             _update_or_create_asset,
                                             _update_or_create_location_asset,
                                             _update_location_asset_counts,
+                                            AppsBooksAPIError,
                                             associate_location_asset,
                                             bulk_assign_location_asset,
                                             disassociate_location_asset,
+                                            ensure_target_asset_assignments,
+                                            get_otf_association_cache_key,
                                             iter_location_assets_to_refresh,
                                             refresh_asset_metadata,
                                             sync_asset, sync_assets,
@@ -816,13 +820,16 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     def test_bulk_assign_location_asset(self, make_request):
         location_asset = force_location_asset()
         make_request.side_effect = [
-            {"limits": {"maxSerialNumbers": 1}},
+            {"limits": {"maxAssets": 25, "maxSerialNumbers": 1}},
             {"eventId": "123"},
             {"eventId": "456"}
         ]
         dep_device1 = force_dep_device()
         dep_device2 = force_dep_device()
-        bulk_assign_location_asset(location_asset, [dep_device1.virtual_server, dep_device2.virtual_server])
+        self.assertEqual(
+            bulk_assign_location_asset(location_asset, [dep_device1.virtual_server, dep_device2.virtual_server]),
+            2
+        )
         self.assertEqual(len(make_request.call_args_list), 3)
         self.assertIn(
             call("service/config"),
@@ -841,6 +848,58 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
             call("assets/associate", json={'assets': assets, 'serialNumbers': [dep_device2.serial_number]}),
             make_request.call_args_list
         )
+
+    # ensure_target_asset_assignments
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient.make_request")
+    def test_ensure_target_asset_assignments_max_assets(self, make_request):
+        location = force_location()
+        event_id1 = str(uuid.uuid4())
+        event_id2 = str(uuid.uuid4())
+        make_request.side_effect = [
+            {"limits": {"maxAssets": 2, "maxSerialNumbers": 1000}},
+            {"eventId": event_id1},
+            {"eventId": event_id2},
+        ]
+        target = Mock(
+            serial_number=get_random_string(10),
+            missing_asset_assignments=[(str(location.mdm_info_id), adam_id, "STDQ")
+                                       for adam_id in ("un", "deux", "trois")],
+        )
+        ensure_target_asset_assignments(target)
+        self.assertEqual(
+            make_request.call_args_list,
+            [call("service/config"),
+             call("assets/associate", json={"assets": [{"adamId": "un", "pricingParam": "STDQ"},
+                                                       {"adamId": "deux", "pricingParam": "STDQ"}],
+                                            "serialNumbers": [target.serial_number]}),
+             call("assets/associate", json={"assets": [{"adamId": "trois", "pricingParam": "STDQ"}],
+                                            "serialNumbers": [target.serial_number]})]
+        )
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id1)), "1")
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id2)), "1")
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient.make_request")
+    def test_ensure_target_asset_assignments_second_request_error(self, make_request):
+        location = force_location()
+        event_id = str(uuid.uuid4())
+        make_request.side_effect = [
+            {"limits": {"maxAssets": 1, "maxSerialNumbers": 1000}},
+            {"eventId": event_id},
+            AppsBooksAPIError("Error 9646"),
+        ]
+        target = Mock(
+            serial_number=get_random_string(10),
+            missing_asset_assignments=[(str(location.mdm_info_id), adam_id, "STDQ")
+                                       for adam_id in ("un", "deux")],
+        )
+        with self.assertLogs("zentral.contrib.mdm.apps_books", level="ERROR") as cm:
+            ensure_target_asset_assignments(target)
+        self.assertEqual(len(make_request.call_args_list), 3)
+        # the device is still notified when the association of the first request is done
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn(f"Could not post device {target.serial_number} associations", cm.output[0])
 
     # associate_location_asset
 

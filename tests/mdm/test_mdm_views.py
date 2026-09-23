@@ -1249,8 +1249,10 @@ class MDMViewsTestCase(TestCase):
         blueprint.default_location = force_location()
         blueprint.save()
         client = Mock()
+        manage_assets_request = {"un": 1}
+        client.iter_manage_assets_requests.return_value = [manage_assets_request]
         event_id = str(uuid.uuid4())
-        client.post_device_associations.return_value = event_id
+        client.post_raw_associations.return_value = event_id
         location_cache_get.return_value = blueprint.default_location, client
         payload = {
             "UDID": udid,
@@ -1269,7 +1271,8 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
         location_cache_get.assert_called_once_with(str(blueprint.default_location.mdm_info_id))
-        client.post_device_associations.asset_called_once_with(serial_number, [("0123456789", "STDQ")])
+        client.iter_manage_assets_requests.assert_called_once_with([("0123456789", "STDQ")], [serial_number])
+        client.post_raw_associations.assert_called_once_with(manage_assets_request)
         # event marked as OTF assignment
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
 
@@ -1314,7 +1317,9 @@ class MDMViewsTestCase(TestCase):
         blueprint.default_location = force_location()
         blueprint.save()
         client = Mock()
-        client.post_device_associations.side_effect = ValueError("Yolo")
+        manage_assets_request = {"un": 1}
+        client.iter_manage_assets_requests.return_value = [manage_assets_request]
+        client.post_raw_associations.side_effect = ValueError("Yolo")
         location_cache_get.return_value = blueprint.default_location, client
         payload = {
             "UDID": udid,
@@ -1328,9 +1333,10 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(
             json_response, Target(session.enrolled_device).declaration_items
         )
-        client.post_device_associations.assert_called_once_with(
-            serial_number, [("0123456789", "STDQ")]
+        client.iter_manage_assets_requests.assert_called_once_with(
+            [("0123456789", "STDQ")], [serial_number]
         )
+        client.post_raw_associations.assert_called_once_with(manage_assets_request)
         logger_exception.assert_called_once_with("Could not post device %s associations", serial_number)
 
     @patch("zentral.contrib.mdm.apps_books.location_cache.get")
@@ -1352,8 +1358,10 @@ class MDMViewsTestCase(TestCase):
         blueprint.default_location = force_location()
         blueprint.save()
         client = Mock()
+        manage_assets_request = {"un": 1}
+        client.iter_manage_assets_requests.return_value = [manage_assets_request]
         event_id = str(uuid.uuid4())
-        client.post_device_associations.return_value = event_id
+        client.post_raw_associations.return_value = event_id
         location_cache_get.return_value = blueprint.default_location, client
         payload = {
             "UDID": udid,
@@ -1367,9 +1375,10 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(
             json_response, Target(session.enrolled_device).declaration_items
         )
-        client.post_device_associations.assert_called_once_with(
-            serial_number, [("0123456789", "STDQ")]
+        client.iter_manage_assets_requests.assert_called_once_with(
+            [("0123456789", "STDQ")], [serial_number]
         )
+        client.post_raw_associations.assert_called_once_with(manage_assets_request)
         # event marked as OTF assignment
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
 
@@ -2874,8 +2883,10 @@ class MDMViewsTestCase(TestCase):
         enrolled_device.security_info_updated_at = now
         enrolled_device.save()
         client = Mock()
+        manage_assets_request = {"un": 1}
+        client.iter_manage_assets_requests.return_value = [manage_assets_request]
         event_id = str(uuid.uuid4())
-        client.post_device_associations.return_value = event_id
+        client.post_raw_associations.return_value = event_id
         location_cache_get.return_value = av.store_app.location_asset.location, client
         payload = {"UDID": udid, "Status": "Idle"}
         response = self._put(reverse("mdm_public:connect"), payload, session)
@@ -2883,10 +2894,12 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(response.content, b"")
         self.assertEqual(response.status_code, 200)
         # no available assignment → association request
-        client.post_device_associations.assert_called_once_with(
-            serial_number, [(av.store_app.location_asset.asset.adam_id,
-                             av.store_app.location_asset.asset.pricing_param)]
+        client.iter_manage_assets_requests.assert_called_once_with(
+            [(av.store_app.location_asset.asset.adam_id,
+              av.store_app.location_asset.asset.pricing_param)],
+            [serial_number]
         )
+        client.post_raw_associations.assert_called_once_with(manage_assets_request)
         # association event set in cache to be recognized as OTF assignment when processing the notifications
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
 
@@ -2925,7 +2938,7 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(data["Command"]["RequestType"], "InstallApplication")
         self.assertEqual(data["Command"]["iTunesStoreID"], int(location_asset.asset.adam_id))
         # existing assignment → no association request
-        client.post_device_associations.assert_not_called()
+        client.post_raw_associations.assert_not_called()
 
     def test_user_channel_connect_idle_no_command(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(

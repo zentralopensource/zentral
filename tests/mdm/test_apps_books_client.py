@@ -114,6 +114,16 @@ class MDMAppsBooksClientTestCase(TestCase):
         self.assertEqual(client.get_service_config(), {"ok": True})
         self.assertEqual(len(client.session.get.call_args_list), 1)
 
+    def test_get_service_config_refresh(self):
+        client, _ = self._get_client([{"ok": 1}, {"ok": 2}], True)
+        self.assertEqual(client.get_service_config(), {"ok": 1})
+        client._service_config_ts -= client.service_config_max_age_seconds + 1
+        self.assertEqual(client.get_service_config(), {"ok": 2})
+        self.assertEqual(len(client.session.get.call_args_list), 2)
+        # the new config is cached
+        self.assertEqual(client.get_service_config(), {"ok": 2})
+        self.assertEqual(len(client.session.get.call_args_list), 2)
+
     # get_asset
 
     def test_get_asset_ok(self):
@@ -262,18 +272,37 @@ class MDMAppsBooksClientTestCase(TestCase):
         )
         self.assertEqual(list(client.iter_asset_device_assignments("yolo", "fomo")), ["un", "deux"])
 
-    # post_device_associations
+    # iter_manage_assets_requests
 
-    def test_post_device_associations_no_event_id(self):
+    def test_iter_manage_assets_requests(self):
+        client, _ = self._get_client({"limits": {"maxAssets": 2, "maxSerialNumbers": 2}}, True)
+        assets = [("un", "STDQ"), ("deux", "STDQ"), ("trois", "PLUS")]
+        serial_numbers = (serial_number for serial_number in ("A", "B", "C"))
+        un_deux = [{"adamId": "un", "pricingParam": "STDQ"}, {"adamId": "deux", "pricingParam": "STDQ"}]
+        trois = [{"adamId": "trois", "pricingParam": "PLUS"}]
+        self.assertEqual(
+            list(client.iter_manage_assets_requests(assets, serial_numbers)),
+            [{"assets": un_deux, "serialNumbers": ["A", "B"]},
+             {"assets": trois, "serialNumbers": ["A", "B"]},
+             {"assets": un_deux, "serialNumbers": ["C"]},
+             {"assets": trois, "serialNumbers": ["C"]}]
+        )
+
+    # post_raw_associations
+
+    def test_post_raw_associations_no_event_id(self):
         client, _ = self._get_client({}, True)
         with self.assertRaises(AppsBooksAPIError) as cm:
-            client.post_device_associations("un", [("yolo", "STDQ")])
+            client.post_raw_associations(client.build_manage_assets_request([("yolo", "STDQ")], ["un"]))
         self.assertEqual(cm.exception.args[0], "No event id")
 
-    def test_post_device_associations(self):
+    def test_post_raw_associations(self):
         event_id = str(uuid.uuid4())
         client, _ = self._get_client({"eventId": event_id}, True)
-        self.assertEqual(client.post_device_associations("un", [("yolo", "STDQ")]), event_id)
+        self.assertEqual(
+            client.post_raw_associations(client.build_manage_assets_request([("yolo", "STDQ")], ["un"])),
+            event_id
+        )
         self.assertEqual(len(client.session.post.call_args_list), 1)
         args, kwargs = client.session.post.call_args_list[0]
         self.assertEqual(args, ("https://vpp.itunes.apple.com/mdm/v2/assets/associate",))
