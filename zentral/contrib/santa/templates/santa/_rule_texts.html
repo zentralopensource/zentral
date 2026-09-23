@@ -3,7 +3,7 @@
 <div>
   <span class="fw-semibold">custom message</span>
   <span class="text-secondary">{{ rule.custom_msg }}
-    {% if rule.custom_url %}<a href="{{ rule.custom_url }}">{{ rule.custom_url }}</a>{% endif %}
+    {% if rule.custom_url %}<a class="rule-custom-url" href="{{ rule.custom_url }}" title="{{ rule.custom_url }}">{{ rule.custom_url }}</a>{% endif %}
   </span>
 </div>
 {% endif %}

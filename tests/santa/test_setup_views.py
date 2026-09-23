@@ -1119,7 +1119,9 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("santa:configuration_rules", args=(configuration.pk,)))
         self.assertContains(response, ">custom message</span>")
         self.assertContains(response, "A CUSTOM MESSAGE")
-        self.assertContains(response, rule.custom_url)
+        # cut to the width of an identifier, with the whole URL in its title
+        url = rule.custom_url
+        self.assertContains(response, f'<a class="rule-custom-url" href="{url}" title="{url}">')
         self.assertContains(response, ">description</span>")
         self.assertContains(response, "A DESCRIPTION")
 

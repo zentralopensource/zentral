@@ -450,9 +450,11 @@ td > p:last-child, td > table:last-child {
     }
 }
 
-// 40 characters: a cdhash fits whole, and a sha256 does not set the width of the column
+// 40 characters: a cdhash fits whole, and a sha256 or a long custom URL does not set the width
+// of the column
 
-.rule-target-identifier {
+.rule-target-identifier,
+.rule-custom-url {
     display: inline-block;
     max-width: 40ch;
     overflow: hidden;
