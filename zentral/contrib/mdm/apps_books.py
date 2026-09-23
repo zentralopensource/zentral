@@ -328,9 +328,15 @@ location_cache = SimpleLazyObject(lambda: LocationCache())
 
 def bulk_assign_location_asset(location_asset, dep_virtual_servers):
     _, client = location_cache.get(location_asset.location.mdm_info_id)
+    # a device can be in more than one virtual server, and Apple rejects a request with a duplicate serial number.
+    # The default ordering of the model sorts on the name of the virtual server too, which keeps the duplicates.
     sni = DEPDevice.objects.filter(
         virtual_server__in=dep_virtual_servers
-    ).values_list(
+    ).exclude(
+        last_op_type=DEPDevice.OP_TYPE_DELETED
+    ).order_by(
+        "serial_number"
+    ).distinct().values_list(
         "serial_number", flat=True
     ).iterator()
     total_assignments = 0

@@ -21,7 +21,7 @@ from zentral.contrib.mdm.apps_books import (_sync_asset_d,
 from zentral.contrib.mdm.events import (AssetCreatedEvent, AssetUpdatedEvent,
                                         DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
                                         LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
-from zentral.contrib.mdm.models import Asset, DeviceAssignment, LocationAsset
+from zentral.contrib.mdm.models import Asset, DEPDevice, DeviceAssignment, LocationAsset
 from zentral.core.incidents.models import Severity
 from .utils import force_asset, force_dep_device, force_location, force_location_asset
 
@@ -847,6 +847,36 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertIn(
             call("assets/associate", json={'assets': assets, 'serialNumbers': [dep_device2.serial_number]}),
             make_request.call_args_list
+        )
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient.make_request")
+    def test_bulk_assign_location_asset_each_device_once(self, make_request):
+        location_asset = force_location_asset()
+        make_request.side_effect = [
+            {"limits": {"maxAssets": 25, "maxSerialNumbers": 1000}},
+            {"eventId": "123"},
+        ]
+        dep_device1 = force_dep_device()
+        dep_device2 = force_dep_device()
+        # the same device in the second virtual server
+        dep_device3 = force_dep_device(server=dep_device2.virtual_server)
+        DEPDevice.objects.filter(pk=dep_device3.pk).update(serial_number=dep_device1.serial_number)
+        # a device removed from the first virtual server
+        force_dep_device(server=dep_device1.virtual_server, op_type=DEPDevice.OP_TYPE_DELETED)
+        self.assertEqual(
+            bulk_assign_location_asset(location_asset, [dep_device1.virtual_server, dep_device2.virtual_server]),
+            2
+        )
+        self.assertEqual(len(make_request.call_args_list), 2)
+        args, kwargs = make_request.call_args_list[1]
+        self.assertEqual(args, ("assets/associate",))
+        self.assertEqual(
+            kwargs["json"]["assets"],
+            [{'adamId': location_asset.asset.adam_id, 'pricingParam': location_asset.asset.pricing_param}]
+        )
+        self.assertEqual(
+            sorted(kwargs["json"]["serialNumbers"]),
+            sorted([dep_device1.serial_number, dep_device2.serial_number])
         )
 
     # ensure_target_asset_assignments
