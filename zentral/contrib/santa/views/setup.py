@@ -260,6 +260,8 @@ class UpdateScopedClientModeView(PBACViewMixin, UpdateViewWithAudit):
 
     def get_pbac_request_kwargs(self, kwargs):
         self.object = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
+        # the template reads view.configuration, as on the create form
+        self.configuration = self.object.configuration
         return {"scoped_client_mode": self.object}
 
     def get_queryset(self):
@@ -270,7 +272,7 @@ class UpdateScopedClientModeView(PBACViewMixin, UpdateViewWithAudit):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["configuration"] = self.object.configuration
+        kwargs["configuration"] = self.configuration
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -327,6 +329,8 @@ class UpdateScopedPathRegexView(PBACViewMixin, UpdateViewWithAudit):
 
     def get_pbac_request_kwargs(self, kwargs):
         self.object = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
+        # the template reads view.configuration, as on the create form
+        self.configuration = self.object.configuration
         return {"scoped_path_regex": self.object}
 
     def get_queryset(self):
@@ -337,7 +341,7 @@ class UpdateScopedPathRegexView(PBACViewMixin, UpdateViewWithAudit):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["configuration"] = self.object.configuration
+        kwargs["configuration"] = self.configuration
         return kwargs
 
     def get_context_data(self, **kwargs):

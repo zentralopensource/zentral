@@ -148,6 +148,8 @@ class SantaScopedPathRegexPBACTestCase(TestCase, LoginCase):
         url = reverse("santa:update_scoped_path_regex", args=(configuration.pk, scm.pk))
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        # the breadcrumbs name the configuration
+        self.assertContains(response, f'<a href="{configuration.get_absolute_url()}">{configuration.name}</a>')
         response = self.client.post(
             url,
             {"name": scm.name,
