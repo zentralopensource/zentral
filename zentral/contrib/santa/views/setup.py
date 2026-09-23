@@ -17,7 +17,8 @@ from zentral.contrib.santa.forms import (BinarySearchForm,
                                          CDHashSearchForm, CertificateSearchForm,
                                          TeamIDSearchForm, SigningIDSearchForm,
                                          ConfigurationForm, EnrollmentForm,
-                                         ScopedClientModeForm, ScopedPathRegexForm, VotingGroupForm,
+                                         ScopedClientModeForm, ScopedClientModeSearchForm,
+                                         ScopedPathRegexForm, ScopedPathRegexSearchForm, VotingGroupForm,
                                          RuleForm, RuleSearchForm, UpdateRuleForm,
                                          fixed_target)
 from zentral.contrib.santa.models import (Configuration, Enrollment, Rule, ScopedClientMode,
@@ -55,18 +56,66 @@ class CreateConfigurationView(PermissionRequiredMixin, CreateViewWithAudit):
     form_class = ConfigurationForm
 
 
-class ConfigurationView(PermissionRequiredMixin, DetailView):
-    permission_required = "santa.view_configuration"
-    model = Configuration
+class ConfigurationTabMixin:
+    """The configuration the tabs share: the header, its links, and the tab bar.
+
+    A tab has its own URL, so its pagination and its search live in the query string.
+    """
+    tab = None
+    # the name, the title, the plural of the title for a tab with a count, the URL name, and the
+    # permission of the view
+    tabs = (
+        ("overview", "Overview", None, "configuration", "santa.view_configuration"),
+        ("rules", "Rule", "Rules", "configuration_rules", "santa.view_rule"),
+        ("scoped_client_modes", "Scoped client mode", "Scoped client modes",
+         "configuration_scoped_client_modes", "santa.view_configuration"),
+        ("scoped_path_regexes", "Scoped path regex", "Scoped path regexes",
+         "configuration_scoped_path_regexes", "santa.view_configuration"),
+    )
+    # the entries of a tab, and the request that decides if the user can view one
+    scoped_item_tabs = {
+        "scoped_client_modes": ("scopedclientmode_set", ViewScopedClientModeRequest),
+        "scoped_path_regexes": ("scopedpathregex_set", ViewScopedPathRegexRequest),
+    }
+
+    def get_visible_scoped_item_pks(self):
+        # one decision per entry, and one set of decisions for the tab bar and the list of a tab,
+        # so that the count of a tab cannot disagree with its list
+        if not hasattr(self, "_visible_scoped_item_pks"):
+            items = {name: list(getattr(self.configuration, item_set_name).all())
+                     for name, (item_set_name, _) in self.scoped_item_tabs.items()}
+            requests = {name: [request_class(self.request.user, i) for i in items[name]]
+                        for name, (_, request_class) in self.scoped_item_tabs.items()}
+            engine.authorize_requests([r for name_requests in requests.values() for r in name_requests])
+            self._visible_scoped_item_pks = {
+                name: {i.pk for i, r in zip(items[name], requests[name]) if r.is_authorized}
+                for name in self.scoped_item_tabs
+            }
+        return self._visible_scoped_item_pks
+
+    def get_tab_count(self, name, ctx):
+        if name == self.tab:
+            # the list of the tab, after its search
+            return ctx["page_obj"].paginator.count
+        if name == "rules":
+            return self.configuration.rule_set.count()
+        return len(self.get_visible_scoped_item_pks()[name])
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        if self.request.user.has_perm("santa.view_enrollment"):
-            enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
-            ctx["enrollments"] = enrollments
-            ctx["enrollments_count"] = len(enrollments)
-        ctx["rules_count"] = self.object.rule_set.count()
-        if self.request.user.has_perms(
+        user = self.request.user
+        ctx["configuration"] = self.configuration
+        ctx["tab"] = self.tab
+        tabs = []
+        for name, title, plural_title, url_name, permission in self.tabs:
+            if not user.has_perm(permission):
+                continue
+            if plural_title:
+                count = self.get_tab_count(name, ctx)
+                title = f"{title if count == 1 else plural_title} ({count})"
+            tabs.append((name, title, reverse(f"santa:{url_name}", args=(self.configuration.pk,))))
+        ctx["tabs"] = tabs
+        if user.has_perms(
             ("santa.view_configuration",
              "santa.view_enrollment",
              "santa.view_rule",
@@ -74,53 +123,97 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         ):
             ctx["show_events_link"] = stores.admin_console_store.object_events
             store_links = []
-            for store in stores.iter_events_url_store_for_user("object", self.request.user):
+            for store in stores.iter_events_url_store_for_user("object", user):
                 url = "{}?{}".format(
-                    reverse("santa:configuration_events_store_redirect", args=(self.object.pk,)),
+                    reverse("santa:configuration_events_store_redirect", args=(self.configuration.pk,)),
                     urlencode({"es": store.name,
                                "tr": ConfigurationEventsView.default_time_range})
                 )
                 store_links.append((url, store.name))
             ctx["store_links"] = store_links
+        # a template cannot build a PBAC request
+        view_enrolled_machine_request = ViewEnrolledMachineRequest(user)
+        engine.authorize_request(view_enrolled_machine_request)
+        ctx["can_view_machines"] = view_enrolled_machine_request.is_authorized
+        return ctx
+
+
+class ConfigurationView(PermissionRequiredMixin, ConfigurationTabMixin, DetailView):
+    permission_required = "santa.view_configuration"
+    model = Configuration
+    tab = "overview"
+
+    def get_object(self, queryset=None):
+        self.configuration = super().get_object(queryset)
+        return self.configuration
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
         ctx["voting_groups"] = list(
             self.object.votinggroup_set
                        .select_related("realm_group")
                        .order_by("realm_group__display_name")
         )
-        # a template cannot build a PBAC request
-        view_enrolled_machine_request = ViewEnrolledMachineRequest(self.request.user)
-        engine.authorize_request(view_enrolled_machine_request)
-        ctx["can_view_machines"] = view_enrolled_machine_request.is_authorized
-        ctx.update(self.get_scoped_item_context(
-            "scoped_client_modes", "can_create_scoped_client_mode", "scopedclientmode_set",
-            CreateScopedClientModeRequest, ViewScopedClientModeRequest,
-            UpdateScopedClientModeRequest, DeleteScopedClientModeRequest,
-        ))
-        ctx.update(self.get_scoped_item_context(
-            "scoped_path_regexes", "can_create_scoped_path_regex", "scopedpathregex_set",
-            CreateScopedPathRegexRequest, ViewScopedPathRegexRequest,
-            UpdateScopedPathRegexRequest, DeleteScopedPathRegexRequest,
-        ))
+        if self.request.user.has_perm("santa.view_enrollment"):
+            enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
+            ctx["enrollments"] = enrollments
+            ctx["enrollments_count"] = len(enrollments)
         return ctx
 
-    def get_scoped_item_context(self, items_key, can_create_key, item_set_name,
-                                create_request_class, view_request_class,
-                                update_request_class, delete_request_class):
-        # a template cannot build a PBAC request
-        create_request = create_request_class(self.request.user, self.object)
-        items = list(
-            getattr(self.object, item_set_name).prefetch_related("tags", "excluded_tags").order_by("name")
-        )
-        view_requests = [view_request_class(self.request.user, i) for i in items]
-        update_requests = [update_request_class(self.request.user, i) for i in items]
-        delete_requests = [delete_request_class(self.request.user, i) for i in items]
-        engine.authorize_requests([create_request] + view_requests + update_requests + delete_requests)
-        rows = [
+
+class BaseConfigurationScopedItemsView(PermissionRequiredMixin, ConfigurationTabMixin, UserPaginationListView):
+    permission_required = "santa.view_configuration"
+    form_class = None
+    create_request_class = None
+    update_request_class = None
+    delete_request_class = None
+
+    def get(self, request, *args, **kwargs):
+        self.configuration = get_object_or_404(Configuration, pk=kwargs["configuration_pk"])
+        self.form = self.form_class(request.GET, configuration=self.configuration)
+        self.form.is_valid()
+        return super().get(request, *args, **kwargs)
+
+    def get_queryset(self):
+        visible_pks = self.get_visible_scoped_item_pks()[self.tab]
+        # the page is cut after the view decisions: a page cut first would drop an entry the user
+        # is allowed to see. Hence a list, and not a queryset
+        return [i for i in self.form.get_queryset() if i.pk in visible_pks]
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["form"] = self.form
+        user = self.request.user
+        items = list(ctx["page_obj"])
+        # a template cannot build a PBAC request. The buttons of the entries of the page only
+        create_request = self.create_request_class(user, self.configuration)
+        update_requests = [self.update_request_class(user, i) for i in items]
+        delete_requests = [self.delete_request_class(user, i) for i in items]
+        engine.authorize_requests([create_request] + update_requests + delete_requests)
+        ctx["can_create"] = create_request.is_authorized
+        ctx["rows"] = [
             {"item": i, "can_update": u.is_authorized, "can_delete": d.is_authorized}
-            for i, v, u, d in zip(items, view_requests, update_requests, delete_requests)
-            if v.is_authorized
+            for i, u, d in zip(items, update_requests, delete_requests)
         ]
-        return {items_key: rows, can_create_key: create_request.is_authorized}
+        return ctx
+
+
+class ConfigurationScopedClientModesView(BaseConfigurationScopedItemsView):
+    template_name = "santa/configuration_scoped_client_modes.html"
+    tab = "scoped_client_modes"
+    form_class = ScopedClientModeSearchForm
+    create_request_class = CreateScopedClientModeRequest
+    update_request_class = UpdateScopedClientModeRequest
+    delete_request_class = DeleteScopedClientModeRequest
+
+
+class ConfigurationScopedPathRegexesView(BaseConfigurationScopedItemsView):
+    template_name = "santa/configuration_scoped_path_regexes.html"
+    tab = "scoped_path_regexes"
+    form_class = ScopedPathRegexSearchForm
+    create_request_class = CreateScopedPathRegexRequest
+    update_request_class = UpdateScopedPathRegexRequest
+    delete_request_class = DeleteScopedPathRegexRequest
 
 
 class EventsMixin:
@@ -296,7 +389,7 @@ class DeleteScopedClientModeView(PBACViewMixin, DeleteViewWithAudit):
                        .filter(configuration__pk=self.kwargs["configuration_pk"]))
 
     def get_success_url(self):
-        return reverse("santa:configuration", args=(self.object.configuration.pk,))
+        return reverse("santa:configuration_scoped_client_modes", args=(self.object.configuration.pk,))
 
 
 # scoped path regexes
@@ -365,7 +458,7 @@ class DeleteScopedPathRegexView(PBACViewMixin, DeleteViewWithAudit):
                        .filter(configuration__pk=self.kwargs["configuration_pk"]))
 
     def get_success_url(self):
-        return reverse("santa:configuration", args=(self.object.configuration.pk,))
+        return reverse("santa:configuration_scoped_path_regexes", args=(self.object.configuration.pk,))
 
 
 # enrollments
@@ -443,9 +536,10 @@ class DeleteEnrollmentView(PermissionRequiredMixin, DeleteViewWithAudit):
 # rules
 
 
-class ConfigurationRulesView(PermissionRequiredMixin, UserPaginationListView):
+class ConfigurationRulesView(PermissionRequiredMixin, ConfigurationTabMixin, UserPaginationListView):
     permission_required = "santa.view_rule"
     template_name = "santa/configuration_rules.html"
+    tab = "rules"
 
     def dispatch(self, request, *args, **kwargs):
         self.configuration = get_object_or_404(Configuration, pk=kwargs["configuration_pk"])
@@ -458,7 +552,6 @@ class ConfigurationRulesView(PermissionRequiredMixin, UserPaginationListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["configuration"] = self.configuration
         ctx["form"] = self.form
         page = ctx["page_obj"]
         display_strings = Target.objects.get_targets_display_strings(
@@ -468,10 +561,6 @@ class ConfigurationRulesView(PermissionRequiredMixin, UserPaginationListView):
             rule.target_display_str = display_strings.get(
                 (Target.Type(rule.target.type), rule.target.identifier)
             )
-        if page.number > 1:
-            qd = self.request.GET.copy()
-            qd.pop('page', None)
-            ctx['reset_link'] = "?{}".format(qd.urlencode())
         return ctx
 
 

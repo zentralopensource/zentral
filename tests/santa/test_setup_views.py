@@ -1222,7 +1222,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/configuration_rules.html")
         self.assertContains(response, "Rules (3)")
         self.assertEqual(response.context["next_url"], "?target_type=CDHASH&page=3")
-        self.assertEqual(response.context["reset_link"], "?target_type=CDHASH")
         self.assertEqual(response.context["previous_url"], "?target_type=CDHASH&page=1")
 
     def test_configuration_rules_is_voting_rule(self):

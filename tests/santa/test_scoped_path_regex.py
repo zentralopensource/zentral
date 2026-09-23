@@ -228,9 +228,10 @@ class SantaScopedPathRegexTestCase(TestCase):
 
     def test_get_absolute_url(self):
         configuration = force_configuration()
-        spr = self.force_scoped_path_regex(configuration, "/a/")
+        spr = self.force_scoped_path_regex(configuration, "/a/", name="Downloads", block=True)
         self.assertEqual(spr.get_absolute_url(),
-                         configuration.get_absolute_url() + f"#scoped-path-regex-{spr.pk}")
+                         reverse("santa:configuration_scoped_path_regexes", args=(configuration.pk,))
+                         + "?policy=BLOCK&q=Downloads")
 
     # preflight view
 

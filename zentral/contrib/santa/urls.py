@@ -42,6 +42,9 @@ urlpatterns = [
          name='reset_target_state'),
 
     # scoped client modes
+    path('configurations/<int:configuration_pk>/scoped_client_modes/',
+         views.ConfigurationScopedClientModesView.as_view(),
+         name='configuration_scoped_client_modes'),
     path('configurations/<int:configuration_pk>/scoped_client_modes/create/',
          views.CreateScopedClientModeView.as_view(),
          name='create_scoped_client_mode'),
@@ -52,6 +55,9 @@ urlpatterns = [
          views.DeleteScopedClientModeView.as_view(),
          name='delete_scoped_client_mode'),
     # scoped path regexes
+    path('configurations/<int:configuration_pk>/scoped_path_regexes/',
+         views.ConfigurationScopedPathRegexesView.as_view(),
+         name='configuration_scoped_path_regexes'),
     path('configurations/<int:configuration_pk>/scoped_path_regexes/create/',
          views.CreateScopedPathRegexView.as_view(),
          name='create_scoped_path_regex'),

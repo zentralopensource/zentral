@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load ui_extras %}
+{% comment %}The layout the configuration tabs share: breadcrumbs, header, links and the tab bar.{% endcomment %}
+
+{% block content %}
+<ol class="breadcrumb">
+  <li class="breadcrumb-item"><a href="/">Home</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
+  <li class="breadcrumb-item active">{{ configuration.name }}</li>
+</ol>
+
+<div class="d-flex align-items-center mb-1">
+    <h2 class="m-0">{{ configuration.name }}</h2>
+    <div class="ms-3">
+        {% if show_events_link %}
+            {% url 'santa:configuration_events' configuration.pk as url %}
+            {% button 'EVENTS' url %}
+        {% endif %}
+        {% if can_view_machines %}
+            <a type="button" href="{% url 'santa:machines' %}?configuration={{ configuration.pk }}" class="btn btn-link"
+                data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Machines">
+                <i class="bi bi-laptop"></i>
+            </a>
+        {% endif %}
+        {% for link, anchor_text in store_links  %}
+            {% button 'LINK' link anchor_text %}
+        {% endfor %}
+    </div>
+</div>
+<div class="d-flex align-items-center mb-3">
+    <h3 class="m-0 fs-5 text-secondary">Santa configuration</h3>
+    <div class="ms-auto">
+        {% if perms.santa.change_configuration %}
+            {% url 'santa:update_configuration' configuration.pk as url %}
+            {% button 'UPDATE' url "Edit Configuration" %}
+        {% endif %}
+        {% if perms.santa.delete_configuration and configuration.can_be_deleted %}
+            {% url 'santa:delete_configuration' configuration.pk as url %}
+            {% button 'DELETE' url "Delete Configuration" %}
+        {% endif %}
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3">
+  {% for name, title, url in tabs %}
+  <li class="nav-item">
+    <a class="nav-link{% if name == tab %} active{% endif %}" href="{{ url }}">{{ title }}</a>
+  </li>
+  {% endfor %}
+</ul>
+
+{% block tab_content %}{% endblock %}
+{% endblock %}

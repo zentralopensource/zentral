@@ -176,6 +176,54 @@ class ScopedPathRegexForm(ScopedConfigurationItemForm):
         widgets = {"regex": forms.Textarea(attrs={"cols": "40", "rows": "3"})}
 
 
+class ScopedConfigurationItemSearchForm(forms.Form):
+    template_name = "django/forms/search.html"
+    item_set_name = None
+
+    def __init__(self, *args, **kwargs):
+        self.configuration = kwargs.pop("configuration")
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        # read from the configuration, so that each entry carries it: its PBAC resource reads it
+        return (getattr(self.configuration, self.item_set_name)
+                .prefetch_related("tags", "excluded_tags")
+                .order_by("name"))
+
+
+class ScopedClientModeSearchForm(ScopedConfigurationItemSearchForm):
+    item_set_name = "scopedclientmode_set"
+
+    client_mode = forms.ChoiceField(label="Mode",
+                                    choices=[("", "…")] + list(Configuration.CLIENT_MODE_CHOICES),
+                                    required=False)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        client_mode = self.cleaned_data.get("client_mode")
+        if client_mode:
+            qs = qs.filter(client_mode=client_mode)
+        return qs
+
+
+class ScopedPathRegexSearchForm(ScopedConfigurationItemSearchForm):
+    item_set_name = "scopedpathregex_set"
+
+    q = forms.CharField(label="Name or pattern", required=False,
+                        widget=forms.TextInput(attrs={"autofocus": True}))
+    policy = forms.ChoiceField(choices=[("", "…")] + ScopedPathRegex.Policy.choices, required=False)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(regex__icontains=q))
+        policy = self.cleaned_data.get("policy")
+        if policy:
+            qs = qs.filter(policy=policy)
+        return qs
+
+
 class EnrollmentForm(forms.ModelForm):
     class Meta:
         model = Enrollment

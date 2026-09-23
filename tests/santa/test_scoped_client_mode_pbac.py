@@ -52,6 +52,13 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
             source += statement.replace("ROLE", role) + "\n"
         return source
 
+    def assert_breadcrumbs(self, response, configuration):
+        self.assertContains(response, f'<a href="{configuration.get_absolute_url()}">{configuration.name}</a>')
+        self.assertContains(response, f'<a href="{self.tab_url(configuration)}">Scoped client modes</a>')
+
+    def tab_url(self, configuration):
+        return reverse("santa:configuration_scoped_client_modes", args=(configuration.pk,))
+
     # resource
 
     def test_resource(self):
@@ -66,19 +73,19 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
 
     # create
 
-    def test_detail_page_hides_the_create_button_without_a_policy(self):
+    def test_tab_hides_the_create_button_without_a_policy(self):
         configuration = force_configuration()
         self.login_with_policy(self.policy())
-        response = self.client.get(configuration.get_absolute_url())
+        response = self.client.get(self.tab_url(configuration))
         self.assertNotContains(response, reverse("santa:create_scoped_client_mode", args=(configuration.pk,)))
 
-    def test_detail_page_shows_the_create_button(self):
+    def test_tab_shows_the_create_button(self):
         configuration = force_configuration()
         self.login_with_policy(self.policy(
             f'permit (principal in ROLE, action == Santa::Action::"createScopedClientMode",'
             f' resource == Santa::Configuration::"{configuration.pk}");'
         ))
-        response = self.client.get(configuration.get_absolute_url())
+        response = self.client.get(self.tab_url(configuration))
         self.assertContains(response, reverse("santa:create_scoped_client_mode", args=(configuration.pk,)))
 
     def test_create_denied_without_a_policy(self):
@@ -102,6 +109,8 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
         url = reverse("santa:create_scoped_client_mode", args=(configuration.pk,))
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+        self.assert_breadcrumbs(response, configuration)
+        self.assertContains(response, f'class="btn btn-outline-secondary" href="{self.tab_url(configuration)}"')
         name = get_random_string(12)
         response = self.client.post(
             url,
@@ -111,7 +120,8 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(ScopedClientMode.objects.filter(name=name).count(), 1)
+        entry = ScopedClientMode.objects.get(name=name)
+        self.assertEqual(response.redirect_chain, [(entry.get_absolute_url(), 302)])
 
     def test_create_denied_on_another_configuration(self):
         configuration = force_configuration()
@@ -147,8 +157,7 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
         url = reverse("santa:update_scoped_client_mode", args=(configuration.pk, scm.pk))
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        # the breadcrumbs name the configuration
-        self.assertContains(response, f'<a href="{configuration.get_absolute_url()}">{configuration.name}</a>')
+        self.assert_breadcrumbs(response, configuration)
         response = self.client.post(
             url,
             {"name": scm.name,
@@ -194,21 +203,21 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
 
     # view
 
-    def test_detail_page_hides_the_entries_without_a_policy(self):
+    def test_tab_hides_the_entries_without_a_policy(self):
         configuration = force_configuration()
         scm = self.force_scoped_client_mode(configuration)
         self.login_with_policy(self.policy())
-        response = self.client.get(configuration.get_absolute_url())
+        response = self.client.get(self.tab_url(configuration))
         self.assertNotContains(response, scm.name)
 
-    def test_detail_page_shows_the_entries(self):
+    def test_tab_shows_the_entries(self):
         configuration = force_configuration()
         scm = self.force_scoped_client_mode(configuration)
         self.login_with_policy(self.policy(
             f'permit (principal in ROLE, action == Santa::Action::"viewScopedClientMode",'
             f' resource in Santa::Configuration::"{configuration.pk}");'
         ))
-        response = self.client.get(configuration.get_absolute_url())
+        response = self.client.get(self.tab_url(configuration))
         self.assertContains(response, scm.name)
         self.assertNotContains(
             response, reverse("santa:delete_scoped_client_mode", args=(configuration.pk, scm.pk))
@@ -234,8 +243,10 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
             f' resource in Santa::Configuration::"{configuration.pk}");'
         ))
         url = reverse("santa:delete_scoped_client_mode", args=(configuration.pk, scm.pk))
-        response = self.client.get(configuration.get_absolute_url())
+        response = self.client.get(self.tab_url(configuration))
         self.assertContains(response, url)
+        self.assert_breadcrumbs(self.client.get(url), configuration)
         response = self.client.post(url, follow=True)
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.redirect_chain, [(self.tab_url(configuration), 302)])
         self.assertEqual(ScopedClientMode.objects.filter(pk=scm.pk).count(), 0)

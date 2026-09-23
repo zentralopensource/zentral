@@ -1,9 +1,11 @@
 from unittest.mock import patch
 from django.test import TestCase
+from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.santa.forms import (ConfigurationForm, RuleForm, ScopedClientModeForm,
-                                         ScopedPathRegexForm, UpdateRuleForm)
+                                         ScopedClientModeSearchForm, ScopedPathRegexForm,
+                                         ScopedPathRegexSearchForm, UpdateRuleForm)
 from zentral.contrib.santa.models import Configuration, Rule, ScopedClientMode, ScopedPathRegex, Target
 from tests.santa.utils import force_configuration, force_realm, force_rule, new_team_id
 
@@ -317,7 +319,8 @@ class ScopedClientModeFormTests(TestCase):
         self.assertEqual(scm.configuration, configuration)
         self.assertEqual(str(scm), "yolo")
         self.assertEqual(scm.get_absolute_url(),
-                         configuration.get_absolute_url() + f"#scoped-client-mode-{scm.pk}")
+                         reverse("santa:configuration_scoped_client_modes", args=(configuration.pk,))
+                         + f"?client_mode={Configuration.MONITOR_MODE}")
 
 
 class ScopedPathRegexFormTests(TestCase):
@@ -433,6 +436,26 @@ class ScopedPathRegexFormTests(TestCase):
         spr = form.save()
         self.assertEqual(spr.configuration, configuration)
         self.assertEqual(str(spr), "yolo")
+
+
+class ScopedConfigurationItemSearchFormTests(TestCase):
+    def test_the_entries_of_the_configuration_by_name(self):
+        configuration = force_configuration()
+        other_configuration = force_configuration()
+        for form_class, create in (
+            (ScopedClientModeSearchForm,
+             lambda c, name, mode: ScopedClientMode.objects.create(configuration=c, name=name, client_mode=mode)),
+            (ScopedPathRegexSearchForm,
+             lambda c, name, mode: ScopedPathRegex.objects.create(configuration=c, name=name, regex=f"/{name}/",
+                                                                  policy=ScopedPathRegex.Policy.ALLOW)),
+        ):
+            with self.subTest(form_class=form_class.__name__):
+                second = create(configuration, "b", Configuration.MONITOR_MODE)
+                first = create(configuration, "a", Configuration.LOCKDOWN_MODE)
+                create(other_configuration, "c", Configuration.MONITOR_MODE)
+                form = form_class({}, configuration=configuration)
+                self.assertTrue(form.is_valid())
+                self.assertEqual(list(form.get_queryset()), [first, second])
 
 
 class ConfigurationFormPathRegexValidationTests(TestCase):

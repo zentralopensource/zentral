@@ -1091,8 +1091,9 @@ class ScopedClientMode(ScopedConfigurationItem):
         ]
 
     def get_absolute_url(self):
-        return (reverse("santa:configuration", args=(self.configuration_id,))
-                + f"#scoped-client-mode-{self.pk}")
+        # a search and not an anchor, because the tab is paginated. The mode finds one entry
+        return (reverse("santa:configuration_scoped_client_modes", args=(self.configuration_id,))
+                + "?" + urlencode({"client_mode": self.client_mode}))
 
     def get_event_detail(self, configuration):
         if self.event_detail_source == self.EventDetailSource.NONE:
@@ -1156,8 +1157,9 @@ class ScopedPathRegex(ScopedConfigurationItem):
         ]
 
     def get_absolute_url(self):
-        return (reverse("santa:configuration", args=(self.configuration_id,))
-                + f"#scoped-path-regex-{self.pk}")
+        # a search and not an anchor, because the tab is paginated
+        return (reverse("santa:configuration_scoped_path_regexes", args=(self.configuration_id,))
+                + "?" + urlencode({"policy": self.policy, "q": self.name}))
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}

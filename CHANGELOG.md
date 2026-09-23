@@ -135,6 +135,8 @@ The rules of a Santa configuration are a table now, with one row for each rule a
 
 The rules of a Santa target use the same two cells, with the configuration of the rule in the place of the target. The tab needs the `santa.view_rule` permission now. It is a list of rules, and the page asks for `santa.view_target` only: a user with the permission to add a rule, but not to view one, had the `Create a rule` menu on that page, and does not have it anymore.
 
+The page of a Santa configuration has four tabs now: Overview, Rules, Scoped client modes and Scoped path regexes. The Overview gives the attributes of the configuration, its voting groups and its enrollments. The three other tabs are paginated, and each one has a search: the rule search for the rules, the mode for the scoped client modes, and the policy and a text for the scoped path regexes. The title of each of these tabs gives its number of items. A link to a scoped client mode or to a scoped path regex opens its tab with a search that finds it, as the link to a rule does. Before, the scoped client modes and the scoped path regexes were all on the page of the configuration, and the rules were on a page of their own.
+
 
 ### Backward incompatibilities
 

@@ -6,6 +6,7 @@
   <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
   <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
   <li class="breadcrumb-item"><a href="{{ view.configuration.get_absolute_url }}">{{ view.configuration }}</a></li>
+  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_scoped_client_modes' view.configuration.pk %}">Scoped client modes</a></li>
   <li class="breadcrumb-item active">{{ title }}</li>
 </ol>
 
@@ -14,7 +15,7 @@
 <form method="POST" class="update-form">{% csrf_token %}
   {{ form }}
   <p>
-    <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'santa:configuration' view.configuration.pk %}{% endif %}">Cancel</a>
+    <a class="btn btn-outline-secondary" href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'santa:configuration_scoped_client_modes' view.configuration.pk %}{% endif %}">Cancel</a>
     <button class="btn btn-primary" type="submit">Save</button>
   </p>
 </form>

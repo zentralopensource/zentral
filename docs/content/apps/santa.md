@@ -25,6 +25,15 @@ In Zentral, go to Setup > Santa configurations. Click on the [Create] button. Th
 
 You can start with the default values, and simply pick a name (must be unique) for the configuration, then click the [Save] button at the bottom.
 
+The page of a configuration has four tabs:
+
+* **Overview**: the attributes of the configuration, its voting groups and its enrollments.
+* **Rules**: the [rules](#santa-rules), with the rule search.
+* **Scoped client modes**: the [scoped client modes](#scoped-client-modes), with a filter on the mode.
+* **Scoped path regexes**: the [scoped path regexes](#scoped-path-regexes), with a filter on the policy, and a search on the name and on the pattern.
+
+Each tab has its own URL. The title of the last three tabs gives their number of items. The number counts only the entries that you can view, and on the open tab it counts the results of the search. These tabs are paginated, with the number of items per page of your profile. A link to a rule, to a scoped client mode or to a scoped path regex opens its tab with a search that finds it.
+
 
 ### Create an enrollment
 
@@ -137,7 +146,7 @@ This policy is only available for `cdhash`, `Binary` and `Signing ID` targets. T
 
 ### Quick start
 
-On any Zentral configuration page (the one with the configuration information and the enrollments), there is a "Rules" sub section at the bottom, with a count and a [Manage rules] button. Click on it to access the configuration rule list.
+Open the configuration, and select its Rules tab. It lists the rules of the configuration.
 
 You can filter the list using the search form at the top. From this list, you can edit or delete existing rules (if they are not part of a ruleset, see API section below), and add more rules. To add a rule, click on the [Add] button at the top, and select the kind of rule you want to add. We will start with a "Base rule".
 
@@ -231,7 +240,7 @@ The `Create a rule` menu of a target page offers a configuration when the target
 
 ## Scoped client modes
 
-A Santa configuration gives the same client mode to all its machines. A scoped client mode gives a different mode to some of them. Open the configuration in Setup > Santa configurations, and use the [Create] button of the Scoped client mode section.
+A Santa configuration gives the same client mode to all its machines. A scoped client mode gives a different mode to some of them. Open the configuration in Setup > Santa configurations, select its Scoped client modes tab, and use the [Create] button.
 
 Zentral resolves the mode of each machine when it answers the [preflight](#preflight). The machine applies it during its next full synchronization. There is no payload to distribute, and the Santa agent keeps no scope of its own.
 
@@ -295,7 +304,7 @@ The configuration is the boundary. A role that can write the entries of a config
 
 ## Scoped path regexes
 
-A Santa configuration has one allow path regex and one block path regex for all its machines. A scoped path regex adds a pattern for some of them. Open the configuration in Setup > Santa configurations, and use the [Create] button of the Scoped path regex section.
+A Santa configuration has one allow path regex and one block path regex for all its machines. A scoped path regex adds a pattern for some of them. Open the configuration in Setup > Santa configurations, select its Scoped path regexes tab, and use the [Create] button.
 
 Santa accepts one pattern for each policy, so Zentral combines them when it answers the [preflight](#preflight). The machine applies the result during its next full synchronization.
 

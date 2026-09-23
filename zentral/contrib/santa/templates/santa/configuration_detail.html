@@ -1,54 +1,9 @@
-{% extends 'base.html' %}
+{% extends 'santa/configuration.html' %}
 {% load inventory_extras %}
 {% load ui_extras %}
 
-{% block content %}
-<ol class="breadcrumb">
-  <li class="breadcrumb-item"><a href="/">Home</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'santa:index' %}">Santa</a></li>
-  <li class="breadcrumb-item"><a href="{% url 'santa:configuration_list' %}">Configurations</a></li>
-  <li class="breadcrumb-item active">{{ object.name }}</li>
-</ol>
-
+{% block tab_content %}
 <div class="object-details">
-    <div class="d-flex align-items-center mb-1">
-        <h2 class="m-0">{{ object.name }}</h2>
-        <div class="ms-3">
-            {% if show_events_link %}
-                {% url 'santa:configuration_events' object.pk as url %}
-                {% button 'EVENTS' url %}
-            {% endif %}
-            {% if perms.santa.add_rule %}
-                <a type="button" href="{% url 'santa:configuration_rules' object.id %}" class="btn btn-link"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Manage rules">
-                    <i class="bi bi-list"></i>
-                </a>
-            {% endif %}
-            {% if can_view_machines %}
-                <a type="button" href="{% url 'santa:machines' %}?configuration={{ object.pk }}" class="btn btn-link"
-                    data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Machines">
-                    <i class="bi bi-laptop"></i>
-                </a>
-            {% endif %}
-            {% for link, anchor_text in store_links  %}
-                {% button 'LINK' link anchor_text %}
-            {% endfor %}
-        </div>
-    </div>
-    <div class="d-flex align-items-center mb-3">
-        <h3 class="m-0 fs-5 text-secondary">Santa configuration</h3>
-        <div class="ms-auto">
-            {% if perms.santa.change_configuration %}
-                {% url 'santa:update_configuration' object.pk as url %}
-                {% button 'UPDATE' url "Edit Configuration" %}
-            {% endif %}
-            {% if perms.santa.delete_configuration and object.can_be_deleted %}
-                {% url 'santa:delete_configuration' object.pk as url %}
-                {% button 'DELETE' url "Delete Configuration" %}
-            {% endif %}
-        </div>
-    </div>
-
     <div class="table-responsive mb-3">
         <table class="table-object-properties">
             <thead>
@@ -247,6 +202,64 @@
 
 </div>
 
+{% if perms.santa.view_votinggroup %}
+<div class="d-flex justify-content-between mb-3">
+    <h2 class="m-0">Voting group{{ voting_groups|length|pluralize }} ({{ voting_groups|length }})</h2>
+    {% if perms.santa.add_votinggroup %}
+        <div class="ms-auto">
+            {% url 'santa:create_voting_group' object.id as url %}
+            {% button 'CREATE' url "Create voting group" %}
+        </div>
+    {% endif %}
+</div>
+
+{% if voting_groups %}
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      <tr>
+        <th>Realm group</th>
+        <th>Can unflag target?</th>
+        <th>Can mark malware?</th>
+        <th>Can reset target?</th>
+        <th>Target types</th>
+        <th>Voting weight</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for voting_group in voting_groups %}
+      <tr class="data-row" id="vg-{{ voting_group.pk }}">
+        <td>
+          {% if perms.realms.view_realmgroup %}
+          <a href="{{ voting_group.realm_group.get_absolute_url }}">{{ voting_group.realm_group }}</a>
+          {% else %}
+          {{ voting_group.realm_group }}
+          {% endif %}
+        </td>
+        <td>{{ voting_group.can_unflag_target|yesno }}</td>
+        <td>{{ voting_group.can_mark_malware|yesno }}</td>
+        <td>{{ voting_group.can_reset_target|yesno }}</td>
+        <td>{{ voting_group.ballot_target_types|join:", "|default:"-" }}</td>
+        <td>{{ voting_group.voting_weight }}</td>
+        <td class="text-end py-0">
+          {% if perms.santa.change_votinggroup %}
+          {% url 'santa:update_voting_group' configuration.id voting_group.id as url %}
+          {% button 'UPDATE' url "Edit voting group" %}
+          {% endif %}
+          {% if perms.santa.delete_votinggroup %}
+          {% url 'santa:delete_voting_group' configuration.id voting_group.id as url %}
+          {% button 'DELETE' url "Delete voting group" %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
 {% if perms.santa.view_enrollment %}
 <div class="d-flex justify-content-between mb-3">
     <h2 class="m-0">Enrollment{{ enrollments_count|pluralize }} ({{ enrollments_count }})</h2>
@@ -336,185 +349,5 @@
     </table>
 </div>
 {% endif %}
-{% endif %}
-
-{% if scoped_client_modes or can_create_scoped_client_mode %}
-<div class="d-flex justify-content-between mb-3">
-    <h2 class="m-0">Scoped client mode{{ scoped_client_modes|length|pluralize }} ({{ scoped_client_modes|length }})</h2>
-    {% if can_create_scoped_client_mode %}
-        <div class="ms-auto">
-            {% url 'santa:create_scoped_client_mode' object.id as url %}
-            {% button 'CREATE' url "Create scoped client mode" %}
-        </div>
-    {% endif %}
-</div>
-
-{% if scoped_client_modes %}
-<div class="table-responsive mb-3">
-  <table class="table table-striped align-middle table-hover">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Mode</th>
-        <th>Button</th>
-        <th>Scope</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in scoped_client_modes %}
-      {% with scm=row.item %}
-      <tr class="data-row" id="scoped-client-mode-{{ scm.pk }}">
-        <td>
-          {{ scm.name }}
-          {% if scm.description %}<br><span class="text-secondary">{{ scm.description }}</span>{% endif %}
-        </td>
-        <td>{{ scm.get_client_mode_display }}</td>
-        <td>{{ scm.get_event_detail_source_display }}</td>
-        <td>{% include "santa/_scoped_item_scope.html" with item=scm %}</td>
-        <td class="text-end py-0">
-          {% if row.can_update %}
-          {% url 'santa:update_scoped_client_mode' object.id scm.id as url %}
-          {% button 'UPDATE' url "Edit scoped client mode" %}
-          {% endif %}
-          {% if row.can_delete %}
-          {% url 'santa:delete_scoped_client_mode' object.id scm.id as url %}
-          {% button 'DELETE' url "Delete scoped client mode" %}
-          {% endif %}
-        </td>
-      </tr>
-      {% endwith %}
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-{% endif %}
-
-{% if scoped_path_regexes or can_create_scoped_path_regex %}
-<div class="d-flex justify-content-between mb-3">
-    <h2 class="m-0">Scoped path regex{{ scoped_path_regexes|length|pluralize:"es" }} ({{ scoped_path_regexes|length }})</h2>
-    {% if can_create_scoped_path_regex %}
-        <div class="ms-auto">
-            {% url 'santa:create_scoped_path_regex' object.id as url %}
-            {% button 'CREATE' url "Create scoped path regex" %}
-        </div>
-    {% endif %}
-</div>
-
-{% if scoped_path_regexes %}
-<p class="text-secondary">
-  Santa reads the block regex before the allow regex, so a path matched by both is blocked.
-  In Monitor mode an allow entry grants nothing, and the executions it matches are not reported.
-</p>
-<div class="table-responsive mb-3">
-  <table class="table table-striped align-middle table-hover">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Policy</th>
-        <th>Regex</th>
-        <th>Scope</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in scoped_path_regexes %}
-      {% with spr=row.item %}
-      <tr class="data-row" id="scoped-path-regex-{{ spr.pk }}">
-        <td>
-          {{ spr.name }}
-          {% if spr.description %}<br><span class="text-secondary">{{ spr.description }}</span>{% endif %}
-        </td>
-        <td>{{ spr.get_policy_display }}</td>
-        <td><code class="badge text-bg-danger text-white fw-normal">{{ spr.regex }}</code></td>
-        <td>{% include "santa/_scoped_item_scope.html" with item=spr %}</td>
-        <td class="text-end py-0">
-          {% if row.can_update %}
-          {% url 'santa:update_scoped_path_regex' object.id spr.id as url %}
-          {% button 'UPDATE' url "Edit scoped path regex" %}
-          {% endif %}
-          {% if row.can_delete %}
-          {% url 'santa:delete_scoped_path_regex' object.id spr.id as url %}
-          {% button 'DELETE' url "Delete scoped path regex" %}
-          {% endif %}
-        </td>
-      </tr>
-      {% endwith %}
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-{% endif %}
-
-{% if perms.santa.view_votinggroup %}
-<div class="d-flex justify-content-between mb-3">
-    <h2 class="m-0">Voting group{{ voting_groups|length|pluralize }} ({{ voting_groups|length }})</h2>
-    {% if perms.santa.add_votinggroup %}
-        <div class="ms-auto">
-            {% url 'santa:create_voting_group' object.id as url %}
-            {% button 'CREATE' url "Create voting group" %}
-        </div>
-    {% endif %}
-</div>
-
-{% if voting_groups %}
-<div class="table-responsive mb-3">
-  <table class="table table-striped align-middle table-hover">
-    <thead>
-      <tr>
-        <th>Realm group</th>
-        <th>Can unflag target?</th>
-        <th>Can mark malware?</th>
-        <th>Can reset target?</th>
-        <th>Target types</th>
-        <th>Voting weight</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for voting_group in voting_groups %}
-      <tr class="data-row" id="vg-{{ voting_group.pk }}">
-        <td>
-          {% if perms.realms.view_realmgroup %}
-          <a href="{{ voting_group.realm_group.get_absolute_url }}">{{ voting_group.realm_group }}</a>
-          {% else %}
-          {{ voting_group.realm_group }}
-          {% endif %}
-        </td>
-        <td>{{ voting_group.can_unflag_target|yesno }}</td>
-        <td>{{ voting_group.can_mark_malware|yesno }}</td>
-        <td>{{ voting_group.can_reset_target|yesno }}</td>
-        <td>{{ voting_group.ballot_target_types|join:", "|default:"-" }}</td>
-        <td>{{ voting_group.voting_weight }}</td>
-        <td class="text-end py-0">
-          {% if perms.santa.change_votinggroup %}
-          {% url 'santa:update_voting_group' configuration.id voting_group.id as url %}
-          {% button 'UPDATE' url "Edit voting group" %}
-          {% endif %}
-          {% if perms.santa.delete_votinggroup %}
-          {% url 'santa:delete_voting_group' configuration.id voting_group.id as url %}
-          {% button 'DELETE' url "Delete voting group" %}
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
-{% endif %}
-
-{% if perms.santa.view_rule %}
-<div class="d-flex justify-content-between mb-3">
-    {% if perms.santa.view_rule %}
-        <a type="button" href="{% url 'santa:configuration_rules' object.id %}">
-    {% endif %}
-            <h2 class="m-0">Rule{{ rules_count|pluralize }} ({{ rules_count }})</h2>
-    {% if perms.santa.view_rule %}
-        </a>
-    {% endif %}
-</div>
 {% endif %}
 {% endblock %}

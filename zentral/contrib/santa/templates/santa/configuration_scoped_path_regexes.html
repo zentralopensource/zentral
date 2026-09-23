@@ -1,0 +1,69 @@
+{% extends 'santa/configuration.html' %}
+{% load ui_extras %}
+
+{% block tab_content %}
+<div class="d-flex flex-wrap align-items-center mb-1">
+  <form method="GET" class="search-form">
+    {{ form }}
+    <button type="submit" class="btn btn-link mb-2">
+      <i class="bi bi-search"></i>
+    </button>
+  </form>
+  {% if can_create %}
+  <div class="ms-auto">
+    {% url 'santa:create_scoped_path_regex' configuration.id as url %}
+    {% button 'CREATE' url "Create scoped path regex" %}
+  </div>
+  {% endif %}
+</div>
+
+{% if rows %}
+
+{% pagination next_url previous_url %}
+
+<div class="table-responsive mb-3">
+  <table class="table table-striped align-middle table-hover">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Policy</th>
+        <th>Regex</th>
+        <th>Scope</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% with spr=row.item %}
+      <tr class="data-row">
+        <td>
+          {{ spr.name }}
+          {% if spr.description %}<br><span class="text-secondary">{{ spr.description }}</span>{% endif %}
+        </td>
+        <td>{{ spr.get_policy_display }}</td>
+        <td><code class="badge text-bg-danger text-white fw-normal">{{ spr.regex }}</code></td>
+        <td>{% include "santa/_scoped_item_scope.html" with item=spr %}</td>
+        <td class="text-end py-0">
+          {% if row.can_update %}
+          {% url 'santa:update_scoped_path_regex' configuration.id spr.id as url %}
+          {% button 'UPDATE' url "Edit scoped path regex" %}
+          {% endif %}
+          {% if row.can_delete %}
+          {% url 'santa:delete_scoped_path_regex' configuration.id spr.id as url %}
+          {% button 'DELETE' url "Delete scoped path regex" %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endwith %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% pagination next_url previous_url %}
+
+{% elif form.has_changed %}
+{% url 'santa:configuration_scoped_path_regexes' configuration.id as empty_results_url %}
+{% empty_results empty_results_url %}
+{% endif %}
+{% endblock %}
