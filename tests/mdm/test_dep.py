@@ -11,6 +11,7 @@ from zentral.contrib.mdm.dep import (
     assign_dep_virtual_server_default_enrollment,
     define_dep_profile,
     iter_unassigned_dep_device_serial_numbers,
+    refresh_dep_device,
     sync_dep_virtual_server_devices,
 )
 from zentral.contrib.mdm.dep_client import (
@@ -598,6 +599,105 @@ class TestDEPEnrollment(TestCase):
         self.assertEqual(dep_device.last_op_type, DEPDevice.OP_TYPE_MODIFIED)
         self.assertEqual(dep_device.last_op_date, datetime(2026, 8, 24, 12, 0, 0))
         self.assertFalse(dep_device.is_deleted())
+
+    # MDM migration deadline
+
+    def force_dep_device_with_migration_deadline(self, server):
+        dep_device = force_dep_device(server=server, profile_status=DEPDevice.PROFILE_STATUS_EMPTY)
+        DEPDevice.objects.filter(pk=dep_device.pk).update(mdm_migration_deadline=datetime(2026, 9, 24, 22, 0, 0),
+                                                          last_op_date=None)
+        dep_device.refresh_from_db()
+        return dep_device
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_token")
+    def test_sync_dep_virtual_server_devices_mdm_server_change_clears_the_migration_deadline(self, from_dep_token):
+        server = self.force_synced_server()
+        dep_device = self.force_dep_device_with_migration_deadline(server)
+
+        def device_iterator():
+            # the device moved to another MDM server
+            yield from [{'op_date': '2026-09-25T08:00:00Z',
+                         'op_type': 'deleted',
+                         'serial_number': dep_device.serial_number}]
+            return get_random_string(12)
+
+        client = Mock()
+        client.sync_devices.return_value = CursorIterator(device_iterator())
+        from_dep_token.return_value = client
+        list(sync_dep_virtual_server_devices(server))
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.last_op_type, DEPDevice.OP_TYPE_DELETED)
+        self.assertIsNone(dep_device.mdm_migration_deadline)
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_virtual_server_default_enrollment_keeps_the_migration_deadline(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        dep_device = self.force_dep_device_with_migration_deadline(server)
+        client = Mock()
+        client.get_device_batch_size.return_value = DEVICE_BATCH_SIZE
+        client.assign_profile.return_value = {"devices": {dep_device.serial_number: "SUCCESS"}}
+        client.get_devices.return_value = {
+            dep_device.serial_number: {
+                "profile_uuid": str(enrollment.uuid).upper().replace("-", ""),
+                "profile_status": "assigned",
+                "profile_assign_time": "2026-09-24T10:45:02Z",
+            }
+        }
+        from_dep_virtual_server.return_value = client
+
+        self.assertEqual(assign_dep_virtual_server_default_enrollment(server)["assigned"], 1)
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.enrollment, enrollment)
+        self.assertEqual(dep_device.mdm_migration_deadline, datetime(2026, 9, 24, 22, 0, 0))
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_assign_dep_device_profile_keeps_the_migration_deadline(self, from_dep_virtual_server):
+        server, enrollment = self.force_server_with_default_enrollment()
+        dep_device = self.force_dep_device_with_migration_deadline(server)
+        client = Mock()
+        client.assign_profile.return_value = {"devices": {dep_device.serial_number: "SUCCESS"}}
+        client.get_devices.return_value = {
+            dep_device.serial_number: {
+                "profile_uuid": str(enrollment.uuid).upper().replace("-", ""),
+                "profile_status": "assigned",
+                "profile_assign_time": "2026-09-24T10:45:02Z",
+            }
+        }
+        from_dep_virtual_server.return_value = client
+
+        assign_dep_device_profile(dep_device, enrollment)
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.enrollment, enrollment)
+        self.assertEqual(dep_device.mdm_migration_deadline, datetime(2026, 9, 24, 22, 0, 0))
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_refresh_dep_device_keeps_the_migration_deadline(self, from_dep_virtual_server):
+        dep_device = self.force_dep_device_with_migration_deadline(force_dep_virtual_server())
+        client = Mock()
+        client.get_devices.return_value = {
+            dep_device.serial_number: {"profile_status": "empty",
+                                       "serial_number": dep_device.serial_number}
+        }
+        from_dep_virtual_server.return_value = client
+
+        refresh_dep_device(dep_device)
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.mdm_migration_deadline, datetime(2026, 9, 24, 22, 0, 0))
+
+    @patch("zentral.contrib.mdm.dep.DEPClient.from_dep_virtual_server")
+    def test_refresh_dep_device_updates_the_migration_deadline(self, from_dep_virtual_server):
+        dep_device = self.force_dep_device_with_migration_deadline(force_dep_virtual_server())
+        client = Mock()
+        client.get_devices.return_value = {
+            dep_device.serial_number: {"mdm_migration_deadline": "2026-09-24T23:00:00Z",
+                                       "profile_status": "empty",
+                                       "serial_number": dep_device.serial_number}
+        }
+        from_dep_virtual_server.return_value = client
+
+        refresh_dep_device(dep_device)
+        dep_device.refresh_from_db()
+        self.assertEqual(dep_device.mdm_migration_deadline, datetime(2026, 9, 24, 23, 0, 0))
 
     # events
 

@@ -145,11 +145,10 @@ def serialize_dep_profile(dep_enrollment):
     return payload
 
 
-def dep_device_update_dict(device, known_enrollments=None):
+def dep_device_update_dict(device, known_enrollments=None, device_details=False):
     if known_enrollments is None:
         known_enrollments = {}
     update_d = {"enrollment": None,
-                "mdm_migration_deadline": None,
                 "profile_uuid": None,
                 "profile_assign_time": None,
                 "profile_push_time": None,
@@ -174,6 +173,13 @@ def dep_device_update_dict(device, known_enrollments=None):
         update_d[attr] = [str(val) for val in device.get(attr) or []]
 
     update_d["is_replacement_device"] = bool(device.get("is_replacement_device"))
+
+    # The device lists report the migration deadline, and leave it out once the device changes MDM
+    # server, which is the only thing that clears it: Apple keeps reporting a deadline removed in
+    # Apple Business Manager. The device details endpoint leaves it out even when there is one, so
+    # there an absent key must leave it alone.
+    if not device_details:
+        update_d["mdm_migration_deadline"] = None
 
     # Apple reports this one only with a deleted operation, so an absent key must leave it alone
     # rather than clear it. Left out of the update dict, it is left out of the update statement.
@@ -389,7 +395,8 @@ def apply_dep_device_updates(dep_virtual_server, updated_devices, known_enrollme
     for dep_device in (DEPDevice.objects.select_related("virtual_server", "enrollment")
                                         .filter(virtual_server=dep_virtual_server,
                                                 serial_number__in=list(updated_devices))):
-        update_d = dep_device_update_dict(updated_devices[dep_device.serial_number], known_enrollments)
+        update_d = dep_device_update_dict(updated_devices[dep_device.serial_number], known_enrollments,
+                                          device_details=True)
         prev_values[dep_device.pk] = dep_device.serialize_for_event()
         update_fields.update(update_d)
         for attr, val in update_d.items():
@@ -471,7 +478,7 @@ def assign_dep_device_profile(dep_device, dep_profile):
     if result == PROFILE_ASSIGNMENT_SUCCESS:
         # fetch a fresh device record and apply the updates
         updated_device = dep_client.get_devices([serial_number])[serial_number]
-        for attr, val in dep_device_update_dict(updated_device).items():
+        for attr, val in dep_device_update_dict(updated_device, device_details=True).items():
             setattr(dep_device, attr, val)
         dep_device.save()
     elif result == PROFILE_ASSIGNMENT_THROTTLED:
@@ -557,7 +564,7 @@ def refresh_dep_device(dep_device):
         dep_device.save()
         raise DEPClientError("Could not find the device.")
     else:
-        for attr, val in dep_device_update_dict(devices[dep_device.serial_number]).items():
+        for attr, val in dep_device_update_dict(devices[dep_device.serial_number], device_details=True).items():
             setattr(dep_device, attr, val)
         dep_device.save()
 
