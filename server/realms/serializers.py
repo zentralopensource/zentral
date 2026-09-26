@@ -7,18 +7,18 @@ from .backends.saml.serializers import SAMLConfigSerializer
 
 class RealmSerializer(serializers.ModelSerializer):
     ldap_config = LDAPConfigSerializer(
-        source="get_ldap_config",
+        source="get_ldap_kwargs",
         required=False,
     )
     openidc_config = OpenIDCConfigSerializer(
-        source="get_openidc_config",
+        source="get_openidc_kwargs",
         required=False,
     )
     saml_config = SAMLConfigSerializer(
-        source="get_saml_config",
+        source="get_saml_kwargs",
         required=False,
     )
 
     class Meta:
         model = Realm
-        exclude = ("config",)
+        exclude = ("backend_kwargs",)

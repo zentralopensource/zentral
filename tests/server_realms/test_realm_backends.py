@@ -1,15 +1,16 @@
 import uuid
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from ldap import LDAPError
 from realms.models import Realm, RealmAuthenticationSession
 
 from zentral.conf import settings
 
-from .utils import SAML2_IDP_METADATA_TEST_STRING
+from .utils import SAML2_IDP_METADATA_TEST_STRING, force_realm
 
 
 class RealmBackendsTestCase(TestCase):
@@ -31,22 +32,51 @@ class RealmBackendsTestCase(TestCase):
             backend="openidc",
             username_claim="username",
             email_claim="email",
-            config={"discovery_url": "https://issuer.example.com/.well-knowm/openid-configuration",
-                    "client_id": str(uuid.uuid4()),
-                    "extra_scopes": []},
+            backend_kwargs={"discovery_url": "https://issuer.example.com/.well-knowm/openid-configuration",
+                            "client_id": str(uuid.uuid4()),
+                            "extra_scopes": []},
             enabled_for_login=True
         )
         cls.saml_realm = Realm.objects.create(
             name=get_random_string(12),
             backend="saml",
             username_claim="username",
-            config={"idp_metadata": SAML2_IDP_METADATA_TEST_STRING},
+            backend_kwargs={"idp_metadata": SAML2_IDP_METADATA_TEST_STRING},
             enabled_for_login=True
         )
 
     def test_ldap_no_login(self):
         response = self.client.post(reverse("realms_public:login", args=(self.ldap_realm_no_login.pk,)))
         self.assertEqual(response.status_code, 404)
+
+    @patch("realms.backends.ldap.get_ldap_connection")
+    def test_ldap_authenticate(self, get_ldap_connection):
+        conn = Mock()
+        get_ldap_connection.return_value = conn
+        backend = force_realm().backend_instance
+        self.assertTrue(backend.authenticate("jane", "fomo"))
+        get_ldap_connection.assert_called_once_with("ldap.example.com")
+        conn.simple_bind_s.assert_called_once_with("uid=jane,ou=Users,o=yolo,dc=example,dc=com", "fomo")
+
+    @patch("realms.backends.ldap.get_ldap_connection")
+    def test_ldap_authenticate_error(self, get_ldap_connection):
+        conn = Mock()
+        conn.simple_bind_s.side_effect = LDAPError({"desc": "Yolo"})
+        get_ldap_connection.return_value = conn
+        backend = force_realm().backend_instance
+        self.assertFalse(backend.authenticate("jane", "fomo"))
+
+    @patch("realms.backends.ldap.get_ldap_connection")
+    def test_ldap_get_user_info(self, get_ldap_connection):
+        conn = Mock()
+        conn.search_s.return_value = [
+            ("uid=jane,ou=Users,o=yolo,dc=example,dc=com", {"uid": [b"jane"]})
+        ]
+        get_ldap_connection.return_value = conn
+        backend = force_realm().backend_instance
+        self.assertEqual(backend.get_user_info("jane"), {"uid": ["jane"]})
+        # the decrypted bind password is used
+        conn.simple_bind_s.assert_called_once_with("uid=zentral,ou=Users,o=yolo,dc=example,dc=com", "yolo")
 
     def test_ldap_login(self):
         next_url = "/{}".format(get_random_string(12))
@@ -79,14 +109,14 @@ class RealmBackendsTestCase(TestCase):
         self.assertEqual(url.netloc, auth_url.netloc)
         self.assertEqual(url.path, auth_url.path)
         query = parse_qs(url.query)
-        self.assertEqual(query["client_id"], [self.openidc_realm.config["client_id"]])
+        self.assertEqual(query["client_id"], [self.openidc_realm.backend_kwargs["client_id"]])
         self.assertEqual(
             query["redirect_uri"],
             ["https://{}{}".format(settings["api"]["fqdn"],
                                    reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)))]
         )
         self.assertEqual(query["state"], [str(ras.pk)])
-        get_openid_configuration.assert_called_once_with(self.openidc_realm.config["discovery_url"])
+        get_openid_configuration.assert_called_once_with(self.openidc_realm.backend_kwargs["discovery_url"])
 
     @patch("realms.backends.openidc.lib.get_openid_configuration")
     @patch("realms.backends.openidc.lib.requests.post")
@@ -100,7 +130,7 @@ class RealmBackendsTestCase(TestCase):
         }
         verify_jws.return_value = {
             "iss": "https://issuer.example.com",
-            "aud": self.openidc_realm.config["client_id"],
+            "aud": self.openidc_realm.backend_kwargs["client_id"],
             "sub": username,
         }
         token_request.return_value.json.return_value = {
@@ -131,6 +161,17 @@ class RealmBackendsTestCase(TestCase):
         self.assertEqual(response.context["user"].username, username)
         self.assertEqual(response.context["user"].email, f"{username}@example.com")
         self.assertTemplateUsed(response, "base/index.html")
+
+    def test_saml_missing_idp_metadata(self):
+        realm = Realm.objects.create(
+            name=get_random_string(12),
+            backend="saml",
+            username_claim="username",
+        )
+        backend = realm.backend_instance
+        with self.assertRaises(KeyError):
+            backend.get_saml2_config()
+        self.assertIsNotNone(backend.get_saml2_config(missing_idp_metadata_ok=True))
 
     def test_saml_login(self):
         next_url = "/{}".format(get_random_string(12))

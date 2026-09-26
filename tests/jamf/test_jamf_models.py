@@ -31,6 +31,7 @@ class JamfModelsTestCase(TestCase):
         jamf_instance.rewrap_secrets()
         self.assertEqual(jamf_instance.get_password(), password)
         # upgrade to fernet secret engine
+        self.addCleanup(secret_engines.load_config, {})
         secret_engines.load_config({
             "fernet": {"backend": "zentral.core.secret_engines.backends.fernet",
                        "passwords": ["undeuxtrois"]}

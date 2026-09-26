@@ -20,7 +20,7 @@ class SamlPublicViewsTestCase(TestCase):
             name=get_random_string(12),
             backend="saml",
             username_claim="username",
-            config={"idp_metadata": SAML2_IDP_METADATA_TEST_STRING},
+            backend_kwargs={"idp_metadata": SAML2_IDP_METADATA_TEST_STRING},
             enabled_for_login=True,
             user_portal=True,
         )

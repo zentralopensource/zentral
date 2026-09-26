@@ -1,10 +1,16 @@
 from django.test import TestCase
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
+from zentral.core.secret_engines import secret_engines
 from .utils import force_realm, force_realm_group, force_realm_user
 
 
 class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
     maxDiff = None
+
+    def setUp(self):
+        # reset the secret engines to the default noop engine,
+        # to be able to assert the tokens stored at rest
+        secret_engines.load_config({})
 
     def test_serialize_for_event_is_json_native(self):
         realm = force_realm()
@@ -30,15 +36,16 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
         self.assertEqual(
             realm.serialize_for_event(),
             {'backend': 'ldap',
-             'config': {
+             'backend_kwargs': {
                  'bind_dn': 'uid=zentral,ou=Users,o=yolo,dc=example,dc=com',
-                 'bind_password': 'yolo',
+                 'bind_password_hash': '311fe3feed16b9cd8df0f8b1517be5cb86048707df4889ba8dc37d4d68866d02',
                  'host': 'ldap.example.com',
                  'users_base_dn': 'ou=Users,o=yolo,dc=example,dc=com'
              },
              'created_at': realm.created_at.isoformat(),
              'custom_attr_1_claim': '',
              'custom_attr_2_claim': '',
+             'description': '',
              'email_claim': 'email',
              'enabled_for_login': False,
              'first_name_claim': '',
@@ -51,6 +58,36 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
              'updated_at': realm.updated_at.isoformat(),
              'username_claim': 'username'}
         )
+
+    def test_realm_ldap_secrets_encrypted_at_rest(self):
+        realm = force_realm()
+        self.assertEqual(realm.backend_kwargs["bind_password"], "noop$eW9sbw==")
+        self.assertEqual(
+            realm.get_backend_kwargs(),
+            {"host": "ldap.example.com",
+             "bind_dn": "uid=zentral,ou=Users,o=yolo,dc=example,dc=com",
+             "bind_password": "yolo",
+             "users_base_dn": "ou=Users,o=yolo,dc=example,dc=com"}
+        )
+
+    def test_realm_openidc_secrets_encrypted_at_rest(self):
+        realm = force_realm(backend="openidc")
+        self.assertEqual(realm.backend_kwargs["client_secret"], "noop$Zm9tbw==")
+        self.assertEqual(realm.get_backend_kwargs()["client_secret"], "fomo")
+
+    def test_realm_saml_backend_kwargs_not_encrypted(self):
+        realm = force_realm(backend="saml")
+        self.assertEqual(
+            realm.backend_kwargs,
+            {"default_relay_state": "29eb0205-3572-4901-b773-fc82bef847ef",
+             "idp_metadata": "<md></md>"}
+        )
+
+    def test_realm_rewrap_secrets(self):
+        realm = force_realm()
+        realm.rewrap_secrets()
+        self.assertEqual(realm.backend_kwargs["bind_password"], "noop$eW9sbw==")
+        self.assertEqual(realm.get_backend_kwargs()["bind_password"], "yolo")
 
     def test_realm_group_serialize_for_event(self):
         parent_realm_group = force_realm_group()
