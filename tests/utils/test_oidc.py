@@ -16,7 +16,7 @@ from django.utils.crypto import get_random_string
 from zentral.utils.oidc import get_openid_configuration, verify_jws
 
 
-# see https://github.com/jpadilla/pyjwt/blob/2.14.0/jwt/jwks_client.py#L162
+# see https://github.com/jpadilla/pyjwt/blob/2.15.0/jwt/jwks_client.py#L167
 class FakeHTTPResponse:
     def __init__(self, bytes):
         self.bytes = bytes
@@ -300,3 +300,24 @@ class OIDCUtilsTestCase(TestCase):
                 openid_configuration=self._make_oid_config(issuer, ["HS256"]),
                 exception_class=ValueError,
             )
+
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_deeply_nested_payload(self, build_opener):
+        issuer = "https://issuer.zentral.com"
+        audience = "my-client"
+
+        token = b".".join([
+            self._b64encode({"alg": "RS256", "typ": "JWT", "kid": "test-kid"}),
+            base64.urlsafe_b64encode(b"[" * 1_000_000 + b"]" * 1_000_000).rstrip(b"="),
+            base64.urlsafe_b64encode(b"forged-sig").rstrip(b"="),
+        ]).decode("utf-8")
+
+        with self.assertRaisesRegex(ValueError, r"Invalid token"):
+            verify_jws(
+                token=token,
+                issuer=issuer,
+                audience=audience,
+                openid_configuration=self._make_oid_config(issuer),
+                exception_class=ValueError,
+            )
+        build_opener.assert_not_called()
