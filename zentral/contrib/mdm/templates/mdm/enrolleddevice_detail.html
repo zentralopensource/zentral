@@ -75,6 +75,67 @@
             {% endif %}
           </td>
         </tr>
+        {% if software_update_status %}
+        {% with software_update_status as sus %}
+        <tr>
+          <th>Software update</th>
+          <td>
+            <ul class="list-unstyled mb-0">
+              {% if sus.pending_version is not None %}
+              <li>
+                {% if sus.pending_version.os_version %}
+                Pending: {{ sus.pending_version.os_version }}
+                {% if sus.pending_version.build_version %}({{ sus.pending_version.build_version }}){% endif %}
+                {% if sus.pending_version.deadline %}
+                &ndash; enforced at {{ sus.pending_version.deadline }}
+                {% endif %}
+                {% else %}
+                Pending: none
+                {% endif %}
+              </li>
+              {% endif %}
+              {% if sus.install_state %}
+              <li>
+                State:
+                {% if sus.install_state == "failed" %}
+                <span class="text-danger">{{ sus.install_state }}</span>
+                {% else %}
+                {{ sus.install_state }}
+                {% endif %}
+              </li>
+              {% endif %}
+              {% if sus.install_reason.reason %}
+              <li>
+                Reason: {{ sus.install_reason.reason|join:", " }}
+                {% if sus.install_reason.declaration_id %}<code>{{ sus.install_reason.declaration_id }}</code>{% endif %}
+              </li>
+              {% endif %}
+              {% if sus.failure_reason.count %}
+              <li class="text-danger">
+                {{ sus.failure_reason.count }} failure{{ sus.failure_reason.count|pluralize }}
+                {% if sus.failure_reason.reason %}: {{ sus.failure_reason.reason }}{% endif %}
+                {% if sus.failure_reason.timestamp %}(last {{ sus.failure_reason.timestamp }}){% endif %}
+              </li>
+              {% endif %}
+              {% if sus.beta_enrollment %}
+              <li>Beta program: {{ sus.beta_enrollment }}</li>
+              {% endif %}
+              {% if sus.enforcement_declaration and sus.enforcement_declaration.valid != "valid" %}
+              <li class="text-danger">
+                Enforcement declaration {{ sus.enforcement_declaration.valid }}
+                {% for reason in sus.enforcement_declaration.reasons %}
+                <br>{{ reason.code }}{% if reason.description %}: {{ reason.description }}{% endif %}
+                {% endfor %}
+              </li>
+              {% endif %}
+            </ul>
+            {% if object.status_items_updated_at %}
+            <small class="text-muted">Reported {{ object.status_items_updated_at|date:'SHORT_DATETIME_FORMAT' }}</small>
+            {% endif %}
+          </td>
+        </tr>
+        {% endwith %}
+        {% endif %}
         {% with object.users.count as users_count %}
           <tr>
             <th>MDM user{{ users_count|pluralize }}</th>
