@@ -1,11 +1,14 @@
 import logging
 
 from django.core.files.storage import storages
+from django.db import transaction
 from django.utils import timezone
 
 from ..events import post_turbo_result_events
-from ..models import JobUpload, UploadErrorReason, UploadStatus, resolve_machine_schedules
+from ..models import (JobUpload, UploadErrorReason, UploadMode, UploadStatus, UploadVerification,
+                      resolve_machine_schedules)
 from ..results import ParsedResult, ResultsBatch
+from ..tasks import abort_multipart_upload_task, complete_multipart_upload_task
 from ..uploads import verify_upload
 from ..wire import WireResultsSerializer
 from .base import BaseEnrolledMachinePostView, WireError
@@ -163,17 +166,43 @@ class ResultsView(BaseEnrolledMachinePostView):
                     row.status = UploadStatus.UPLOADED
                     row.truncated = bool(reported.get("truncated"))
             row.completed_at = timezone.now()
-            if row.status == UploadStatus.UPLOADED:
+            # the status axis, which is this path's to write
+            written = ["status", "error_reason", "truncated", "completed_at", "updated_at"]
+            if row.mode == UploadMode.MULTIPART:
+                # a multipart object is verified by its completion, which validates the whole-object
+                # checksum against the algorithm declared at create — there is nothing left to HEAD.
+                # The verdict may already be here, or the completion may still be owed: the agent's
+                # call can have been lost, and a result is often the first thing to arrive.
+                self._settle_multipart(row, uploads_ref)
+            elif row.status == UploadStatus.UPLOADED:
                 verification = verify_upload(row, reported, storage)
                 if verification is not None:
                     row.verification = verification
                     row.verified_at = timezone.now()
+                    written += ["verification", "verified_at"]
                     # the verdict, not a boolean: `missing` and `mismatch` both answer "no" and
                     # mean different things, and a consumer that has to tell them apart cannot go
                     # to the database from an event
                     uploads_ref[-1] = {**reported, "verification": verification}
-            row.save()
+            # named fields, so this never writes back a verification the completion task committed
+            # while this request was in flight — the multipart path above decides nothing itself
+            row.save(update_fields=written)
         return uploads_ref
+
+    def _settle_multipart(self, row, uploads_ref):
+        # on_commit, both of them: a task that read the row before this request committed would find
+        # it as it was, and the abort would drop the parts of an upload whose failure is not recorded
+        # yet
+        if row.status == UploadStatus.FAILED:
+            transaction.on_commit(lambda: abort_multipart_upload_task.apply_async((str(row.pk),)))
+            return
+        if row.verification == UploadVerification.PENDING:
+            transaction.on_commit(
+                lambda: complete_multipart_upload_task.apply_async((str(row.pk),)))
+            return
+        # the verdict, like the single-PUT path: assembly_failed is its own answer, and a consumer
+        # that has to tell it from a mismatch cannot go to the database from an event
+        uploads_ref[-1] = {**uploads_ref[-1], "verification": row.verification}
 
     @staticmethod
     def _wire_ref(job, kind, version, run, ran_at, outcome, uploads_ref=None):
