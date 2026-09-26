@@ -139,6 +139,17 @@ The rules of a Santa target use the same two cells, with the configuration of th
 The page of a Santa configuration has four tabs now: Overview, Rules, Scoped client modes and Scoped path regexes. The Overview gives the attributes of the configuration, its voting groups and its enrollments. The three other tabs are paginated, and each one has a search: the rule search for the rules, the mode for the scoped client modes, and the policy and a text for the scoped path regexes. The title of each of these tabs gives its number of items. A link to a scoped client mode or to a scoped path regex opens its tab with a search that finds it, as the link to a rule does. Before, the scoped client modes and the scoped path regexes were all on the page of the configuration, and the rules were on a page of their own.
 
 
+#### Turbo
+
+New **commands**, the third kind of job: a command collects something from a machine instead of producing a verdict. Two kinds are available. `sysdiagnose` collects a `sysdiagnose` archive and takes no options. `file_export` collects the files that match a list of path patterns, plus a manifest of what it collected, and takes `patterns` and an uncompressed `max_size`.
+
+A command is created with the `/api/turbo/commands/` endpoint, and *Turbo > Commands* lists them. The kind cannot be changed after the command is created. A change to the options bumps the version of the job, and the agent runs the command again.
+
+A command runs one time only: the server refuses to attach one to a recurring job.
+
+`Turbo::Action::"createOneTimeJob"` takes the configuration as its resource, and `Turbo::Action::"updateOneTimeJob"` and `Turbo::Action::"deleteOneTimeJob"` take the schedule, which is a member of its configuration. All three carry the job in `context.job`, so one policy can name them all, and an update or delete policy can read `resource.job` as well. A policy can therefore allow one kind and refuse another, or grant one configuration and not another — neither of which the `turbo.add_onetimejob` permission can express. A policy needs no guard and no companion `forbid`: `when { context.job.kind == "sysdiagnose" }` grants that kind and nothing else, and the role still reaches the scheduling page, because Zentral only hides an action when no kind could be permitted. Every kind is covered, scripts and mSCP checks included, and the REST API is covered as well as the console. The upload of the collected files comes in a later release.
+
+
 ### Backward incompatibilities
 
 
@@ -263,6 +274,14 @@ The web console applies the same rules. Its form carries every attribute, so it 
 A task belongs to the user or the service account that launched it, and `/api/task_result/<task_id>/` and `/api/task_result/<task_id>/download/` answer only for that principal. A superuser reads all of them, as before. Until now the two endpoints only asked for a valid session or API token: any authenticated principal that had a task ID could read the state of that task and download its file, and an export carries everything the principal that launched it was allowed to see. The state endpoint gives the `UNKNOWN` status for the task of a different principal, like it does for a task that does not exist, and the download endpoint gives a `404`. The task list and the task pages of the web console already applied this rule.
 
 A task that a device launched, and a task that Zentral launched before version 2025.11, has no user, so only a superuser can read those. The exports are temporary: launch the export again to get a file that you can download.
+
+#### 🧨 Turbo one-time job permissions
+
+The `turbo.add_onetimejob`, `turbo.change_onetimejob` and `turbo.delete_onetimejob` permissions no longer authorize anything. `Turbo::Action::"createOneTimeJob"`, `Turbo::Action::"updateOneTimeJob"` and `Turbo::Action::"deleteOneTimeJob"` do. The first takes the configuration as its resource, the other two take the schedule itself, and all three carry the job in `context.job` — none of which the permissions could express.
+
+A policy that came from the automatic conversion of a role is unaffected: it names the actions and leaves the resource open. A policy written by hand that granted the permissions must name the actions instead.
+
+The two scheduling forms also need a view permission now: `turbo.view_onetimejob` under a configuration, and `turbo.view_enrolledmachine` on a machine page. A scheduling action needs the job to decide, and a form opens before the operator picks one, so the view permission opens the form and the submit applies the policy.
 
 #### 🧨 PBAC User action groups
 
