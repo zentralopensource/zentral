@@ -1,13 +1,21 @@
+import os.path
+from functools import cached_property
+
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.files.storage import storages
 from django.db.models import F
-from django.http import Http404
+from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, View
 from zentral.contrib.inventory.models import MetaMachine
+from zentral.utils.storage import file_storage_has_signed_urls, generate_presigned_get
 from zentral.utils.views import CreateViewWithAudit
 from ..forms import EnrolledMachineSearchForm, MachineOneTimeJobForm
-from ..models import EnrolledMachine, Job, OneTimeJob, OneTimeJobMachine, RecurringJobMachine
-from ..pbac import can_create_one_time_job, check_create_one_time_job
+from ..models import (EnrolledMachine, Job, JobUpload, OneTimeJob, OneTimeJobMachine,
+                      RecurringJobMachine, UploadStatus, resolve_upload_schedules)
+from ..pbac import (authorize_job_upload_rows, can_create_one_time_job, check_create_one_time_job,
+                    check_download_job_upload)
 from .base import SearchFormListView
 
 
@@ -70,7 +78,57 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         ctx["recurring_job_machines"] = recurring
         ctx["kind_choices"] = Job.Kind.choices
         ctx["selected_kind"] = kind
+        # the artifacts this machine has been asked for, newest first. Filtered by policy rather than
+        # merely unlinked: an upload the user may not see is absent from the page.
+        uploads = authorize_job_upload_rows(
+            self.request.user,
+            JobUpload.objects.filter(serial_number=serial_number).order_by("-created_at"))
+        if kind:
+            # after the decision, on the job it already resolved: filtering first would resolve every
+            # schedule a second time
+            uploads = [upload for upload in uploads if upload.job.kind == kind]
+        ctx["job_uploads"] = uploads
         return ctx
+
+
+class DownloadJobUploadView(PermissionRequiredMixin, View):
+    """Fetch a collected artifact.
+
+    view_enrolledmachine gates the page and this gates the file, which are two different questions:
+    the first is whether the machine page exists for you at all, the second is whether the data
+    inside a sysdiagnose is yours to read. The typed action decides the second.
+    """
+    permission_required = "turbo.view_enrolledmachine"
+
+    @cached_property
+    def _file_storage(self):
+        # the storage the plane WRITES to: the mint presigns against it, the hosted PUT saves to it,
+        # and the verification reads it. select_dist_storage() is for the MDM artifacts, and a
+        # deployment that configures a separate dist storage would send every download to a bucket
+        # the artifact was never written to.
+        return storages["default"]
+
+    def get(self, request, **kwargs):
+        upload = get_object_or_404(JobUpload, pk=kwargs["pk"])
+        resolved = resolve_upload_schedules([upload]).get(upload.schedule_pk)
+        if resolved is None:
+            # the schedule is gone, so there is no configuration to name and nothing to decide
+            # against. Refusing beats guessing.
+            raise Http404
+        configuration, job = resolved
+        check_download_job_upload(request, upload, configuration, job)
+        if upload.status != UploadStatus.UPLOADED:
+            # nothing was ever written at that key
+            raise Http404
+        filename = os.path.basename(upload.key)
+        if file_storage_has_signed_urls(self._file_storage):
+            return HttpResponseRedirect(
+                generate_presigned_get(upload.key, filename, self._file_storage))
+        if not self._file_storage.exists(upload.key):
+            # expected: the expiry rule removes objects out from under rows that outlive them
+            raise Http404
+        return FileResponse(self._file_storage.open(upload.key), filename=filename,
+                            as_attachment=True)
 
 
 class ScheduleMachineOneTimeJobView(PermissionRequiredMixin, CreateViewWithAudit):
