@@ -8,6 +8,7 @@ from zentral.utils.storage import (abort_multipart_upload, complete_multipart_up
                                    list_multipart_parts, stat_object)
 
 from .models import JobUpload, UploadMode, UploadStatus, UploadVerification
+from .uploads import part_lengths
 
 logger = logging.getLogger("zentral.contrib.turbo.tasks")
 
@@ -58,6 +59,16 @@ def complete_multipart_upload_task(self, upload_pk):
         return _record(upload, {**result, "status": "no_parts"}, UploadVerification.ASSEMBLY_FAILED)
 
     result["parts"] = len(parts)
+    if upload.part_size:
+        # the geometry was fixed on the row when the multipart upload was created, so the storage's
+        # part list can be checked against it here. A gap would only come back from the completion as
+        # the storage's own wording (InvalidRequest, a size mismatch); by number it says what is gone.
+        expected = len(part_lengths(upload.size, upload.part_size))
+        missing = sorted(set(range(1, expected + 1)) - {part["PartNumber"] for part in parts})
+        if missing:
+            logger.error("Turbo upload %s is missing parts %s", upload.pk, missing)
+            return _record(upload, {**result, "status": "missing_parts", "missing": missing},
+                           UploadVerification.ASSEMBLY_FAILED)
     try:
         complete_multipart_upload(upload.key, upload.upload_id, parts, upload.crc64nvme, upload.size,
                                   storage=storage)

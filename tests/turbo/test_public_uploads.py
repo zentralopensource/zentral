@@ -1325,6 +1325,48 @@ class TurboMultipartMintTestCase(TurboPublicTestCase):
     @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
     @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_of_an_unknown_run_is_refused(self, post_event, create, part):
+        # the agent resumed under a new run_id: the lookup finds no row. Creating one would start a
+        # new multipart upload and sign only the missing parts of it — an object that can never
+        # assemble. Refused before anything is written, so no empty pending row is left behind.
+        create.return_value = "mpu-1"
+        part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (
+            f"https://example.com/{n}", {"Content-Length": str(size)})
+        token, one_time_job = self._scheduled()
+        size = 4 * MULTIPART_PART_SIZE
+        self._mint(token, self._body(one_time_job, size, run_id=uuid.uuid4()))
+        self.assertEqual(create.call_count, 1)
+        response = self._mint(token, self._body(one_time_job, size, run_id=uuid.uuid4(),
+                                                upload_id="mpu-1", missing_parts=[2]))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "unknown_upload_id"})
+        self.assertEqual(JobUpload.objects.count(), 1)
+        self.assertEqual(create.call_count, 1)
+
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_resume_of_a_run_without_a_row_is_refused(self, post_event, create):
+        token, one_time_job = self._scheduled()
+        response = self._mint(token, self._body(one_time_job, 3 * MULTIPART_PART_SIZE,
+                                                upload_id="mpu-1", missing_parts=[2]))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "unknown_upload_id"})
+        self.assertEqual(JobUpload.objects.count(), 0)
+        create.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_an_empty_upload_id_is_invalid(self, post_event):
+        # it would match every row whose multipart upload has not started
+        token, one_time_job = self._scheduled()
+        response = self._mint(token, self._body(one_time_job, MULTIPART_THRESHOLD,
+                                                upload_id="", missing_parts=[2]))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "invalid_upload_id"})
+        self.assertEqual(JobUpload.objects.count(), 0)
+
+    @patch("zentral.contrib.turbo.uploads.generate_presigned_part")
+    @patch("zentral.contrib.turbo.uploads.create_multipart_upload")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_a_resume_cannot_ask_for_a_part_that_does_not_exist(self, post_event, create, part):
         create.return_value = "mpu-1"
         part.side_effect = lambda key, upload_id, n, size, expiry, storage=None: (

@@ -194,6 +194,22 @@ class TurboCompleteMultipartTaskTestCase(TurboPublicTestCase):
         self.assertEqual(upload.verification, UploadVerification.ASSEMBLY_FAILED)
         complete.assert_not_called()
 
+    @patch("zentral.contrib.turbo.tasks.complete_multipart_upload")
+    @patch("zentral.contrib.turbo.tasks.list_multipart_parts")
+    def test_missing_parts_are_reported_by_number(self, list_parts, complete):
+        # the row's geometry says two parts, the storage holds only the second: the gap is reported
+        # by number rather than as the storage's InvalidRequest, and the completion is not attempted
+        list_parts.return_value = PARTS[1:]
+        upload = self._upload()
+        with self.assertLogs("zentral.contrib.turbo.tasks", level="ERROR"):
+            result = complete_multipart_upload_task(str(upload.pk))
+        self.assertEqual(result["status"], "missing_parts")
+        self.assertEqual(result["missing"], [1])
+        self.assertEqual(result["parts"], 1)
+        upload.refresh_from_db()
+        self.assertEqual(upload.verification, UploadVerification.ASSEMBLY_FAILED)
+        complete.assert_not_called()
+
     @patch("zentral.contrib.turbo.tasks.stat_object")
     @patch("zentral.contrib.turbo.tasks.complete_multipart_upload")
     @patch("zentral.contrib.turbo.tasks.list_multipart_parts")

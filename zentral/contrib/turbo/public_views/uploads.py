@@ -3,21 +3,38 @@ import logging
 import uuid
 from datetime import timedelta
 
+from botocore.exceptions import BotoCoreError, ClientError
+from django.core.exceptions import RequestDataTooBig
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.db import transaction
-from botocore.exceptions import BotoCoreError, ClientError
-from django.core.exceptions import RequestDataTooBig
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import View
 
-from ..models import (JobUpload, ScheduleMode, UploadMode, UploadStatus, UploadVerification,
-                      get_machine_schedule, one_time_gate_closed)
+from ..models import (
+    JobUpload,
+    ScheduleMode,
+    UploadMode,
+    UploadStatus,
+    UploadVerification,
+    get_machine_schedule,
+    one_time_gate_closed,
+)
 from ..tasks import complete_multipart_upload_task
-from ..uploads import (MAX_PENDING_UPLOADS, MAX_UPLOAD_ATTEMPTS, UPLOAD_URL_EXPIRY,
-                       build_upload_destination, build_upload_key, parse_digests, parse_sha256,
-                       start_multipart_upload, unsign_hosted_upload, upload_max_size, upload_mode)
+from ..uploads import (
+    MAX_PENDING_UPLOADS,
+    MAX_UPLOAD_ATTEMPTS,
+    UPLOAD_URL_EXPIRY,
+    build_upload_destination,
+    build_upload_key,
+    parse_digests,
+    parse_sha256,
+    start_multipart_upload,
+    unsign_hosted_upload,
+    upload_max_size,
+    upload_mode,
+)
 from .base import BaseEnrolledMachinePostView, WireError
 
 logger = logging.getLogger("zentral.contrib.turbo.public_views.uploads")
@@ -80,7 +97,8 @@ class UploadMintView(BaseEnrolledMachinePostView):
         # the resume block, both halves or neither: an upload_id names the multipart upload already in
         # flight, and missing_parts says which parts of it still need a URL
         upload_id = data.get("upload_id")
-        if upload_id is not None and not isinstance(upload_id, str):
+        if upload_id is not None and (not isinstance(upload_id, str) or not upload_id):
+            # empty is not an id: it would match every row whose multipart upload has not started
             raise WireError("invalid_upload_id")
         missing_parts = _part_numbers(data.get("missing_parts"))
         if missing_parts is not None and upload_id is None:
@@ -116,15 +134,26 @@ class UploadMintView(BaseEnrolledMachinePostView):
             # with and the assembled object would be accepted unchecked
             raise WireError("missing_digest")
 
-        upload, _ = JobUpload.objects.get_or_create(
-            schedule_pk=schedule.pk, serial_number=self.serial_number,
-            run_id=run_id, artifact=artifact_name,
-            defaults={"schedule_mode": schedule.wire_mode, "size": size, "sha256": sha256,
-                      "crc64nvme": digests.get("crc64nvme", ""),
-                      "crc32c": digests.get("crc32c", ""),
-                      "mode": mode,
-                      "key": ""},
-        )
+        lookup = {"schedule_pk": schedule.pk, "serial_number": self.serial_number,
+                  "run_id": run_id, "artifact": artifact_name}
+        if upload_id is not None:
+            # a resume continues an upload in flight, so the row must exist and already hold that id.
+            # Never created here: a new row has no parts in flight, and signing only the missing parts
+            # of the multipart upload it would start hands out a subset of an object that can never
+            # assemble. Checked before anything is written, so the refusal leaves no empty pending row
+            # to count against MAX_PENDING_UPLOADS.
+            upload = JobUpload.objects.filter(**lookup, upload_id=upload_id).first()
+            if upload is None:
+                raise WireError("unknown_upload_id")
+        else:
+            upload, _ = JobUpload.objects.get_or_create(
+                **lookup,
+                defaults={"schedule_mode": schedule.wire_mode, "size": size, "sha256": sha256,
+                          "crc64nvme": digests.get("crc64nvme", ""),
+                          "crc32c": digests.get("crc32c", ""),
+                          "mode": mode,
+                          "key": ""},
+            )
         if upload.status == UploadStatus.UPLOADED:
             # the artifact is already in, and for a one-time shot the partial unique index would
             # refuse a second one anyway
@@ -133,10 +162,7 @@ class UploadMintView(BaseEnrolledMachinePostView):
             raise WireError("attempts_exhausted")
 
         if upload.mode == UploadMode.MULTIPART and upload.upload_id:
-            if upload_id is not None and upload_id != upload.upload_id:
-                # the presented id is checked against the row, never believed: parts signed against a
-                # different multipart upload would assemble somewhere nothing is looking
-                raise WireError("unknown_upload_id")
+            # a presented upload_id was already matched against the row by the lookup above
             if (size, sha256) != (upload.size, upload.sha256):
                 # the parts already up are the bytes this row describes, and the geometry was fixed
                 # against that size when the multipart upload was created. A different artifact needs
