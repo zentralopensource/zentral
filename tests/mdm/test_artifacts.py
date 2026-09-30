@@ -2164,6 +2164,8 @@ class TestMDMArtifacts(TestCase):
         "diskmanagement.filevault.enabled",
         "mdm.enrollment-type",
         "mdm.is-awaiting-configuration",
+        "migration-assistant.report",
+        "migration-assistant.state",
         "passcode.is-compliant",
         "passcode.is-present",
         "security.lockdown-mode",

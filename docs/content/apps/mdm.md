@@ -974,6 +974,8 @@ Use this endpoint to list the MDM enrolled devices.
 `email` is the email of the realm user who authenticated during the MDM enrollment.
 `filevault_enabled`, `passcode_compliant` and `lockdown_mode` are booleans matched against the state the device reported through the DDM status channel (`filevault_enabled` falls back to the `SecurityInfo` query result). A device that never reported the item does not match either value.
 
+The `status_items` attribute of a device holds the scalar DDM status items it reported, keyed by Apple's item names: the `softwareupdate.*` items, the device state items (`passcode.*`, `security.lockdown-mode`, `device.power.battery-health`, `device.system.health`, `diskmanagement.filevault.enabled`, `mdm.*`), the identifier and model items, and on macOS 26.4 or later the Migration Assistant state and report (`migration-assistant.state`, `migration-assistant.report`). An item is present once the device has reported it and keeps its last value; an empty value means the device cleared it.
+
 Example:
 
 ```bash

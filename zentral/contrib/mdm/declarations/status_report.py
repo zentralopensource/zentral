@@ -30,6 +30,8 @@ SCALAR_STATUS_ITEMS = frozenset((
     "mdm.is-awaiting-configuration",
     "mdm.is-return-to-service",
     "mdm.is-shared-ipad",
+    "migration-assistant.report",
+    "migration-assistant.state",
     "passcode.is-compliant",
     "passcode.is-present",
     "security.lockdown-mode",
