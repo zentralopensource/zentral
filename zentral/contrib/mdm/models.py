@@ -983,6 +983,25 @@ class DeviceAssignment(models.Model):
 # Enrollment
 
 
+
+def iter_status_items_for_display(status_items):
+    if not isinstance(status_items, dict):
+        return
+    for name in sorted(status_items):
+        value = status_items[name]
+        if isinstance(value, bool):
+            kind = "bool"
+        elif value in ({}, []):
+            kind = "cleared"
+        elif isinstance(value, (dict, list)):
+            kind = "json"
+        elif value == "":
+            kind = "empty"
+        else:
+            kind = "text"
+        yield name, value, kind
+
+
 class EnrolledDeviceManager(models.Manager):
     def blocked(self):
         return self.filter(blocked_at__isnull=False)
@@ -1332,6 +1351,10 @@ class EnrolledDevice(models.Model):
         return self.build_version_extra or self.build_version or ""
 
     @property
+    def status_items_for_display(self):
+        return list(iter_status_items_for_display(self.status_items))
+
+    @property
     def software_update_status(self):
         # the software update status items, with template-friendly keys
         status_items = self.status_items if isinstance(self.status_items, dict) else {}
@@ -1585,6 +1608,10 @@ class EnrolledUser(models.Model):
     # timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def status_items_for_display(self):
+        return list(iter_status_items_for_display(self.status_items))
 
     def __str__(self):
         return self.long_name or self.short_name

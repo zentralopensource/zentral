@@ -524,6 +524,56 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             self.assertNotContains(response, "<h4>Device state</h4>")
             self.assertEqual(enrolled_device.device_state_status, {})
 
+    def test_enrolled_device_status_items_section_empty(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<h3>Status items (0)</h3>')
+        self.assertNotContains(response, 'id="status-items"')
+        self.assertNotContains(response, 'data-bs-target="#status-items"')
+        self.assertNotContains(response, "bi-chevron-right")
+        self.assertContains(response, "<th style=\"width:160px\">Last update</th>\n      <td>-</td>")
+        self.assertEqual(session.enrolled_device.status_items_for_display, [])
+
+    def test_enrolled_device_status_items_section(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.status_items = {
+            "softwareupdate.pending-version": {"os-version": "26.7.1", "build-version": "25G241"},
+            "softwareupdate.failure-reason": {},
+            "softwareupdate.beta-enrollment": "",
+            "softwareupdate.install-state": "downloading",
+            "diskmanagement.filevault.enabled": True,
+            "softwareupdate.install-reason": {"reason": ["declaration"]},
+        }
+        enrolled_device.status_items_updated_at = datetime(2026, 9, 30, 13, 54, 29)
+        enrolled_device.save()
+        self.assertEqual(
+            enrolled_device.status_items_for_display,
+            [("diskmanagement.filevault.enabled", True, "bool"),
+             ("softwareupdate.beta-enrollment", "", "empty"),
+             ("softwareupdate.failure-reason", {}, "cleared"),
+             ("softwareupdate.install-reason", {"reason": ["declaration"]}, "json"),
+             ("softwareupdate.install-state", "downloading", "text"),
+             ("softwareupdate.pending-version", {"os-version": "26.7.1", "build-version": "25G241"}, "json")]
+        )
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<h3>Status items (6)</h3>')
+        self.assertContains(response, 'id="status-items"')
+        self.assertContains(response, 'data-bs-target="#status-items"')
+        self.assertContains(response, "collapse-chevron collapsed")
+        self.assertContains(response,
+                            "<th style=\"width:160px\">Last update</th>\n      <td>09/30/2026 1:54 p.m.</td>")
+        self.assertContains(response, "<th>Last full report</th>\n      <td>-</td>")
+        self.assertContains(response, "<code>softwareupdate.pending-version</code>")
+        self.assertContains(response, "<em>cleared</em>")
+        self.assertContains(response, "<em>empty string</em>")
+        self.assertContains(response, "25G241")
+        self.assertContains(response, "downloading")
+
     def test_enrolled_device_software_update_status_cleared_pending_version(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
         enrolled_device = session.enrolled_device

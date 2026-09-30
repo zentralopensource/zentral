@@ -132,6 +132,30 @@ class EnrolledUserManagementViewsTestCase(TestCase, LoginCase):
             reverse("mdm:download_enrolled_device_command_result", args=(second_command.db_command.uuid,))
         )
 
+    def test_enrolled_user_status_items_section(self):
+        enrolled_user, enrolled_device = self._force_enrolled_user()
+        self.login("mdm.view_enrolleduser")
+        response = self.client.get(reverse("mdm:enrolled_user", args=(enrolled_device.pk, enrolled_user.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<h3>Status items (0)</h3>')
+        self.assertNotContains(response, 'id="status-items"')
+        self.assertNotContains(response, 'data-bs-target="#status-items"')
+        enrolled_user.status_items = {"passcode.is-compliant": False, "device.model.family": "Mac"}
+        enrolled_user.status_items_updated_at = datetime(2026, 9, 30, 14, 5, 35)
+        enrolled_user.status_items_full_report_at = datetime(2026, 9, 30, 14, 5, 35)
+        enrolled_user.save()
+        self.assertEqual(enrolled_user.status_items_for_display,
+                         [("device.model.family", "Mac", "text"), ("passcode.is-compliant", False, "bool")])
+        response = self.client.get(reverse("mdm:enrolled_user", args=(enrolled_device.pk, enrolled_user.pk)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<h3>Status items (2)</h3>')
+        self.assertContains(response, 'id="status-items"')
+        self.assertContains(response, 'data-bs-target="#status-items"')
+        self.assertContains(response, "collapse-chevron collapsed")
+        self.assertContains(response, "<th>Last full report</th>\n      <td>09/30/2026 2:05 p.m.</td>")
+        self.assertContains(response, "<code>passcode.is-compliant</code>")
+        self.assertContains(response, "no")
+
     # test enrolled user target artifacts
 
     def test_enrolled_user_target_artifact_installed(self):
