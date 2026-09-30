@@ -1,0 +1,58 @@
+{% load base_extras %}
+{% with object.status_items_for_display as status_items %}
+<h3>Status item{{ status_items|length|pluralize }} ({{ status_items|length }})</h3>
+<table class="table-object-properties mb-3">
+  <tbody>
+    <tr>
+      <th style="width:160px">Last update</th>
+      <td>{{ object.status_items_updated_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+    </tr>
+    <tr>
+      <th>Last full report</th>
+      <td>{{ object.status_items_full_report_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+    </tr>
+  </tbody>
+</table>
+{% if status_items %}
+<div class="mb-1">
+  <span class="collapse-chevron collapsed"
+        role="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#status-items"
+        aria-expanded="false"
+        aria-controls="status-items">
+    <i class="bi bi-chevron-right"></i> Item{{ status_items|length|pluralize }} list ({{ status_items|length }})
+  </span>
+</div>
+<div class="collapse" id="status-items">
+  <table class="table table-striped align-middle">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Value</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for name, value, kind in status_items %}
+      <tr>
+        <td><code>{{ name }}</code></td>
+        <td>
+          {% if kind == "bool" %}
+          {{ value|yesno }}
+          {% elif kind == "cleared" %}
+          <em>cleared</em>
+          {% elif kind == "empty" %}
+          <em>empty string</em>
+          {% elif kind == "json" %}
+          {{ value|jsonprettyprint }}
+          {% else %}
+          {{ value }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endwith %}

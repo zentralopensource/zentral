@@ -901,6 +901,8 @@
     <h3>Enrollment session{{ enrollment_session_info_count|pluralize }} ({{ enrollment_session_info_count }})</h3>
     {% include "mdm/_enrollment_session_info_list.html" %}
   {% endif %}
+{% include "mdm/_status_items.html" %}
+
 {% endblock %}
 {% block extrajs %}
   <script nonce="{{ request.csp_nonce }}">
