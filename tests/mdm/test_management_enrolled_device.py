@@ -459,9 +459,70 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Camera:")
         self.assertContains(response, '<span class="text-danger">non-genuine</span>')
         self.assertNotContains(response, "Shared iPad?")
+        self.assertNotContains(response, "<th width=\"300px\">Migration</th>")
         # the FDE row follows the status item, not the SecurityInfo result
         self.assertContains(response, "<h4>FDE</h4>")
         self.assertTrue(enrolled_device.filevault_enabled)
+
+    def test_enrolled_device_device_state_migration_completed(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.status_items = {
+            "migration-assistant.state": "completed",
+            "migration-assistant.report": {
+                "completed-data-size": 53687091200,
+                "completed-file-count": 125000,
+                "completion-time": "2025-05-15T14:30:00Z",
+                "source-user": "olduser",
+                "start-time": "2025-05-15T12:00:00Z",
+                "target-user": "newuser",
+                "total-data-size": 64424509440,
+                "total-file-count": 150000,
+                "errors": ["Photos library skipped"],
+            },
+        }
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<h4>Device state</h4>")
+        self.assertContains(response, "<th width=\"300px\">Migration</th>")
+        self.assertContains(response, "completed")
+        self.assertNotContains(response, "badge text-bg-warning")
+        self.assertContains(response, "Started: 2025-05-15T12:00:00Z")
+        self.assertContains(response, "Completed: 2025-05-15T14:30:00Z")
+        self.assertContains(response, "Source user: olduser")
+        self.assertContains(response, "Target user: newuser")
+        self.assertContains(response, "Files: 125000 / 150000")
+        self.assertContains(response, "Data: 50.0\u00a0GB / 60.0\u00a0GB")
+        self.assertContains(response, '<span class="text-danger">Photos library skipped</span>')
+
+    def test_enrolled_device_device_state_migration_failed(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.status_items = {"migration-assistant.state": "failed",
+                                        "migration-assistant.report": {"errors": ["Disk full"]}}
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<th width=\"300px\">Migration</th>")
+        self.assertContains(response, '<span class="badge text-bg-warning">failed</span>')
+        self.assertContains(response, '<span class="text-danger">Disk full</span>')
+        self.assertNotContains(response, "Files:")
+        self.assertNotContains(response, "Data:")
+
+    def test_enrolled_device_device_state_migration_waiting(self):
+        session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        for state in ("waiting", "none"):
+            enrolled_device.status_items = {"migration-assistant.state": state}
+            enrolled_device.save()
+            self.login("mdm.view_enrolleddevice")
+            response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, "<h4>Device state</h4>")
+            self.assertEqual(enrolled_device.device_state_status, {})
 
     def test_enrolled_device_software_update_status_cleared_pending_version(self):
         session, device_udid, serial_number = force_user_enrollment_session(self.mbu, completed=True)

@@ -1371,6 +1371,14 @@ class EnrolledDevice(models.Model):
             if value is None:
                 continue
             status[key] = value
+        migration_state = status_items.get("migration-assistant.state")
+        # Apple's schema lists "waiting" as the initial value and describes it as "none"
+        if isinstance(migration_state, str) and migration_state not in ("", "none", "waiting"):
+            migration = {"state": migration_state}
+            report = status_items.get("migration-assistant.report")
+            if isinstance(report, dict) and report:
+                migration["report"] = {k.replace("-", "_"): v for k, v in report.items()}
+            status["migration"] = migration
         return status
 
     @property

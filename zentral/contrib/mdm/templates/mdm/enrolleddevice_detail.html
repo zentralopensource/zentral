@@ -369,6 +369,37 @@
             <td>{{ device_state_status.return_to_service|yesno }}</td>
           </tr>
           {% endif %}
+          {% if device_state_status.migration %}
+          {% with device_state_status.migration as migration %}
+          <tr>
+            <th width="300px">Migration</th>
+            <td>
+              {% if migration.state == "failed" or migration.state == "cancelled" %}
+                <span class="badge text-bg-warning">{{ migration.state }}</span>
+              {% else %}
+                {{ migration.state }}
+              {% endif %}
+              {% if migration.report %}
+              <ul class="list-unstyled mb-0">
+                {% if migration.report.start_time %}<li>Started: {{ migration.report.start_time }}</li>{% endif %}
+                {% if migration.report.completion_time %}<li>Completed: {{ migration.report.completion_time }}</li>{% endif %}
+                {% if migration.report.source_user %}<li>Source user: {{ migration.report.source_user }}</li>{% endif %}
+                {% if migration.report.target_user %}<li>Target user: {{ migration.report.target_user }}</li>{% endif %}
+                {% if migration.report.total_file_count %}
+                <li>Files: {{ migration.report.completed_file_count|default:0 }} / {{ migration.report.total_file_count }}</li>
+                {% endif %}
+                {% if migration.report.total_data_size %}
+                <li>Data: {{ migration.report.completed_data_size|default:0|filesizeformat }} / {{ migration.report.total_data_size|filesizeformat }}</li>
+                {% endif %}
+                {% for error in migration.report.errors %}
+                <li><span class="text-danger">{{ error }}</span></li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+          {% endif %}
         </tbody>
       </table>
     {% endif %}
