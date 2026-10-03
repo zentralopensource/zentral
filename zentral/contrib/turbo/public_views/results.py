@@ -58,6 +58,16 @@ class ResultsView(BaseEnrolledMachinePostView):
             # and is always set in the result event payload. A wire kind contradicting it (confused or
             # hostile agent) skips the entry; an absent one is filled in (with a warning — the agent is
             # expected to send it)
+            if job.definition is None:
+                # A kind that this release does not know. An instance on the previous release
+                # can get the results of a job that a newer instance served.
+                # definition_wire_ref() reads .pk on None, which gives a 500 for the whole
+                # batch: every valid entry in it waits for the end of the upgrade.
+                logger.warning("Turbo results from %s: unknown kind %r for schedule %s",
+                               serial_number, job.kind, schedule_pk)
+                batch.record_run(job_machine, job, entry["version"], ran_at)
+                skipped.append({**ack, "reason": "unknown_job_kind"})
+                continue
             kind = entry["kind"]
             if kind is None:
                 logger.warning("Turbo results from %s: no kind, using the schedule's %r",
