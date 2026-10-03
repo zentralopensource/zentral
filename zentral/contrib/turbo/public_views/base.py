@@ -85,7 +85,10 @@ class BaseEnrolledMachineView(WireErrorMixin, View):
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         self._stamp_last_seen()
         response = super().dispatch(request, *args, **kwargs)
-        if self.request_type and response.status_code == 200:
+        # any 2xx: the event records that the agent made the request and the server took it, and an
+        # endpoint that only accepts the work answers 202. A 4xx is a wire error, which logs instead —
+        # otherwise a machine hammering a malformed request would fill the event stream with it.
+        if self.request_type and 200 <= response.status_code < 300:
             post_turbo_request_event(request, self.serial_number, self.enrollment,
                                      {"request_type": self.request_type, **(self.request_event_payload or {})})
         return response
@@ -103,6 +106,11 @@ class BaseEnrolledMachineView(WireErrorMixin, View):
 class BaseEnrolledMachinePostView(BaseEnrolledMachineView):
     """Base for the agent's JSON POST endpoints: read (and optionally gunzip) the body, hand the
     decoded payload to do_post(), and wrap its dict in a JsonResponse."""
+
+    # 200 for an endpoint that did the work before answering. An endpoint that only accepted the work
+    # says so with a 202, which is part of its contract rather than a detail: the agent moves on
+    # instead of waiting for an answer it has no use for.
+    response_status = 200
 
     def get_json_data(self, request):
         # gzip is the one Content-Encoding the agent uses: standard, and available out of the box on
@@ -128,4 +136,4 @@ class BaseEnrolledMachinePostView(BaseEnrolledMachineView):
         return data
 
     def post(self, request, *args, **kwargs):
-        return JsonResponse(self.do_post(self.get_json_data(request)))
+        return JsonResponse(self.do_post(self.get_json_data(request)), status=self.response_status)
