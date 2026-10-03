@@ -186,6 +186,7 @@ class AppsViewsTestCase(TestCase, LoginCase):
         self.login("inventory.view_debpackage")
         response = self.client.get(reverse("inventory:deb_packages"))
         self.assertContains(response, "Debian packages", status_code=200)
+        self.assertContains(response, '<button type="submit" name="action" value="search"')
 
     def test_all_deb_packages(self):
         self.login("inventory.view_debpackage")
