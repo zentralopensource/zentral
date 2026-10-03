@@ -35,8 +35,7 @@ def build_specific_software_update_enforcement(target):
             logger.error("Software update enforcement %s: missing local time or delay in days",
                          software_update_enforcement.pk)
             return
-        device_information = enrolled_device.device_information
-        if not isinstance(device_information, dict) or not device_information.get("SoftwareUpdateDeviceID"):
+        if not enrolled_device.software_update_device_id:
             # the device has not reported its inventory yet, there is nothing to look up the feed with
             logger.info("Enrolled device %s: no software update device ID", enrolled_device.udid)
             return

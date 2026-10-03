@@ -130,18 +130,9 @@ def best_available_software_update_for_device_id_and_build(device_id, build, dat
 
 
 def iter_available_software_updates(enrolled_device, date=None, max_os_version=None):
-    try:
-        device_id = enrolled_device.device_information["SoftwareUpdateDeviceID"]
-    except (KeyError, TypeError):
-        logger.debug("Enrolled device %s: no SoftwareUpdateDeviceID found", enrolled_device.udid)
-        return
-    if not isinstance(device_id, str):
-        # should never happen
-        logger.error("Enrolled device %s: SoftwareUpdateDeviceID is not a str", enrolled_device.udid)
-        return
+    device_id = enrolled_device.software_update_device_id
     if not device_id:
-        # should never happen
-        logger.error("Enrolled device %s: SoftwareUpdateDeviceID is an empty str", enrolled_device.udid)
+        logger.debug("Enrolled device %s: no software update device ID found", enrolled_device.udid)
         return
     build = enrolled_device.current_build_version
     yield from iter_available_software_updates_for_device_id_and_build(device_id, build, date, max_os_version)

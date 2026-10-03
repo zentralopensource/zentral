@@ -1384,7 +1384,8 @@ class MDMViewsTestCase(TestCase):
 
     # status
 
-    def test_declarative_management_status_report(self, post_event):
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_declarative_management_status_report(self, send_enrolled_device_notification, post_event):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
         )
@@ -1395,8 +1396,19 @@ class MDMViewsTestCase(TestCase):
             "Data": json.dumps(build_status_report()),
             "Endpoint": "status",
         }
-        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
+        enrolled_device = session.enrolled_device
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.status_items["softwareupdate.install-state"], "downloading")
+        self.assertEqual(enrolled_device.status_items["softwareupdate.device-id"], "Macmini9,1")
+        self.assertIsNotNone(enrolled_device.status_items_updated_at)
+        status_items_events = [c.args[0] for c in post_event.call_args_list
+                               if c.args[0].event_type == "mdm_status_items_update"]
+        self.assertEqual(len(status_items_events), 1)
+        self.assertEqual(status_items_events[0].payload["channel"], "Device")
+        self.assertEqual(status_items_events[0].metadata.machine_serial_number, serial_number)
 
     # legacy profile
 
