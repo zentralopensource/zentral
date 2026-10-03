@@ -2152,7 +2152,23 @@ class TestMDMArtifacts(TestCase):
 
     # test update status items
 
-    SOFTWARE_UPDATE_STATUS_ITEMS = [
+    # every scalar status item of the testdata/status_report.json fixture
+    FIXTURE_STATUS_ITEMS = [
+        "device.identifier.serial-number",
+        "device.identifier.udid",
+        "device.model.family",
+        "device.model.identifier",
+        "device.model.marketing-name",
+        "device.model.number",
+        "device.power.battery-health",
+        "diskmanagement.filevault.enabled",
+        "mdm.enrollment-type",
+        "mdm.is-awaiting-configuration",
+        "migration-assistant.report",
+        "migration-assistant.state",
+        "passcode.is-compliant",
+        "passcode.is-present",
+        "security.lockdown-mode",
         "softwareupdate.beta-enrollment",
         "softwareupdate.device-id",
         "softwareupdate.failure-reason",
@@ -2177,11 +2193,16 @@ class TestMDMArtifacts(TestCase):
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
         status_report = self._build_status_report_with_sue(target)
         update_fields, changed, cleared = target.update_status_items_with_status_report(status_report)
-        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at",
+                                         "awaiting_configuration", "supervised", "user_enrollment"])
         self.assertEqual(changed,
-                         self.SOFTWARE_UPDATE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
+                         self.FIXTURE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
         self.assertEqual(cleared, [])
         self.assertIsNone(self.enrolled_device.status_items_full_report_at)
+        # synced from the mdm.* items
+        self.assertFalse(self.enrolled_device.awaiting_configuration)
+        self.assertTrue(self.enrolled_device.supervised)
+        self.assertFalse(self.enrolled_device.user_enrollment)
         status_items = self.enrolled_device.status_items
         self.assertEqual(status_items["softwareupdate.install-state"], "downloading")
         self.assertEqual(status_items["softwareupdate.pending-version"],
@@ -2208,7 +2229,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(status_items["softwareupdate.install-state"], "installing")
         # missing items are kept
         self.assertEqual(status_items["softwareupdate.device-id"], "Macmini9,1")
-        self.assertEqual(len(status_items), 6)
+        self.assertEqual(len(status_items), len(self.FIXTURE_STATUS_ITEMS))
         self.assertGreater(self.enrolled_device.status_items_updated_at, updated_at)
 
     def test_update_status_items_full_report(self):
@@ -2218,7 +2239,7 @@ class TestMDMArtifacts(TestCase):
             {"StatusItems": {"softwareupdate": {"install-state": "none"}}, "FullReport": True}
         )
         self.assertEqual(update_fields, ["status_items_full_report_at", "status_items", "status_items_updated_at"])
-        self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
+        self.assertEqual(changed, self.FIXTURE_STATUS_ITEMS)
         # missing items are dropped
         self.assertEqual(self.enrolled_device.status_items, {"softwareupdate.install-state": "none"})
         self.assertIsNotNone(self.enrolled_device.status_items_full_report_at)
@@ -2234,7 +2255,8 @@ class TestMDMArtifacts(TestCase):
     def test_update_status_items_no_items(self):
         target = Target(self.enrolled_device_no_blueprint)
         status_report = build_status_report()
-        status_report["StatusItems"].pop("softwareupdate")
+        # only the sections with a dedicated reader
+        status_report["StatusItems"] = {"management": status_report["StatusItems"]["management"]}
         self.assertEqual(target.update_status_items_with_status_report(status_report), ([], [], []))
         self.assertEqual(self.enrolled_device_no_blueprint.status_items, {})
         self.assertIsNone(self.enrolled_device_no_blueprint.status_items_updated_at)
@@ -2257,7 +2279,7 @@ class TestMDMArtifacts(TestCase):
         update_fields, changed, cleared = target.update_status_items_with_status_report(build_status_report())
         self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
         # no enforcement declaration on the user channel
-        self.assertEqual(changed, self.SOFTWARE_UPDATE_STATUS_ITEMS)
+        self.assertEqual(changed, self.FIXTURE_STATUS_ITEMS)
         self.assertEqual(self.enrolled_user.status_items["softwareupdate.install-state"], "downloading")
         self.assertIsNotNone(self.enrolled_user.status_items_updated_at)
         self.assertEqual(self.enrolled_device.status_items, {})
@@ -2296,6 +2318,64 @@ class TestMDMArtifacts(TestCase):
         self.assertIsNone(self.enrolled_device.status_items_updated_at)
         self.assertIsNone(self.enrolled_device.status_items_full_report_at)
 
+    def test_update_status_items_awaiting_configuration_cleared(self):
+        target = Target(self.enrolled_device_awaiting_configuration)
+        self.assertTrue(target.awaiting_configuration)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"is-awaiting-configuration": False}}}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at", "awaiting_configuration"])
+        self.assertEqual(changed, ["mdm.is-awaiting-configuration"])
+        self.assertFalse(self.enrolled_device_awaiting_configuration.awaiting_configuration)
+
+    def test_update_status_items_enrollment_type_user(self):
+        self.enrolled_device.supervised = True
+        self.enrolled_device.user_enrollment = False
+        target = Target(self.enrolled_device)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"enrollment-type": "user"}}}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at", "supervised", "user_enrollment"])
+        self.assertFalse(self.enrolled_device.supervised)
+        self.assertTrue(self.enrolled_device.user_enrollment)
+
+    def test_update_status_items_enrollment_type_unknown_value(self):
+        self.enrolled_device.supervised = True
+        target = Target(self.enrolled_device)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"enrollment-type": "none", "is-awaiting-configuration": "yes"}}}
+        )
+        # stored, but the device fields are left alone
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertTrue(self.enrolled_device.supervised)
+        self.assertIsNone(self.enrolled_device.awaiting_configuration)
+
+    def test_update_status_items_user_channel_no_device_fields(self):
+        target = Target(self.enrolled_device, self.enrolled_user)
+        update_fields, changed, cleared = target.update_status_items_with_status_report(
+            {"StatusItems": {"mdm": {"enrollment-type": "user", "is-awaiting-configuration": True}}}
+        )
+        self.assertEqual(update_fields, ["status_items", "status_items_updated_at"])
+        self.assertIsNone(self.enrolled_device.supervised)
+        self.assertIsNone(self.enrolled_device.awaiting_configuration)
+
+    def test_filevault_enabled_from_status_item(self):
+        self.enrolled_device.security_info = {"FDE_Enabled": False}
+        self.enrolled_device.status_items = {"diskmanagement.filevault.enabled": True}
+        self.assertTrue(self.enrolled_device.filevault_enabled)
+
+    def test_filevault_enabled_fallback_to_security_info(self):
+        self.enrolled_device.security_info = {"FDE_Enabled": True}
+        for status_items in ({}, {"diskmanagement.filevault.enabled": "yes"}, None):
+            with self.subTest(status_items=status_items):
+                self.enrolled_device.status_items = status_items
+                self.assertTrue(self.enrolled_device.filevault_enabled)
+
+    def test_filevault_enabled_unknown(self):
+        self.enrolled_device.security_info = None
+        self.enrolled_device.status_items = {}
+        self.assertIsNone(self.enrolled_device.filevault_enabled)
+
     def test_update_status_items_cleared(self):
         target = Target(self.enrolled_device)
         target.update_status_items_with_status_report(build_status_report())
@@ -2332,7 +2412,7 @@ class TestMDMArtifacts(TestCase):
             event.payload,
             {"channel": "Device",
              "status_items": self.enrolled_device.status_items,
-             "changed": self.SOFTWARE_UPDATE_STATUS_ITEMS,
+             "changed": self.FIXTURE_STATUS_ITEMS,
              "full_report": False}
         )
         metadata = event.metadata.serialize()
@@ -2359,7 +2439,7 @@ class TestMDMArtifacts(TestCase):
         event = post_event.call_args_list[0].args[0]
         self.assertEqual(event.payload["software_update_enforcement"], {"pk": sue.pk, "name": sue.name})
         self.assertEqual(event.payload["changed"],
-                         self.SOFTWARE_UPDATE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
+                         self.FIXTURE_STATUS_ITEMS + ["zentral.softwareupdate.enforcement-declaration"])
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_software_update_enforcement": [str(sue.pk)]})
 

@@ -42,6 +42,14 @@
             {% endif %}
         </td>
         </tr>
+        <tr>
+        <th>Declarative management</th>
+        <td>{{ object.declarative_management|yesno }}</td>
+        </tr>
+        <tr>
+        <th>Last full status report</th>
+        <td>{{ object.status_items_full_report_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+        </tr>
     </tbody>
     </table>
 </div>
@@ -182,5 +190,7 @@
 {% endif %}
 
 {% endif %}
+
+{% include "mdm/_status_items.html" %}
 
 {% endblock %}

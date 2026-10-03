@@ -1170,6 +1170,12 @@ class Target:
         "status_items_full_report_at",
         "client_capabilities",
     )
+    # enrolled device fields synced from the mdm.* status items
+    DEVICE_STATUS_ITEMS_FIELDS = (
+        "awaiting_configuration",
+        "supervised",
+        "user_enrollment",
+    )
 
     def lock_target_for_status_report(self):
         """Lock the target row and reload the merged fields.
@@ -1178,12 +1184,37 @@ class Target:
         Mac), and the merge is a read-modify-write. Requests are atomic, so the lock lasts until the request
         commits.
         """
+        fields = self.STATUS_ITEMS_FIELDS
+        if self.is_device:
+            fields += self.DEVICE_STATUS_ITEMS_FIELDS
         locked = (type(self.target).objects
                                    .select_for_update()
-                                   .only("pk", *self.STATUS_ITEMS_FIELDS)
+                                   .only("pk", *fields)
                                    .get(pk=self.target.pk))
-        for field in self.STATUS_ITEMS_FIELDS:
+        for field in fields:
             setattr(self.target, field, getattr(locked, field))
+
+    def _update_device_fields_with_status_items(self, reported_items):
+        """Sync the enrolled device fields that the mdm.* status items report directly.
+
+        Those fields are otherwise inferred at enrollment time and refreshed by the DeviceInformation poll.
+        """
+        update_fields = []
+        awaiting_configuration = reported_items.get("mdm.is-awaiting-configuration")
+        if (
+            isinstance(awaiting_configuration, bool)
+            and awaiting_configuration != self.enrolled_device.awaiting_configuration
+        ):
+            self.enrolled_device.awaiting_configuration = awaiting_configuration
+            update_fields.append("awaiting_configuration")
+        enrollment_type = reported_items.get("mdm.enrollment-type")
+        if enrollment_type in ("supervised", "device", "user"):
+            for field, value in (("supervised", enrollment_type == "supervised"),
+                                 ("user_enrollment", enrollment_type == "user")):
+                if getattr(self.enrolled_device, field) != value:
+                    setattr(self.enrolled_device, field, value)
+                    update_fields.append(field)
+        return update_fields
 
     def update_status_items_with_status_report(self, status_report):
         """Merge the scalar status items of a report into the target's status_items.
@@ -1220,6 +1251,8 @@ class Target:
             self.target.status_items = status_items
             self.target.status_items_updated_at = now
             update_fields.extend(["status_items", "status_items_updated_at"])
+        if self.is_device:
+            update_fields.extend(self._update_device_fields_with_status_items(reported_items))
         return update_fields, changed, cleared
 
     def _queue_status_items_update_event(self, status_report, changed_status_items, cleared_status_items, errors):
