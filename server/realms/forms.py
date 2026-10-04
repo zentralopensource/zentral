@@ -16,7 +16,7 @@ class RealmForm(forms.ModelForm):
         commit = kwargs.pop("commit", True)
         kwargs["commit"] = False
         realm = super().save(*args, **kwargs)
-        realm.config = self.get_config()
+        realm.set_backend_kwargs(self.get_config())
         if commit:
             realm.save()
         return realm

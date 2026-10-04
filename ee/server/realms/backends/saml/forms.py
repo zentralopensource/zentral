@@ -25,7 +25,7 @@ class SAMLRealmForm(RealmForm):
         super().__init__(*args, **kwargs)
         self.fields["metadata_file"].required = self.instance is None
         if self.instance:
-            self.fields["allow_idp_initiated_login"].initial = self.instance.config.get(
+            self.fields["allow_idp_initiated_login"].initial = self.instance.backend_kwargs.get(
                 "allow_idp_initiated_login"
             )
 
@@ -111,7 +111,7 @@ class SAMLRealmForm(RealmForm):
         config = {}
         idp_metadata = self.cleaned_data.get("idp_metadata")
         if not idp_metadata and self.instance:
-            idp_metadata = self.instance.config.get("idp_metadata")
+            idp_metadata = self.instance.backend_kwargs.get("idp_metadata")
         if idp_metadata:
             config["idp_metadata"] = idp_metadata
         if self.cleaned_data.get("allow_idp_initiated_login"):
@@ -120,7 +120,7 @@ class SAMLRealmForm(RealmForm):
             config["allow_idp_initiated_login"] = False
         default_relay_state = None
         if self.instance:
-            default_relay_state = self.instance.config.get("default_relay_state")
+            default_relay_state = self.instance.backend_kwargs.get("default_relay_state")
         if not default_relay_state:
             default_relay_state = str(uuid.uuid4())
         config["default_relay_state"] = default_relay_state
