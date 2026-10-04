@@ -6,7 +6,6 @@ ARG APP_VERSION=unknown
 ####
 # Build stage 0:
 # - Install apt build dependencies
-# - Download and build tini
 # - Download and build bomutils and xar
 # - Make venv and install common requirements
 #
@@ -30,27 +29,6 @@ RUN apt-get update && \
             npm && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
-
-# tini
-# see https://github.com/elastic/dockerfiles/blob/23f38a8a9f825c21784a02dde18dea0e54c88bbc/elasticsearch/Dockerfile#L21
-RUN set -eux ; \
-    \
-    tini_bin="" ; \
-    case "$(arch)" in \
-        aarch64) \
-          tini_bin='tini-arm64'; \
-          tini_bin_sha256='07952557df20bfd2a95f9bef198b445e006171969499a1d361bd9e6f8e5e0e81' \
-          ;; \
-        x86_64)  \
-          tini_bin='tini-amd64'; \
-          tini_bin_sha256='93dcc18adc78c65a028a84799ecf8ad40c936fdfc5f2a57b1acda5a8117fa82c' \
-          ;; \
-        *) echo >&2 ; echo >&2 "Unsupported architecture $(arch)" ; echo >&2 ; exit 1 ;; \
-    esac ; \
-    curl --retry 8 -S -L -O https://github.com/krallin/tini/releases/download/v0.19.0/${tini_bin} ; \
-    echo "${tini_bin_sha256} ${tini_bin}" | sha256sum --check --status ; \
-    mv ${tini_bin} /tini ; \
-    chmod +x /tini
 
 # bomutils & xar build (to generate the pkg files with zentral)
 # as seen in https://github.com/boot2docker/osx-installer/blob/master/Dockerfile
@@ -109,7 +87,7 @@ RUN pip install -r requirements_gcp.txt
 # - install apt dependencies
 # - add zentral user & home
 # - create common app dirs
-# - copy tini, mkbom and xar from stage 0
+# - copy mkbom and xar from stage 0
 #
 
 FROM python:3.14-slim-trixie AS base-runner
@@ -129,7 +107,9 @@ RUN apt-get update && \
             libffi8 \
 # dep for python-ldap
             libldap2 \
-            libsasl2-2 && \
+            libsasl2-2 \
+# init for PID 1
+            tini && \
 # clean cache
     rm -rf /var/lib/apt/lists/*
 
@@ -142,7 +122,6 @@ RUN mkdir /zentral_static && chown zentral:zentral /zentral_static
 RUN mkdir /var/zentral && chown zentral:zentral /var/zentral
 
 # copy files from builder
-COPY --from=base-builder /tini /tini
 COPY --from=base-builder /usr/bin/mkbom /usr/bin/mkbom
 COPY --from=base-builder /usr/local/lib/libxar.so.1 /usr/local/lib/libxar.so.1
 COPY --from=base-builder /usr/local/bin/xar /usr/local/bin/xar
@@ -205,4 +184,4 @@ WORKDIR /zentral
 USER zentral
 EXPOSE 8000
 ENV PATH="/opt/venv/bin:$PATH"
-ENTRYPOINT ["/tini", "--", "/zentral/docker-entrypoint.py"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/zentral/docker-entrypoint.py"]

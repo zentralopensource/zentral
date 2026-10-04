@@ -142,6 +142,11 @@ The page of a Santa configuration has four tabs now: Overview, Rules, Scoped cli
 ### Backward incompatibilities
 
 
+#### 🧨 The path of tini in the Docker image
+
+The Docker image installs tini from the Debian packages. Its path is `/usr/bin/tini` now, not `/tini`. If your deployment sets its own entrypoint with `/tini`, change it to `/usr/bin/tini`.
+
+
 #### 🧨 The first scope field that matches a machine decides for a Santa rule
 
 A Santa rule has three scope fields, each one with an exclusion. Zentral looks at them from the narrowest to the widest – serial numbers, then primary users, then tags – and the first field that matches the machine decides: in the scope field, the rule is in scope, in the exclusion field, it is not. A machine can carry a tag of each field: the exclusion wins. A rule with no scope field is for every machine that its exclusions do not match. The scoped client modes and the scoped path regexes follow the same rule.
