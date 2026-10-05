@@ -690,6 +690,10 @@ class MDMViewsTestCase(TestCase):
         ed.declaration_items_snapshot = {
             "zentral.declaration.x": {"artifact_version_pk": "y", "server_token": "z"}
         }
+        ed.dep_enrollment = False
+        ed.user_enrollment = True
+        ed.user_approved_enrollment = False
+        ed.supervised = False
         ed.save()
         # new enrollment but not a re-enrollment session
         session, udid, serial_number = force_dep_enrollment_session(
@@ -721,6 +725,11 @@ class MDMViewsTestCase(TestCase):
         self.assertFalse(ed.declarative_management)
         self.assertEqual(ed.declarations_token, "")
         self.assertEqual(ed.declaration_items_snapshot, {})
+        # the enrollment attributes of the new DEP enrollment survive the purge
+        self.assertIs(ed.dep_enrollment, True)
+        self.assertIs(ed.user_enrollment, False)
+        self.assertIs(ed.user_approved_enrollment, True)
+        self.assertIs(ed.supervised, True)
 
     # checkin - user authenticate
 

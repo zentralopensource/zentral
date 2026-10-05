@@ -352,6 +352,8 @@ An MDM re-enrollment completes on the token update of the device now. The re-enr
 
 An MDM token update that has no `UserShortName` does not give a 500 anymore. Apple makes the key optional, but the short name of an enrolled user is not nullable. The check-in writes the column only when the payload carries the key now, and a new user gets an empty short name.
 
+A new MDM enrollment of a known device keeps its DEP enrollment, user enrollment, user approved enrollment and supervised attributes now. The purge of the previous enrollment set them to null, until the device acknowledged the device information and the security info commands of the new enrollment.
+
 The MDM software update enforcement API rejects a null delay in days or local time when a maximum target OS version is set. A latest enforcement needs both fields to calculate the target date of its declaration. If you omit them, the defaults of 14 days and 09:30 apply, as before.
 
 A DEP enrollment with a maximum required OS version does not ask a device to install an update at or above that version anymore. Zentral read the maximum only to decide to look for an update, then asked the device to install the most recent update available for it. It selects the most recent update below the maximum now, as the enrollment page shows.
