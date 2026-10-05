@@ -1013,7 +1013,7 @@ class TargetSearchForm(forms.Form):
             kwargs["email"] = email
         if last_seen_days is not None:
             havings.append(
-                "(max(ac.last_seen) is not null and max(ac.last_seen) > now() - interval '%(last_seen_days)s days')"
+                "(max(tr.last_seen) is not null and max(tr.last_seen) > now() - interval '%(last_seen_days)s days')"
             )
             kwargs["last_seen_days"] = last_seen_days
         # serialize wheres & havings
@@ -1106,19 +1106,19 @@ class TargetSearchForm(forms.Form):
         targets_query = " union all ".join(v for k, v in targets_subqueries.items()
                                            if target_type is None or k == target_type)
         if order_by == "-last_seen":
-            primary_order_by = "max(ac.last_seen) desc,"
+            primary_order_by = "max(tr.last_seen) desc,"
         elif order_by == "-executed":
-            primary_order_by = "coalesce(sum(ac.executed_count), 0) desc,"
+            primary_order_by = "coalesce(sum(tr.executed_count), 0) desc,"
         elif order_by == "-blocked":
-            primary_order_by = "coalesce(sum(ac.blocked_count), 0) desc,"
+            primary_order_by = "coalesce(sum(tr.blocked_count), 0) desc,"
         elif order_by == "-min_score":
-            primary_order_by = "coalesce(min(ts.score), 0) desc,"
+            primary_order_by = "coalesce(min(tr.min_score), 0) desc,"
         elif order_by == "-max_score":
-            primary_order_by = "coalesce(max(ts.score), 0) desc,"
+            primary_order_by = "coalesce(max(tr.max_score), 0) desc,"
         elif order_by == "+min_score":
-            primary_order_by = "coalesce(min(ts.score), 0) asc,"
+            primary_order_by = "coalesce(min(tr.min_score), 0) asc,"
         elif order_by == "+max_score":
-            primary_order_by = "coalesce(max(ts.score), 0) asc,"
+            primary_order_by = "coalesce(max(tr.max_score), 0) asc,"
         else:
             if order_by:
                 logger.error("Unknown order by value: %s", order_by)
@@ -1157,29 +1157,41 @@ class TargetSearchForm(forms.Form):
             "  join santa_targetcounter tc on (tc.target_id = b.target_id)"
             f" {ac_cfg_where}"
             "  group by mb.target_id, tc.configuration_id"
+            # The states are aggregated per target and counter first.
+            # Summing the counters directly over the target × counters × states rows would multiply them
+            # by the number of states.
+            "), target_rows as ("
+            "  select t.id, t.target_type, t.identifier, t.object, t.sort_str,"
+            "  ac.blocked_count, ac.collected_count, ac.executed_count, ac.last_seen,"
+            "  max(ts.state) max_state, min(ts.state) min_state,"
+            "  max(ts.score) max_score, min(ts.score) min_score,"
+            "  min(ts.updated_at) min_state_updated_at, max(ts.updated_at) max_state_updated_at"
+            "  from targets t"
+            "  left join all_counters ac on (ac.target_id = t.id)"
+            "  left join santa_targetstate ts on (ts.target_id = t.id)"
+            f" {where}"
+            "  group by t.id, t.target_type, t.identifier, t.object, t.sort_str,"
+            "  ac.configuration_id, ac.blocked_count, ac.collected_count, ac.executed_count, ac.last_seen"
             ") "
-            "select t.id, t.target_type, t.identifier, t.object, count(*) over() as full_count,"
+            "select tr.id, tr.target_type, tr.identifier, tr.object, count(*) over() as full_count,"
             # counters
-            "coalesce(sum(ac.blocked_count), 0) blocked_count,"
-            "coalesce(sum(ac.collected_count), 0) collected_count,"
-            "coalesce(sum(ac.executed_count), 0) executed_count,"
-            "max(ac.last_seen) last_seen,"
+            "coalesce(sum(tr.blocked_count), 0) blocked_count,"
+            "coalesce(sum(tr.collected_count), 0) collected_count,"
+            "coalesce(sum(tr.executed_count), 0) executed_count,"
+            "max(tr.last_seen) last_seen,"
             # states
-            "coalesce(max(ts.state), 0) max_state,"
-            "coalesce(min(ts.state), 0) min_state,"
-            "coalesce(max(ts.score), 0) max_score,"
-            "coalesce(min(ts.score), 0) min_score,"
-            "min(ts.updated_at) min_state_updated_at,"
-            "max(ts.updated_at) max_state_updated_at,"
+            "coalesce(max(tr.max_state), 0) max_state,"
+            "coalesce(min(tr.min_state), 0) min_state,"
+            "coalesce(max(tr.max_score), 0) max_score,"
+            "coalesce(min(tr.min_score), 0) min_score,"
+            "min(tr.min_state_updated_at) min_state_updated_at,"
+            "max(tr.max_state_updated_at) max_state_updated_at,"
             # rules
-            "(select count(*) from santa_rule r where r.target_id = t.id) rule_count "
-            "from targets t "
-            "left join all_counters ac on (ac.target_id = t.id) "
-            "left join santa_targetstate ts on (ts.target_id = t.id) "
-            f"{where} "
-            "group by t.id, t.target_type, t.identifier, t.object, t.sort_str "
+            "(select count(*) from santa_rule r where r.target_id = tr.id) rule_count "
+            "from target_rows tr "
+            "group by tr.id, tr.target_type, tr.identifier, tr.object, tr.sort_str "
             f"{having} "
-            f"order by {primary_order_by} t.sort_str, t.identifier "
+            f"order by {primary_order_by} tr.sort_str, tr.identifier "
         )
         return query, kwargs
 

@@ -4,6 +4,7 @@ from unittest.mock import patch
 from accounts.models import User
 from django.contrib.auth.models import Group
 from django.db import connection
+from django.db.models import Sum
 from django.test import SimpleTestCase, TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import resolve, reverse
@@ -295,6 +296,96 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(targets[0]["blocked_count"], 1)
         self.assertEqual(targets[0]["executed_count"], 2)
         self.assertEqual(targets[0]["collected_count"], 3)
+
+    def _get_file_target_counts(self):
+        return TargetCounter.objects.filter(target=self.file_target).aggregate(
+            blocked_count=Sum("blocked_count"),
+            collected_count=Sum("collected_count"),
+            executed_count=Sum("executed_count"),
+        )
+
+    def test_search_target_counters_with_states_in_multiple_configurations(self):
+        counts = self._get_file_target_counts()
+        configuration = force_configuration()
+        TargetCounter.objects.create(
+            configuration=configuration,
+            target=self.file_target,
+            blocked_count=1,
+            executed_count=2,
+            collected_count=3,
+        )
+        for state_configuration in (configuration, force_configuration()):
+            TargetState.objects.create(
+                configuration=state_configuration,
+                target=self.file_target,
+                flagged=False,
+                state=TargetState.State.UNTRUSTED,
+                score=0,
+            )
+        self.login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"), {"q": self.file_sha256})
+        targets = response.context["targets"]
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0]["blocked_count"], counts["blocked_count"] + 1)
+        self.assertEqual(targets[0]["executed_count"], counts["executed_count"] + 2)
+        self.assertEqual(targets[0]["collected_count"], counts["collected_count"] + 3)
+
+    def test_search_target_state_counters_with_matching_states_in_multiple_configurations(self):
+        counts = self._get_file_target_counts()
+        for _ in range(2):
+            TargetState.objects.create(
+                configuration=force_configuration(),
+                target=self.file_target,
+                flagged=False,
+                state=TargetState.State.UNTRUSTED,
+                score=0,
+            )
+        self.login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"), {"target_type": Target.Type.BINARY,
+                                                              "target_state": TargetState.State.UNTRUSTED})
+        targets = response.context["targets"]
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0]["identifier"], self.file_sha256)
+        self.assertEqual(targets[0]["blocked_count"], counts["blocked_count"])
+        self.assertEqual(targets[0]["executed_count"], counts["executed_count"])
+        self.assertEqual(targets[0]["collected_count"], counts["collected_count"])
+
+    def test_search_target_order_by_counters(self):
+        configuration = force_configuration()
+        TargetCounter.objects.create(
+            configuration=configuration,
+            target=self.file_target,
+            blocked_count=2,
+            executed_count=2,
+            collected_count=0,
+        )
+        TargetCounter.objects.create(
+            configuration=configuration,
+            target=self.bundle_target,
+            blocked_count=3,
+            executed_count=3,
+            collected_count=0,
+        )
+        TargetCounter.objects.filter(target=self.bundle_target).update(updated_at=naive_utcnow() - timedelta(days=1))
+        # 3 states for the file target, to check that its counters are not counted 3 times
+        for state_configuration in (configuration, force_configuration(), force_configuration()):
+            TargetState.objects.create(
+                configuration=state_configuration,
+                target=self.file_target,
+                flagged=False,
+                state=TargetState.State.UNTRUSTED,
+                score=0,
+            )
+        expected_target_pks = (self.file_target.pk, self.bundle_target.pk)
+        self.login("santa.view_target")
+        for order_by, expected_targets in (("-executed", [self.bundle_target, self.file_target]),
+                                           ("-blocked", [self.bundle_target, self.file_target]),
+                                           ("-last_seen", [self.file_target, self.bundle_target])):
+            response = self.client.get(reverse("santa:targets"), {"configuration": configuration.pk,
+                                                                  "order_by": order_by})
+            # the metabundle target is also in the results, with the counters of its bundle
+            self.assertEqual([t["id"] for t in response.context["targets"] if t["id"] in expected_target_pks],
+                             [t.pk for t in expected_targets])
 
     def test_search_target_has_yes_votes_no_result(self):
         self.login("santa.view_target")

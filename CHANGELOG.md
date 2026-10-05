@@ -328,6 +328,8 @@ Fixed the 500 error when a user saves a Santa configuration with client certific
 
 The Santa target search filters the files on the search text before it groups them now. It grouped all the files that Santa reported first, and the database wrote them to temporary files for each search. The database continues a search that the user leaves, so some searches in a row could keep the database busy.
 
+Fixed the counters of a Santa target in the target search and in the target export: a target with a state in more than one configuration had its blocked, collected and executed counts multiplied by its number of states. The sort on these counts used the wrong values too.
+
 The inventory history cleanup deletes in bounded batches now. One unbounded statement for each table could delete millions of rows in one transaction, and keep the database at its maximum capacity for the full run. Each batch is a transaction, and a batch that gives an integrity error is retried alone.
 
 Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.
