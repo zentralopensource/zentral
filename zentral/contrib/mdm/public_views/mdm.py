@@ -312,12 +312,16 @@ class CheckinView(MDMView):
             enrolled_device_defaults["supervised"] = False
         if self.certificate:
             enrolled_device_defaults.update(build_enrolled_device_cert_defaults(self.certificate))
+
+        # purge the installed artifacts and sent commands, if it is not a re-enrollment.
+        # Before the update, because the purge also resets the enrollment attributes of the defaults.
+        if not is_reenrollment:
+            existing_enrolled_device = EnrolledDevice.objects.filter(udid=self.enrolled_device_udid).first()
+            if existing_enrolled_device:
+                existing_enrolled_device.purge_state(full=True)
+
         enrolled_device, created = EnrolledDevice.objects.update_or_create(udid=self.enrolled_device_udid,
                                                                            defaults=enrolled_device_defaults)
-
-        # purge the installed artifacts and sent commands, if it is not a re-enrollment
-        if not created and not is_reenrollment:
-            enrolled_device.purge_state(full=True)
 
         # initial machine tagging
         if not is_reenrollment:
