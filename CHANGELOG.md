@@ -326,6 +326,8 @@ Fixed the Santa preflight that overwrote what another request committed on the s
 
 Fixed the 500 error when a user saves a Santa configuration with client certificate authentication on a server with no mTLS FQDN. The form put its error on a field removed from the configuration, and Django refuses an error on a field that does not exist.
 
+The Santa target search filters the files on the search text before it groups them now. It grouped all the files that Santa reported first, and the database wrote them to temporary files for each search. The database continues a search that the user leaves, so some searches in a row could keep the database busy.
+
 The inventory history cleanup deletes in bounded batches now. One unbounded statement for each table could delete millions of rows in one transaction, and keep the database at its maximum capacity for the full run. Each batch is a transaction, and a batch that gives an integrity error is retried alone.
 
 Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.

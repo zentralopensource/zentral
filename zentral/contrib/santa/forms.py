@@ -924,6 +924,18 @@ class TargetSearchForm(forms.Form):
         # q
         if q:
             kwargs["q"] = "%{}%".format(connection.ops.prep_for_like_query(q))
+            # Superset of the file filters of the branches below, applied before the collected files are grouped.
+            # The team ID is a prefix of the signing ID, so it is covered by the signing ID filter.
+            cf_where = ("and (upper(f.name) like upper(%(q)s)"
+                        " or upper(f.sha_256) like upper(%(q)s)"
+                        " or upper(f.cdhash) like upper(%(q)s)"
+                        " or upper(f.signing_id) like upper(%(q)s)"
+                        " or f.signed_by_id in ("
+                        "  select c.id from inventory_certificate c"
+                        "  where upper(c.common_name) like upper(%(q)s)"
+                        "  or upper(c.organizational_unit) like upper(%(q)s)"
+                        "  or upper(c.organization) like upper(%(q)s)"
+                        "  or upper(c.sha_256) like upper(%(q)s)))")
             bi_where = ("where upper(f.name) like upper(%(q)s)"
                         " or upper(f.identifier) like upper(%(q)s)")
             ce_where = ("where upper(c.common_name) like upper(%(q)s)"
@@ -941,7 +953,7 @@ class TargetSearchForm(forms.Form):
             mbu_where = ("where upper(b.name) like upper(%(q)s)"
                          " or upper(t.identifier) like upper(%(q)s)")
         else:
-            bi_where = ce_where = bu_where = mbu_where = ""
+            cf_where = bi_where = ce_where = bu_where = mbu_where = ""
             ti_where = "where f.team_id IS NOT NULL"
             ch_where = "where (f.cdhash = '') IS FALSE"
             si_where = "where (f.signing_id = '') IS FALSE"
@@ -1091,8 +1103,8 @@ class TargetSearchForm(forms.Form):
                 f"{mbu_where} "
                 "group by target_type, t.identifier"
         }
-        targets_query = " union ".join(v for k, v in targets_subqueries.items()
-                                       if target_type is None or k == target_type)
+        targets_query = " union all ".join(v for k, v in targets_subqueries.items()
+                                           if target_type is None or k == target_type)
         if order_by == "-last_seen":
             primary_order_by = "max(ac.last_seen) desc,"
         elif order_by == "-executed":
@@ -1119,6 +1131,7 @@ class TargetSearchForm(forms.Form):
             "  from inventory_file as f"
             "  join inventory_source as s on (f.source_id = s.id)"
             "  where s.module='zentral.contrib.santa' and s.name = 'Santa events'"
+            f" {cf_where}"
             "  group by f.sha_256, f.cdhash, f.signed_by_id, f.signing_id, f.name"
             "), targets_info as ("
             f" {targets_query}"
@@ -1133,7 +1146,7 @@ class TargetSearchForm(forms.Form):
             "  from santa_targetcounter tc"
             f" {ac_cfg_where}"
             #  aggregated metabundle counters
-            "  union"
+            "  union all"
             "  select mb.target_id, tc.configuration_id,"
             "  sum(tc.blocked_count) blocked_count,"
             "  sum(tc.collected_count) collected_count,"
