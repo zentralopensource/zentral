@@ -17,6 +17,7 @@ from zentral.contrib.mdm.events.mdm import (
     UserEnrollmentRequestEvent,
 )
 from zentral.contrib.mdm.events.recovery_password import RecoveryPasswordSetEvent
+from zentral.contrib.mdm.events.status_items import StatusItemsUpdateEvent
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -30,6 +31,7 @@ from zentral.contrib.mdm.models import (
     OTAEnrollment,
     Package,
     ReEnrollmentSession,
+    SoftwareUpdateEnforcement,
     UserEnrollment,
 )
 from zentral.core.events.base import BaseEvent, EventMetadata, linked_objects_key
@@ -82,6 +84,30 @@ CASES = (
         {"target_artifact": {"artifact_version": {"pk": "av-uuid", "artifact": {"pk": "a-uuid"}}},
          "enrolled_user": {"pk": 42}},
         {Artifact: [("a-uuid",)], ArtifactVersion: [("av-uuid",)], EnrolledUser: [(42,)]},
+    ),
+    (
+        StatusItemsUpdateEvent,
+        {"channel": "Device",
+         "status_items": {"softwareupdate.install-state": "downloading"},
+         "changed": ["softwareupdate.install-state"],
+         "full_report": False,
+         "software_update_enforcement": {"pk": 3, "name": "Latest macOS 15"}},
+        {SoftwareUpdateEnforcement: [(3,)]},
+    ),
+    (
+        StatusItemsUpdateEvent,
+        {"channel": "User",
+         "status_items": {},
+         "changed": [],
+         "full_report": False,
+         "errors": [{"status_item": "softwareupdate.install-state", "reasons": []}],
+         "enrolled_user": {"pk": 42, "user_id": "user-id"}},
+        {EnrolledUser: [(42,)]},
+    ),
+    (
+        StatusItemsUpdateEvent,
+        {"channel": "Device", "status_items": {}, "changed": [], "full_report": True},
+        {},
     ),
     (
         AdminPasswordUpdatedEvent,

@@ -21,14 +21,21 @@ from zentral.utils.time import naive_utcnow
 
 from .apns import send_enrolled_device_notification, send_enrolled_user_notification
 from .declarations import (
+    SOFTWARE_UPDATE_ENFORCEMENT_DECLARATION_STATUS_ITEM,
     build_specific_software_update_enforcement,
     build_target_management_status_subscriptions,
     get_artifact_identifier,
     get_artifact_version_server_token,
     get_blueprint_declaration_identifier,
+    get_software_update_enforcement_specific_identifier,
+    get_status_report_declaration_status,
+    get_status_report_errors,
+    get_status_report_scalar_status_items,
     get_status_report_target_artifacts_info,
 )
-from .events import post_device_lock_pin_clear_event, post_target_artifact_update_events
+from .events import (post_device_lock_pin_clear_event,
+                     post_status_items_update_event,
+                     post_target_artifact_update_events)
 from .models import (
     Artifact,
     ArtifactVersion,
@@ -1157,11 +1164,105 @@ class Target:
                 self.target.client_capabilities = client_capabilities
         return update_fields
 
+    STATUS_ITEMS_FIELDS = (
+        "status_items",
+        "status_items_updated_at",
+        "status_items_full_report_at",
+        "client_capabilities",
+    )
+
+    def lock_target_for_status_report(self):
+        """Lock the target row and reload the merged fields.
+
+        Two status reports of one target can be processed concurrently (a sync burst, or the two channels of a
+        Mac), and the merge is a read-modify-write. Requests are atomic, so the lock lasts until the request
+        commits.
+        """
+        locked = (type(self.target).objects
+                                   .select_for_update()
+                                   .only("pk", *self.STATUS_ITEMS_FIELDS)
+                                   .get(pk=self.target.pk))
+        for field in self.STATUS_ITEMS_FIELDS:
+            setattr(self.target, field, getattr(locked, field))
+
+    def update_status_items_with_status_report(self, status_report):
+        """Merge the scalar status items of a report into the target's status_items.
+
+        Return the update fields, the sorted names of the changed items, and the sorted names of the items
+        the report cleared (an empty value). Reports are incremental, so a missing item keeps its stored
+        value, unless the report is flagged as a full report.
+        """
+        reported_items = get_status_report_scalar_status_items(status_report)
+        if self.is_device and self.blueprint:
+            sue_declaration_status = get_status_report_declaration_status(
+                status_report, get_software_update_enforcement_specific_identifier(self)
+            )
+            if sue_declaration_status:
+                reported_items[SOFTWARE_UPDATE_ENFORCEMENT_DECLARATION_STATUS_ITEM] = sue_declaration_status
+        full_report = bool(status_report.get("FullReport"))
+        now = naive_utcnow()
+        update_fields = []
+        if full_report:
+            self.target.status_items_full_report_at = now
+            update_fields.append("status_items_full_report_at")
+        current_status_items = self.target.status_items or {}
+        if full_report:
+            status_items = reported_items
+        else:
+            status_items = {**current_status_items, **reported_items}
+        changed = sorted(
+            name for name in set(current_status_items) | set(status_items)
+            if current_status_items.get(name) != status_items.get(name)
+        )
+        # an empty dict or list is the device clearing the item; an empty string is a value ("no beta program")
+        cleared = [name for name in changed if name in status_items and status_items[name] in ({}, [])]
+        if changed:
+            self.target.status_items = status_items
+            self.target.status_items_updated_at = now
+            update_fields.extend(["status_items", "status_items_updated_at"])
+        return update_fields, changed, cleared
+
+    def _queue_status_items_update_event(self, status_report, changed_status_items, cleared_status_items, errors):
+        payload = {
+            "channel": str(self.channel),
+            "status_items": self.target.status_items,
+            "changed": changed_status_items,
+            "full_report": bool(status_report.get("FullReport")),
+        }
+        if cleared_status_items:
+            # the event stores may not keep the empty values (ClickHouse drops empty objects)
+            payload["cleared"] = cleared_status_items
+        if errors:
+            payload["errors"] = errors
+        if self.is_device:
+            if self.software_update_enforcement:
+                payload["software_update_enforcement"] = (
+                    self.software_update_enforcement.serialize_for_event(keys_only=True)
+                )
+        else:
+            payload["enrolled_user"] = {
+                "pk": self.enrolled_user.pk,
+                "user_id": self.enrolled_user.user_id,
+            }
+        transaction.on_commit(lambda: post_status_items_update_event(self, payload))
+
     def update_target_with_status_report(self, status_report):
-        update_fields = self.update_os_info_with_status_report(status_report)
-        update_fields.extend(self.update_client_capabilities_with_status_report(status_report))
-        if update_fields:
-            self.target.save(update_fields=update_fields + ["updated_at"])
+        with transaction.atomic():
+            self.lock_target_for_status_report()
+            update_fields = self.update_os_info_with_status_report(status_report)
+            update_fields.extend(self.update_client_capabilities_with_status_report(status_report))
+            status_items_update_fields, changed_status_items, cleared_status_items = (
+                self.update_status_items_with_status_report(status_report)
+            )
+            update_fields.extend(status_items_update_fields)
+            errors = get_status_report_errors(status_report)
+            for error in errors:
+                logger.warning("Target %s: status item %s error: %s",
+                               self.target, error["status_item"], error["reasons"])
+            if update_fields:
+                self.target.save(update_fields=update_fields + ["updated_at"])
+        if changed_status_items or errors:
+            self._queue_status_items_update_event(status_report, changed_status_items, cleared_status_items, errors)
         target_artifacts_updated = self.update_target_artifacts_with_status_report(status_report)
         if update_fields or target_artifacts_updated:
             func = send_enrolled_device_notification if self.is_device else send_enrolled_user_notification
