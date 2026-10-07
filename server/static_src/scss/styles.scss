@@ -489,6 +489,18 @@ select#id_permissions {
     transform: rotate(90deg);
 }
 
+// chevron in front of a section heading, turns when its collapse target opens
+.collapse-chevron {
+    .bi {
+        display: inline-block;
+        transition: transform .15s ease-in-out;
+    }
+}
+
+.collapse-chevron:not(.collapsed) .bi {
+    transform: rotate(90deg);
+}
+
 // non-expandable rows: muted placeholder in the chevron slot, so it reads as "no details"
 .app-instance-no-details {
     color: var(--bs-secondary-color, #6c757d);

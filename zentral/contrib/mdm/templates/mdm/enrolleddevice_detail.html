@@ -197,6 +197,10 @@
           <td>{{ object.declarative_management|yesno }}</td>
         </tr>
         <tr>
+          <th>Last full status report</th>
+          <td>{{ object.status_items_full_report_at|date:"SHORT_DATETIME_FORMAT"|default:"-" }}</td>
+        </tr>
+        <tr>
           <th>DEP device{{ dep_device_count|pluralize }}</th>
           <td>
             {% if dep_device_count %}
@@ -298,6 +302,107 @@
         </tr>
       </tbody>
     </table>
+    {% if device_state_status %}
+      <h4>Device state</h4>
+      <table class="table-object-properties mb-5">
+        <tbody>
+          {% if device_state_status.passcode_present is not None %}
+          <tr>
+            <th width="300px">Passcode present?</th>
+            <td>{{ device_state_status.passcode_present|yesno }}</td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.passcode_compliant is not None %}
+          <tr>
+            <th width="300px">Passcode compliant?</th>
+            <td>
+              {% if device_state_status.passcode_compliant %}
+                yes
+              {% else %}
+                <span class="text-danger">no</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.lockdown_mode is not None %}
+          <tr>
+            <th width="300px">Lockdown mode?</th>
+            <td>{{ device_state_status.lockdown_mode|yesno }}</td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.battery_health %}
+          <tr>
+            <th width="300px">Battery health</th>
+            <td>
+              {% if device_state_status.battery_health == "normal" or device_state_status.battery_health == "unsupported" %}
+                {{ device_state_status.battery_health }}
+              {% else %}
+                <span class="text-danger">{{ device_state_status.battery_health }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.system_health %}
+          <tr>
+            <th width="300px">System health</th>
+            <td>
+              <ul class="list-unstyled mb-0">
+                {% for component, state in device_state_status.system_health.items %}
+                <li>
+                  {{ component }}:
+                  {% if state == "ok" %}{{ state }}{% else %}<span class="text-danger">{{ state }}</span>{% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.shared_ipad is not None %}
+          <tr>
+            <th width="300px">Shared iPad?</th>
+            <td>{{ device_state_status.shared_ipad|yesno }}</td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.return_to_service is not None %}
+          <tr>
+            <th width="300px">Return to service?</th>
+            <td>{{ device_state_status.return_to_service|yesno }}</td>
+          </tr>
+          {% endif %}
+          {% if device_state_status.migration %}
+          {% with device_state_status.migration as migration %}
+          <tr>
+            <th width="300px">Migration</th>
+            <td>
+              {% if migration.state == "failed" or migration.state == "cancelled" %}
+                <span class="badge text-bg-warning">{{ migration.state }}</span>
+              {% else %}
+                {{ migration.state }}
+              {% endif %}
+              {% if migration.report %}
+              <ul class="list-unstyled mb-0">
+                {% if migration.report.start_time %}<li>Started: {{ migration.report.start_time }}</li>{% endif %}
+                {% if migration.report.completion_time %}<li>Completed: {{ migration.report.completion_time }}</li>{% endif %}
+                {% if migration.report.source_user %}<li>Source user: {{ migration.report.source_user }}</li>{% endif %}
+                {% if migration.report.target_user %}<li>Target user: {{ migration.report.target_user }}</li>{% endif %}
+                {% if migration.report.total_file_count %}
+                <li>Files: {{ migration.report.completed_file_count|default:0 }} / {{ migration.report.total_file_count }}</li>
+                {% endif %}
+                {% if migration.report.total_data_size %}
+                <li>Data: {{ migration.report.completed_data_size|default:0|filesizeformat }} / {{ migration.report.total_data_size|filesizeformat }}</li>
+                {% endif %}
+                {% for error in migration.report.errors %}
+                <li><span class="text-danger">{{ error }}</span></li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </td>
+          </tr>
+          {% endwith %}
+          {% endif %}
+        </tbody>
+      </table>
+    {% endif %}
     {% if object.platform == "macOS" %}
       <h4>Bootstrap token</h4>
       <table class="table-object-properties mb-5">
@@ -406,7 +511,7 @@
             <tbody>
               <tr>
                 <th width="300px">Enabled?</th>
-                <td>{{ security_info.FDE_Enabled|yesno }}</td>
+                <td>{{ object.filevault_enabled|yesno }}</td>
               </tr>
               <tr>
                 <th>Personal recovery key</th>
@@ -796,6 +901,8 @@
     <h3>Enrollment session{{ enrollment_session_info_count|pluralize }} ({{ enrollment_session_info_count }})</h3>
     {% include "mdm/_enrollment_session_info_list.html" %}
   {% endif %}
+{% include "mdm/_status_items.html" %}
+
 {% endblock %}
 {% block extrajs %}
   <script nonce="{{ request.csp_nonce }}">

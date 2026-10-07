@@ -983,6 +983,25 @@ class DeviceAssignment(models.Model):
 # Enrollment
 
 
+
+def iter_status_items_for_display(status_items):
+    if not isinstance(status_items, dict):
+        return
+    for name in sorted(status_items):
+        value = status_items[name]
+        if isinstance(value, bool):
+            kind = "bool"
+        elif value in ({}, []):
+            kind = "cleared"
+        elif isinstance(value, (dict, list)):
+            kind = "json"
+        elif value == "":
+            kind = "empty"
+        else:
+            kind = "text"
+        yield name, value, kind
+
+
 class EnrolledDeviceManager(models.Manager):
     def blocked(self):
         return self.filter(blocked_at__isnull=False)
@@ -1332,6 +1351,10 @@ class EnrolledDevice(models.Model):
         return self.build_version_extra or self.build_version or ""
 
     @property
+    def status_items_for_display(self):
+        return list(iter_status_items_for_display(self.status_items))
+
+    @property
     def software_update_status(self):
         # the software update status items, with template-friendly keys
         status_items = self.status_items if isinstance(self.status_items, dict) else {}
@@ -1353,6 +1376,32 @@ class EnrolledDevice(models.Model):
                     # "2026-09-21 08:30:00", "2026-09-21 16:30:00 +0000" or "2026-09-21T08:30:00"
                     value["deadline"] = deadline.replace("T", " ").removesuffix(" +0000")
             status[key] = value
+        return status
+
+    @property
+    def device_state_status(self):
+        # the device state status items, with template-friendly keys
+        status_items = self.status_items if isinstance(self.status_items, dict) else {}
+        status = {}
+        for key, item in (("passcode_present", "passcode.is-present"),
+                          ("passcode_compliant", "passcode.is-compliant"),
+                          ("lockdown_mode", "security.lockdown-mode"),
+                          ("battery_health", "device.power.battery-health"),
+                          ("system_health", "device.system.health"),
+                          ("return_to_service", "mdm.is-return-to-service"),
+                          ("shared_ipad", "mdm.is-shared-ipad")):
+            value = status_items.get(item)
+            if value is None:
+                continue
+            status[key] = value
+        migration_state = status_items.get("migration-assistant.state")
+        # Apple's schema lists "waiting" as the initial value and describes it as "none"
+        if isinstance(migration_state, str) and migration_state not in ("", "none", "waiting"):
+            migration = {"state": migration_state}
+            report = status_items.get("migration-assistant.report")
+            if isinstance(report, dict) and report:
+                migration["report"] = {k.replace("-", "_"): v for k, v in report.items()}
+            status["migration"] = migration
         return status
 
     @property
@@ -1468,6 +1517,11 @@ class EnrolledDevice(models.Model):
 
     @property
     def filevault_enabled(self):
+        # the status item is pushed on change, the SecurityInfo query is polled
+        if isinstance(self.status_items, dict):
+            enabled = self.status_items.get("diskmanagement.filevault.enabled")
+            if isinstance(enabled, bool):
+                return enabled
         try:
             return self.security_info["FDE_Enabled"]
         except (KeyError, TypeError):
@@ -1554,6 +1608,10 @@ class EnrolledUser(models.Model):
     # timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def status_items_for_display(self):
+        return list(iter_status_items_for_display(self.status_items))
 
     def __str__(self):
         return self.long_name or self.short_name
