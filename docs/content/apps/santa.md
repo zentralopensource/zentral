@@ -1005,6 +1005,7 @@ $ curl -X DELETE \
 
 * method: POST
 * Content-Type: application/json
+* PBAC action: `Inventory::Action::"createFile"`
 
 This endpoint is designed to ingest the JSON output of the [`santactl fileinfo` command](https://northpole.dev/binaries/santactl.html#fileinfo). This can be used to quickly and automatically upload information about binaries and certificates to Zentral. This information will be used to add context to rules identifiers, and in the rule forms.
 
@@ -1049,6 +1050,14 @@ This operation is idempotent. The second time you run the command, and if the ap
 
 * method: POST
 * Content-Type: application/json or application/yaml
+* PBAC actions:
+    * `Santa::Action::"createRuleSet"`
+    * `Santa::Action::"updateRuleSet"`
+    * `Santa::Action::"createRule"`
+    * `Santa::Action::"updateRule"`
+    * `Santa::Action::"deleteRule"`
+
+The policies must permit all five actions.
 
 This endpoint is designed to help automatically maintain Zentral Santa configuration rulesets. It can be used in a CI/CD workflow.
 
