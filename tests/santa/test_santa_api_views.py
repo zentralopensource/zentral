@@ -2,8 +2,10 @@ import json
 import uuid
 from unittest.mock import patch
 
+from django.db import connection
 from django.db.models import F
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
 from server.urls import build_urlpatterns_for_zentral_apps
@@ -1119,6 +1121,86 @@ class SantaAPIViewsTestCase(TestCase):
                                              collected_count=c_count,
                                              executed_count=e_count).exists()
             )
+
+    @patch("zentral.contrib.santa.events.update_target_counters", False)
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_eventupload_without_target_counters(self, post_event):
+        event_d = {
+            'cdhash': new_cdhash(),
+            'current_sessions': [],
+            'decision': 'BLOCK_UNKNOWN',
+            'executing_user': 'root',
+            'execution_time': 2242783327.585212,
+            'file_bundle_id': 'servicecontroller:com.apple.stomp.transcoderx',
+            'file_bundle_name': 'CompressorTranscoderX',
+            'file_bundle_path': ('/Library/Frameworks/Compressor.framework/'
+                                 'Versions/A/Resources/CompressorTranscoderX.bundle'),
+            'file_bundle_version': '3.5.3',
+            'file_bundle_version_string': '3.5.3',
+            'file_bundle_hash': new_sha256(),
+            'file_bundle_binary_count': 1,
+            'file_name': 'compressord',
+            'file_path': ('/Library/Frameworks/Compressor.framework/'
+                          'Versions/A/Resources/CompressorTranscoderX.bundle/Contents/MacOS'),
+            'file_sha256': new_sha256(),
+            'logged_in_users': [],
+            'parent_name': 'launchd',
+            'pid': 95,
+            'ppid': 1,
+            'quarantine_timestamp': 0,
+            'team_id': new_team_id(),
+            'signing_id': new_signing_id_identifier(),
+            'signing_chain': [{'cn': 'Software Signing',
+                               'ou': new_team_id(),
+                               'org': 'Apple Inc.',
+                               'sha256': new_sha256(),
+                               'valid_from': 1172268176,
+                               'valid_until': 1421272976},
+                              {'cn': 'Apple Root CA',
+                               'org': 'Apple Inc.',
+                               'ou': 'Apple Certification Authority',
+                               'sha256': 'b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024',
+                               'valid_from': 1146001236,
+                               'valid_until': 2054670036}]
+        }
+        target = Target.objects.create(
+            type=Target.Type.BINARY,
+            identifier=event_d["file_sha256"],
+        )
+        TargetCounter.objects.create(
+            target=target,
+            configuration=self.configuration,
+            blocked_count=3,
+            collected_count=2,
+            executed_count=1,
+        )
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.post_as_json("eventupload", self.enrolled_machine.hardware_uuid, {"events": [event_d]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"event_upload_bundle_binaries": [event_d["file_bundle_hash"]]})
+        self.assertEqual([q["sql"] for q in ctx.captured_queries if "LOCK TABLE" in q["sql"]], [])
+        self.assertTrue(
+            Bundle.objects.filter(target__type=Target.Type.BUNDLE,
+                                  target__identifier=event_d["file_bundle_hash"],
+                                  bundle_id=event_d["file_bundle_id"]).exists()
+        )
+        self.assertEqual(
+            sorted(Target.objects.values_list("type", "identifier")),
+            sorted([
+                (Target.Type.BINARY, event_d["file_sha256"]),
+                (Target.Type.BUNDLE, event_d["file_bundle_hash"]),
+                (Target.Type.CDHASH, event_d["cdhash"]),
+                (Target.Type.CERTIFICATE, event_d["signing_chain"][0]["sha256"]),
+                (Target.Type.CERTIFICATE, event_d["signing_chain"][1]["sha256"]),
+                (Target.Type.SIGNING_ID, event_d["signing_id"]),
+                (Target.Type.TEAM_ID, event_d["team_id"]),
+            ])
+        )
+        self.assertEqual(
+            list(TargetCounter.objects.values_list("target", "blocked_count", "collected_count", "executed_count")),
+            [(target.pk, 3, 2, 1)]
+        )
+        self.assertEqual(len(post_event.call_args_list), 1)
 
     def test_deprecated_eventupload(self):
         url = reverse("santa_public:deprecated_eventupload", args=(self.enrollment_secret.secret,

@@ -16,6 +16,19 @@ from .forms import TargetSearchForm
 
 def _iter_targets(search_kwargs, window_size=2000):
     query, kwargs = TargetSearchForm.search_query(**search_kwargs)
+    fields = [("identifier", "identifier")]
+    if TargetSearchForm.target_counters:
+        fields.extend((("blocked count", "blocked_count"),
+                       ("collected count", "collected_count"),
+                       ("executed count", "executed_count"),
+                       ("last seen", "last_seen")))
+    fields.extend((("min state", "min_state"),
+                   ("max state", "max_state"),
+                   ("min score", "min_score"),
+                   ("max score", "max_score"),
+                   ("min state updated at", "min_state_updated_at"),
+                   ("max state updated at", "max_state_updated_at"),
+                   ("rule count", "rule_count")))
     with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute(f"DECLARE santa_targets_export_cursor CURSOR FOR {query}", kwargs)
         while True:
@@ -27,18 +40,7 @@ def _iter_targets(search_kwargs, window_size=2000):
             for result in results:
                 target = dict(zip(columns, result))
                 row = []
-                for field, key in (("identifier", "identifier"),
-                                   ("blocked count", "blocked_count"),
-                                   ("collected count", "collected_count"),
-                                   ("executed count", "executed_count"),
-                                   ("last seen", "last_seen"),
-                                   ("min state", "min_state"),
-                                   ("max state", "max_state"),
-                                   ("min score", "min_score"),
-                                   ("max score", "max_score"),
-                                   ("min state updated at", "min_state_updated_at"),
-                                   ("max state updated at", "max_state_updated_at"),
-                                   ("rule count", "rule_count")):
+                for field, key in fields:
                     val = target.get(key)
                     if val is None:
                         val = ""

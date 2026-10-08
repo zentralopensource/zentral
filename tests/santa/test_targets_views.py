@@ -246,6 +246,51 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0]["identifier"], self.file_sha256)
 
+    def test_search_target_counter_fields(self):
+        self.login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"), {"target_type": "BINARY"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Target (1)")
+        self.assertContains(response, "<th>Counters</th>")
+        self.assertContains(response, "Executed: 1")
+        form = response.context["form"]
+        self.assertIn("last_seen_days", form.fields)
+        self.assertEqual(
+            [value for value, _ in form.fields["order_by"].choices],
+            ["", "-last_seen", "-executed", "-blocked", "-min_score", "-max_score", "+min_score", "+max_score"]
+        )
+        self.assertContains(response, 'name="last_seen_days"')
+        self.assertContains(response, 'value="-executed"')
+
+    @patch("zentral.contrib.santa.forms.TargetSearchForm.target_counters", False)
+    def test_search_target_without_counter_fields(self):
+        self.login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"), {"target_type": "BINARY"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Target (1)")
+        self.assertNotContains(response, "<th>Counters</th>")
+        self.assertNotContains(response, "Executed:")
+        form = response.context["form"]
+        self.assertNotIn("last_seen_days", form.fields)
+        self.assertEqual(
+            [value for value, _ in form.fields["order_by"].choices],
+            ["", "-min_score", "-max_score", "+min_score", "+max_score"]
+        )
+        self.assertNotContains(response, 'name="last_seen_days"')
+        self.assertNotContains(response, 'value="-executed"')
+        self.assertContains(response, 'value="-max_score"')
+
+    @patch("zentral.contrib.santa.forms.TargetSearchForm.target_counters", False)
+    def test_search_target_without_counter_fields_ignores_last_seen(self):
+        TargetCounter.objects.update(updated_at=naive_utcnow() - timedelta(days=100))
+        self.login("santa.view_target")
+        response = self.client.get(reverse("santa:targets"),
+                                   {"target_type": "BINARY",
+                                    "last_seen_days": 3})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Target (1)")
+        self.assertEqual([t["identifier"] for t in response.context["targets"]], [self.file_sha256])
+
     def test_search_target_configuration_no_link(self):
         configuration = force_configuration()
         self.login("santa.view_target")

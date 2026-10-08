@@ -16,6 +16,7 @@ from zentral.contrib.santa.events import (
     SantaRuleUpdateEvent,
     SantaTargetStateUpdateEvent,
     _build_file_tree_from_santa_event,
+    _commit_files,
     _create_bundle_binaries,
     _create_missing_bundles,
     _update_targets,
@@ -715,6 +716,23 @@ class SantaEventTestCase(TestCase):
         self.assertEqual(_update_targets(configuration, [event_d]), {})
         logger_warning.assert_called_once_with("Unknown decision: %s", "UNKNOWN!!!")
 
+    # _commit_files
+
+    @patch("zentral.contrib.santa.events.File")
+    def test_commit_files_sorted_and_deduplicated(self, file_model):
+        hashes = sorted(new_sha256() for _ in range(10))
+        events = [{"decision": "ALLOW_UNKNOWN", "file_sha256": sha256} for sha256 in reversed(hashes)]
+        _commit_files(events + events)
+        self.assertEqual([c.args[0]["sha_256"] for c in file_model.objects.commit.call_args_list], hashes)
+
+    @patch("zentral.contrib.santa.events.logger.exception")
+    @patch("zentral.contrib.santa.events.File")
+    def test_commit_files_error(self, file_model, logger_exception):
+        file_model.objects.commit.side_effect = [Exception("YOLO"), None]
+        _commit_files([{"decision": "ALLOW_UNKNOWN", "file_sha256": new_sha256()} for _ in range(2)])
+        self.assertEqual(file_model.objects.commit.call_count, 2)
+        logger_exception.assert_called_once_with("Could not commit file")
+
     # _create_missing_bundles
 
     @patch("zentral.contrib.santa.events.logger.error")
@@ -724,7 +742,26 @@ class SantaEventTestCase(TestCase):
         _create_missing_bundles([event_d], {})
         logger_error.assert_called_once_with("Missing BUNDLE target %s", event_d["file_bundle_hash"])
 
+    def test_create_missing_bundles_sorted(self):
+        hashes = sorted(new_sha256() for _ in range(10))
+        targets = {}
+        for sha256 in hashes:
+            targets[(Target.Type.BUNDLE, sha256)] = (Target.objects.create(type=Target.Type.BUNDLE, identifier=sha256),
+                                                     True)
+        events = [{"decision": "BLOCK_UNKNOWN", "file_bundle_hash": sha256} for sha256 in reversed(hashes)]
+        self.assertEqual(_create_missing_bundles(events, targets), hashes)
+
     # _create_bundle_binaries
+
+    @patch("zentral.contrib.santa.events.add_bundle_binary_targets")
+    def test_create_bundle_binaries_sorted(self, add_bundle_binary_targets):
+        hashes = sorted(new_sha256() for _ in range(10))
+        for sha256 in hashes:
+            Bundle.objects.create(target=Target.objects.create(type=Target.Type.BUNDLE, identifier=sha256),
+                                  binary_count=0)
+        _create_bundle_binaries([{"decision": "BUNDLE_BINARY", "file_bundle_hash": sha256, "file_sha256": new_sha256()}
+                                 for sha256 in reversed(hashes)])
+        self.assertEqual([c.args[0].target.identifier for c in add_bundle_binary_targets.call_args_list], hashes)
 
     @patch("zentral.contrib.santa.events.logger.error")
     def test_create_bundle_binaries_missing_bundle(self, logger_error):

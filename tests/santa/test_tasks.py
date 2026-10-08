@@ -1,6 +1,9 @@
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from .utils import add_file_to_test_class
+from zentral.contrib.santa.forms import TargetSearchForm
 from zentral.contrib.santa.models import Target
 from zentral.contrib.santa.tasks import _export_targets, _iter_targets
 
@@ -23,6 +26,24 @@ class SantaTasksTestCase(TestCase):
                 break
         else:
             raise AssertionError("Identifier not found")
+
+    def test_iter_targets_fields(self):
+        target_type, row = list(_iter_targets({"q": self.file_sha256}))[0]
+        self.assertEqual(
+            [field for field, _ in row][:12],
+            ["identifier", "blocked count", "collected count", "executed count", "last seen",
+             "min state", "max state", "min score", "max score",
+             "min state updated at", "max state updated at", "rule count"]
+        )
+
+    @patch.object(TargetSearchForm, "target_counters", False)
+    def test_iter_targets_fields_without_target_counters(self):
+        target_type, row = list(_iter_targets({"q": self.file_sha256}))[0]
+        self.assertEqual(
+            [field for field, _ in row][:8],
+            ["identifier", "min state", "max state", "min score", "max score",
+             "min state updated at", "max state updated at", "rule count"]
+        )
 
     def test_export_zip(self):
         self.assertEqual(

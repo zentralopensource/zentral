@@ -138,6 +138,8 @@ The rules of a Santa target use the same two cells, with the configuration of th
 
 The page of a Santa configuration has four tabs now: Overview, Rules, Scoped client modes and Scoped path regexes. The Overview gives the attributes of the configuration, its voting groups and its enrollments. The three other tabs are paginated, and each one has a search: the rule search for the rules, the mode for the scoped client modes, and the policy and a text for the scoped path regexes. The title of each of these tabs gives its number of items. A link to a scoped client mode or to a scoped path regex opens its tab with a search that finds it, as the link to a rule does. Before, the scoped client modes and the scoped path regexes were all on the page of the configuration, and the rules were on a page of their own.
 
+The new `update_target_counters` option of the `zentral.contrib.santa` app stops the updates of the target counters. To update them, each event upload locks a database table until the end of its request, so the event uploads wait for each other. With `false`, the event uploads create the targets but do not lock the table. The counters and the last seen time stop changing, and the Targets page and the targets export do not show them.
+
 
 ### Backward incompatibilities
 

@@ -49,7 +49,9 @@
     <thead>
         <tr>
             <th>Object</th>
+            {% if form.target_counters %}
             <th>Counters</th>
+            {% endif %}
             <th>State</th>
             <th>Score</th>
             <th>Rules</th>
@@ -95,11 +97,13 @@
           {% endif %}
           {% endif %}
         </td>
+        {% if form.target_counters %}
         <td>
           Executed: {{ target.executed_count }}
           <br>Blocked: {{ target.blocked_count }}
           <br>Last seen: {{ target.last_seen }}
         </td>
+        {% endif %}
         <td>
           {% if target.min_state != target.max_state %}
           {{ target.min_state.label }} → {{ target.max_state.label }}

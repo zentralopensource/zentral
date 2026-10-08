@@ -14,7 +14,7 @@ from zentral.conf import settings
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.time import naive_utcnow
 
-from .events import post_santa_rule_update_event
+from .events import post_santa_rule_update_event, update_target_counters
 from .models import (
     Configuration,
     EnrolledMachine,
@@ -903,6 +903,17 @@ class TargetSearchForm(forms.Form):
                  ('+min_score', '↑ Min score'),
                  ('+max_score', '↑ Max score'),]
     )
+
+    target_counters = update_target_counters
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.target_counters:
+            del self.fields["last_seen_days"]
+            self.fields["order_by"].choices = [
+                (value, label) for value, label in self.fields["order_by"].choices
+                if value not in ("-last_seen", "-executed", "-blocked")
+            ]
 
     @classmethod
     def search_query(

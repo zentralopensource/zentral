@@ -15,6 +15,20 @@ To activate the santa module, you need to add a `zentral.contrib.santa` section 
 
 The Santa events have a `signing_chain` key that is an array of certificate objects. This can be difficult to use in some event stores, like Elasticsearch. To fix this issue, Zentral flattens the signing chain using the `signing_cert_0`, `signing_cert_1` and `signing_cert_2` keys. To prevent Zentral from altering the events (default behaviour), set this boolean option to `false`.
 
+### `update_target_counters`
+
+**OPTIONAL**
+
+For each target and each configuration, Zentral counts the executed, blocked and collected events that Santa uploads. It also keeps the time of the last event, which is the last seen time of the target. The Targets page and the targets export show these values.
+
+To update the counters, each event upload locks a database table until the end of its request. Only one event upload at a time can continue, and the other event uploads wait. With many machines, or with large event uploads, the requests can queue on this lock.
+
+To stop the updates of the counters, set this boolean option to `false`. The default is `true`. Zentral continues to create the targets and keeps the counters that it has, but it does not lock the table. The consequences are:
+
+* The counters and the last seen time of the targets do not change.
+* The Targets page and the targets export do not show the counters and the last seen time. The Targets page does not show the `Last seen` filter and the sort orders on these values.
+* With a configuration filter, the Targets page finds a new target only when the target has a state in this configuration.
+
 ## Santa deployment
 
 ### Create a Santa agent configuration

@@ -1,9 +1,11 @@
+import json
 import logging
 
 from zentral.conf import settings
 from zentral.contrib.inventory.models import File
 from zentral.contrib.santa.models import Bundle, EnrolledMachine, Target
-from zentral.contrib.santa.utils import add_bundle_binary_targets, update_metabundles, update_or_create_targets
+from zentral.contrib.santa.utils import (add_bundle_binary_targets, create_targets, update_metabundles,
+                                         update_or_create_targets)
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, register_event_type
 from zentral.utils.certificates import APPLE_DEV_ID_ISSUER_CN, parse_apple_dev_id
 from zentral.utils.text import shard
@@ -379,6 +381,9 @@ def _is_bundle_binary_pseudo_event(event_d):
     return event_d.get('decision') == "BUNDLE_BINARY"
 
 
+update_target_counters = settings["apps"]["zentral.contrib.santa"].get("update_target_counters", True)
+
+
 def _update_targets(configuration, events):
     targets = {}
     for event_d in events:
@@ -425,10 +430,12 @@ def _update_targets(configuration, events):
             target_increments["blocked_incr"] += blocked_incr
             target_increments["collected_incr"] += collected_incr
             target_increments["executed_incr"] += executed_incr
-    if targets:
+    if not targets:
+        return {}
+    elif update_target_counters:
         return update_or_create_targets(configuration, targets)
     else:
-        return {}
+        return create_targets(targets)
 
 
 def _create_missing_bundles(events, targets):
@@ -450,7 +457,7 @@ def _create_missing_bundles(events, targets):
             uploaded_at__isnull=False,  # to recover from blocked uploads
         ).values_list("target__identifier", flat=True)
     )
-    unknown_file_bundle_hashes = list(set(bundle_events.keys()) - existing_sha256_set)
+    unknown_file_bundle_hashes = sorted(set(bundle_events.keys()) - existing_sha256_set)
     for sha256 in unknown_file_bundle_hashes:
         target, _ = targets.get((Target.Type.BUNDLE, sha256), (None, None))
         if not target:
@@ -484,7 +491,7 @@ def _create_bundle_binaries(events):
             if bundle_sha256:
                 bundle_binary_events.setdefault(bundle_sha256, []).append(event_d)
     uploaded_bundles = set()
-    for bundle_sha256, events in bundle_binary_events.items():
+    for bundle_sha256, events in sorted(bundle_binary_events.items()):
         try:
             bundle = Bundle.objects.get(target__type=Target.Type.BUNDLE, target__identifier=bundle_sha256)
         except Bundle.DoesNotExist:
@@ -521,16 +528,21 @@ def _create_bundle_binaries(events):
 
 
 def _commit_files(events):
+    file_trees = {}
     for event_d in events:
         try:
             file_d = _build_file_tree_from_santa_event(event_d)
         except Exception:
             logger.exception("Could not build app tree from santa event")
         else:
-            try:
-                File.objects.commit(file_d)
-            except Exception:
-                logger.exception("Could not commit file")
+            file_trees[json.dumps(file_d, sort_keys=True, default=str)] = file_d
+    # In the same order in all the event uploads, so that the uploads that commit the same new files
+    # wait for each other instead of deadlocking.
+    for _, file_d in sorted(file_trees.items()):
+        try:
+            File.objects.commit(file_d)
+        except Exception:
+            logger.exception("Could not commit file")
 
 
 flatten_events_signing_chain = settings["apps"]["zentral.contrib.santa"].get("flatten_events_signing_chain", True)

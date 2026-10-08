@@ -161,11 +161,50 @@ def update_or_create_targets(configuration, targets):
         return targets
 
 
+def create_targets(targets):
+    with connection.cursor() as cursor:
+        # One page for all the targets: the database sorts all of them,
+        # so the concurrent transactions insert them in the same order, and cannot deadlock.
+        created_ids = {
+            target_id
+            for target_id, in psycopg2.extras.execute_values(
+                cursor,
+                'insert into santa_target(type, identifier, created_at)'
+                ' select type, identifier, ts from (values %s) o(type, identifier, ts)'
+                ' order by type, identifier'
+                ' on conflict (type, identifier) do nothing'
+                ' returning id',
+                ((target_type.value, target_identifier, naive_utcnow())
+                 for target_type, target_identifier in targets),
+                page_size=len(targets),
+                fetch=True
+            )
+        }
+        # A second statement, with a new snapshot. The insert does not return a target that a concurrent
+        # transaction inserted, and its snapshot does not see it after the concurrent transaction commits.
+        result = psycopg2.extras.execute_values(
+            cursor,
+            'select t.id, t.type, t.identifier, t.created_at'
+            ' from santa_target t join (values %s) o(type, identifier)'
+            ' on (t.type = o.type and t.identifier = o.identifier)',
+            ((target_type.value, target_identifier) for target_type, target_identifier in targets),
+            page_size=len(targets),
+            fetch=True
+        )
+        columns = [c.name for c in cursor.description]
+        created_targets = {}
+        for t in result:
+            target = Target(**dict(zip(columns, t)))
+            created_targets[(target.type, target.identifier)] = (target, target.pk in created_ids)
+        return created_targets
+
+
 def add_bundle_binary_targets(bundle, binary_target_identifiers):
     query = (
         'insert into santa_bundle_binary_targets '
         '("bundle_id", "target_id") '
         "select %s, id from santa_target where type = 'BINARY' and identifier in %s "
+        'order by id '
         'on conflict ("bundle_id", "target_id") do nothing'
     )
     with connection.cursor() as cursor:
@@ -195,6 +234,7 @@ def update_metabundles(bundles=None):
         "  insert into santa_target(type, identifier, created_at)"
         "  select 'SIGNINGID', signing_id, now()"
         "  from unique_signing_ids"
+        "  order by signing_id"
         "  on conflict (type, identifier) do nothing"
         "  returning id, identifier"
         "), existing_signing_id_targets as ("
@@ -232,6 +272,7 @@ def update_metabundles(bundles=None):
         "  insert into santa_target(type, identifier, created_at)"
         "  select type, identifier, now()"
         "  from expected_metabundle_targets"
+        "  order by identifier"
         "  on conflict (type, identifier) do nothing"
         "  returning id, identifier"
         "), metabundle_targets as ("
@@ -245,6 +286,7 @@ def update_metabundles(bundles=None):
         "  insert into santa_metabundle(target_id, created_at)"
         "  select id, now()"
         "  from metabundle_targets"
+        "  order by id"
         "  on conflict do nothing"
         "  returning id, target_id"
         "), metabundles as ("
@@ -263,21 +305,31 @@ def update_metabundles(bundles=None):
         "    from expected_metabundle_targets"
         "  ) as uemt on (mbt.identifier = uemt.identifier)"
         "  join signing_id_targets sit on (sit.identifier = uemt.signing_id)"
+        "  order by mb.id, sit.id"
         "  on conflict do nothing"
-        "), bundles_metabundles as ("
-        "  select asi.bundle_id, mb.id metabundle_id"
-        "  from aggregated_signing_ids asi"
-        "  join expected_metabundle_targets emt on (asi.signing_ids = emt.signing_ids)"
-        "  join metabundle_targets mbt on (emt.identifier = mbt.identifier)"
-        "  join metabundles mb on (mb.target_id = mbt.id)"
-        ")"
-        "update santa_bundle "
-        "set metabundle_id = bundles_metabundles.metabundle_id "
-        "from bundles_metabundles "
-        "where santa_bundle.id = bundles_metabundles.bundle_id"
+        ") "
+        "select asi.bundle_id, emt.identifier"
+        " from aggregated_signing_ids asi"
+        " join expected_metabundle_targets emt on (asi.signing_ids = emt.signing_ids)"
     )
-    with connection.cursor() as cursor:
+    # The savepoint keeps the event upload going if the update fails.
+    with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute(query, args)
+        bundle_metabundles = cursor.fetchall()
+        if not bundle_metabundles:
+            return
+        # A second statement, with a new snapshot. The query does not return a metabundle that a concurrent
+        # transaction inserted, and its snapshot does not see it after the concurrent transaction commits.
+        psycopg2.extras.execute_values(
+            cursor,
+            "update santa_bundle b set metabundle_id = mb.id"
+            " from (values %s) v(bundle_id, identifier)"
+            " join santa_target t on (t.type = 'METABUNDLE' and t.identifier = v.identifier)"
+            " join santa_metabundle mb on (mb.target_id = t.id)"
+            " where b.id = v.bundle_id and b.metabundle_id is distinct from mb.id",
+            bundle_metabundles,
+            page_size=len(bundle_metabundles)
+        )
 
 
 def target_related_targets(target):
