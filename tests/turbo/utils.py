@@ -16,6 +16,16 @@ from zentral.utils.provisioning import provision
 from pbac.engine import engine
 
 
+def mint_body(schedule_pk, run_id, artifact="archive", size=1024, sha256=None, digests=None):
+    """The mint request as the wire has it: the result's run block, and one uploads[] entry without the key."""
+    upload = {"artifact": artifact, "size": size}
+    if sha256 is not None:
+        upload["sha256"] = sha256
+    if digests is not None:
+        upload["digests"] = digests
+    return {"run": {"id": str(run_id), "schedule_pk": str(schedule_pk)}, "upload": upload}
+
+
 def force_configuration(name=None):
     return Configuration.objects.create(name=name or get_random_string(12))
 
