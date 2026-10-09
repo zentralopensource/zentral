@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from accounts.models import User
+from accounts.models import Policy, User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.commands import CustomCommand
@@ -54,6 +54,22 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     def _get_url_namespace(self):
         return "mdm"
+
+    # utils
+
+    def _set_block_state_policy(self, *action_ids):
+        # not the LoginCase policy, which login() replaces
+        Policy.objects.update_or_create(
+            name="MDM block tests",
+            defaults={"source": "\n".join(
+                "permit ("
+                f' principal in Role::"{self.group.pk}",'
+                f' action == MDM::Action::"{action_id}",'
+                " resource"
+                ");"
+                for action_id in action_ids
+            )},
+        )
 
     # test enrolled devices
 
@@ -281,9 +297,25 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
 
-    def test_enrolled_device_block_link(self):
+    def test_enrolled_device_no_block_link_change_permission(self):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)
         self.login("mdm.view_enrolleddevice", "mdm.change_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
+
+    def test_enrolled_device_no_block_link_unblock_policy(self):
+        session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        self._set_block_state_policy("unblockEnrolledDevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
+
+    def test_enrolled_device_block_link(self):
+        session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        self._set_block_state_policy("blockEnrolledDevice")
         response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
@@ -296,10 +328,20 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
 
+    def test_enrolled_device_no_unblock_link_block_policy(self):
+        session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.block()
+        self.login("mdm.view_enrolleddevice")
+        self._set_block_state_policy("blockEnrolledDevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
+
     def test_enrolled_device_unblock_link(self):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)
         session.enrolled_device.block()
-        self.login("mdm.view_enrolleddevice", "mdm.change_enrolleddevice")
+        self.login("mdm.view_enrolleddevice")
+        self._set_block_state_policy("unblockEnrolledDevice")
         response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
@@ -1947,9 +1989,23 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_block_enrolled_device_get(self):
+    def test_block_enrolled_device_change_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self.login("mdm.change_enrolleddevice")
+        response = self.client.get(reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_block_enrolled_device_unblock_policy_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login()
+        self._set_block_state_policy("unblockEnrolledDevice")
+        response = self.client.get(reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_block_enrolled_device_get(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login()
+        self._set_block_state_policy("blockEnrolledDevice")
         response = self.client.get(reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_confirm_block.html")
@@ -1958,7 +2014,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
     def test_block_blocked_enrolled_device_404(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         session.enrolled_device.block()
-        self.login("mdm.change_enrolleddevice")
+        self.login()
+        self._set_block_state_policy("blockEnrolledDevice")
         response = self.client.get(reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -1968,7 +2025,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         enrolled_device = session.enrolled_device
         self.assertIsNone(enrolled_device.blocked_at)
-        self.login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
+        self.login("mdm.view_enrolleddevice")
+        self._set_block_state_policy("blockEnrolledDevice")
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
@@ -2003,7 +2061,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
     def test_block_blocked_enrolled_device_posts_no_event(self, send_enrolled_device_notification, post_event):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         session.enrolled_device.block()
-        self.login("mdm.change_enrolleddevice")
+        self.login()
+        self._set_block_state_policy("blockEnrolledDevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("mdm:block_enrolled_device", args=(session.enrolled_device.pk,))
@@ -2020,14 +2079,31 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     def test_unblock_enrolled_device_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.block()
         self.login()
+        response = self.client.get(reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_unblock_enrolled_device_change_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.block()
+        self.login("mdm.change_enrolleddevice")
+        response = self.client.get(reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_unblock_enrolled_device_block_policy_permission_denied(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        session.enrolled_device.block()
+        self.login()
+        self._set_block_state_policy("blockEnrolledDevice")
         response = self.client.get(reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_unblock_enrolled_device_get(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         session.enrolled_device.block()
-        self.login("mdm.change_enrolleddevice")
+        self.login()
+        self._set_block_state_policy("unblockEnrolledDevice")
         response = self.client.get(reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/enrolleddevice_confirm_unblock.html")
@@ -2035,7 +2111,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     def test_unblock_unblocked_enrolled_device_404(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login("mdm.change_enrolleddevice")
+        self.login()
+        self._set_block_state_policy("unblockEnrolledDevice")
         response = self.client.get(reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,)))
         self.assertEqual(response.status_code, 404)
 
@@ -2045,7 +2122,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         enrolled_device = session.enrolled_device
         enrolled_device.block()
         blocked_at = enrolled_device.blocked_at
-        self.login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
+        self.login("mdm.view_enrolleddevice")
+        self._set_block_state_policy("unblockEnrolledDevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("mdm:unblock_enrolled_device", args=(enrolled_device.pk,)),
@@ -2068,7 +2146,8 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_unblock_unblocked_enrolled_device_posts_no_event(self, post_event):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login("mdm.change_enrolleddevice")
+        self.login()
+        self._set_block_state_policy("unblockEnrolledDevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("mdm:unblock_enrolled_device", args=(session.enrolled_device.pk,))

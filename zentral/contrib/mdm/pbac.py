@@ -120,6 +120,35 @@ force_install_artifact_action = engine.register_action(
 )
 
 
+# Blocking and unblocking are two actions, so that a role can block a device without being
+# allowed to let it enroll again. Both take the inventory machine resource, so a policy can be
+# scoped to a meta business unit.
+block_enrolled_device_action = engine.register_action(
+    "blockEnrolledDevice",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(MACHINE_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Block a device. Zentral releases the device from the MDM, and refuses its new enrollments.",
+)
+
+
+unblock_enrolled_device_action = engine.register_action(
+    "unblockEnrolledDevice",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(MACHINE_RESOURCE_TYPE,),
+        context={},
+    ),
+    help_text="Unblock a device. The device can enroll again.",
+)
+
+
 # requests
 
 
@@ -134,3 +163,20 @@ class ForceInstallArtifactRequest(Request):
              "artifactName": artifact.name,
              "channel": str(channel)},
         )
+
+
+class BaseEnrolledDeviceBlockRequest(Request):
+    def __init__(self, user_obj, machine: MetaMachine) -> None:
+        super().__init__(
+            Principal.from_user(user_obj),
+            self.action,
+            get_meta_machine_resource(machine),
+        )
+
+
+class BlockEnrolledDeviceRequest(BaseEnrolledDeviceBlockRequest):
+    action = block_enrolled_device_action
+
+
+class UnblockEnrolledDeviceRequest(BaseEnrolledDeviceBlockRequest):
+    action = unblock_enrolled_device_action

@@ -537,8 +537,10 @@ class PBACEngineTestCase(TestCase):
         user_only_action_keys = (
             ("createMachineTag", "Inventory"),
             ("deleteMachineTag", "Inventory"),
+            ("blockEnrolledDevice", "MDM"),
             ("disownDEPDevice", "MDM"),
             ("forceInstallArtifact", "MDM"),
+            ("unblockEnrolledDevice", "MDM"),
             ("viewAdminPassword", "MDM"),
             ("viewDeviceLockPIN", "MDM"),
             ("viewFileVaultPRK", "MDM"),

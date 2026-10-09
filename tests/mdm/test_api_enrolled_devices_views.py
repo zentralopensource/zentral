@@ -77,6 +77,18 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     def _get_api_key(self):
         return self.api_key
 
+    # utils
+
+    def set_block_state_policy(self, *action_ids):
+        self.set_policy("\n".join(
+            "permit ("
+            f' principal in Role::"{self.group.pk}",'
+            f' action == MDM::Action::"{action_id}",'
+            " resource"
+            ");"
+            for action_id in action_ids
+        ))
+
     # Assertions
 
     def _assert_found_enrolled_device(self, response, last_ip=None, last_seen_at=None):
@@ -490,10 +502,25 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
         response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 403)
 
+    def test_block_enrolled_device_change_permission_denied(self):
+        self.set_permissions("mdm.change_enrolleddevice")
+        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 403)
+
+    def test_block_enrolled_device_unblock_policy_permission_denied(self):
+        self.set_block_state_policy("unblockEnrolledDevice")
+        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 403)
+
+    def test_block_enrolled_device_not_found(self):
+        self.set_block_state_policy("blockEnrolledDevice")
+        response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk + 1000,)), None)
+        self.assertEqual(response.status_code, 404)
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_block_enrolled_device_already_blocked(self, post_event):
         self.enrolled_device.block()
-        self.set_permissions("mdm.change_enrolleddevice")
+        self.set_block_state_policy("blockEnrolledDevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 400)
@@ -505,7 +532,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     @patch("zentral.contrib.mdm.api_views.enrolled_devices.send_enrolled_device_notification")
     def test_block_enrolled_device_audit_event(self, send_enrolled_device_notification, post_event):
         self.enrolled_device.unblock()
-        self.set_permissions("mdm.change_enrolleddevice")
+        self.set_block_state_policy("blockEnrolledDevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)),
                                  None, ip="1.2.3.4")
@@ -540,7 +567,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     def test_unblock_enrolled_device_audit_event(self, send_enrolled_device_notification, post_event):
         self.enrolled_device.block()
         blocked_at = self.enrolled_device.blocked_at
-        self.set_permissions("mdm.change_enrolleddevice")
+        self.set_block_state_policy("unblockEnrolledDevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 200)
@@ -559,7 +586,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_unblock_enrolled_device_not_blocked_posts_no_event(self, post_event):
         self.enrolled_device.unblock()
-        self.set_permissions("mdm.change_enrolleddevice")
+        self.set_block_state_policy("unblockEnrolledDevice")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 400)
@@ -568,7 +595,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
 
     def test_block_enrolled_device(self):
         self.enrolled_device.unblock()
-        self.set_permissions("mdm.change_enrolleddevice")
+        self.set_block_state_policy("blockEnrolledDevice")
         response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 200)
         self.enrolled_device.refresh_from_db()
@@ -635,16 +662,28 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
         response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 403)
 
+    def test_unblock_enrolled_device_change_permission_denied(self):
+        self.enrolled_device.block()
+        self.set_permissions("mdm.change_enrolleddevice")
+        response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 403)
+
+    def test_unblock_enrolled_device_block_policy_permission_denied(self):
+        self.enrolled_device.block()
+        self.set_block_state_policy("blockEnrolledDevice")
+        response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
+        self.assertEqual(response.status_code, 403)
+
     def test_unblock_enrolled_device_already_unblocked(self):
         self.enrolled_device.unblock()
-        self.set_permissions("mdm.change_enrolleddevice")
+        self.set_block_state_policy("unblockEnrolledDevice")
         response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"detail": "Device not blocked."})
 
     def test_unblock_enrolled_device(self):
         self.enrolled_device.block()
-        self.set_permissions("mdm.change_enrolleddevice")
+        self.set_block_state_policy("unblockEnrolledDevice")
         response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
         self.assertEqual(response.status_code, 200)
         self.enrolled_device.refresh_from_db()

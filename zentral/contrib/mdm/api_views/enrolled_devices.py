@@ -13,7 +13,7 @@ from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from zentral.contrib.inventory.models import MachineTag, Tag
+from zentral.contrib.inventory.models import MachineTag, MetaMachine, Tag
 from zentral.contrib.mdm.apns import send_enrolled_device_notification
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import (
@@ -29,6 +29,7 @@ from zentral.contrib.mdm.events import (
     post_recovery_password_viewed_event,
 )
 from zentral.contrib.mdm.models import Channel, EnrolledDevice
+from zentral.contrib.mdm.pbac import BlockEnrolledDeviceRequest, UnblockEnrolledDeviceRequest
 from zentral.contrib.mdm.serializers import (
     DeviceCommandSerializer,
     EnrolledDeviceAdminPasswordSerializer,
@@ -40,6 +41,7 @@ from zentral.utils.drf import (
     DefaultDjangoModelPermissions,
     DjangoPermissionRequired,
     MaxLimitOffsetPagination,
+    PBACPermission,
 )
 
 
@@ -155,11 +157,14 @@ class EnrolledDeviceList(ListAPIView):
 
 
 class UpdateEnrolledDeviceBlockView(APIView):
-    permission_required = "mdm.change_enrolleddevice"
-    permission_classes = [DjangoPermissionRequired]
+    permission_classes = [PBACPermission]
+
+    def get_pbac_request(self, request):
+        self.enrolled_device = get_object_or_404(EnrolledDevice, pk=self.kwargs["pk"])
+        return self.pbac_request_class(request.user, MetaMachine(self.enrolled_device.serial_number))
 
     def post(self, request, *args, **kwargs):
-        enrolled_device = get_object_or_404(EnrolledDevice, pk=kwargs["pk"])
+        enrolled_device = self.enrolled_device
         error = self.verify_block_state(enrolled_device)
         if error:
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
@@ -181,6 +186,8 @@ class UpdateEnrolledDeviceBlockView(APIView):
 
 
 class BlockEnrolledDevice(UpdateEnrolledDeviceBlockView):
+    pbac_request_class = BlockEnrolledDeviceRequest
+
     def verify_block_state(self, enrolled_device):
         if enrolled_device.blocked_at:
             return "Device already blocked."
@@ -195,6 +202,8 @@ class BlockEnrolledDevice(UpdateEnrolledDeviceBlockView):
 
 
 class UnblockEnrolledDevice(UpdateEnrolledDeviceBlockView):
+    pbac_request_class = UnblockEnrolledDeviceRequest
+
     def verify_block_state(self, enrolled_device):
         if not enrolled_device.blocked_at:
             return "Device not blocked."

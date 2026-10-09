@@ -7,8 +7,9 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
+from pbac import cedar
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.inventory.models import MetaBusinessUnit
+from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.models import Channel, DeviceArtifact, TargetArtifact, UserArtifact, UserCommand
 from zentral.utils.time import naive_utcnow
 
@@ -103,6 +104,23 @@ class MDMForceInstallViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Force install")
         self.assertContains(response, self.device_url(enrolled_device, artifact))
+
+    def test_enrolled_device_page_authorizes_its_requests_at_once(self):
+        enrolled_device = self._force_enrolled_device()
+        self._force_target_artifact(enrolled_device)
+        self.login("mdm.view_enrolleddevice")
+        self._set_policy()
+        with patch("zentral.contrib.mdm.views.management.MetaMachine", wraps=MetaMachine) as meta_machine, \
+             patch("pbac.engine.authorize_requests", wraps=cedar.authorize_requests) as authorize_requests:
+            response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Force install")
+        meta_machine.assert_called_once_with(enrolled_device.serial_number)
+        authorize_requests.assert_called_once()
+        self.assertEqual(
+            sorted(str(request.action) for request in authorize_requests.call_args.args[0]),
+            ['MDM::Action::"blockEnrolledDevice"', 'MDM::Action::"forceInstallArtifact"'],
+        )
 
     def test_enrolled_device_no_force_install_button_blocked_device(self):
         enrolled_device = self._force_enrolled_device()

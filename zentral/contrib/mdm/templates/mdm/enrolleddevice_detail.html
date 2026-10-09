@@ -222,7 +222,7 @@
           <th>Blocked?</th>
           <td>
             {{ object.blocked_at|date:"SHORT_DATETIME_FORMAT"|default:"no" }}
-            {% if perms.mdm.change_enrolleddevice %}
+            {% if block_state_request.is_authorized %}
               {% if object.blocked_at %}
                 <a href="{% url 'mdm:unblock_enrolled_device' object.pk %}"
                    class="btn btn-success btn-xs"

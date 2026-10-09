@@ -255,6 +255,22 @@ Each change of a target artifact is recorded as a `target_artifact_update` event
 - `force_install_requested_at`: set when the forced install is requested, and back to `null` when it is resolved.
 - `retries_exhausted`: `true` on the failure event of the final install attempt, when no automatic retry will follow. Use it to find the artifacts that will not recover on their own.
 
+## Block a device
+
+Zentral releases a blocked device from the MDM, and refuses its new MDM enrollments. An unblocked device can enroll again. In the web console, the *Block* and *Unblock* buttons are in the *Blocked?* row of the device page. The [HTTP API endpoints](#apimdmdevicesintpkblock) are documented below. The [audit trail](#blocking-a-device) records each block and unblock.
+
+### Block device permissions
+
+Two PBAC actions gate the two operations: `MDM::Action::"blockEnrolledDevice"` and `MDM::Action::"unblockEnrolledDevice"`. A role can thus block a device, and not let it enroll again. The two actions take the inventory machine resource, so a policy can be scoped to a machine or to a meta business unit. They are members of the `UserActions` and `AdminActions` groups. Example:
+
+```
+permit (
+  principal in Role::"42",
+  action == MDM::Action::"blockEnrolledDevice",
+  resource in Inventory::MetaBusinessUnit::"3"
+);
+```
+
 ## FileVault Configuration
 
 Zentral manages FileVault settings for full disk encryption on macOS devices via MDM. Using a dedicated configuration, it allows the creation and assignment of an individual FileVault configuration to one or more MDM Blueprints. This approach provides centralized control over FileVault application, user experience, and key management, ensuring compliance with the organization’s data encryption policies.
@@ -1111,7 +1127,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/block/`
 
  * method: `POST`
- * PBAC action: `MDM::Action::"updateEnrolledDevice"`
+ * PBAC action: `MDM::Action::"blockEnrolledDevice"`
 
 Blocks an enrolled device. Releases it from the MDM and denies further MDM enrollments. The device is notified, so that it connects and is released straight away instead of staying managed until its next check-in. A serialized device is returned.
 
@@ -1181,7 +1197,7 @@ Response:
 ### `/api/mdm/devices/<int:pk>/unblock/`
 
  * method: `POST`
- * PBAC action: `MDM::Action::"updateEnrolledDevice"`
+ * PBAC action: `MDM::Action::"unblockEnrolledDevice"`
 
 Unblocks an enrolled device. The device can enroll again. A serialized device is returned.
 

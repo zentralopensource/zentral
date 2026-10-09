@@ -56,6 +56,8 @@ New paginated API endpoints list the target artifacts of the enrolled devices an
 
 The `target_artifact_update` events carry two new attributes: `force_install_requested_at`, set while a forced install is pending, and `retries_exhausted`, `true` on the failure of the final install attempt of an artifact, when no automatic retry will follow. The event of a forced install request carries the full request context of the operator.
 
+Two new PBAC actions gate the block and the unblock of a device: `MDM::Action::"blockEnrolledDevice"` and `MDM::Action::"unblockEnrolledDevice"`. A role can block a device, and not let it enroll again. The two actions take the inventory machine resource, so a policy can be scoped to a machine or to a meta business unit. They are members of the `UserActions` and `AdminActions` groups.
+
 
 #### Monolith
 
@@ -142,6 +144,11 @@ The new `update_target_counters` option of the `zentral.contrib.santa` app stops
 
 
 ### Backward incompatibilities
+
+
+#### 🧨 The block and the unblock of an MDM device have their own PBAC actions
+
+`MDM::Action::"updateEnrolledDevice"` does not let a role block or unblock a device anymore. The block and unblock buttons, and the `block/` and `unblock/` API endpoints, use `MDM::Action::"blockEnrolledDevice"` and `MDM::Action::"unblockEnrolledDevice"` now. A policy that grants the `AdminActions` or the `UserActions` group needs no change. A role with the `UserActions` group can block and unblock a device too. A policy that names `updateEnrolledDevice` must also name the two new actions, to keep these operations. The policies that Zentral made from the legacy roles name `updateEnrolledDevice` for each role that had the `mdm.change_enrolleddevice` permission: examine them before the upgrade.
 
 
 #### 🧨 The path of tini in the Docker image
