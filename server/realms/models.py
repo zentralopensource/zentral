@@ -1,6 +1,5 @@
 import logging
 import uuid
-from functools import partial
 from importlib import import_module
 
 import django.dispatch
@@ -11,6 +10,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils.functional import cached_property
 
+from zentral.utils.backend_model import BackendInstance
 from zentral.utils.time import naive_utcnow
 
 from .backends.registry import backend_classes
@@ -18,9 +18,14 @@ from .backends.registry import backend_classes
 logger = logging.getLogger('zentral.realms.models')
 
 
-class Realm(models.Model):
+class RealmBackend(models.TextChoices):
+    LDAP = "ldap", "LDAP"
+    OPENIDC = "openidc", "OpenID Connect"
+    SAML = "saml", "SAML"
+
+
+class Realm(BackendInstance):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255)
     enabled_for_login = models.BooleanField(
         default=False,
         help_text="If True, users will be able to sign in to the Zentral admin console"
@@ -32,8 +37,9 @@ class Realm(models.Model):
     login_session_expiry = models.PositiveIntegerField(null=True, default=0)
 
     # backend + backend config
-    backend = models.CharField(max_length=255, editable=False)
-    config = models.JSONField(default=dict, editable=False)
+    backend = models.CharField(max_length=255, editable=False, choices=RealmBackend.choices)
+    backend_enum = RealmBackend
+    backend_kwargs = models.JSONField(default=dict, editable=False)
 
     # user claims mapping
     username_claim = models.CharField(max_length=255)
@@ -47,30 +53,17 @@ class Realm(models.Model):
     # SCIM
     scim_enabled = models.BooleanField(verbose_name="SCIM enabled", default=False)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     class Meta:
         ordering = ("name", "-created_at")
 
-    def __str__(self):
-        return self.name
+    def get_backend(self, load=False):
+        return backend_classes[self.backend](self, load)
 
     @cached_property
     def backend_instance(self):
         backend_class = backend_classes.get(self.backend)
         if backend_class:
             return backend_class(self)
-
-    def _get_BACKEND_config(self, backend):
-        if self.backend == backend:
-            return self.config
-
-    def __getattr__(self, name):
-        for backend in backend_classes:
-            if name == f"get_{backend}_config":
-                return partial(self._get_BACKEND_config, backend)
-        raise AttributeError
 
     def get_absolute_url(self):
         return reverse("realms:view", args=(self.uuid,))
@@ -82,15 +75,12 @@ class Realm(models.Model):
             yield user_claim, getattr(self, "{}_claim".format(user_claim))
 
     def serialize_for_event(self, keys_only=False):
-        d = {"pk": str(self.pk),
-             "name": self.name}
+        d = super().serialize_for_event(keys_only=keys_only)
         if keys_only:
             return d
         d.update({
             "enabled_for_login": self.enabled_for_login,
             "login_session_expiry": self.login_session_expiry,
-            "backend": self.backend,
-            "config": self.config,
             "username_claim": self.username_claim,
             "email_claim": self.email_claim,
             "first_name_claim": self.first_name_claim,
@@ -99,8 +89,6 @@ class Realm(models.Model):
             "custom_attr_1_claim": self.custom_attr_1_claim,
             "custom_attr_2_claim": self.custom_attr_2_claim,
             "scim_enabled": self.scim_enabled,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
         })
         return d
 
