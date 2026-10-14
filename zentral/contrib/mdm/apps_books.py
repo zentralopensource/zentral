@@ -96,7 +96,6 @@ class AppsBooksClient:
             return False
         server_token_hash = self.location.server_token_hash
         self.location.refresh_from_db()
-        # the location form saves a new token with a new hash
         if self.location.server_token_hash == server_token_hash:
             return False
         logger.info("Location %s: reload server token", self.location_name)
