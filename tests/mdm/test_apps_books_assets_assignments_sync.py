@@ -15,13 +15,14 @@ from zentral.contrib.mdm.apps_books import (_sync_asset_d,
                                             ensure_target_asset_assignments,
                                             get_otf_association_cache_key,
                                             iter_location_assets_to_refresh,
+                                            location_cache,
                                             refresh_asset_metadata,
                                             sync_asset, sync_assets,
                                             update_location_asset_counts)
 from zentral.contrib.mdm.events import (AssetCreatedEvent, AssetUpdatedEvent,
                                         DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
                                         LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
-from zentral.contrib.mdm.models import Asset, DEPDevice, DeviceAssignment, LocationAsset
+from zentral.contrib.mdm.models import Asset, DEPDevice, DeviceAssignment, Location, LocationAsset
 from zentral.core.incidents.models import Severity
 from .utils import force_asset, force_dep_device, force_location, force_location_asset
 
@@ -930,6 +931,34 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
         self.assertEqual(len(cm.output), 1)
         self.assertIn(f"Could not post device {target.serial_number} associations", cm.output[0])
+
+    def test_ensure_target_asset_assignments_new_server_token(self):
+        location = force_location()
+        _, client = location_cache.get(location.mdm_info_id)
+        # the location form saves the new token in another process
+        other_location = Location.objects.get(pk=location.pk)
+        other_location.server_token_hash = get_random_string(40, allowed_chars="abcdef0123456789")
+        new_server_token = get_random_string(12)
+        other_location.set_server_token(new_server_token)
+        other_location.save()
+        event_id = str(uuid.uuid4())
+        target = Mock(
+            serial_number=get_random_string(10),
+            missing_asset_assignments=[(str(location.mdm_info_id), "un", "STDQ")],
+        )
+        with patch.object(client, "session") as session:
+            session.headers = {}
+            session.get.return_value = Mock(
+                status_code=200, **{"json.return_value": {"limits": {"maxAssets": 25, "maxSerialNumbers": 1000}}}
+            )
+            session.post.side_effect = [
+                Mock(status_code=401, **{"json.return_value": {"errorNumber": 9625}}),
+                Mock(status_code=200, **{"json.return_value": {"eventId": event_id}}),
+            ]
+            ensure_target_asset_assignments(target)
+        self.assertEqual(session.headers["Authorization"], f"Bearer {new_server_token}")
+        self.assertEqual(len(session.post.call_args_list), 2)
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
 
     # associate_location_asset
 

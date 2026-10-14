@@ -91,6 +91,19 @@ class AppsBooksClient:
                    location.country_code,
                    location)
 
+    def _reload_server_token(self):
+        if not self.location:
+            return False
+        server_token_hash = self.location.server_token_hash
+        self.location.refresh_from_db()
+        # the location form saves a new token with a new hash
+        if self.location.server_token_hash == server_token_hash:
+            return False
+        logger.info("Location %s: reload server token", self.location_name)
+        self.server_token = self.location.get_server_token()
+        self.session.headers["Authorization"] = "Bearer " + self.server_token
+        return True
+
     def make_request(self, path, retry_if_invalid_token=True, verify_mdm_info=False, **kwargs):
         url = urljoin(self.base_url, path)
         if "json" in kwargs:
@@ -98,22 +111,23 @@ class AppsBooksClient:
         else:
             method = self.session.get
         resp = method(url, **kwargs)
-        resp.raise_for_status()
-        response = resp.json()
+        if resp.status_code == 401:
+            # expired or revoked token, the error number in the body gives the reason
+            try:
+                response = resp.json()
+            except ValueError:
+                response = {}
+        else:
+            resp.raise_for_status()
+            response = resp.json()
         errorNumber = response.get("errorNumber")
-        if errorNumber:
-            if errorNumber == 9622 and retry_if_invalid_token:
-                if not self.location:
-                    raise AppsBooksAPIError("Invalid server token")
-                logger.debug("Location %s: refresh session token", self.location_name)
-                self.location.refresh_from_db()
-                self.server_token = self.location.get_server_token()
-                self.session.headers["Authorization"] = "Bearer " + self.server_token
-                return self.make_request(path, False, verify_mdm_info, **kwargs)
-            else:
-                logger.error("Location %s: API error %s %s",
-                             self.location_name, errorNumber, response.get("errorMessage", "-"))
-                raise AppsBooksAPIError(f"Error {errorNumber}")
+        invalid_token = resp.status_code == 401 or errorNumber == 9622
+        if invalid_token and retry_if_invalid_token and self._reload_server_token():
+            return self.make_request(path, False, verify_mdm_info, **kwargs)
+        if invalid_token or errorNumber:
+            logger.error("Location %s: API error %s %s",
+                         self.location_name, errorNumber, response.get("errorMessage", "-"))
+            raise AppsBooksAPIError("Invalid server token" if invalid_token else f"Error {errorNumber}")
         if (
             verify_mdm_info
             and self.mdm_info_id is not None

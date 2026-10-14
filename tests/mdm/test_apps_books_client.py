@@ -16,7 +16,7 @@ class MDMAppsBooksClientTestCase(TestCase):
             responses = [responses]
         resp = Mock()
         resp.json.side_effect = responses
-        resp.json.status_code = 200
+        resp.status_code = 200
         session = Mock()
         session.headers = {}
         session.get.return_value = resp
@@ -48,6 +48,26 @@ class MDMAppsBooksClientTestCase(TestCase):
             location
         ), location
 
+    def _set_responses(self, client, *responses):
+        resps = []
+        for status_code, json_response in responses:
+            resp = Mock(status_code=status_code)
+            if isinstance(json_response, Exception):
+                resp.json.side_effect = json_response
+            else:
+                resp.json.return_value = json_response
+            resps.append(resp)
+        client.session.get.side_effect = resps
+
+    def _update_server_token(self, location):
+        # the location form saves the token with a different instance
+        other_location = Location.objects.get(pk=location.pk)
+        other_location.server_token_hash = get_random_string(40, allowed_chars='abcdef0123456789')
+        server_token = get_random_string(12)
+        other_location.set_server_token(server_token)
+        other_location.save()
+        return server_token
+
     # make_request
 
     def test_make_request_ok(self):
@@ -62,11 +82,78 @@ class MDMAppsBooksClientTestCase(TestCase):
 
     def test_invalid_token_location_retry(self):
         client, location = self._get_client([{"errorNumber": 9622}, {"ok": True}], True)
-        updated_token = get_random_string(12)
-        location.set_server_token(updated_token)
-        location.save()
-        self.assertEqual(client.make_request("/yolo"), {"ok": True})
+        updated_token = self._update_server_token(location)
+        with self.assertLogs("zentral.contrib.mdm.apps_books", level="INFO") as cm:
+            self.assertEqual(client.make_request("/yolo"), {"ok": True})
+        self.assertEqual(cm.output, [f"INFO:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                                     "reload server token"])
         self.assertEqual(client.session.headers["Authorization"], f"Bearer {updated_token}")
+        self.assertEqual(len(client.session.get.call_args_list), 2)
+
+    def test_invalid_token_same_token_no_retry(self):
+        client, location = self._get_client([{"errorNumber": 9622}, {"ok": True}], True)
+        server_token = client.server_token
+        with self.assertRaises(AppsBooksAPIError) as cm:
+            client.make_request("/yolo")
+        self.assertEqual(cm.exception.args[0], "Invalid server token")
+        self.assertEqual(client.session.headers["Authorization"], f"Bearer {server_token}")
+        self.assertEqual(len(client.session.get.call_args_list), 1)
+
+    def test_unauthorized_no_location(self):
+        client, _ = self._get_client({}, False)
+        self._set_responses(client, (401, {"errorNumber": 9621, "errorMessage": "The token has expired."}))
+        with self.assertLogs("zentral.contrib.mdm.apps_books", level="ERROR") as lcm:
+            with self.assertRaises(AppsBooksAPIError) as cm:
+                client.make_request("/yolo")
+        self.assertEqual(cm.exception.args[0], "Invalid server token")
+        self.assertEqual(lcm.output, ["ERROR:zentral.contrib.mdm.apps_books:Location None: "
+                                      "API error 9621 The token has expired."])
+        self.assertEqual(len(client.session.get.call_args_list), 1)
+
+    def test_unauthorized_same_token_no_retry(self):
+        client, location = self._get_client({}, True)
+        server_token = client.server_token
+        self._set_responses(client, (401, {"errorNumber": 9625, "errorMessage": "The server has revoked the sToken."}))
+        with self.assertLogs("zentral.contrib.mdm.apps_books", level="ERROR") as lcm:
+            with self.assertRaises(AppsBooksAPIError) as cm:
+                client.make_request("/yolo")
+        self.assertEqual(cm.exception.args[0], "Invalid server token")
+        self.assertEqual(lcm.output, [f"ERROR:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                                      "API error 9625 The server has revoked the sToken."])
+        self.assertEqual(client.session.headers["Authorization"], f"Bearer {server_token}")
+        self.assertEqual(len(client.session.get.call_args_list), 1)
+
+    def test_unauthorized_no_json_body(self):
+        client, location = self._get_client({}, True)
+        self._set_responses(client, (401, ValueError("Expecting value")))
+        with self.assertLogs("zentral.contrib.mdm.apps_books", level="ERROR") as lcm:
+            with self.assertRaises(AppsBooksAPIError) as cm:
+                client.make_request("/yolo")
+        self.assertEqual(cm.exception.args[0], "Invalid server token")
+        self.assertEqual(lcm.output, [f"ERROR:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                                      "API error None -"])
+
+    def test_unauthorized_new_token_retry(self):
+        client, location = self._get_client({}, True)
+        self._set_responses(client, (401, {"errorNumber": 9621}), (200, {"ok": True}))
+        updated_token = self._update_server_token(location)
+        self.assertEqual(client.make_request("/yolo"), {"ok": True})
+        self.assertEqual(client.server_token, updated_token)
+        self.assertEqual(client.session.headers["Authorization"], f"Bearer {updated_token}")
+        self.assertEqual(len(client.session.get.call_args_list), 2)
+
+    def test_unauthorized_new_token_retry_once(self):
+        client, location = self._get_client({}, True)
+        self._set_responses(client, (401, {"errorNumber": 9621}), (401, {"errorNumber": 9625}), (401, {}))
+        updated_token = self._update_server_token(location)
+        with self.assertRaises(AppsBooksAPIError):
+            client.make_request("/yolo")
+        self.assertEqual(client.session.headers["Authorization"], f"Bearer {updated_token}")
+        self.assertEqual(len(client.session.get.call_args_list), 2)
+        # same token in the database, no retry
+        with self.assertRaises(AppsBooksAPIError):
+            client.make_request("/yolo")
+        self.assertEqual(len(client.session.get.call_args_list), 3)
 
     def test_other_error(self):
         client, _ = self._get_client({"errorNumber": 123}, False)
