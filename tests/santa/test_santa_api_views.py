@@ -130,6 +130,15 @@ class SantaAPIViewsTestCase(TestCase):
         response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 400)
 
+    @patch("zentral.contrib.santa.public_views.verify_enrollment_secret")
+    def test_preflight_invalid_serial_num(self, verify_enrollment_secret):
+        for invalid_serial_number in ({"yolo": "fomo"}, ["yolo"], 123):
+            data, serial_number, hardware_uuid = self._get_preflight_data()
+            data["serial_number"] = invalid_serial_number
+            response = self.post_as_json("preflight", hardware_uuid, data)
+            self.assertEqual(response.status_code, 400)
+        verify_enrollment_secret.assert_not_called()
+
     def test_preflight_missing_os_build(self):
         for key in ("os_build", "os_version", "hostname"):
             data, serial_number, hardware_uuid = self._get_preflight_data()

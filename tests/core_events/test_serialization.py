@@ -2,6 +2,7 @@ from datetime import datetime
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from zentral.contrib.inventory.models import MachineSnapshotCommit
+from zentral.core.events import event_from_event_d
 from zentral.core.events.base import (BaseEvent,
                                       EventMetadata, EventRequest, EventRequestGeo, EventRequestUser,
                                       register_event_type)
@@ -55,6 +56,26 @@ class EventSerializationTestCase(TestCase):
         event = make_event(with_msn=False)
         d = event.serialize()
         metadata = d["_zentral"]
+        self.assertNotIn("machine_serial_number", metadata)
+        self.assertNotIn("machine", metadata)
+
+    def test_event_with_non_str_msn(self):
+        for msn in ({"yolo": "fomo"}, ["yolo"], 123):
+            with self.assertLogs("zentral.core.events.base", level="WARNING") as cm:
+                metadata = EventMetadata(machine_serial_number=msn)
+            self.assertIsNone(metadata.machine_serial_number)
+            self.assertIsNone(metadata.machine)
+            self.assertEqual(
+                cm.output,
+                [f"WARNING:zentral.core.events.base:Ignore machine serial number of type {type(msn).__name__}"]
+            )
+
+    def test_deserialized_event_with_non_str_msn(self):
+        event_d = make_event(with_msn=False).serialize(machine_metadata=False)
+        event_d["_zentral"]["machine_serial_number"] = ["yolo"]
+        with self.assertLogs("zentral.core.events.base", level="WARNING"):
+            event = event_from_event_d(event_d)
+        metadata = event.serialize(machine_metadata=True)["_zentral"]
         self.assertNotIn("machine_serial_number", metadata)
         self.assertNotIn("machine", metadata)
 

@@ -144,9 +144,9 @@ class PreflightView(BaseSyncView):
         for key in ("serial_number", "serial_num"):
             if key in self.request_data:
                 serial_num = self.request_data[key]
-                if serial_num:
+                if serial_num and isinstance(serial_num, str):
                     return serial_num
-        raise SuspiciousOperation("Missing or empty serial number")
+        raise SuspiciousOperation("Missing, empty or invalid serial number")
 
     def _iter_rule_count_keys(self):
         for prefix in ("binary", "cdhash", "certificate", "compiler", "signingid", "transitive", "teamid"):

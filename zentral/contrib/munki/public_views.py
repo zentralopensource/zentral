@@ -53,9 +53,13 @@ class EnrollView(View):
         user_agent, ip = user_agent_and_ip_address_from_request(request)
         try:
             request_json = json.loads(request.body.decode("utf-8"))
+            if not isinstance(request_json, dict):
+                raise ValueError
             secret = request_json["secret"]
             serial_number = request_json["serial_number"]
             uuid = request_json["uuid"]
+            if not all(isinstance(value, str) for value in (secret, serial_number, uuid)):
+                raise ValueError
             es_request = verify_enrollment_secret(
                 "munki_enrollment", secret,
                 user_agent, ip,

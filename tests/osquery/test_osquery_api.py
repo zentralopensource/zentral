@@ -347,6 +347,29 @@ class OsqueryAPIViewsTestCase(TestCase):
         response = self.post_as_json("enroll", {"enroll_secret": self.enrollment.secret.secret})
         self.assertEqual(response.status_code, 400)
 
+    def test_enroll_not_an_object(self):
+        response = self.post_as_json("enroll", ["yolo"])
+        self.assertEqual(response.status_code, 400)
+
+    @patch("zentral.contrib.osquery.public_views.verify_enrollment_secret")
+    def test_enroll_invalid_values(self, verify_enrollment_secret):
+        secret = self.enrollment.secret.secret
+        for data in (
+            {"enroll_secret": ["yolo"],
+             "host_details": {"system_info": {"hardware_serial": get_random_string(12)}}},
+            {"enroll_secret": secret,
+             "host_details": {"system_info": {"hardware_serial": ["yolo"]}}},
+            {"enroll_secret": secret,
+             "host_details": {"system_info": {"hardware_serial": ""}},
+             "host_identifier": {"yolo": "fomo"}},
+            {"enroll_secret": secret,
+             "host_details": ["yolo"],
+             "host_identifier": 123},
+        ):
+            response = self.post_as_json("enroll", data)
+            self.assertEqual(response.status_code, 400)
+        verify_enrollment_secret.assert_not_called()
+
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_enroll_ok(self, post_event):
         serial_number = get_random_string(12)

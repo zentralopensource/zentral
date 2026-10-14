@@ -70,6 +70,8 @@ class BaseJsonPostView(View):
                 self.data = json.loads(request.body)
         except ValueError:
             raise SuspiciousOperation("Could not read JSON data")
+        if not isinstance(self.data, dict):
+            raise SuspiciousOperation("Could not read JSON data")
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
         try:
             self.authenticate()
@@ -81,27 +83,29 @@ class BaseJsonPostView(View):
 class EnrollView(BaseJsonPostView):
     def get_enroll_secret(self):
         enroll_secret = self.data.get("enroll_secret")
-        if not enroll_secret:
-            raise SuspiciousOperation("Missing 'enroll_secret' key")
+        if not enroll_secret or not isinstance(enroll_secret, str):
+            raise SuspiciousOperation("Missing or invalid 'enroll_secret' key")
         return enroll_secret
 
-    def get_serial_number(self):
+    def _get_system_info_value(self, key):
         try:
-            serial_number = self.data["host_details"]["system_info"]["hardware_serial"].strip()
-        except (KeyError, AttributeError):
-            serial_number = None
+            value = self.data["host_details"]["system_info"][key]
+        except (KeyError, TypeError):
+            return
+        if isinstance(value, str):
+            return value.strip()
+
+    def get_serial_number(self):
+        serial_number = self._get_system_info_value("hardware_serial")
         if not serial_number:
             # special configuration for linux machines. see install script.
             serial_number = self.data.get("host_identifier")
-        if not serial_number:
-            raise SuspiciousOperation("Missing serial number")
+        if not serial_number or not isinstance(serial_number, str):
+            raise SuspiciousOperation("Missing or invalid serial number")
         return serial_number
 
     def get_uuid(self):
-        try:
-            return self.data["host_details"]["system_info"]["uuid"].strip()
-        except (KeyError, AttributeError):
-            pass
+        return self._get_system_info_value("uuid")
 
     def authenticate(self):
         self.serial_number = self.get_serial_number()

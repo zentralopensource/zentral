@@ -329,6 +329,10 @@ class EventMetadata(object):
             except ValueError:
                 self.created_at = parser.parse(self.created_at)
         self.machine_serial_number = kwargs.pop('machine_serial_number', None)
+        if self.machine_serial_number is not None and not isinstance(self.machine_serial_number, str):
+            # a client can send any JSON value, and the event would fail in the next workers
+            logger.warning("Ignore machine serial number of type %s", type(self.machine_serial_number).__name__)
+            self.machine_serial_number = None
         if self.machine_serial_number:
             self.machine = MetaMachine(self.machine_serial_number)
         else:

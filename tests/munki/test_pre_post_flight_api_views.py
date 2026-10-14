@@ -180,6 +180,22 @@ class MunkiAPIViewsTestCase(TestCase):
                                        "serial_number": serial_number})
         self.assertEqual(response.status_code, 400)
 
+    def test_enroll_bad_request_not_an_object(self):
+        response = self._post_as_json(reverse("munki_public:enroll"), ["yolo"])
+        self.assertEqual(response.status_code, 400)
+
+    @patch("zentral.contrib.munki.public_views.verify_enrollment_secret")
+    def test_enroll_bad_request_invalid_values(self, verify_enrollment_secret):
+        for key in ("secret", "uuid", "serial_number"):
+            for invalid_value in ({"yolo": "fomo"}, ["yolo"], 123):
+                data = {"secret": self.enrollment.secret.secret,
+                        "uuid": str(uuid.uuid4()),
+                        "serial_number": get_random_string(32)}
+                data[key] = invalid_value
+                response = self._post_as_json(reverse("munki_public:enroll"), data)
+                self.assertEqual(response.status_code, 400)
+        verify_enrollment_secret.assert_not_called()
+
     def test_enroll_ok(self):
         serial_number = get_random_string(32)
         response = self._post_as_json(reverse("munki_public:enroll"),
