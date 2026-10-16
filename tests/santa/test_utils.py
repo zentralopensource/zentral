@@ -5,9 +5,9 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
 from zentral.contrib.santa.models import MetaBundle, Target, TargetCounter
-from zentral.contrib.santa.utils import create_targets, update_metabundles
+from zentral.contrib.santa.utils import create_targets, update_metabundles, update_or_create_targets
 
-from .utils import new_sha256, new_team_id
+from .utils import force_configuration, new_sha256, new_team_id
 
 
 class SantaUtilsTestCase(TestCase):
@@ -39,6 +39,37 @@ class SantaUtilsTestCase(TestCase):
         self.assertEqual(len(targets), 250)
         self.assertEqual(Target.objects.count(), 250)
         self.assertEqual(len(ctx.captured_queries), 2)
+
+    def test_create_targets_existing_targets_use_no_id(self):
+        existing_targets = [Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256()) for _ in range(3)]
+        new_identifier = new_sha256()
+        targets = create_targets(
+            [(Target.Type.BINARY, t.identifier) for t in existing_targets] + [(Target.Type.BINARY, new_identifier)]
+        )
+        self.assertEqual(targets[(Target.Type.BINARY, new_identifier)][1], True)
+        next_target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        self.assertEqual(next_target.pk, existing_targets[-1].pk + 2)
+
+    # update_or_create_targets
+
+    def test_update_or_create_targets_existing_targets_use_no_id(self):
+        configuration = force_configuration()
+        existing_targets = [Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256()) for _ in range(3)]
+        new_identifier = new_sha256()
+        increments = {"blocked_incr": 0, "collected_incr": 0, "executed_incr": 1}
+        targets = update_or_create_targets(
+            configuration,
+            {(Target.Type.BINARY, identifier): increments
+             for identifier in [t.identifier for t in existing_targets] + [new_identifier]}
+        )
+        new_target = Target.objects.get(type=Target.Type.BINARY, identifier=new_identifier)
+        self.assertEqual(
+            {k: target.pk for k, (target, _) in targets.items()},
+            {(t.type, t.identifier): t.pk for t in existing_targets + [new_target]}
+        )
+        self.assertEqual(TargetCounter.objects.filter(configuration=configuration, executed_count=1).count(), 4)
+        next_target = Target.objects.create(type=Target.Type.BINARY, identifier=new_sha256())
+        self.assertEqual(next_target.pk, existing_targets[-1].pk + 2)
 
     # update_metabundles
 

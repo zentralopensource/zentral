@@ -116,7 +116,10 @@ def update_or_create_targets(configuration, targets):
         '  values %s'
         '), updated_targets as ('
         '  insert into santa_target(type, identifier, created_at)'
-        '  select type, identifier, ts from observations'
+        '  select type, identifier, ts from observations o'
+        '  where not exists ('  # the insert uses an id for each row, also for a row in conflict
+        '    select 1 from santa_target t where t.type = o.type and t.identifier = o.identifier'
+        '  )'
         '  order by type, identifier'
         '  on conflict (type, identifier) do nothing'
         '  returning *'
@@ -165,12 +168,16 @@ def create_targets(targets):
     with connection.cursor() as cursor:
         # One page for all the targets: the database sorts all of them,
         # so the concurrent transactions insert them in the same order, and cannot deadlock.
+        # The insert uses an id for each row, also for a row in conflict: the existing targets are skipped first.
         created_ids = {
             target_id
             for target_id, in psycopg2.extras.execute_values(
                 cursor,
                 'insert into santa_target(type, identifier, created_at)'
                 ' select type, identifier, ts from (values %s) o(type, identifier, ts)'
+                ' where not exists ('
+                '  select 1 from santa_target t where t.type = o.type and t.identifier = o.identifier'
+                ' )'
                 ' order by type, identifier'
                 ' on conflict (type, identifier) do nothing'
                 ' returning id',

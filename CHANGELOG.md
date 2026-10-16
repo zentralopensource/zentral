@@ -341,6 +341,8 @@ The Santa target search filters the files on the search text before it groups th
 
 Fixed the counters of a Santa target in the target search and in the target export: a target with a state in more than one configuration had its blocked, collected and executed counts multiplied by its number of states. The sort on these counts used the wrong values too.
 
+Fixed the Santa event uploads, which used one target ID for each target they reported, also for a target that already existed. There are at most 2147483647 target IDs, and the event uploads fail when no ID is left. An event upload uses an ID only for a new target now. The IDs already used are not given back.
+
 The inventory history cleanup deletes in bounded batches now. One unbounded statement for each table could delete millions of rows in one transaction, and keep the database at its maximum capacity for the full run. Each batch is a transaction, and a batch that gives an integrity error is retried alone.
 
 Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.
