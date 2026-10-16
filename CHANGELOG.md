@@ -272,6 +272,12 @@ On the API, a `PUT` carries `event_detail_source`, `event_detail_url` and `event
 
 The web console applies the same rules. Its form carries every attribute, so it never sends a part of the button on its own.
 
+#### 🧨 Santa target IDs migration
+
+The IDs of the Santa targets and of the Santa target counters are 64-bit integers now. The database migration rewrites the `santa_target` table and the nine tables that point to it, `santa_targetcounter` included. These tables are locked until the end of the migration, so the Santa syncs and the Santa pages wait. The time of the migration increases with the number of targets, target counters and machine rules. On a large server, stop the Santa syncs during the upgrade.
+
+The migration fails after 10 seconds if it cannot lock a table, for example during a long target search. Run it again.
+
 #### 🧨 Privilege escalation hardening — task results
 
 A task belongs to the user or the service account that launched it, and `/api/task_result/<task_id>/` and `/api/task_result/<task_id>/download/` answer only for that principal. A superuser reads all of them, as before. Until now the two endpoints only asked for a valid session or API token: any authenticated principal that had a task ID could read the state of that task and download its file, and an export carries everything the principal that launched it was allowed to see. The state endpoint gives the `UNKNOWN` status for the task of a different principal, like it does for a task that does not exist, and the download endpoint gives a `404`. The task list and the task pages of the web console already applied this rule.

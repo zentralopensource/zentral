@@ -325,6 +325,7 @@ class Target(models.Model):
         def url_name(self):
             return f"santa:{self.value.lower()}"
 
+    id = models.BigAutoField(primary_key=True)
     type = models.CharField(choices=Type.choices, max_length=16)
     identifier = models.CharField(max_length=256)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -388,6 +389,7 @@ class Target(models.Model):
 
 
 class TargetCounter(models.Model):
+    id = models.BigAutoField(primary_key=True)
     target = models.ForeignKey(Target, on_delete=models.CASCADE)
     configuration = models.ForeignKey("santa.Configuration", on_delete=models.CASCADE)
     blocked_count = models.IntegerField(default=0)
