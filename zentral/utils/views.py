@@ -1,5 +1,4 @@
 import json
-import logging
 
 from django.contrib.auth.mixins import AccessMixin
 from django.core.exceptions import PermissionDenied
@@ -8,11 +7,8 @@ from django.http import HttpResponseServerError
 from django.views.defaults import server_error as django_server_error
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from pbac.engine import engine
+from pbac.utils import check_request
 from zentral.core.events.base import AuditEvent
-
-
-logger = logging.getLogger("zentral.utils.views")
 
 
 class UserPaginationMixin:
@@ -175,8 +171,5 @@ class PBACViewMixin(AccessMixin):
         if pbac_request.unknown_context:
             # a preview is not a decision
             raise ValueError(f"{pbac_request} cannot gate a view")
-        engine.authorize_request(pbac_request)
-        if not pbac_request.is_authorized:
-            logger.error("Permission denied %s", pbac_request, extra={"request": request})
-            raise PermissionDenied
+        check_request(request, pbac_request)
         return super().dispatch(request, *args, **kwargs)
