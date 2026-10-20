@@ -143,6 +143,17 @@ The page of a Santa configuration has four tabs now: Overview, Rules, Scoped cli
 The new `update_target_counters` option of the `zentral.contrib.santa` app stops the updates of the target counters. To update them, each event upload locks a database table until the end of its request, so the event uploads wait for each other. With `false`, the event uploads create the targets but do not lock the table. The counters and the last seen time stop changing, and the Targets page and the targets export do not show them.
 
 
+#### Turbo
+
+Two new kinds of job collect files from a machine. A **sysdiagnose** collects a `sysdiagnose` archive. It has no options. A **file export** collects the files that match a list of path patterns, with a list of what it collected. Its options are `patterns` and a maximum uncompressed size.
+
+Create them with the `/api/turbo/sysdiagnoses/` and `/api/turbo/file_exports/` endpoints. *Turbo > Sysdiagnoses* and *Turbo > File exports* list them. Each kind has its own permissions, like the scripts. A change to the options of a file export bumps its version. Only a machine that has not reported a result yet gets the new options.
+
+A sysdiagnose and a file export run one time only: Zentral refuses to attach one to a recurring job.
+
+The upload of the collected files comes in a later release.
+
+
 ### Backward incompatibilities
 
 

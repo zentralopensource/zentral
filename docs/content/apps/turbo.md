@@ -81,12 +81,14 @@ Enrolled machines are listed under *Turbo > Enrolled machines*, with the date th
 
 ## Jobs
 
-A **job** is what Turbo runs on a machine. There are two kinds:
+A **job** is what Turbo runs on a machine. There are four kinds:
 
  * a **script** – a zsh script, whose exit code is the outcome,
- * an **mSCP check** – an mSCP rule, whose check logic and baseline defaults are bundled in the agent.
+ * an **mSCP check** – an mSCP rule, whose check logic and baseline defaults are bundled in the agent,
+ * a **sysdiagnose** – a `sysdiagnose` archive of the machine, uploaded to Zentral,
+ * a **file export** – the files that match a list of path patterns, uploaded to Zentral.
 
-Creating a script or an mSCP check only *defines* the job. It does not run anywhere until it is scheduled in a configuration, as a [recurring job](#recurring-jobs) or a [one-time job](#one-time-jobs). The same definition can be scheduled in several configurations.
+Creating a script, an mSCP check, a sysdiagnose or a file export only *defines* the job. It does not run anywhere until it is scheduled in a configuration, as a [recurring job](#recurring-jobs) or a [one-time job](#one-time-jobs). The same definition can be scheduled in several configurations.
 
 ### Scripts
 
@@ -129,6 +131,62 @@ An mSCP check *is* a compliance check – one is created with it, named after th
 
 An mSCP check cannot be deleted while it is scheduled in a configuration.
 
+### Sysdiagnoses
+
+A sysdiagnose collects a `sysdiagnose` archive from a machine and uploads it. It has no options: the agent runs the tool unattended and uploads the archive that the tool produces.
+
+Create a sysdiagnose with the [API](#apiturbosysdiagnoses). The web console does not create sysdiagnoses yet. *Turbo > Sysdiagnoses* lists them.
+
+|Attribute|Description|
+|---|---|
+|`name`|A name. Two sysdiagnoses cannot have the same name.|
+|`description`|Optional.|
+
+See [Collected files](#collected-files) for the rules that apply to a sysdiagnose and to a file export.
+
+### File exports
+
+A file export collects the files that match a list of path patterns. It uploads them with a manifest of what it collected.
+
+Create a file export with the [API](#apiturbofile_exports). The web console does not create file exports yet. *Turbo > File exports* lists them and shows their patterns.
+
+|Attribute|Description|
+|---|---|
+|`name`|A name. Two file exports cannot have the same name.|
+|`description`|Optional.|
+|`patterns`|1 to 32 absolute path patterns, for example `/var/log/install.log*`. Each one is at most 1024 characters, must start with a `/`, and must not contain a `..` segment or a `**`. See the syntax below.|
+|`max_size`|The maximum **uncompressed** total, in bytes. 104857600 (100 MB) by default, 524288000 (500 MB) at most. File sizes are known before anything is written, so the agent decides what to include first, in a stable path order, and reports what it skipped.|
+
+The agent matches the patterns with `fnmatch`, which macOS provides. The syntax is the shell glob syntax, with one important limit:
+
+|Pattern|Matches|
+|---|---|
+|`*`|Any sequence of characters, up to the next `/`. `/var/log/*` matches `/var/log/install.log`, and does not match `/var/log/sub/deep.log`.|
+|`?`|Any single character.|
+|`[abc]`|One character of the set.|
+
+**There is no recursive wildcard.** `fnmatch` reads `**` as a single `*`, so `/Library/Logs/**/*.log` would match `/Library/Logs/a/b.log` and not `/Library/Logs/a/b/c.log` — one level, not every level. Zentral refuses a pattern that contains `**`, because a pattern written for recursion would otherwise collect one level and give no error. Name each level you want instead:
+
+```
+/Library/Logs/Foo/*.log
+/Library/Logs/Foo/*/*.log
+/Library/Logs/Foo/*/*/*.log
+```
+
+A file export run produces two files: a manifest, which lists what was matched, collected, skipped and unreadable, and an archive of the collected files. The manifest is a separate file so an operator can read what a run collected without downloading the archive. A run that matched nothing uploads the manifest and no archive.
+
+See [Collected files](#collected-files) for the rules that apply to a sysdiagnose and to a file export.
+
+### Collected files
+
+A sysdiagnose and a file export collect files from a machine. Unlike a script or an mSCP check, they have no compliance role and produce no verdict.
+
+**A sysdiagnose and a file export run one time only.** They cannot be attached to a recurring job, because a repeated collection is not a job. Schedule them with a one-time job, or with the *Schedule one-time job* action on a machine page.
+
+A change to the options of a file export bumps its [version](#job-versions). A machine that has not reported a result yet gets the new options. A machine that has reported does not run it again: create a new one-time job. A new name or a new description does not bump the version.
+
+A sysdiagnose or a file export cannot be deleted while it is scheduled in a configuration.
+
 ### Recurring jobs
 
 A recurring job runs a definition on an interval, for as long as it stays in scope. Create one from the Recurring jobs section of a configuration, or from *Turbo > Recurring jobs*.
@@ -146,7 +204,7 @@ A one-time job runs a definition once per machine. Create one from the One-time 
 
 |Attribute|Description|
 |---|---|
-|`job`|The script or mSCP check to run.|
+|`job`|The script, mSCP check, sysdiagnose or file export to run.|
 |`not_before`|Optional. Do not deliver the job before this date – use it to schedule a run in the future.|
 |`not_after`|Optional. Delivery window end. The job is not delivered anymore after this date, whether it ran or not.|
 
@@ -173,7 +231,7 @@ The configuration and the definition of a schedule are fixed when it is created.
 
 ### Job versions
 
-A definition carries a version, which Zentral bumps when the definition changes: for a script, when its `source` changes; for an mSCP check, when any of its attributes changes – they are all identity-bearing.
+A definition carries a version, which Zentral bumps when the definition changes: for a script, when its `source` changes; for an mSCP check, when any of its attributes changes – they are all identity-bearing; for a file export, when its options change. A sysdiagnose has no options, so its version does not change.
 
 The version is served to the agent with the job, and reported back with every result. It is how Zentral tells a run of the current definition from a run of a superseded one:
 
@@ -1137,6 +1195,255 @@ curl \
   https://$ZTL_FQDN/api/turbo/mscp_checks/a657104d-952b-489c-9816-14a32f12c7b6/
 ```
 
+### /api/turbo/sysdiagnoses/
+
+#### List all sysdiagnoses
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewSysdiagnose"`
+* Optional filter parameters:
+    * `name`: name of the sysdiagnose
+    * `configuration`: primary key of a Turbo configuration – the sysdiagnoses scheduled in it
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/sysdiagnoses/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": "d1b9471f-5ccb-4c25-a5ff-19d831855303",
+            "name": "Support archive",
+            "description": "",
+            "version": 1,
+            "job_id": "5221c439-edc0-483a-affe-502c965d6336",
+            "created_at": "2026-10-19T08:46:12.901263",
+            "updated_at": "2026-10-19T08:46:12.901457"
+        }
+    ]
+}
+```
+
+`job_id` is the primary key of the job of the sysdiagnose. A one-time job schedules it. `version` and `job_id` are read-only.
+
+#### Add a sysdiagnose
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Turbo::Action::"createSysdiagnose"`
+
+A sysdiagnose has no options.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Support archive"}' \
+  https://$ZTL_FQDN/api/turbo/sysdiagnoses/ \
+  |python3 -m json.tool
+```
+
+### /api/turbo/sysdiagnoses/`<uuid:pk>`/
+
+#### Get a sysdiagnose
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewSysdiagnose"`
+* `<uuid:pk>`: the primary key of the sysdiagnose
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/sysdiagnoses/d1b9471f-5ccb-4c25-a5ff-19d831855303/ \
+  |python3 -m json.tool
+```
+
+#### Update a sysdiagnose
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Turbo::Action::"updateSysdiagnose"`
+* `<uuid:pk>`: the primary key of the sysdiagnose
+
+An update changes the name or the description. It does not change `version`.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X PUT \
+  -d '{"name": "Support archive", "description": "For the support team"}' \
+  https://$ZTL_FQDN/api/turbo/sysdiagnoses/d1b9471f-5ccb-4c25-a5ff-19d831855303/ \
+  |python3 -m json.tool
+```
+
+#### Delete a sysdiagnose
+
+* method: DELETE
+* PBAC action: `Turbo::Action::"deleteSysdiagnose"`
+* `<uuid:pk>`: the primary key of the sysdiagnose
+
+A sysdiagnose that is scheduled in a configuration cannot be deleted.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -X DELETE \
+  https://$ZTL_FQDN/api/turbo/sysdiagnoses/d1b9471f-5ccb-4c25-a5ff-19d831855303/
+```
+
+### /api/turbo/file_exports/
+
+#### List all file exports
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewFileExport"`
+* Optional filter parameters:
+    * `name`: name of the file export
+    * `configuration`: primary key of a Turbo configuration – the file exports scheduled in it
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/file_exports/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": "f3a2b979-5704-448b-ac14-ab4a1e043b6a",
+            "name": "Install logs",
+            "description": "The installer logs and Munki's",
+            "patterns": [
+                "/var/log/install.log*",
+                "/Library/Logs/Munki/*.log"
+            ],
+            "max_size": 104857600,
+            "version": 1,
+            "job_id": "cc050216-5031-40cf-8cf0-d6b895bb1ffb",
+            "created_at": "2026-10-19T08:46:12.895513",
+            "updated_at": "2026-10-19T08:46:12.895814"
+        }
+    ]
+}
+```
+
+`job_id` is the primary key of the job of the file export. A one-time job schedules it. `version` and `job_id` are read-only.
+
+#### Add a file export
+
+* method: POST
+* Content-Type: application/json
+* PBAC action: `Turbo::Action::"createFileExport"`
+
+`patterns` is required. `max_size` is optional. See [File exports](#file-exports) for the rules.
+
+Example:
+
+file_export.json
+
+```json
+{
+  "name": "Install logs",
+  "description": "The installer logs and Munki's",
+  "patterns": ["/var/log/install.log*", "/Library/Logs/Munki/*.log"]
+}
+```
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @file_export.json \
+  https://$ZTL_FQDN/api/turbo/file_exports/ \
+  |python3 -m json.tool
+```
+
+### /api/turbo/file_exports/`<uuid:pk>`/
+
+#### Get a file export
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewFileExport"`
+* `<uuid:pk>`: the primary key of the file export
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/file_exports/f3a2b979-5704-448b-ac14-ab4a1e043b6a/ \
+  |python3 -m json.tool
+```
+
+#### Update a file export
+
+* method: PUT
+* Content-Type: application/json
+* PBAC action: `Turbo::Action::"updateFileExport"`
+* `<uuid:pk>`: the primary key of the file export
+
+An update replaces all the options. A `max_size` that is not in the request is the default value again.
+
+A change to the options bumps `version`. A machine that has not reported a result yet gets the new options. A machine that has reported does not run the file export again: create a new one-time job. A change to the name or to the description only does not bump `version`.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -X PUT \
+  -d @file_export.json \
+  https://$ZTL_FQDN/api/turbo/file_exports/f3a2b979-5704-448b-ac14-ab4a1e043b6a/ \
+  |python3 -m json.tool
+```
+
+#### Delete a file export
+
+* method: DELETE
+* PBAC action: `Turbo::Action::"deleteFileExport"`
+* `<uuid:pk>`: the primary key of the file export
+
+A file export that is scheduled in a configuration cannot be deleted.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -X DELETE \
+  https://$ZTL_FQDN/api/turbo/file_exports/f3a2b979-5704-448b-ac14-ab4a1e043b6a/
+```
+
 ### /api/turbo/recurring_jobs/
 
 Terraform resource: [`zentral_turbo_recurring_job`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_recurring_job)
@@ -1582,7 +1889,7 @@ Each entry in `jobs` carries:
 
 |Attribute|Description|
 |---|---|
-|`kind`|`script` or `mscp_check`.|
+|`kind`|`script`, `mscp_check`, `sysdiagnose` or `file_export`.|
 |`pk`|The primary key of the job – the identity of the definition.|
 |`version`|The current version of the definition.|
 |`schedule.mode`|`recurring` or `one_time`.|

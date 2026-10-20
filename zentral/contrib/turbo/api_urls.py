@@ -2,10 +2,12 @@ from django.urls import path
 from .api_views import (ConfigurationList, ConfigurationDetail,
                         EnrollmentList, EnrollmentDetail,
                         EnrollmentPlist, EnrollmentConfigurationProfile,
+                        FileExportList, FileExportDetail,
                         MSCPCheckList, MSCPCheckDetail,
                         OneTimeJobList, OneTimeJobDetail,
                         RecurringJobList, RecurringJobDetail,
-                        ScriptList, ScriptDetail)
+                        ScriptList, ScriptDetail,
+                        SysdiagnoseList, SysdiagnoseDetail)
 
 
 app_name = "turbo_api"
@@ -21,6 +23,10 @@ urlpatterns = [
     path('scripts/<uuid:pk>/', ScriptDetail.as_view(), name="script"),
     path('mscp_checks/', MSCPCheckList.as_view(), name="mscp_checks"),
     path('mscp_checks/<uuid:pk>/', MSCPCheckDetail.as_view(), name="mscp_check"),
+    path('sysdiagnoses/', SysdiagnoseList.as_view(), name="sysdiagnoses"),
+    path('sysdiagnoses/<uuid:pk>/', SysdiagnoseDetail.as_view(), name="sysdiagnose"),
+    path('file_exports/', FileExportList.as_view(), name="file_exports"),
+    path('file_exports/<uuid:pk>/', FileExportDetail.as_view(), name="file_export"),
     path('recurring_jobs/', RecurringJobList.as_view(), name="recurring_jobs"),
     path('recurring_jobs/<uuid:pk>/', RecurringJobDetail.as_view(), name="recurring_job"),
     path('one_time_jobs/', OneTimeJobList.as_view(), name="one_time_jobs"),

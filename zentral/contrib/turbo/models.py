@@ -7,7 +7,9 @@ from django.db.models import Exists, OuterRef, Q
 from django.urls import reverse
 
 from zentral.contrib.inventory.models import BaseEnrollment, MetaMachine, Tag
+from zentral.utils.backend_model import BackendInstance
 
+from .command_backends import CommandBackend, get_command_backend, get_command_backend_class
 from .compliance_checks import sync_mscp_check_compliance_check
 
 
@@ -173,22 +175,41 @@ class EnrolledMachine(models.Model):
 
 
 class Job(models.Model):
-    # Polymorphic anchor for the things Turbo runs. One row per Script / MSCPCheck (each O2Os in below).
-    # The kind is the wire `kind`; Job.pk is the wire identity of the definition (the `pk` in each job
-    # block). Per-machine delivery is tracked against the scheduling row, not the Job.
+    # One row for each Script / MSCPCheck / Sysdiagnose / FileExport, which point here with a O2O. kind and pk
+    # are the wire identity of the definition. The scheduling row records the delivery to a
+    # machine, not the Job.
     class Kind(models.TextChoices):
         SCRIPT = "script", "Script"
         MSCP_CHECK = "mscp_check", "mSCP check"
+        # One value for each command backend. Do not add a "command" kind with a sub-type.
+        # An agent ignores a kind that it does not know, so a new command is a configuration
+        # change for the agent, not a protocol change.
+        SYSDIAGNOSE = CommandBackend.SYSDIAGNOSE.value, CommandBackend.SYSDIAGNOSE.label
+        FILE_EXPORT = CommandBackend.FILE_EXPORT.value, CommandBackend.FILE_EXPORT.label
 
     # Every definition relation of a Job. A caller that reads job.definition prefetches with
     # this tuple. With one tuple, no select_related site can miss a new kind.
-    DEFINITION_RELATIONS = ("script", "mscp_check")
+    DEFINITION_RELATIONS = ("script", "mscp_check", "command")
 
     @classmethod
     def definition_relations(cls, prefix=""):
         # select_related() arguments for the definition relations. The optional prefix
         # ("job__", "one_time_job__job__") lets a caller reach a Job from any depth.
         return tuple(f"{prefix}{relation}" for relation in cls.DEFINITION_RELATIONS)
+
+    @classmethod
+    def allowed_schedule_modes(cls, kind):
+        # A command backend declares the schedule modes that accept its kind. A command accepts
+        # the one-time mode only, because a repeated collection is not a job. A Script and an
+        # MSCPCheck accept both modes. The key is the kind, not an instance, because a caller
+        # validates a choice before a row exists.
+        if kind in CommandBackend.values:
+            return get_command_backend_class(kind).allowed_modes
+        return frozenset(ScheduleMode.values)
+
+    @classmethod
+    def kinds_for_schedule_mode(cls, mode):
+        return [kind for kind in cls.Kind.values if mode in cls.allowed_schedule_modes(kind)]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=32, choices=Kind.choices, editable=False)
@@ -207,6 +228,10 @@ class Job(models.Model):
         self.refresh_from_db()
 
     @property
+    def is_command(self):
+        return self.kind in CommandBackend.values
+
+    @property
     def definition(self):
         # None for a kind that this release does not know. During a rolling upgrade, an older
         # instance reads a row that a newer instance wrote. A caller must not dereference None.
@@ -214,6 +239,8 @@ class Job(models.Model):
             return self.script
         elif self.kind == self.Kind.MSCP_CHECK:
             return self.mscp_check
+        elif self.is_command:
+            return self.command
 
     def definition_linked_objects_keys(self):
         # link the definition, which is the page an admin opens, not the Job. The key is the
@@ -488,6 +515,128 @@ class MSCPCheck(models.Model):
         return result
 
 
+class Command(BackendInstance):
+    # The table of the job kinds that are a verb with a small options dict: sysdiagnose and
+    # file_export. Script and MSCPCheck each need a table, because Postgres enforces their identity
+    # with FKs, typed ODV columns and constraints. These kinds need none of these. Their variation is
+    # agent behaviour and result handling, which are Python. So they share one table and a backend
+    # registry, like stores.Store and probes.Action. If a kind later needs an FK or a constraint, add
+    # a definition model for it under the same Job.
+    #
+    # The table is not a concept for an operator. Each kind is a proxy model below, with its own
+    # permissions, PBAC actions, API endpoints, console pages and event keys, like a Script.
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job = models.OneToOneField(Job, on_delete=models.CASCADE, related_name="command", editable=False)
+    # unique for each kind, like the name of a script, see Meta
+    name = models.CharField()
+    # IMMUTABLE. Job.kind repeats it, and both are the wire identity of this definition. The proxy
+    # model of the kind sets it.
+    backend = models.CharField(choices=CommandBackend.choices)
+    backend_enum = CommandBackend
+    # inherited from BackendInstance: description, backend_kwargs, created_at, updated_at
+    # version lives on the Job (bumped on a kwargs change); access via self.job.version
+
+    # set on each proxy model
+    command_backend = None
+
+    objects = JobDefinitionManager()
+
+    class Meta:
+        # the permissions are on the proxy model of each kind
+        default_permissions = ()
+        constraints = [
+            models.UniqueConstraint(fields=("backend", "name"), name="turbo_command_backend_name_unique"),
+        ]
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # A row loads as the proxy model of its kind, through every path: Command.objects,
+        # job.command or a select_related. Its permissions, audit key and URL are then those of
+        # the kind. A backend that this release does not know stays a Command.
+        if cls is Command and "backend" in field_names:
+            cls = COMMAND_KIND_MODELS.get(values[field_names.index("backend")], cls)
+        return super(Command, cls).from_db(db, field_names, values)
+
+    def get_backend(self, load=False):
+        return get_command_backend(self, load)
+
+    def get_absolute_url(self):
+        # the console URL names are the kinds
+        return reverse(f"turbo:{self.backend}", args=(self.pk,))
+
+    @property
+    def version(self):
+        return self.job.version
+
+    def save(self, *args, **kwargs):
+        if self.command_backend is not None:
+            self.backend = self.command_backend
+        # atomic so a failed insert (e.g. duplicate name) rolls the auto-minted Job back, no orphan
+        with transaction.atomic():
+            if not self.job_id:
+                self.job = Job.objects.create(kind=self.backend)
+            super().save(*args, **kwargs)
+
+    def can_be_deleted(self):
+        return Command.objects.can_be_deleted().filter(pk=self.pk).exists()
+
+    def wire_payload(self):
+        # A function of kwargs and version only. Zentral caches it for config_refresh_interval
+        # and sends it to every machine in scope. Do not put per-machine or per-run data in it.
+        # This is why a separate endpoint gives out an upload destination.
+        return self.get_backend(load=True).wire_payload()
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": str(self.pk), "name": self.name}
+        if keys_only:
+            return d
+        # the options are at the top level, like the fields of a script
+        d.update(self.get_backend_kwargs_for_event())
+        d.update({
+            "version": self.job.version,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        if self.description:
+            d["description"] = self.description
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return {}
+
+    def delete(self, *args, **kwargs):
+        job = self.job
+        result = super().delete(*args, **kwargs)
+        job.delete()  # cascades to RecurringJob / OneTimeJob and their per-machine trackers
+        return result
+
+
+class CommandKindManager(JobDefinitionManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(backend=self.model.command_backend)
+
+
+class Sysdiagnose(Command):
+    command_backend = CommandBackend.SYSDIAGNOSE
+
+    objects = CommandKindManager()
+
+    class Meta:
+        proxy = True
+
+
+class FileExport(Command):
+    command_backend = CommandBackend.FILE_EXPORT
+
+    objects = CommandKindManager()
+
+    class Meta:
+        proxy = True
+
+
+COMMAND_KIND_MODELS = {model.command_backend: model for model in (Sysdiagnose, FileExport)}
+
+
 class JobScope(models.Model):
     # Shared by the scheduling models: WHICH configuration + machines a job is delivered to.
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
@@ -714,7 +863,8 @@ def resolve_machine_schedules(configuration, serial_number, schedule_pks):
         return {}
 
     # the results path scores compliance from definition.compliance_check, so prefetch it here to keep
-    # the ingest at one query for the batch: no SELECT for each result.
+    # the ingest at one query for the batch: no SELECT for each result. A command has no tag and no
+    # compliance check, so DEFINITION_RELATIONS is sufficient for it.
     related = (*(f"job__{relation}" for relation in Job.DEFINITION_RELATIONS),
                "job__script__tag", "job__script__compliance_check",
                "job__mscp_check__compliance_check")

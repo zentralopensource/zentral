@@ -44,6 +44,13 @@ urlpatterns = [
     path('mscp_checks/<uuid:pk>/update/', views.UpdateMSCPCheckView.as_view(), name='update_mscp_check'),
     path('mscp_checks/<uuid:pk>/delete/', views.DeleteMSCPCheckView.as_view(), name='delete_mscp_check'),
 
+    # sysdiagnose and file export. No create, update or delete yet: an operator defines them
+    # through the API. The detail URL names are the kinds, see Command.get_absolute_url.
+    path('sysdiagnoses/', views.SysdiagnoseListView.as_view(), name='sysdiagnoses'),
+    path('sysdiagnoses/<uuid:pk>/', views.SysdiagnoseView.as_view(), name='sysdiagnose'),
+    path('file_exports/', views.FileExportListView.as_view(), name='file_exports'),
+    path('file_exports/<uuid:pk>/', views.FileExportView.as_view(), name='file_export'),
+
     # recurring job
     path('recurring_jobs/', views.RecurringJobListView.as_view(), name='recurring_jobs'),
     path('configurations/<uuid:configuration_pk>/recurring_jobs/create/',
@@ -71,6 +78,8 @@ modules_menu_cfg = {
         ('enrolled_machines', 'Enrolled machines', False, ('turbo.view_enrolledmachine',)),
         ('scripts', 'Scripts', False, ('turbo.view_script',)),
         ('mscp_checks', 'mSCP checks', False, ('turbo.view_mscpcheck',)),
+        ('sysdiagnoses', 'Sysdiagnoses', False, ('turbo.view_sysdiagnose',)),
+        ('file_exports', 'File exports', False, ('turbo.view_fileexport',)),
         ('recurring_jobs', 'Recurring jobs', False, ('turbo.view_recurringjob',)),
         ('one_time_jobs', 'One-time jobs', False, ('turbo.view_onetimejob',)),
     ),

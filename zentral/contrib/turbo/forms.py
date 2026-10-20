@@ -5,8 +5,8 @@ from django.db.models.functions import Coalesce
 
 from zentral.contrib.inventory.models import Tag
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
-from .models import (Configuration, EnrolledMachine, Enrollment, Job, MSCPCheck, OneTimeJob,
-                     RecurringJob, Script)
+from .models import (Configuration, EnrolledMachine, Enrollment, FileExport, Job, MSCPCheck, OneTimeJob,
+                     RecurringJob, ScheduleMode, Script, Sysdiagnose)
 
 
 class ConfigurationForm(forms.ModelForm):
@@ -93,6 +93,41 @@ class ScriptSearchForm(forms.Form):
                 | Q(job__onetimejob__configuration=configuration)
             ).distinct()
         return qs
+
+
+class CommandKindSearchForm(forms.Form):
+    # A subclass sets model to the proxy model of a kind.
+    model = None
+    template_name = "django/forms/search.html"
+
+    q = forms.CharField(
+        label="Name", required=False,
+        widget=forms.TextInput(attrs={"autofocus": True, "size": 36}),
+    )
+    configuration = forms.ModelChoiceField(
+        label="Scheduled in", queryset=Configuration.objects.all(), required=False, empty_label="...",
+    )
+
+    def get_queryset(self):
+        qs = self.model.objects.select_related("job").order_by("name")
+        q = self.cleaned_data.get("q")
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+        configuration = self.cleaned_data.get("configuration")
+        if configuration:
+            qs = qs.filter(
+                Q(job__recurringjob__configuration=configuration)
+                | Q(job__onetimejob__configuration=configuration)
+            ).distinct()
+        return qs
+
+
+class SysdiagnoseSearchForm(CommandKindSearchForm):
+    model = Sysdiagnose
+
+
+class FileExportSearchForm(CommandKindSearchForm):
+    model = FileExport
 
 
 class MSCPCheckForm(forms.ModelForm):
@@ -206,6 +241,10 @@ class RecurringJobForm(BaseJobScopeForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # A kind for the one-time mode only cannot use a recurring schedule. A smaller queryset
+        # is also the validation: a ModelChoiceField refuses a pk that is not in it.
+        self.fields["job"].queryset = self.fields["job"].queryset.filter(
+            kind__in=Job.kinds_for_schedule_mode(ScheduleMode.RECURRING))
         if self.configuration is not None and self.instance._state.adding:
             # a job can be scheduled at most once per configuration (unique constraint). Excluding the
             # scheduled jobs from the choices is enough now that an existing schedule keeps its job
@@ -308,6 +347,7 @@ class OneTimeJobSearchForm(forms.Form):
             qs = qs.filter(
                 Q(job__script__name__icontains=q)
                 | Q(job__mscp_check__rule_id__icontains=q)
+                | Q(job__command__name__icontains=q)
                 | Q(configuration__name__icontains=q)
             )
         configuration = self.cleaned_data.get("configuration")
