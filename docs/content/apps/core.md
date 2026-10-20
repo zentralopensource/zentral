@@ -241,3 +241,142 @@ Response:
     }
 }
 ```
+
+### `/api/compliance_checks/compliance_checks/`
+
+* method: GET
+* PBAC action: `ComplianceChecks::Action::"viewComplianceCheck"`
+* available filters:
+    * `model`
+    * `name`
+* pagination:
+    * `limit` (max `500`, `50` by default)
+    * `offset`
+
+Use this endpoint to list the compliance checks. `model` is the type of the check, for example `MunkiScriptCheck` or `OsqueryCheck`.
+
+`status_counts` gives the number of machines for each status of the current version of the check: `OK`, `PENDING`, `UNKNOWN`, `FAILED` and `OUT_OF_SCOPE`. These are the statuses of the compliance check events.
+
+`outdated_count` gives the number of machines with a status from a previous version of the check. When the check changes, a machine stays in this count until it sends a result for the new version.
+
+A machine without a stored status is not counted. The archived machines are counted.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/compliance_checks/compliance_checks/?name=FileVault+enabled" \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "model": "MunkiScriptCheck",
+            "name": "FileVault enabled",
+            "description": "Verify that FileVault is enabled",
+            "version": 3,
+            "status_counts": {
+                "OK": 2,
+                "PENDING": 0,
+                "UNKNOWN": 0,
+                "FAILED": 1,
+                "OUT_OF_SCOPE": 0
+            },
+            "outdated_count": 1,
+            "created_at": "2026-10-20T11:56:31.625790",
+            "updated_at": "2026-10-20T11:56:31.625793"
+        }
+    ]
+}
+```
+
+### `/api/compliance_checks/compliance_checks/<int:compliance_check_id>/`
+
+* method: GET
+* PBAC action: `ComplianceChecks::Action::"viewComplianceCheck"`
+
+Use this endpoint to get a compliance check. The response is the same as one item of the [list](#apicompliance_checkscompliance_checks), with the same `status_counts`.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/compliance_checks/compliance_checks/1/ \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "id": 1,
+    "model": "MunkiScriptCheck",
+    "name": "FileVault enabled",
+    "description": "Verify that FileVault is enabled",
+    "version": 3,
+    "status_counts": {
+        "OK": 2,
+        "PENDING": 0,
+        "UNKNOWN": 0,
+        "FAILED": 1,
+        "OUT_OF_SCOPE": 0
+    },
+    "outdated_count": 1,
+    "created_at": "2026-10-20T11:56:31.625790",
+    "updated_at": "2026-10-20T11:56:31.625793"
+}
+```
+
+### `/api/compliance_checks/machine_statuses/`
+
+* method: GET
+* PBAC action: `ComplianceChecks::Action::"viewMachineStatus"`
+* available filters:
+    * `compliance_check_id`
+    * `serial_number`
+* pagination:
+    * `limit` (max `500`, `50` by default)
+    * `offset`
+
+Use this endpoint to list the compliance check statuses of the machines. Each item gives the status of one machine for one compliance check, and the status before it. `previous_status` is `null` for the first status of a machine.
+
+`compliance_check_version` is the version of the check that gave the status. If it is lower than the `version` of the check, the status comes from a previous version of the check.
+
+An unknown `compliance_check_id` gives a `400`.
+
+Example:
+
+```bash
+curl -H "Authorization: Token $ZTL_API_TOKEN" \
+  "https://$ZTL_FQDN/api/compliance_checks/machine_statuses/?serial_number=C02ABC123452" \
+  | python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 4,
+            "compliance_check": 1,
+            "compliance_check_version": 3,
+            "serial_number": "C02ABC123452",
+            "status": "FAILED",
+            "status_time": "2026-10-20T09:12:03.123456",
+            "previous_status": "OK"
+        }
+    ]
+}
+```

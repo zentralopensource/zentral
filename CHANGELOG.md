@@ -10,6 +10,8 @@ The PBAC Schema browser documents each action now. It shows what the action auth
 
 A task that produces several files has a manifest in its result. The download endpoint of the task gives the manifest with a download URL for each file, and the `file` parameter downloads one file. With an S3 or GCS storage, the manifest also gives the URL of each file in the storage, and the expiration time of the URL when it expires. The tasks pages list the files.
 
+A read-only HTTP API is available for the compliance checks. `/api/compliance_checks/compliance_checks/` lists the compliance checks, with the number of machines for each status, and the number of machines with a status from a previous version of the check. `/api/compliance_checks/machine_statuses/` lists the status of each machine for each check, and you can filter it on the serial number of the machine and on the compliance check.
+
 
 #### Documentation
 
