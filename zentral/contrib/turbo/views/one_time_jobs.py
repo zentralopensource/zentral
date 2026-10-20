@@ -1,5 +1,7 @@
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from ..forms import OneTimeJobForm, OneTimeJobSearchForm
 from ..models import OneTimeJob
+from ..pbac import CreateOneTimeJobRequest, DeleteOneTimeJobRequest, UpdateOneTimeJobRequest
 from .base import (BaseCreateConfigurationScopedJobView, BaseDeleteConfigurationScopedJobView,
                    BaseUpdateConfigurationScopedJobView, SearchFormListView)
 
@@ -10,21 +12,22 @@ class OneTimeJobListView(SearchFormListView):
     search_form_class = OneTimeJobSearchForm
 
 
-class CreateOneTimeJobView(BaseCreateConfigurationScopedJobView):
-    permission_required = "turbo.add_onetimejob"
+class CreateOneTimeJobView(PermissionRequiredMixin, BaseCreateConfigurationScopedJobView):
+    permission_required = "turbo.view_onetimejob"
+    create_pbac_request_class = CreateOneTimeJobRequest
     model = OneTimeJob
     form_class = OneTimeJobForm
     anchor = "one-time-jobs"
 
 
 class UpdateOneTimeJobView(BaseUpdateConfigurationScopedJobView):
-    permission_required = "turbo.change_onetimejob"
+    pbac_request_class = UpdateOneTimeJobRequest
     model = OneTimeJob
     form_class = OneTimeJobForm
     anchor = "one-time-jobs"
 
 
 class DeleteOneTimeJobView(BaseDeleteConfigurationScopedJobView):
-    permission_required = "turbo.delete_onetimejob"
+    pbac_request_class = DeleteOneTimeJobRequest
     model = OneTimeJob
     anchor = "one-time-jobs"

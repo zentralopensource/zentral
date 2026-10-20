@@ -3,10 +3,11 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from accounts.models import Policy
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.turbo.models import RecurringJob
-from .utils import (TurboAPITestCase, force_command, force_configuration, force_recurring_job,
-                    force_script)
+from .utils import (TurboAPITestCase, forbid_job_kind_policy, force_command, force_configuration,
+                    force_mscp_check, force_recurring_job, force_script, turbo_policy)
 
 
 class TurboRecurringJobAPITestCase(TurboAPITestCase):
@@ -30,7 +31,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         # job. The console removes it from the choices. The API must give the error.
         configuration = force_configuration()
         command = force_command()
-        self.set_permissions("turbo.add_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.post(reverse("turbo_api:recurring_jobs"),
                              {"configuration": str(configuration.pk), "job": str(command.job.pk),
                               "interval": 3600})
@@ -43,7 +44,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
     def test_create_recurring_job(self, post_event):
         configuration = force_configuration()
         script = force_script()
-        self.set_permissions("turbo.add_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         with self.captureOnCommitCallbacks(execute=True):
             response = self.post(reverse("turbo_api:recurring_jobs"),
                                  {"configuration": str(configuration.pk), "job": str(script.job.pk),
@@ -68,7 +69,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         configuration = force_configuration()
         script = force_script()
         tag = Tag.objects.create(name=get_random_string(12))
-        self.set_permissions("turbo.add_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.post(reverse("turbo_api:recurring_jobs"),
                              {"configuration": str(configuration.pk), "job": str(script.job.pk),
                               "tags": [tag.pk], "serial_numbers": ["ABC123", "DEF456"]})
@@ -79,7 +80,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
 
     def test_create_recurring_job_duplicate(self):
         recurring_job = force_recurring_job()
-        self.set_permissions("turbo.add_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.post(reverse("turbo_api:recurring_jobs"),
                              {"configuration": str(recurring_job.configuration.pk),
                               "job": str(recurring_job.job.pk)})
@@ -89,7 +90,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         configuration = force_configuration()
         script = force_script()
         tag = Tag.objects.create(name=get_random_string(12))
-        self.set_permissions("turbo.add_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.post(reverse("turbo_api:recurring_jobs"),
                              {"configuration": str(configuration.pk), "job": str(script.job.pk),
                               "tags": [tag.pk], "excluded_tags": [tag.pk]})
@@ -139,7 +140,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
 
     def test_update_recurring_job(self):
         recurring_job = force_recurring_job(interval=3600)
-        self.set_permissions("turbo.change_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
                             {"configuration": str(recurring_job.configuration.pk),
                              "job": str(recurring_job.job.pk), "interval": 7200})
@@ -151,7 +152,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         # re-pointing a schedule to another configuration would retarget that config's whole fleet
         recurring_job = force_recurring_job(interval=3600)
         other_configuration = force_configuration()
-        self.set_permissions("turbo.change_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
                             {"configuration": str(other_configuration.pk),
                              "job": str(recurring_job.job.pk), "interval": 7200})
@@ -164,7 +165,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         # re-pointing a schedule to another job would strand its per-machine ledger rows
         recurring_job = force_recurring_job(interval=3600)
         other_script = force_script()
-        self.set_permissions("turbo.change_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
                             {"configuration": str(recurring_job.configuration.pk),
                              "job": str(other_script.job.pk), "interval": 7200})
@@ -176,7 +177,67 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
     def test_delete_recurring_job(self):
         recurring_job = force_recurring_job()
         pk = recurring_job.pk
-        self.set_permissions("turbo.delete_recurringjob")
+        self.set_policy(turbo_policy(self.group))
         response = self.delete(reverse("turbo_api:recurring_job", args=(pk,)))
         self.assertEqual(response.status_code, 204)
         self.assertFalse(RecurringJob.objects.filter(pk=pk).exists())
+
+    # PBAC: the typed createRecurringJob, updateRecurringJob and deleteRecurringJob
+
+    def _forbid_kind(self, kind):
+        Policy.objects.update_or_create(name="Turbo API tests",
+                                        defaults={"source": forbid_job_kind_policy(kind)})
+
+    def test_create_recurring_job_refused_by_a_forbidden_kind(self):
+        configuration = force_configuration()
+        script = force_script()
+        self.set_policy(turbo_policy(self.group))
+        self._forbid_kind("script")
+        response = self.post(reverse("turbo_api:recurring_jobs"),
+                             {"configuration": str(configuration.pk), "job": str(script.job.pk)})
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(RecurringJob.objects.filter(job=script.job).exists())
+
+    def test_create_recurring_job_allowed_for_another_kind(self):
+        configuration = force_configuration()
+        mscp_check = force_mscp_check()
+        self.set_policy(turbo_policy(self.group))
+        self._forbid_kind("script")
+        response = self.post(reverse("turbo_api:recurring_jobs"),
+                             {"configuration": str(configuration.pk), "job": str(mscp_check.job.pk)})
+        self.assertEqual(response.status_code, 201)
+
+    def test_create_recurring_job_refused_in_another_configuration(self):
+        allowed = force_configuration()
+        other = force_configuration()
+        script = force_script()
+        self.set_policy("permit ("
+                        f' principal in Role::"{self.group.pk}",'
+                        ' action == Turbo::Action::"createRecurringJob",'
+                        f' resource == Turbo::Configuration::"{allowed.pk}"'
+                        ");\n")
+        response = self.post(reverse("turbo_api:recurring_jobs"),
+                             {"configuration": str(other.pk), "job": str(script.job.pk)})
+        self.assertEqual(response.status_code, 403)
+        response = self.post(reverse("turbo_api:recurring_jobs"),
+                             {"configuration": str(allowed.pk), "job": str(script.job.pk)})
+        self.assertEqual(response.status_code, 201)
+
+    def test_update_recurring_job_refused_by_a_forbidden_kind(self):
+        recurring_job = force_recurring_job(interval=3600)
+        self.set_policy(turbo_policy(self.group))
+        self._forbid_kind("script")
+        response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
+                            {"configuration": str(recurring_job.configuration.pk),
+                             "job": str(recurring_job.job.pk), "interval": 7200})
+        self.assertEqual(response.status_code, 403)
+        recurring_job.refresh_from_db()
+        self.assertEqual(recurring_job.interval, 3600)
+
+    def test_delete_recurring_job_refused_by_a_forbidden_kind(self):
+        recurring_job = force_recurring_job()
+        self.set_policy(turbo_policy(self.group))
+        self._forbid_kind("script")
+        response = self.delete(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(RecurringJob.objects.filter(pk=recurring_job.pk).exists())

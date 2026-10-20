@@ -1,17 +1,18 @@
-from zentral.utils.drf import (ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
-                               RetrieveUpdateDestroyAPIViewWithAudit)
 from ..models import OneTimeJob
+from ..pbac import CreateOneTimeJobRequest, DeleteOneTimeJobRequest, UpdateOneTimeJobRequest
 from ..serializers import OneTimeJobSerializer
+from .base import BaseJobScopeDetail, BaseJobScopeList
 
 
-class OneTimeJobList(ListCreateAPIViewWithAudit):
+class OneTimeJobList(BaseJobScopeList):
     queryset = (OneTimeJob.objects.select_related("job")
                 .prefetch_related("tags", "excluded_tags").order_by("created_at", "pk"))
     serializer_class = OneTimeJobSerializer
-    pagination_class = MaxLimitOffsetPagination
-    filterset_fields = ("configuration", "job")
+    create_pbac_request_class = CreateOneTimeJobRequest
 
 
-class OneTimeJobDetail(RetrieveUpdateDestroyAPIViewWithAudit):
-    queryset = OneTimeJob.objects.select_related("job").all()
+class OneTimeJobDetail(BaseJobScopeDetail):
+    queryset = OneTimeJob.objects.select_related("job", "configuration").all()
     serializer_class = OneTimeJobSerializer
+    update_pbac_request_class = UpdateOneTimeJobRequest
+    delete_pbac_request_class = DeleteOneTimeJobRequest

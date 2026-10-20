@@ -7,6 +7,8 @@ from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, Updat
                                  UserPaginationListView)
 from ..forms import ConfigurationForm
 from ..models import Configuration, Job
+from ..pbac import (authorize_one_time_job_rows, authorize_recurring_job_rows, can_create_one_time_job,
+                    can_create_recurring_job)
 
 
 class ConfigurationListView(PermissionRequiredMixin, UserPaginationListView):
@@ -57,9 +59,12 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
                                         output_field=TextField()))
             .order_by("job_name", "pk")
         )
-        recurring_jobs = list(recurring_jobs)
+        # one decision for each row, because the rows have different jobs
+        recurring_jobs = authorize_recurring_job_rows(self.request.user, recurring_jobs)
         ctx["recurring_jobs"] = recurring_jobs
         ctx["recurring_job_count"] = len(recurring_jobs)
+        ctx["can_edit_recurring_job"] = any(rj.can_update or rj.can_delete for rj in recurring_jobs)
+        ctx["can_create_recurring_job"] = can_create_recurring_job(self.request.user, self.object)
         one_time_job_qs = (
             self.object.onetimejob_set
             .select_related(*Job.definition_relations("job__"))
@@ -67,7 +72,14 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
             .order_by(F("not_before").desc(nulls_last=True), "-created_at")
         )
         ctx["one_time_job_count"] = one_time_job_qs.count()
-        ctx["one_time_jobs"] = one_time_job_qs[:self.one_time_job_preview_count]
+        # one decision for each row, because the rows have different jobs
+        one_time_jobs = authorize_one_time_job_rows(
+            self.request.user,
+            one_time_job_qs.select_related("configuration")[:self.one_time_job_preview_count])
+        ctx["one_time_jobs"] = one_time_jobs
+        ctx["can_edit_one_time_job"] = any(otj.can_update or otj.can_delete
+                                           for otj in one_time_jobs)
+        ctx["can_create_one_time_job"] = can_create_one_time_job(self.request.user, self.object)
         return ctx
 
 

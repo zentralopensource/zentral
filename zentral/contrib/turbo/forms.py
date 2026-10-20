@@ -5,6 +5,7 @@ from django.db.models.functions import Coalesce
 
 from zentral.contrib.inventory.models import Tag
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
+from .pbac import CreateOneTimeJobRequest, CreateRecurringJobRequest, offerable_jobs
 from .models import (Configuration, EnrolledMachine, Enrollment, FileExport, Job, MSCPCheck, OneTimeJob,
                      RecurringJob, ScheduleMode, Script, Sysdiagnose)
 
@@ -234,12 +235,26 @@ class BaseJobScopeForm(forms.ModelForm):
         return super().save(*args, **kwargs)
 
 
-class RecurringJobForm(BaseJobScopeForm):
+class OfferAuthorizedJobsMixin:
+    # Changes the choices that the picker shows, not the queryset that validates the post. A
+    # forged post reaches the typed check, which refuses it. A form error does not.
+    create_pbac_request_class = None
+
+    def _offer_authorized_jobs(self, user):
+        field = self.fields["job"]
+        allowed = offerable_jobs(user, self.create_pbac_request_class, self.configuration, field.queryset)
+        field.choices = [("", field.empty_label)] + [(job.pk, field.label_from_instance(job))
+                                                     for job in allowed]
+
+
+class RecurringJobForm(OfferAuthorizedJobsMixin, BaseJobScopeForm):
+    create_pbac_request_class = CreateRecurringJobRequest
+
     class Meta:
         model = RecurringJob
         fields = ("job", "interval", "tags", "excluded_tags", "serial_numbers", "excluded_serial_numbers")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         # A kind for the one-time mode only cannot use a recurring schedule. A smaller queryset
         # is also the validation: a ModelChoiceField refuses a pk that is not in it.
@@ -250,6 +265,10 @@ class RecurringJobForm(BaseJobScopeForm):
             # scheduled jobs from the choices is enough now that an existing schedule keeps its job
             scheduled = RecurringJob.objects.filter(configuration=self.configuration).values_list("job_id", flat=True)
             self.fields["job"].queryset = self.fields["job"].queryset.exclude(pk__in=scheduled)
+        # On the create only. On an update the field is disabled and keeps its value, even if a
+        # policy refuses that kind now.
+        if user is not None and self.instance._state.adding:
+            self._offer_authorized_jobs(user)
 
 
 class RecurringJobSearchForm(forms.Form):
@@ -314,11 +333,20 @@ class BaseOneTimeJobForm(forms.ModelForm):
         return cleaned_data
 
 
-class OneTimeJobForm(BaseJobScopeForm, BaseOneTimeJobForm):
+class OneTimeJobForm(OfferAuthorizedJobsMixin, BaseJobScopeForm, BaseOneTimeJobForm):
+    create_pbac_request_class = CreateOneTimeJobRequest
+
     class Meta:
         model = OneTimeJob
         fields = ("job", "not_before", "not_after", "tags", "excluded_tags",
                   "serial_numbers", "excluded_serial_numbers")
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # On the create only. On an update the field is disabled and keeps its value, even if a
+        # policy refuses that kind now.
+        if user is not None and self.instance._state.adding:
+            self._offer_authorized_jobs(user)
 
 
 class OneTimeJobSearchForm(forms.Form):
@@ -382,18 +410,21 @@ class EnrolledMachineSearchForm(forms.Form):
         return qs
 
 
-class MachineOneTimeJobForm(BaseOneTimeJobForm):
+class MachineOneTimeJobForm(OfferAuthorizedJobsMixin, BaseOneTimeJobForm):
+    create_pbac_request_class = CreateOneTimeJobRequest
     job = JobChoiceField(queryset=Job.objects.all())
 
     class Meta:
         model = OneTimeJob
         fields = ("job", "not_before", "not_after")
 
-    def __init__(self, *args, configuration=None, serial_number=None, **kwargs):
+    def __init__(self, *args, configuration=None, serial_number=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.configuration = configuration
         self.serial_number = serial_number
         self.fields["job"].queryset = Job.objects.select_related(*Job.definition_relations()).all()
+        if user is not None:
+            self._offer_authorized_jobs(user)
 
     def save(self, *args, **kwargs):
         # locked to one machine: the view supplies the config + serial, no scope UI

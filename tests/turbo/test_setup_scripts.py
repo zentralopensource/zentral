@@ -90,8 +90,10 @@ class TurboSetupScriptsTestCase(TurboSetupTestCase):
         self.login("turbo.view_script", "turbo.view_recurringjob", "turbo.view_onetimejob")
         response = self.client.get(script.get_absolute_url())
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Recurring job")
-        self.assertContains(response, "One-time job")
+        # The headings carry the count. A list has no count() without an argument, and the
+        # template engine then renders the empty string.
+        self.assertContains(response, "Recurring job (1)")
+        self.assertContains(response, "One-time job (1)")
         self.assertContains(response, configuration.get_absolute_url())
 
     def test_script_detail_jobs_hidden_without_permission(self):

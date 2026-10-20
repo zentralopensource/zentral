@@ -151,7 +151,7 @@ Create them with the `/api/turbo/sysdiagnoses/` and `/api/turbo/file_exports/` e
 
 A sysdiagnose and a file export run one time only: Zentral refuses to attach one to a recurring job.
 
-The upload of the collected files comes in a later release.
+The one-time jobs and the recurring jobs have typed PBAC actions. `Turbo::Action::"createOneTimeJob"` and `Turbo::Action::"createRecurringJob"` take the configuration as their resource. `Turbo::Action::"updateOneTimeJob"`, `Turbo::Action::"deleteOneTimeJob"`, `Turbo::Action::"updateRecurringJob"` and `Turbo::Action::"deleteRecurringJob"` take the schedule, which is a member of its configuration. The six actions carry the job in `context.job`. A policy can allow one kind of job and refuse another, or allow one configuration and not another. A policy needs no guard: `when { context.job.kind == "sysdiagnose" }` allows that kind and nothing else, and the role still opens the scheduling page. Every kind is covered, scripts and mSCP checks included, in the console and in the API. The upload of the collected files comes in a later release.
 
 
 ### Backward incompatibilities

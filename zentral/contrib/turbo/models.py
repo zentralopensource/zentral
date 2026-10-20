@@ -639,6 +639,13 @@ COMMAND_KIND_MODELS = {model.command_backend: model for model in (Sysdiagnose, F
 
 class JobScope(models.Model):
     # Shared by the scheduling models: WHICH configuration + machines a job is delivered to.
+    #
+    # pbac.py registers create, update and delete by hand, on the configuration or on the row.
+    # An auto-registered action takes System with no context, so a policy cannot refuse one
+    # kind. Only view stays auto-registered. A typed view action must scope a list, which
+    # means a policy filters a queryset instead of a decision on one request.
+    pbac_excluded_default_permissions = ("add", "change", "delete")
+
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     tags = models.ManyToManyField(Tag, blank=True, related_name="%(app_label)s_%(class)s_tags")
     excluded_tags = models.ManyToManyField(Tag, blank=True, related_name="%(app_label)s_%(class)s_excluded_tags")

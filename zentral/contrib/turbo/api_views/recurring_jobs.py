@@ -1,17 +1,18 @@
-from zentral.utils.drf import (ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
-                               RetrieveUpdateDestroyAPIViewWithAudit)
 from ..models import RecurringJob
+from ..pbac import CreateRecurringJobRequest, DeleteRecurringJobRequest, UpdateRecurringJobRequest
 from ..serializers import RecurringJobSerializer
+from .base import BaseJobScopeDetail, BaseJobScopeList
 
 
-class RecurringJobList(ListCreateAPIViewWithAudit):
+class RecurringJobList(BaseJobScopeList):
     queryset = (RecurringJob.objects.select_related("job")
                 .prefetch_related("tags", "excluded_tags").order_by("created_at", "pk"))
     serializer_class = RecurringJobSerializer
-    pagination_class = MaxLimitOffsetPagination
-    filterset_fields = ("configuration", "job")
+    create_pbac_request_class = CreateRecurringJobRequest
 
 
-class RecurringJobDetail(RetrieveUpdateDestroyAPIViewWithAudit):
-    queryset = RecurringJob.objects.select_related("job").all()
+class RecurringJobDetail(BaseJobScopeDetail):
+    queryset = RecurringJob.objects.select_related("job", "configuration").all()
     serializer_class = RecurringJobSerializer
+    update_pbac_request_class = UpdateRecurringJobRequest
+    delete_pbac_request_class = DeleteRecurringJobRequest
