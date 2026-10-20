@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 
 from zentral.contrib.inventory.models import MachineTag
-from ..models import OneTimeJob, OneTimeJobMachine, RecurringJob
+from ..models import Job, OneTimeJob, OneTimeJobMachine, RecurringJob
 from .base import BaseEnrolledMachineView
 
 logger = logging.getLogger("zentral.contrib.turbo.public_views.config")
@@ -36,7 +36,7 @@ class ConfigView(BaseEnrolledMachineView):
         # recurring — every in-scope RecurringJob; null interval falls back to the configuration default
         recurring_jobs = (
             RecurringJob.in_scope(configuration, serial_number, tag_ids)
-            .select_related("job__script", "job__mscp_check")
+            .select_related(*Job.definition_relations("job__"))
         )
         for recurring_job in recurring_jobs:
             job = recurring_job.job
@@ -53,7 +53,7 @@ class ConfigView(BaseEnrolledMachineView):
             OneTimeJob.in_scope(configuration, serial_number, tag_ids)
             .filter(Q(not_before__isnull=True) | Q(not_before__lte=now))
             .filter(Q(not_after__isnull=True) | Q(not_after__gte=now))
-            .select_related("job__script", "job__mscp_check")
+            .select_related(*Job.definition_relations("job__"))
         )
         done = set(
             OneTimeJobMachine.objects

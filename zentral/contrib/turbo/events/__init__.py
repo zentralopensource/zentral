@@ -14,11 +14,12 @@ class BaseTurboEvent(BaseEvent):
 
     @staticmethod
     def _link_definition(keys, ref):
-        # the payload's turbo-local definition block (script / mscp_check) → the pk-only, namespaced
-        # linked object (turbo_script / turbo_mscp_check), so one key correlates a definition's machine,
-        # audit and compliance events
-        for payload_key, linked_key in (("script", "turbo_script"), ("mscp_check", "turbo_mscp_check")):
-            pk = (ref.get(payload_key) or {}).get("pk")
+        # Maps the definition block of the payload, under the kind, to the linked object with the
+        # turbo_ prefix. One key then correlates the machine, audit and compliance events of a definition.
+        from ..models import Job  # a module-level import would cycle (models → compliance_checks → events)
+        for kind in Job.Kind.values:
+            pk = (ref.get(kind) or {}).get("pk")
+            linked_key = f"turbo_{kind}"
             if pk and (pk,) not in keys.setdefault(linked_key, []):
                 keys[linked_key].append((pk,))
                 return

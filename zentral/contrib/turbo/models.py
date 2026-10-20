@@ -180,6 +180,16 @@ class Job(models.Model):
         SCRIPT = "script", "Script"
         MSCP_CHECK = "mscp_check", "mSCP check"
 
+    # Every definition relation of a Job. A caller that reads job.definition prefetches with
+    # this tuple. With one tuple, no select_related site can miss a new kind.
+    DEFINITION_RELATIONS = ("script", "mscp_check")
+
+    @classmethod
+    def definition_relations(cls, prefix=""):
+        # select_related() arguments for the definition relations. The optional prefix
+        # ("job__", "one_time_job__job__") lets a caller reach a Job from any depth.
+        return tuple(f"{prefix}{relation}" for relation in cls.DEFINITION_RELATIONS)
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     kind = models.CharField(max_length=32, choices=Kind.choices, editable=False)
     # wire version; bumped whenever the Script / MSCPCheck definition changes. The agent re-runs a job
@@ -206,18 +216,18 @@ class Job(models.Model):
             return self.mscp_check
 
     def definition_linked_objects_keys(self):
-        # link the definition (Script / MSCPCheck) — the page an admin navigates to — not the Job anchor
-        key = "turbo_script" if self.kind == self.Kind.SCRIPT else "turbo_mscp_check"
-        return {key: [(self.definition.pk,)]}
+        # link the definition, which is the page an admin opens, not the Job. The key is the
+        # audit key of the definition model.
+        return {f"turbo_{self.kind}": [(self.definition.pk,)]}
 
     def definition_wire_ref(self):
-        # the definition block for an event payload: (payload_key, {pk + human context}). The payload
-        # key is turbo-local (script / mscp_check); the pk-only linked object stays namespaced
-        # (turbo_script / turbo_mscp_check) — see events.get_linked_objects_keys.
+        # the definition block for an event payload: (kind, {pk + human context}). The payload
+        # key is local to Turbo. The linked object keeps the turbo_ prefix. See
+        # events.get_linked_objects_keys.
         definition = self.definition
-        if self.kind == self.Kind.SCRIPT:
-            return "script", {"pk": str(definition.pk), "name": definition.name}
-        return "mscp_check", {"pk": str(definition.pk), "rule_id": definition.rule_id}
+        if self.kind == self.Kind.MSCP_CHECK:
+            return self.kind, {"pk": str(definition.pk), "rule_id": definition.rule_id}
+        return self.kind, {"pk": str(definition.pk), "name": definition.name}
 
 
 class JobDefinitionManager(models.Manager):
@@ -704,9 +714,10 @@ def resolve_machine_schedules(configuration, serial_number, schedule_pks):
         return {}
 
     # the results path scores compliance from definition.compliance_check, so prefetch it here to keep
-    # ingest O(1) in the batch size (no per-result SELECT to dereference the check)
-    related = ("job__script__tag", "job__script__compliance_check",
-               "job__mscp_check", "job__mscp_check__compliance_check")
+    # the ingest at one query for the batch: no SELECT for each result.
+    related = (*(f"job__{relation}" for relation in Job.DEFINITION_RELATIONS),
+               "job__script__tag", "job__script__compliance_check",
+               "job__mscp_check__compliance_check")
     pks = list(valid.values())
     recurring_jobs = {
         rj.pk: rj

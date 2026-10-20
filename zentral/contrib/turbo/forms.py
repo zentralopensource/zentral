@@ -168,7 +168,7 @@ class BaseJobScopeForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # NB: the UUID PK default fills pk at construction, so use _state.adding (not pk) for create-vs-update
         self.configuration = configuration or (None if self.instance._state.adding else self.instance.configuration)
-        self.fields["job"].queryset = Job.objects.select_related("script", "mscp_check").all()
+        self.fields["job"].queryset = Job.objects.select_related(*Job.definition_relations()).all()
         if not self.instance._state.adding:
             # disabled keeps the initial value, whatever is posted
             self.fields["job"].disabled = True
@@ -230,7 +230,7 @@ class RecurringJobSearchForm(forms.Form):
     def get_queryset(self):
         qs = (
             RecurringJob.objects
-            .select_related("configuration", "job__script", "job__mscp_check")
+            .select_related("configuration", *Job.definition_relations("job__"))
             .prefetch_related("tags", "excluded_tags")
             .annotate(job_name=Coalesce("job__script__name", "job__mscp_check__rule_id",
                                         output_field=TextField()))
@@ -299,7 +299,7 @@ class OneTimeJobSearchForm(forms.Form):
     def get_queryset(self):
         qs = (
             OneTimeJob.objects
-            .select_related("configuration", "job__script", "job__mscp_check")
+            .select_related("configuration", *Job.definition_relations("job__"))
             .prefetch_related("tags", "excluded_tags")
             .order_by(F("not_before").desc(nulls_last=True), "-created_at")
         )
@@ -353,7 +353,7 @@ class MachineOneTimeJobForm(BaseOneTimeJobForm):
         super().__init__(*args, **kwargs)
         self.configuration = configuration
         self.serial_number = serial_number
-        self.fields["job"].queryset = Job.objects.select_related("script", "mscp_check").all()
+        self.fields["job"].queryset = Job.objects.select_related(*Job.definition_relations()).all()
 
     def save(self, *args, **kwargs):
         # locked to one machine: the view supplies the config + serial, no scope UI
