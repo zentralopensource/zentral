@@ -74,7 +74,8 @@ class ComplianceChecksViewsTestCase(TestCase, LoginCase):
 
     def test_redirect_404(self):
         cc = self._force_jmespath_check()
-        cc.delete()  # the compliance check still exists
+        # the queryset delete skips JMESPathCheck.delete(), so the compliance check still exists
+        JMESPathCheck.objects.filter(pk=cc.pk).delete()
         self.login("compliance_checks.view_compliancecheck", "inventory.view_jmespathcheck")
         response = self.client.get(reverse("compliance_checks:redirect", args=(cc.compliance_check.pk,)))
         self.assertEqual(response.status_code, 404)
