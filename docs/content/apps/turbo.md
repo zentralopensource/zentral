@@ -258,7 +258,7 @@ The results and status endpoints validate strictly per entry, and tolerantly per
 The response therefore acknowledges every entry Zentral *processed*, in two lists:
 
  * `accepted` – the entry was recorded,
- * `skipped` – the entry was well-formed but could not be used, with a `reason`: `unknown_schedule` (the schedule is unknown, or belongs to another configuration), or `kind_mismatch` (the `kind` contradicts the resolved schedule).
+ * `skipped` – the entry was well-formed but could not be used, with a `reason`: `unknown_schedule` (the schedule is unknown, or belongs to another configuration), `kind_mismatch` (the `kind` contradicts the resolved schedule), or `unknown_job_kind` (the job is of a kind this Zentral does not know – it can only happen to an instance still on the previous release, during a rolling upgrade, and it resolves itself when the upgrade completes).
 
 An entry that appears in neither list was set aside as malformed. Zentral logs it; the agent deduces it from what is missing.
 
@@ -1643,7 +1643,7 @@ Request:
 |`run.at`|**Required.** When the job ran on the device. It becomes the event's `created_at`.|
 |`run.duration`|Optional. How long the run took, in seconds.|
 |`run.mode`|Optional, informational – the correlation is on `schedule_pk` alone.|
-|`kind`|The job kind. Optional, but expected: when present it must agree with the resolved schedule, or the entry is skipped.|
+|`kind`|The job kind. Optional, but expected: when present it must agree with the resolved schedule, or the entry is skipped. A kind this Zentral does not know is *not* rejected – during a rolling upgrade the instances do not share a set of kinds, and a report of a run that happened must not be dropped. It is skipped with `unknown_job_kind`, and the schedule still records the run.|
 |`pk`, `version`|Declarative. The resolved schedule stays authoritative.|
 |`result.exit_code`|Scripts – the process exit code, or `null` when the script could not run.|
 |`result.status`|mSCP checks – the compliance status code. See [Compliance checks](#compliance-checks).|

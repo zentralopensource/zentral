@@ -198,6 +198,8 @@ class Job(models.Model):
 
     @property
     def definition(self):
+        # None for a kind that this release does not know. During a rolling upgrade, an older
+        # instance reads a row that a newer instance wrote. A caller must not dereference None.
         if self.kind == self.Kind.SCRIPT:
             return self.script
         elif self.kind == self.Kind.MSCP_CHECK:
