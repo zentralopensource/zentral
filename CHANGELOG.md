@@ -179,7 +179,7 @@ The page of an enrolled machine lists the artifacts that its jobs collected, wit
 
 In a policy, the resource of the two actions is the upload. It is a member of its machine and of its schedule, and the schedule is a member of its configuration. So one `forbid` on a configuration covers the scheduling and the artifacts. It has the artifact name and the job, so a policy can also read `resource.job.kind`.
 
-Add an `AbortIncompleteMultipartUpload` rule to the bucket. Zentral deletes the parts of a failed upload, but only this rule deletes the parts of an upload that the agent never reports.
+If you manage your own deployment, add rules to the bucket. Zentral does not delete the artifacts: an `Expiration` rule on `turbo/uploads/` deletes them, for example after 14 days. An `AbortIncompleteMultipartUpload` rule on the bucket deletes the parts of an upload that the agent never reports. On a bucket with versioning, an `ExpiredObjectDeleteMarker` rule deletes the delete markers.
 
 
 ### Backward incompatibilities

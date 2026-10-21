@@ -420,7 +420,24 @@ The completion runs in the background, because S3 documents that it can take som
 
 The completion verifies a multipart upload. The agent declares the CRC-64/NVME of the full file when it asks for the destination. Zentral gives this value at the completion, and the storage refuses a file with another CRC. That failure is `assembly_failed`. So the config asks for this digest, and Zentral refuses a multipart artifact without it: the SHA-256 cannot do this on a multipart upload. Zentral also compares the result with the request for the destination: a result with another `size` or `sha256` is a `mismatch`. A decided verification is final. The completion writes only over `pending`, and Zentral answers `already_uploaded` to a request for a destination after the decision.
 
-When the result reports that a multipart upload failed, Zentral deletes the parts. Zentral also deletes them when a result does not agree with the request for the destination before the completion: the verification is then `mismatch`, and no completion follows. Also add the `AbortIncompleteMultipartUpload` rule to the bucket. Only this rule deletes the parts of an upload that the agent never reports. The storage keeps the parts until something deletes them, and you pay for them.
+When the result reports that a multipart upload failed, Zentral deletes the parts. Zentral also deletes them when a result does not agree with the request for the destination before the completion: the verification is then `mismatch`, and no completion follows. A result can arrive late, or never, so the bucket also needs a rule that deletes the parts. The storage keeps the parts until something deletes them, and you pay for them. See [Bucket rules](#bucket-rules).
+
+#### Bucket rules
+
+Zentral writes the artifacts, but it does not delete them. If you manage your own deployment, set these S3 lifecycle rules on the bucket:
+
+|Rule|Scope|Reason|
+|---|---|---|
+|`Expiration`|`turbo/uploads/`|Only this rule deletes a collected artifact. An artifact has the data of the person who uses the machine, so keep it only for the time that you need it. 14 days is a good default.|
+|`AbortIncompleteMultipartUpload`|The bucket|Only this rule deletes the parts of a [multipart](#multipart) upload that the agent never reports. An `Expiration` rule does not delete them, because their object does not exist. 7 days gives time to an agent that sends a large artifact again over some cycles.|
+
+If the storage has a `location`, the keys start with it, and the prefix of the `Expiration` rule is `<location>/turbo/uploads/`. A rule on `turbo/uploads/` then deletes nothing, and nothing tells you.
+
+Set the abort rule on the bucket, not only on `turbo/uploads/`. All the clients can start a multipart upload, for example the AWS SDK for a large file, and a stopped upload keeps its parts. The rule deletes only the parts of an incomplete upload, never a complete object.
+
+If the bucket has versioning, add a rule with `ExpiredObjectDeleteMarker`. An expiration adds a delete marker, and the object version becomes noncurrent. A noncurrent version rule deletes the version, but not the marker. Put `ExpiredObjectDeleteMarker` in a rule of its own: one `Expiration` cannot have `ExpiredObjectDeleteMarker` and a number of days.
+
+After a rule deletes an artifact, its download gives a `404`. The row stays on the machine page, because it records that the job collected an artifact.
 
 [Config](#configuration) publishes `upload_max_size` and `upload_digests`. The agent can then refuse a file that is too large before it collects it, and compute the digests the storage wants in the same pass as the SHA-256.
 
