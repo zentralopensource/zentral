@@ -27,6 +27,8 @@ urlpatterns = [
     path('enrolled_machines/', views.EnrolledMachineListView.as_view(), name='enrolled_machines'),
     path('enrolled_machines/<str:urlsafe_serial_number>/',
          views.EnrolledMachineDetailView.as_view(), name='enrolled_machine'),
+    path('job_uploads/<uuid:pk>/download/',
+         views.DownloadJobUploadView.as_view(), name='download_job_upload'),
     path('enrolled_machines/<str:urlsafe_serial_number>/schedule/',
          views.ScheduleMachineOneTimeJobView.as_view(), name='schedule_machine_one_time_job'),
 

@@ -1,9 +1,17 @@
+import logging
+
 from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace, Principal, Request, Resource
 from pbac.types import SERVICE_ACCOUNT, USER, AppliesTo, AttrSpec, ResourceType
 from pbac.utils import check_request
 
-from .models import Job
+from zentral.contrib.inventory.models import MetaMachine
+from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
+
+from .models import Job, OneTimeJob, resolve_upload_schedules
+
+
+logger = logging.getLogger("zentral.contrib.turbo.pbac")
 
 
 # namespace
@@ -44,6 +52,33 @@ RECURRING_JOB_RESOURCE_TYPE = ResourceType(
 )
 
 
+# A collected artifact has two containers. The machine tells whose data it is, and gives the meta business
+# unit scope with the parents of Inventory::Machine. The schedule tells which job collected it, and it is a
+# member of its configuration, so that one policy covers the scheduling and the artifacts:
+#
+#   forbid (
+#     principal,
+#     action in [Turbo::Action::"createOneTimeJob", Turbo::Action::"updateOneTimeJob",
+#                Turbo::Action::"deleteOneTimeJob", Turbo::Action::"viewJobUpload",
+#                Turbo::Action::"downloadJobUpload"],
+#     resource in Turbo::Configuration::"…"
+#   );
+#
+# The two containers can disagree: a configuration of one team can collect from a machine in the meta
+# business unit of another team. A forbid on one of them applies.
+
+
+JOB_UPLOAD_RESOURCE_TYPE = ResourceType(
+    "JobUpload", get_namespace(),
+    attrs={
+        "artifact": AttrSpec(str, help_text="The declared output of the job kind, for example the "
+                                            "archive of a sysdiagnose or the manifest of a file export."),
+        "job": AttrSpec(JOB_RESOURCE_TYPE, help_text="The job of the run that collected the artifact."),
+    },
+    parents=(MACHINE_RESOURCE_TYPE, ONE_TIME_JOB_RESOURCE_TYPE, RECURRING_JOB_RESOURCE_TYPE),
+)
+
+
 def get_configuration_resource(configuration) -> Resource:
     return Resource("Configuration", str(configuration.pk), get_namespace())
 
@@ -56,6 +91,21 @@ def _get_schedule_resource(resource_type, schedule) -> Resource:
     return Resource(resource_type.name, str(schedule.pk), get_namespace(),
                     [get_configuration_resource(schedule.configuration)],
                     attrs={"job": get_job_resource(schedule.job)})
+
+
+def get_schedule_resource(schedule) -> Resource:
+    resource_type = ONE_TIME_JOB_RESOURCE_TYPE if isinstance(schedule, OneTimeJob) else RECURRING_JOB_RESOURCE_TYPE
+    return _get_schedule_resource(resource_type, schedule)
+
+
+def get_job_upload_resource(upload, machine, schedule) -> Resource:
+    # the caller gives the machine: get_meta_machine_resource keeps its parents on the object, so one
+    # MetaMachine for each serial number makes one query, not one query for each row
+    return Resource(
+        "JobUpload", str(upload.pk), get_namespace(),
+        [get_meta_machine_resource(machine), get_schedule_resource(schedule)],
+        attrs={"artifact": upload.artifact, "job": get_job_resource(schedule.job)},
+    )
 
 
 # actions
@@ -178,6 +228,42 @@ delete_recurring_job_action = engine.register_action(
 )
 
 
+# The two artifact actions have the same applies_to, but not the same groups. To see that a sysdiagnose
+# exists is a view. A download gives the data of the person who uses the machine, so the Viewer group
+# does not have downloadJobUpload, also without a policy.
+#
+# No context: the upload has all the data of the decision, so there is no preview.
+
+
+_JOB_UPLOAD_APPLIES_TO = AppliesTo(
+    principals=(USER, SERVICE_ACCOUNT),
+    resources=(JOB_UPLOAD_RESOURCE_TYPE,),
+)
+
+
+view_job_upload_action = engine.register_action(
+    "viewJobUpload",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
+    applies_to=_JOB_UPLOAD_APPLIES_TO,
+    help_text="See that a job collected an artifact from a machine, and the state of the upload. The "
+              "resource is the upload. It is a member of the machine and of the schedule, and the "
+              "schedule is a member of its configuration, so a policy can use all of them. It has the "
+              "artifact name, and the job as an entity, so a policy can read `resource.job.kind`.",
+)
+
+
+download_job_upload_action = engine.register_action(
+    "downloadJobUpload",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+    applies_to=_JOB_UPLOAD_APPLIES_TO,
+    help_text="Download the artifact that a job collected from a machine. The resource is the same as "
+              "for viewJobUpload. A sysdiagnose has the data of the person who uses the machine, so the "
+              "Viewer group does not have this action.",
+)
+
+
 # requests
 
 
@@ -241,6 +327,26 @@ class DeleteRecurringJobRequest(BaseScheduleRequest):
     resource_type = RECURRING_JOB_RESOURCE_TYPE
 
 
+class BaseJobUploadRequest(Request):
+    # the caller has the upload, so there is no preview
+    pbac_action = None
+
+    def __init__(self, user_obj, upload, machine, schedule) -> None:
+        super().__init__(
+            Principal.from_user(user_obj),
+            self.pbac_action,
+            get_job_upload_resource(upload, machine, schedule),
+        )
+
+
+class ViewJobUploadRequest(BaseJobUploadRequest):
+    pbac_action = view_job_upload_action
+
+
+class DownloadJobUploadRequest(BaseJobUploadRequest):
+    pbac_action = download_job_upload_action
+
+
 # checks
 
 
@@ -281,6 +387,43 @@ def offerable_jobs(user_obj, create_request_class, configuration, queryset):
     requests = [create_request_class(user_obj, configuration, job) for job in jobs]
     engine.authorize_requests(requests)
     return [job for job, pbac_request in zip(jobs, requests) if pbac_request.is_authorized]
+
+
+def check_download_job_upload(request, upload, schedule):
+    check_request(request, DownloadJobUploadRequest(request.user, upload, MetaMachine(upload.serial_number), schedule))
+
+
+def authorize_job_upload_rows(user_obj, uploads):
+    """The uploads that the user can see, each with can_download, in one batched decision.
+
+    The rows have different machines, configurations and jobs, so one answer for the page is not
+    correct. An upload that the user cannot see is not on the page, so its name and its size stay
+    hidden. An upload without its schedule is not on the page either: there is no configuration and no
+    job for the decision.
+    """
+    uploads = list(uploads)
+    schedules = resolve_upload_schedules(uploads)
+    machines = {}
+    placed = []
+    requests = []
+    for upload in uploads:
+        schedule = schedules.get(upload.schedule_pk)
+        if schedule is None:
+            logger.warning("Turbo upload %s: no schedule %s", upload.pk, upload.schedule_pk)
+            continue
+        machine = machines.setdefault(upload.serial_number, MetaMachine(upload.serial_number))
+        upload.job = schedule.job
+        placed.append(upload)
+        requests.append(ViewJobUploadRequest(user_obj, upload, machine, schedule))
+        requests.append(DownloadJobUploadRequest(user_obj, upload, machine, schedule))
+    engine.authorize_requests(requests)
+    visible = []
+    for index, upload in enumerate(placed):
+        if not requests[2 * index].is_authorized:
+            continue
+        upload.can_download = requests[2 * index + 1].is_authorized
+        visible.append(upload)
+    return visible
 
 
 def _authorize_schedule_rows(user_obj, update_request_class, delete_request_class, schedules):

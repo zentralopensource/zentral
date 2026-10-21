@@ -454,6 +454,50 @@ Some answers are not answers, and Zentral records none of them. A storage that t
 
 Give Zentral `s3:ListBucket` on the bucket. Without it S3 answers 403 rather than 404 for a key that does not exist, and Zentral cannot tell a missing object from one it may not read: the upload stays `pending`, and every result for it writes an error to the log.
 
+#### See and download an artifact
+
+The page of an enrolled machine lists the artifacts that its jobs collected. Each row gives the size and the state of the artifact, and a download link when the upload is complete.
+
+Two PBAC actions control this list:
+
+|Action|Group|Permits|
+|---|---|---|
+|`Turbo::Action::"viewJobUpload"`|Admin, User, **Viewer**|See that a job collected an artifact, and the state of the upload.|
+|`Turbo::Action::"downloadJobUpload"`|Admin, User|Download the artifact.|
+
+To see that a sysdiagnose exists is a view. A download gives the data of the person who uses the machine, so the Viewer group does not have `downloadJobUpload`. An artifact that a user cannot see is not on the page, so its name and its size stay hidden.
+
+The resource of the two actions is the upload. It is a member of two containers:
+
+* `Inventory::Machine`, the machine that the data comes from. The parents of the machine give the meta business unit scope.
+* `Turbo::OneTimeJob` or `Turbo::RecurringJob`, the schedule that collected the artifact. The schedule is a member of its `Turbo::Configuration`.
+
+So one policy covers the scheduling and the artifacts:
+
+```
+forbid (
+  principal,
+  action in [Turbo::Action::"createOneTimeJob", Turbo::Action::"updateOneTimeJob",
+             Turbo::Action::"deleteOneTimeJob", Turbo::Action::"viewJobUpload",
+             Turbo::Action::"downloadJobUpload"],
+  resource in Turbo::Configuration::"a4d3e2b1-…"
+);
+```
+
+Without the schedule container, this policy covers the scheduling, but not the artifacts. The two containers can also disagree: a configuration of one team can collect from a machine in the meta business unit of another team. A `forbid` on one of them applies. **The meta business unit scope alone is not a boundary.** A machine that enrolled, but has no inventory snapshot yet, is in no meta business unit for a policy.
+
+The upload has the artifact name, and the job as an entity, so a policy can read the two:
+
+```
+forbid (
+  principal,
+  action == Turbo::Action::"downloadJobUpload",
+  resource
+) when { resource.job.kind == "file_export" };
+```
+
+The machine page also needs the `turbo.view_enrolledmachine` permission, which is global. A meta business unit scope for the machine pages is separate work.
+
 **Verification never reopens a one-time job.** That is what the two axes are for: the job was done on that machine when the agent reported, whatever the storage says afterwards. A `mismatch` does not give the agent another destination, and it does not make Zentral ask for the file again.
 
 ### Tolerant batches

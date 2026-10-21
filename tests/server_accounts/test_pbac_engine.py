@@ -549,6 +549,7 @@ class PBACEngineTestCase(TestCase):
             ("viewRecoveryPassword", "MDM"),
             ("syncRepository", "Monolith"),
             ("forceCleanSync", "Santa"),
+            ("downloadJobUpload", "Turbo"),
         )
         found_user_only_actions = 0
         global_user_action_group = engine.get_action_group(ActionGroupBasename.USER)
@@ -567,7 +568,8 @@ class PBACEngineTestCase(TestCase):
             if (action_id, namespace_id) in user_only_action_keys:
                 self.assertIn(global_user_action_group, action.parents)
                 self.assertIn(user_action_group, action.parents)
-                # The MDM secret readers are named view* but reveal a secret.
+                # The MDM secret readers are named view* but show a secret. downloadJobUpload gives the data of the
+                # person who uses the machine.
                 self.assertNotIn(global_viewer_action_group, action.parents)
                 found_user_only_actions += 1
             elif global_viewer_action_group not in action.parents:

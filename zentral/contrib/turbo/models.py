@@ -1018,6 +1018,28 @@ def get_machine_schedule(configuration, serial_number, schedule_pk):
     return None
 
 
+def resolve_upload_schedules(uploads):
+    """The schedule of each upload, a one-time job or a recurring job, by schedule pk.
+
+    An upload has no foreign key to the two scheduling models, so this looks for the schedule in the
+    two. The schedule has its configuration and its job: the console and the authorization decision
+    need them.
+
+    A deleted schedule gives nothing. The upload row stays, because the artifact is still in the
+    bucket, and the caller decides what to do with it.
+    """
+    schedule_pks = {upload.schedule_pk for upload in uploads}
+    if not schedule_pks:
+        return {}
+    related = Job.definition_relations("job__")
+    resolved = {}
+    for model in (OneTimeJob, RecurringJob):
+        for schedule in (model.objects.filter(pk__in=schedule_pks)
+                                      .select_related("configuration", *related)):
+            resolved[schedule.pk] = schedule
+    return resolved
+
+
 def one_time_gate_closed(one_time_job, serial_number):
     # the shot is spent: a current-version result came back and ConfigView stopped serving the job.
     # A mint after that would write an object nothing can ever reference, because the result that

@@ -133,6 +133,18 @@ def generate_presigned_put(key, size, content_type, sha256_hex, expires_in, stor
     _refuse(storage, "presign an upload")
 
 
+def generate_presigned_get(key, filename, storage):
+    """A signed URL that downloads the object.
+
+    The key ends with the file name, but a browser opens a small JSON file in the tab. On S3, the URL
+    also signs a Content-Disposition, so the browser saves the file with this name. A GCS URL has no
+    disposition, because ZentralGoogleCloudStorage.url() takes no parameters.
+    """
+    if _is_s3_storage(storage):
+        return _s3_presigned_get(storage, key, filename)
+    return storage.url(key)
+
+
 def stat_object(key, storage=None):
     """The stored size, and the digests of file_storage_recorded_digests() as hex.
 
@@ -393,6 +405,10 @@ def _s3_presigned_put(storage, key, size, content_type, sha256_hex, expires_in):
         ExpiresIn=expires_in,
     )
     return url, headers
+
+
+def _s3_presigned_get(storage, key, filename):
+    return storage.url(key, parameters={"ResponseContentDisposition": f'attachment; filename="{filename}"'})
 
 
 def _s3_stat_object(storage, key):

@@ -175,6 +175,10 @@ When all the parts are sent, the agent calls the new `/public/turbo/uploads/comp
 
 If the storage does not answer, the upload stays `pending`. Run the new `sweep_turbo_uploads` command every hour to try again. You can run it on more than one server at the same time.
 
+The page of an enrolled machine lists the artifacts that its jobs collected, with a download link. The new `Turbo::Action::"viewJobUpload"` PBAC action shows an artifact, and the new `Turbo::Action::"downloadJobUpload"` action downloads it. The Viewer group has only the first, because a sysdiagnose has the data of the person who uses the machine. An artifact that a user cannot see is not on the page.
+
+In a policy, the resource of the two actions is the upload. It is a member of its machine and of its schedule, and the schedule is a member of its configuration. So one `forbid` on a configuration covers the scheduling and the artifacts. It has the artifact name and the job, so a policy can also read `resource.job.kind`.
+
 Add an `AbortIncompleteMultipartUpload` rule to the bucket. Zentral deletes the parts of a failed upload, but only this rule deletes the parts of an upload that the agent never reports.
 
 

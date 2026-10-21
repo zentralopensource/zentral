@@ -20,9 +20,9 @@ from zentral.utils.storage import (MultipartUploadNotFound, MultipartUploadRefus
                                    abort_multipart_upload, complete_multipart_upload, create_multipart_upload,
                                    file_storage_has_multipart_uploads, file_storage_has_presigned_uploads,
                                    file_storage_has_signed_urls, file_storage_recorded_digests,
-                                   file_storage_signed_url_expiration, generate_presigned_part,
-                                   generate_presigned_put, list_multipart_parts, select_dist_storage,
-                                   sha256_object, stat_object)
+                                   file_storage_signed_url_expiration, generate_presigned_get,
+                                   generate_presigned_part, generate_presigned_put, list_multipart_parts,
+                                   select_dist_storage, sha256_object, stat_object)
 
 
 S3_STORAGE = {"default": {"BACKEND": "storages.backends.s3.S3Storage",
@@ -543,3 +543,26 @@ class TaskClientTestCase(SimpleTestCase):
         # only a presign must set SigV4, because a request uses it by default. This test finds a change of the shared
         # builder that removes it.
         self.assertEqual(_s3_task_client(self._storage()).meta.config.signature_version, "s3v4")
+
+
+class PresignedGetTestCase(SimpleTestCase):
+    """Only S3 takes the disposition."""
+
+    @override_settings(STORAGES=S3_STORAGE)
+    def test_s3_signs_the_disposition(self):
+        url = generate_presigned_get("turbo/uploads/manifest.json", "manifest.json", storages["default"])
+        query = parse_qs(urlparse(url).query)
+        self.assertIn("attachment", query["response-content-disposition"][0])
+
+    def test_gcs_gets_a_url_without_a_disposition(self):
+        # ZentralGoogleCloudStorage.url() takes no parameters: a disposition is a TypeError, and a 500 on
+        # each download
+        storage = storages.create_storage(
+            {"BACKEND": "zentral.utils.gcs_storage.ZentralGoogleCloudStorage",
+             "OPTIONS": {"bucket_name": "zentral-tests"}})
+        self.assertTrue(file_storage_has_signed_urls(storage))
+        with patch.object(type(storage), "url", return_value="https://example.com/signed") as url:
+            self.assertEqual(
+                generate_presigned_get("turbo/uploads/manifest.json", "manifest.json", storage),
+                "https://example.com/signed")
+        url.assert_called_once_with("turbo/uploads/manifest.json")

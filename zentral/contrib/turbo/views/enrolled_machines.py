@@ -1,13 +1,21 @@
+import os.path
+from functools import cached_property
+
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.files.storage import storages
 from django.db.models import F
-from django.http import Http404
+from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView, View
 from zentral.contrib.inventory.models import MetaMachine
+from zentral.utils.storage import file_storage_has_signed_urls, generate_presigned_get
 from zentral.utils.views import CreateViewWithAudit
 from ..forms import EnrolledMachineSearchForm, MachineOneTimeJobForm
-from ..models import EnrolledMachine, Job, OneTimeJob, OneTimeJobMachine, RecurringJobMachine
-from ..pbac import can_create_one_time_job, check_create_one_time_job
+from ..models import (EnrolledMachine, Job, JobUpload, OneTimeJob, OneTimeJobMachine,
+                      RecurringJobMachine, UploadStatus, resolve_upload_schedules)
+from ..pbac import (authorize_job_upload_rows, can_create_one_time_job, check_create_one_time_job,
+                    check_download_job_upload)
 from .base import SearchFormListView
 
 
@@ -70,7 +78,51 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         ctx["recurring_job_machines"] = recurring
         ctx["kind_choices"] = Job.Kind.choices
         ctx["selected_kind"] = kind
+        # the artifacts of this machine, newest first. An upload that the user cannot see is not on the page.
+        uploads = authorize_job_upload_rows(
+            self.request.user,
+            JobUpload.objects.filter(serial_number=serial_number).order_by("-created_at"))
+        if kind:
+            # after the decision, with the job that it found: a filter before the decision looks for each schedule two
+            # times
+            uploads = [upload for upload in uploads if upload.job.kind == kind]
+        ctx["job_uploads"] = uploads
         return ctx
+
+
+class DownloadJobUploadView(PermissionRequiredMixin, View):
+    """Download a collected artifact.
+
+    view_enrolledmachine gives access to the machine page. The typed action decides if the user can
+    read the data in the artifact.
+    """
+    permission_required = "turbo.view_enrolledmachine"
+
+    @cached_property
+    def _file_storage(self):
+        # the storage of all the upload calls. select_dist_storage() is for the MDM artifacts, and a separate dist
+        # storage does not have the artifact.
+        return storages["default"]
+
+    def get(self, request, **kwargs):
+        upload = get_object_or_404(JobUpload, pk=kwargs["pk"])
+        schedule = resolve_upload_schedules([upload]).get(upload.schedule_pk)
+        if schedule is None:
+            # no schedule: no configuration and no job for the decision
+            raise Http404
+        check_download_job_upload(request, upload, schedule)
+        if upload.status != UploadStatus.UPLOADED:
+            # no object at this key
+            raise Http404
+        filename = os.path.basename(upload.key)
+        if file_storage_has_signed_urls(self._file_storage):
+            return HttpResponseRedirect(
+                generate_presigned_get(upload.key, filename, self._file_storage))
+        if not self._file_storage.exists(upload.key):
+            # expected: the bucket rule deletes objects, and the rows stay
+            raise Http404
+        return FileResponse(self._file_storage.open(upload.key), filename=filename,
+                            as_attachment=True)
 
 
 class ScheduleMachineOneTimeJobView(PermissionRequiredMixin, CreateViewWithAudit):
