@@ -10,6 +10,7 @@ from pbac.engine import engine
 from pbac.entities import Entity
 from rest_framework import serializers
 
+from tests.server_accounts.utils import GOOGLE_OPENID_CONFIGURATION
 from tests.zentral_test_utils.zentral_api_test_case import ZentralAPITestCase
 from zentral.core.events.base import AuditEvent
 
@@ -35,7 +36,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
             user=user,
             name=get_random_string(12),
             description=description,
-            issuer_uri="https://accounts.google.com",  # TODO mock instead of making a real HTTP request?
+            issuer_uri="https://accounts.google.com",
             audience=f"aud-{get_random_string(10)}",
             cel_condition=cel_condition,
             max_validity=max_validity,
@@ -43,7 +44,9 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
 
     # OIDC API token auth
 
-    def test_auth_errors(self):
+    @patch("zentral.utils.oidc.requests.get")
+    def test_auth_errors(self, requests_get):
+        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         response = self.post(
             url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(self.issuer.pk,)),
             data={"jwt": "yolo", "validity": self.issuer.max_validity * 2},
@@ -370,7 +373,9 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_create_token_issuer(self, post_event):
+    @patch("zentral.utils.oidc.requests.get")
+    def test_create_token_issuer(self, requests_get, post_event):
+        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.set_permissions("accounts.add_oidcapitokenissuer")
         name = get_random_string(12)
         payload = {
@@ -447,7 +452,9 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(response.status_code, 403, response.data)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_update_token_issuer(self, post_event):
+    @patch("zentral.utils.oidc.requests.get")
+    def test_update_token_issuer(self, requests_get, post_event):
+        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.set_permissions("accounts.change_oidcapitokenissuer")
         prev_value = self.issuer.serialize_for_event()
         payload = {

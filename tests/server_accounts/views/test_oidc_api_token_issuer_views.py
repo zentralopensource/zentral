@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import OIDCAPITokenIssuer, Policy, User
 from pbac.engine import engine
 from pbac.entities import Entity
+from tests.server_accounts.utils import GOOGLE_OPENID_CONFIGURATION
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
 
@@ -215,7 +216,9 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_create_issuer(self, post_event):
+    @patch("zentral.utils.oidc.requests.get")
+    def test_create_issuer(self, requests_get, post_event):
+        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.login(
             "accounts.add_oidcapitokenissuer",
             "accounts.view_oidcapitokenissuer",
@@ -271,7 +274,9 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     # mandatory CEL condition
 
-    def test_create_issuer_blank_cel_condition(self):
+    @patch("zentral.utils.oidc.requests.get")
+    def test_create_issuer_blank_cel_condition(self, requests_get):
+        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.login("accounts.add_oidcapitokenissuer")
         payload = self._issuer_form_payload()
         payload["cel_condition"] = ""
@@ -288,8 +293,10 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
         self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
 
-    def test_update_issuer_blank_cel_condition(self):
+    @patch("zentral.utils.oidc.requests.get")
+    def test_update_issuer_blank_cel_condition(self, requests_get):
         """The condition cannot be dropped from an existing issuer."""
+        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         issuer = self._force_issuer()
         self.login("accounts.change_oidcapitokenissuer")
         payload = self._issuer_form_payload()
@@ -402,7 +409,9 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_update_issuer(self, post_event):
+    @patch("zentral.utils.oidc.requests.get")
+    def test_update_issuer(self, requests_get, post_event):
+        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         issuer = self._force_issuer()
         prev_value = issuer.serialize_for_event()
         self.login(

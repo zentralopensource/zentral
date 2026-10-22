@@ -4,6 +4,13 @@ from django.utils.crypto import get_random_string
 from accounts.models import APIToken, Group, Policy, ProvisionedRole, User
 
 
+GOOGLE_OPENID_CONFIGURATION = {
+    "id_token_signing_alg_values_supported": ["RS256"],
+    "issuer": "https://accounts.google.com",
+    "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
+}
+
+
 def force_policy(provisioning_uid=None):
     return Policy.objects.create(
         provisioning_uid=provisioning_uid,
