@@ -1,7 +1,10 @@
 import copy
+from datetime import timedelta
 from unittest.mock import patch, Mock
+import requests
 from django.test import SimpleTestCase
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
+from zentral.utils.time import naive_utcnow
 from .data import computer_response, mobile_device_response
 
 
@@ -85,6 +88,90 @@ class JamfAPIClientTestCase(SimpleTestCase):
         with self.assertRaises(APIClientError) as cm:
             api_client.get_machine_d("yolo", 123)
         self.assertEqual(cm.exception.args[0], "Unknown device type: yolo")
+
+    # bearer token
+
+    @staticmethod
+    def _token_client(expires_in=None):
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec", bearer_token_authentication=True)
+        if expires_in is not None:
+            api_client.token = {"token": "old", "expires": naive_utcnow() + expires_in}
+        return api_client
+
+    def _token_response(self):
+        expires = (naive_utcnow() + timedelta(minutes=20)).isoformat(timespec="milliseconds") + "Z"
+        return self._mocked_response(200, {"token": "new", "expires": expires})
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_basic_auth_no_token(self, session_post):
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        self.assertIsNone(api_client.update_token_if_necessary())
+        session_post.assert_not_called()
+        self.assertEqual(api_client.session.auth, ("user", "pwd"))
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_first_token(self, session_post):
+        session_post.return_value = self._token_response()
+        api_client = self._token_client()
+        self.assertEqual(api_client.update_token_if_necessary(), "new")
+        session_post.assert_called_once_with("https://host:443/api/v1/auth/token", auth=("user", "pwd"))
+        self.assertEqual(api_client.session.headers["Authorization"], "Bearer new")
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_valid_token_reused(self, session_post):
+        api_client = self._token_client(expires_in=timedelta(minutes=6))
+        self.assertEqual(api_client.update_token_if_necessary(), "old")
+        session_post.assert_not_called()
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_valid_token_force(self, session_post):
+        session_post.return_value = self._token_response()
+        api_client = self._token_client(expires_in=timedelta(minutes=6))
+        self.assertEqual(api_client.update_token_if_necessary(force=True), "new")
+        session_post.assert_called_once()
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_token_renewed_before_expiry(self, session_post):
+        session_post.return_value = self._token_response()
+        api_client = self._token_client(expires_in=timedelta(minutes=4))
+        self.assertEqual(api_client.update_token_if_necessary(), "new")
+        session_post.assert_called_once()
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_expired_token_renewed(self, session_post):
+        session_post.return_value = self._token_response()
+        api_client = self._token_client(expires_in=timedelta(minutes=-1))
+        self.assertEqual(api_client.update_token_if_necessary(), "new")
+        session_post.assert_called_once()
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_token_request_status_error(self, session_post):
+        session_post.return_value = self._mocked_response(401)
+        api_client = self._token_client()
+        with self.assertRaises(APIClientError) as cm:
+            api_client.update_token_if_necessary()
+        self.assertEqual(cm.exception.message, "Could not get bearer token. Status code: 401")
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_token_request_connection_error_retried(self, session_post):
+        session_post.side_effect = [requests.exceptions.ConnectionError("reset"), self._token_response()]
+        api_client = self._token_client(expires_in=timedelta(minutes=-1))
+        with self.assertLogs("zentral.contrib.jamf.api_client", level="WARNING") as cm:
+            self.assertEqual(api_client.update_token_if_necessary(), "new")
+        self.assertEqual(cm.output, ["WARNING:zentral.contrib.jamf.api_client:"
+                                     "Could not get bearer token for https://host:443. Retry."])
+        self.assertEqual(session_post.call_count, 2)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_token_request_connection_error_twice(self, session_post):
+        session_post.side_effect = requests.exceptions.ConnectionError("reset")
+        api_client = self._token_client(expires_in=timedelta(minutes=-1))
+        with (self.assertRaises(APIClientError) as cm,
+              self.assertLogs("zentral.contrib.jamf.api_client", level="WARNING") as lcm):
+            api_client.update_token_if_necessary()
+        self.assertEqual(cm.exception.message, "Could not get bearer token: reset")
+        self.assertEqual(len(lcm.output), 1)
+        self.assertEqual(session_post.call_count, 2)
 
     # machines missing from jamf
 

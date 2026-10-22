@@ -92,11 +92,11 @@ class APIClient(object):
         if (
             force or
             self.token is None
-            or self.token["expires"] + timedelta(seconds=self.token_min_validity_seconds) < naive_utcnow()
+            or self.token["expires"] - timedelta(seconds=self.token_min_validity_seconds) < naive_utcnow()
         ):
             logger.info("Fetch bearer token for %s", self.base_url)
             self.session.headers.pop("Authorization", None)
-            resp = self.session.post(f"{self.base_url}/api/v1/auth/token", auth=self.token_auth)
+            resp = self._post_token_request()
             if resp.status_code != 200:
                 raise APIClientError(f"Could not get bearer token. Status code: {resp.status_code}")
             self.token = resp.json()
@@ -106,6 +106,18 @@ class APIClient(object):
         else:
             logger.debug("Re-use bearer token for %s. Expires: %s", self.base_url, self.token["expires"])
         return self.token["token"]
+
+    def _post_token_request(self):
+        url = f"{self.base_url}/api/v1/auth/token"
+        for attempt in (1, 2):
+            try:
+                return self.session.post(url, auth=self.token_auth)
+            except requests.exceptions.ConnectionError as e:
+                # The connection is idle for the life of a token, and the server often closes it.
+                # A second token request is safe.
+                if attempt == 2:
+                    raise APIClientError(f"Could not get bearer token: {e}")
+                logger.warning("Could not get bearer token for %s. Retry.", self.base_url)
 
     def get_source_d(self):
         return {"module": "zentral.contrib.jamf",
