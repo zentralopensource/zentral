@@ -4,6 +4,7 @@ from unittest.mock import patch, Mock
 from xml.etree import ElementTree as ET
 import requests
 from django.test import SimpleTestCase
+from zentral.contrib.inventory.conf import IPADOS, TABLET, update_ms_tree_platform, update_ms_tree_type
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
 from zentral.contrib.jamf.events import JAMF_EVENTS
 from zentral.utils.time import naive_utcnow
@@ -595,6 +596,40 @@ class JamfAPIClientTestCase(SimpleTestCase):
         self.assertEqual(machine_d["os_version"]["major"], 15)
         self.assertEqual(machine_d["os_version"]["minor"], 5)
         self.assertEqual(machine_d["os_version"]["patch"], 0)
+
+    # mobile device OS name
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_mobile_device_os_name(self, session_get):
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        for os_type, model_identifier, os_version, expected_os_name in (
+            ("iOS", "iPad16,3", "26.3", "iPadOS"),
+            ("iOS", "iPad8,10", "13.1", "iPadOS"),
+            ("iOS", "iPad8,10", "13", "iOS"),
+            ("iOS", "iPad7,5", "12.5.7", "iOS"),
+            ("iOS", "iPhone17,1", "26.3", "iOS"),
+            ("iOS", None, "26.3", "iOS"),
+            ("iPadOS", "iPad16,3", "26.3", "iPadOS"),
+            ("tvOS", "AppleTV14,1", "26.3", "tvOS"),
+        ):
+            with self.subTest(os_type=os_type, model_identifier=model_identifier, os_version=os_version):
+                mobile_device = copy.deepcopy(mobile_device_response)
+                mobile_device["general"].update({"os_type": os_type,
+                                                 "model_identifier": model_identifier,
+                                                 "os_version": os_version})
+                session_get.return_value = self._mocked_response(200, {"mobile_device": mobile_device})
+                machine_d = api_client.get_machine_d("mobile_device", 2)
+                self.assertEqual(machine_d["os_version"]["name"], expected_os_name)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_mobile_device_ipados_platform(self, session_get):
+        session_get.return_value = self._mocked_response(200, {"mobile_device": mobile_device_response})
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        machine_d = api_client.get_machine_d("mobile_device", 2)
+        update_ms_tree_platform(machine_d)
+        update_ms_tree_type(machine_d)
+        self.assertEqual(machine_d["platform"], IPADOS)
+        self.assertEqual(machine_d["type"], TABLET)
 
     # computer extension attributes
 

@@ -396,6 +396,8 @@ Fixed the Jamf API requests that failed with a `401` error after the bearer toke
 
 Fixed the Jamf mobile devices that Zentral did not update after the first import. Zentral read a mobile device from Jamf the first time it saw its serial number, and then only when the device entered or left a smart group, so its OS version and its name could stay old. Zentral reads the device from Jamf each time the device sends its inventory now, with the `MobileDeviceInventoryCompleted` webhook of Jamf Pro 10.47 and later. Click *Setup webhooks* on the page of each Jamf instance to add the webhook.
 
+Fixed the iPads imported from Jamf, which had the iOS platform. Jamf gives iOS as the OS of an iPad, and Zentral used this name. An iPad with OS version 13.1 or later has the iPadOS platform now. The iPads change platform at their next update from Jamf: add iPadOS to the compliance checks and to the probe filters that select the iPads with the iOS platform.
+
 Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.
 
 Fixed nine MDM API list endpoints that ignored the `ordering` query parameter: the enrolled devices one and the eight artifact ones. The queries had no `ORDER BY`, so a client that read the pages could miss rows and get others two times. The seven endpoints of an artifact version order on the artifact version timestamps now. Each endpoint also orders on the primary key.

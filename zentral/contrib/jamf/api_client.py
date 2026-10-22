@@ -556,7 +556,15 @@ class APIClient(object):
         except ValueError:
             pass
         else:
-            os_version.update({'name': general['os_type'],
+            os_name = general['os_type']
+            # Jamf reports iOS for the iPads too
+            if (
+                os_name == "iOS"
+                and (general['model_identifier'] or "").startswith("iPad")
+                and (os_version['major'], os_version.get('minor', 0)) >= (13, 1)
+            ):
+                os_name = "iPadOS"
+            os_version.update({'name': os_name,
                                'build': general['os_build']})
             if 'patch' not in os_version:
                 os_version['patch'] = 0
