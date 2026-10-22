@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.core.files.base import ContentFile
@@ -8,6 +9,7 @@ from django.urls import reverse
 
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
 from zentral.contrib.turbo.command_backends import CommandBackend
+from zentral.contrib.turbo.events import TurboArtifactDownloadedEvent
 from zentral.contrib.turbo.models import (JobUpload, UploadStatus, UploadVerification,
                                           resolve_upload_schedules)
 from zentral.contrib.turbo.pbac import authorize_job_upload_rows
@@ -240,8 +242,41 @@ class TurboJobUploadConsoleTestCase(TurboSetupTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b"".join(response.streaming_content), b"a sysdiagnose")
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_the_download_posts_an_event(self, post_event):
+        _, serial_number, one_time_job, upload = self._machine_with_upload()
+        storage = storages["default"]
+        storage.save(upload.key, ContentFile(b"a sysdiagnose"))
+        self.addCleanup(storage.delete, upload.key)
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine", actions=ARTIFACT_ACTIONS))
+        response = self.client.get(reverse("turbo:download_job_upload", args=(upload.pk,)))
+        self.assertEqual(response.status_code, 200)
+        events = [c.args[0] for c in post_event.call_args_list
+                  if isinstance(c.args[0], TurboArtifactDownloadedEvent)]
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.metadata.machine_serial_number, serial_number)
+        self.assertEqual(event.metadata.request.user.username, self.user.username)
+        self.assertEqual(event.payload, {
+            "schedule": {"mode": "one_time", "pk": str(one_time_job.pk)},
+            "artifact": "archive",
+            "upload": {"pk": str(upload.pk), "size": 1024, "sha256": SHA256},
+        })
+
     @override_settings(STORAGES=S3_STORAGE)
-    def test_a_signing_storage_redirects_with_the_disposition_signed(self):
+    @patch("zentral.contrib.turbo.uploads.stat_object", return_value=None)
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_a_signing_storage_without_the_file(self, post_event, stat_object):
+        # Zentral reads the metadata before the redirect: a 404 from Zentral, and no event
+        _, _, _, upload = self._machine_with_upload()
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine", actions=ARTIFACT_ACTIONS))
+        response = self.client.get(reverse("turbo:download_job_upload", args=(upload.pk,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(any(isinstance(c.args[0], TurboArtifactDownloadedEvent) for c in post_event.call_args_list))
+
+    @override_settings(STORAGES=S3_STORAGE)
+    @patch("zentral.contrib.turbo.uploads.stat_object", return_value={"size": 1024, "digests": {}})
+    def test_a_signing_storage_redirects_with_the_disposition_signed(self, stat_object):
         # the key ends with the file name, but a browser opens a small manifest.json in the tab. The disposition makes
         # the browser save it.
         _, _, _, upload = self._machine_with_upload(artifact="manifest")

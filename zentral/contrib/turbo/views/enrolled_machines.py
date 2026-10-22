@@ -101,7 +101,7 @@ class DownloadJobUploadView(PermissionRequiredMixin, View):
             # no schedule: no configuration and no job for the decision
             raise Http404
         check_download_job_upload(request, upload, schedule)
-        return build_download_response(upload)
+        return build_download_response(request, upload)
 
 
 class ScheduleMachineOneTimeJobView(PermissionRequiredMixin, CreateViewWithAudit):

@@ -96,4 +96,4 @@ class ArtifactDownload(generics.GenericAPIView):
         return DownloadJobUploadRequest(request.user, self.upload, MetaMachine(self.upload.serial_number), schedule)
 
     def get(self, request, *args, **kwargs):
-        return build_download_response(self.upload)
+        return build_download_response(request, self.upload)

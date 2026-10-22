@@ -437,7 +437,7 @@ Set the abort rule on the bucket, not only on `turbo/uploads/`. All the clients 
 
 If the bucket has versioning, add a rule with `ExpiredObjectDeleteMarker`. An expiration adds a delete marker, and the object version becomes noncurrent. A noncurrent version rule deletes the version, but not the marker. Put `ExpiredObjectDeleteMarker` in a rule of its own: one `Expiration` cannot have `ExpiredObjectDeleteMarker` and a number of days.
 
-After a rule deletes an artifact, its download gives a `404`. The row stays on the machine page, because it records that the job collected an artifact.
+After a rule deletes an artifact, its download gives a `404`: Zentral reads the metadata of the file before the download. The row stays on the machine page, because it records that the job collected an artifact.
 
 [Config](#configuration) publishes `upload_max_size` and `upload_digests`. The agent can then refuse a file that is too large before it collects it, and compute the digests the storage wants in the same pass as the SHA-256.
 
@@ -483,6 +483,8 @@ Two PBAC actions control this list:
 |`Turbo::Action::"downloadJobUpload"`|Admin, User|Download the artifact.|
 
 To see that a sysdiagnose exists is a view. A download gives the data of the person who uses the machine, so the Viewer group does not have `downloadJobUpload`. An artifact that a user cannot see is not on the page, so its name and its size stay hidden.
+
+Each download posts a `turbo_artifact_downloaded` [event](#events).
 
 The resource of the two actions is the upload. It is a member of two containers:
 
@@ -549,6 +551,7 @@ The device endpoints always answer with JSON – never with an HTML error page.
 |`turbo_enrollment`|`turbo`|A machine enrolled or re-enrolled. The `action` payload attribute is `enrollment` or `re-enrollment`.|
 |`turbo_request`|`turbo`, `heartbeat`|One authenticated agent request. The `request_type` payload attribute is `config`, `results`, `status` or `inventory`. This is the Turbo heartbeat.|
 |`turbo_result`|`turbo`|One job result. Its `created_at` is the time the job ran on the device.|
+|`turbo_artifact_downloaded`|`turbo`|A user or an API client downloaded an artifact that a job collected. The event has the serial number of the machine and the request. The payload has the `schedule` (`mode` and `pk`), the `artifact` name, and the `upload` (`pk`, `size` and `sha256`).|
 |`turbo_script_check_status_updated`|`turbo`, `compliance_check`, `compliance_check_status`, `turbo_compliance_check`|The status of a script compliance check changed on a machine.|
 |`turbo_mscp_check_status_updated`|`turbo`, `compliance_check`, `compliance_check_status`, `turbo_compliance_check`|The status of an mSCP check changed on a machine.|
 
@@ -2121,7 +2124,9 @@ A machine is in the list after the agent reports the job in its status. When `la
 * PBAC action: `Turbo::Action::"downloadJobUpload"`
 * `<uuid:pk>`: the `id` of the artifact
 
-Use the `download_url` of the artifact. With S3 or Google Cloud Storage, the response is a `302` to a signed URL of the storage. With the file system storage, the response has the file. The response is a `404` when the `status` is not `uploaded`, or when a bucket rule deleted the file.
+Use the `download_url` of the artifact. With S3 or Google Cloud Storage, the response is a `302` to a signed URL of the storage. With the file system storage, the response has the file. Each download posts a `turbo_artifact_downloaded` [event](#events).
+
+Zentral reads the metadata of the file before the response. The response is a `404` when the `status` is not `uploaded`, or when a bucket rule deleted the file. The response is a `503` when the storage does not give the metadata. For example, without `s3:ListBucket`, S3 answers a `403` for a file that does not exist.
 
 Compare the SHA-256 of the file with the `sha256` of the artifact.
 

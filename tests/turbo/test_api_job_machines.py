@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.core.files.base import ContentFile
@@ -13,8 +14,11 @@ from django.utils import timezone
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaMachine
 from zentral.contrib.turbo.command_backends import CommandBackend
+from zentral.contrib.turbo.events import TurboArtifactDownloadedEvent
 from zentral.contrib.turbo.models import (JobUpload, OneTimeJobMachine, RecurringJobMachine, UploadStatus,
                                           UploadVerification)
+from zentral.core.events.base import EventMetadata
+from zentral.utils.storage import StorageError
 
 from .utils import (TurboAPITestCase, force_command, force_configuration, force_enrolled_machine,
                     force_one_time_job, force_recurring_job, force_script, turbo_policy)
@@ -333,7 +337,8 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
         self.assertEqual(self._download(upload).status_code, 403)
 
     @override_settings(STORAGES=S3_STORAGE)
-    def test_download_redirects_with_the_disposition(self):
+    @patch("zentral.contrib.turbo.uploads.stat_object", return_value={"size": 1024, "digests": {}})
+    def test_download_redirects_with_the_disposition(self, stat_object):
         one_time_job = self._one_time_job()
         upload = self._artifact(one_time_job, self._otjm(one_time_job).serial_number, artifact="manifest")
         self._allow(DOWNLOAD_ARTIFACT_ACTION)
@@ -353,6 +358,44 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b"".join(response.streaming_content), b"a sysdiagnose")
         self.assertIn("attachment", response["Content-Disposition"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_download_posts_an_event(self, post_event):
+        one_time_job = self._one_time_job()
+        upload = self._artifact(one_time_job, self._otjm(one_time_job).serial_number)
+        storage = storages["default"]
+        storage.save(upload.key, ContentFile(b"a sysdiagnose"))
+        self.addCleanup(storage.delete, upload.key)
+        self._allow(DOWNLOAD_ARTIFACT_ACTION)
+        self.assertEqual(self._download(upload).status_code, 200)
+        events = [c.args[0] for c in post_event.call_args_list
+                  if isinstance(c.args[0], TurboArtifactDownloadedEvent)]
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.metadata.machine_serial_number, upload.serial_number)
+        self.assertEqual(event.metadata.request.user.username, self.service_account.username)
+        self.assertEqual(event.payload, {
+            "schedule": {"mode": "one_time", "pk": str(one_time_job.pk)},
+            "artifact": "archive",
+            "upload": {"pk": str(upload.pk), "size": 1024, "sha256": SHA256},
+        })
+
+    @patch("zentral.contrib.turbo.uploads.stat_object", side_effect=StorageError("403"))
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_download_when_the_storage_does_not_give_the_file(self, post_event, stat_object):
+        # for example S3 without s3:ListBucket, which answers a 403 for a missing key
+        one_time_job = self._one_time_job()
+        upload = self._artifact(one_time_job, self._otjm(one_time_job).serial_number)
+        self._allow(DOWNLOAD_ARTIFACT_ACTION)
+        with self.assertLogs("zentral.contrib.turbo.uploads", level="ERROR"):
+            response = self._download(upload)
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(any(isinstance(c.args[0], TurboArtifactDownloadedEvent) for c in post_event.call_args_list))
+
+    def test_the_download_event_links_the_schedule(self):
+        for mode, key in (("one_time", "turbo_one_time_job"), ("recurring", "turbo_recurring_job")):
+            event = TurboArtifactDownloadedEvent(EventMetadata(), {"schedule": {"mode": mode, "pk": "a"}})
+            self.assertEqual(event.get_linked_objects_keys(), {key: [("a",)]})
 
     def test_download_of_an_upload_that_failed(self):
         one_time_job = self._one_time_job()

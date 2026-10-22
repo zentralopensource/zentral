@@ -111,6 +111,24 @@ class TurboResultEvent(BaseTurboEvent):
 register_event_type(TurboResultEvent)
 
 
+class TurboArtifactDownloadedEvent(BaseTurboEvent):
+    # a user or an API client downloaded an artifact that a job collected
+    event_type = "turbo_artifact_downloaded"
+
+    def get_linked_objects_keys(self):
+        from ..models import ScheduleMode  # a module-level import would cycle (models → compliance_checks → events)
+        keys = super().get_linked_objects_keys()
+        schedule = self.payload.get("schedule") or {}
+        if schedule.get("mode") == ScheduleMode.RECURRING:
+            keys["turbo_recurring_job"] = [(schedule["pk"],)]
+        elif schedule.get("mode") == ScheduleMode.ONE_TIME:
+            keys["turbo_one_time_job"] = [(schedule["pk"],)]
+        return keys
+
+
+register_event_type(TurboArtifactDownloadedEvent)
+
+
 class BaseTurboComplianceCheckStatusUpdated(BaseTurboEvent):
     # one per compliance check whose status changed on a machine (the machine-wide roll-up is a separate
     # MachineComplianceChangeEvent), mirroring osquery / munki so probes can key on a single check flipping.
@@ -181,6 +199,19 @@ def post_turbo_enrollment_event(request, serial_number, enrollment, action):
         request=EventRequest.build_from_request(request),
     )
     TurboEnrollmentEvent(metadata, _add_enrollment_keys(enrollment, {"action": action})).post()
+
+
+def post_turbo_artifact_downloaded_event(request, upload):
+    metadata = EventMetadata(
+        machine_serial_number=upload.serial_number,
+        request=EventRequest.build_from_request(request),
+    )
+    payload = {
+        "schedule": {"mode": upload.schedule_mode, "pk": str(upload.schedule_pk)},
+        "artifact": upload.artifact,
+        "upload": {"pk": str(upload.pk), "size": upload.size, "sha256": upload.sha256},
+    }
+    TurboArtifactDownloadedEvent(metadata, payload).post()
 
 
 def post_turbo_result_events(request, serial_number, enrollment, results):

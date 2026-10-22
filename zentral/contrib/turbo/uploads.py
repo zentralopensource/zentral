@@ -5,17 +5,18 @@ import re
 from django.conf import settings
 from django.core.files.storage import storages
 from django.core.signing import BadSignature, TimestampSigner
-from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
 
 from zentral.conf import api_base_url
-from zentral.utils.storage import (create_multipart_upload, file_storage_has_multipart_uploads,
-                                   file_storage_has_presigned_uploads, file_storage_has_signed_urls,
-                                   file_storage_recorded_digests, generate_presigned_get,
-                                   generate_presigned_part, generate_presigned_put, sha256_object,
-                                   stat_object)
+from zentral.utils.storage import (StorageError, StorageUnavailable, create_multipart_upload,
+                                   file_storage_has_multipart_uploads, file_storage_has_presigned_uploads,
+                                   file_storage_has_signed_urls, file_storage_recorded_digests,
+                                   generate_presigned_get, generate_presigned_part, generate_presigned_put,
+                                   sha256_object, stat_object)
 
+from .events import post_turbo_artifact_downloaded_event
 from .models import UploadMode, UploadStatus, UploadVerification
 
 
@@ -313,10 +314,10 @@ def start_multipart_upload(upload, artifact, storage):
     upload.part_size = MULTIPART_PART_SIZE
 
 
-def build_download_response(upload):
+def build_download_response(request, upload):
     """The download of a collected artifact, for the console and for the API.
 
-    A redirect to a signed URL, or the file of the file system storage.
+    A redirect to a signed URL, or the file of the file system storage. Each download posts an event.
     """
     if upload.status != UploadStatus.UPLOADED:
         # no object at this key
@@ -324,10 +325,19 @@ def build_download_response(upload):
     # the storage of all the upload calls. select_dist_storage() is for the MDM artifacts, and a separate dist
     # storage does not have the artifact.
     storage = storages["default"]
+    # Before the redirect: after the redirect, S3 gives the error, a 404 or a 403 without s3:ListBucket, and
+    # the event is for a file that does not exist.
+    try:
+        stored = stat_object(upload.key, storage=storage)
+    except StorageError as error:
+        level = logging.WARNING if isinstance(error, StorageUnavailable) else logging.ERROR
+        logger.log(level, "Turbo upload %s: no answer from the storage: %s", upload.pk, error)
+        return HttpResponse("The storage did not give the file.", status=503, content_type="text/plain")
+    if stored is None:
+        # expected: the bucket rule deletes objects, and the rows stay
+        raise Http404
+    post_turbo_artifact_downloaded_event(request, upload)
     filename = os.path.basename(upload.key)
     if file_storage_has_signed_urls(storage):
         return HttpResponseRedirect(generate_presigned_get(upload.key, filename, storage))
-    if not storage.exists(upload.key):
-        # expected: the bucket rule deletes objects, and the rows stay
-        raise Http404
     return FileResponse(storage.open(upload.key), filename=filename, as_attachment=True)
