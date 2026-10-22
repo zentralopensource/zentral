@@ -1020,6 +1020,27 @@ class MetaMachine:
     def meta_business_units(self):
         return set(bu.meta_business_unit for bu in self.business_units(include_api_enrollment_business_unit=True))
 
+    @staticmethod
+    def prefetch_meta_business_units(machines):
+        """Set meta_business_units on each machine, with one query for all of them.
+
+        It must give the same set as the property: the meta business units of the current snapshots,
+        the API enrollment business units included.
+        """
+        machines = [machine for machine in machines if "meta_business_units" not in machine.__dict__]
+        if not machines:
+            return
+        found = {machine.serial_number: set() for machine in machines}
+        # the filter of current(), with only the join that the meta business units need
+        for ms in (MachineSnapshot.objects.current()
+                                          .select_related(None)
+                                          .select_related("business_unit__meta_business_unit")
+                                          .filter(serial_number__in=found)):
+            if ms.business_unit:
+                found[ms.serial_number].add(ms.business_unit.meta_business_unit)
+        for machine in machines:
+            machine.__dict__["meta_business_units"] = found[machine.serial_number]
+
     @cached_property
     def meta_business_unit_id_set(self):
         return set(mbu.id for mbu in self.meta_business_units)
