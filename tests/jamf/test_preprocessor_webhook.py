@@ -169,3 +169,72 @@ class WebhookEventPreprocessorArchiveTestCase(TestCase):
         self.assertEqual(self._drain(client, 42), [])
 
         self.assertEqual(CurrentMachineSnapshot.objects.filter(serial_number=serial_number).count(), 1)
+
+
+class WebhookEventPreprocessorMachineUpdateTestCase(TestCase):
+    @staticmethod
+    def _source_d():
+        return {"module": "zentral.contrib.jamf", "name": "jamf",
+                "config": {"host": "jamf.example.com", "path": "/JSSResource", "port": 443}}
+
+    def _ms_tree(self, serial_number, minor):
+        return {"source": self._source_d(),
+                "reference": "mobile_device,42",
+                "serial_number": serial_number,
+                "os_version": {"name": "iOS", "major": 26, "minor": minor, "patch": 0}}
+
+    def _make_client(self, serial_number):
+        client = MagicMock()
+        client.source_repr = "jamf.example.com"
+        client.get_source_d.side_effect = self._source_d
+        client.get_machine_d_and_tags.return_value = (self._ms_tree(serial_number, 6), {})
+        return client
+
+    def _process(self, client, event_type, serial_number):
+        raw_event = {"request": {"user_agent": "Jamf", "ip": "127.0.0.1"},
+                     "event_type": event_type,
+                     "jamf_instance": {},
+                     "jamf_event": {"jssID": 42, "serialNumber": serial_number},
+                     "device_type": "mobile_device",
+                     "jamf_id": 42,
+                     "serial_number": serial_number}
+        with patch.object(WebhookEventPreprocessor, "_get_client", return_value=((1, 1), client)):
+            return list(WebhookEventPreprocessor().process_raw_event(raw_event))
+
+    def _os_minor(self, serial_number):
+        cms = CurrentMachineSnapshot.objects.select_related("machine_snapshot__os_version").get(
+            serial_number=serial_number
+        )
+        return cms.machine_snapshot.os_version.minor
+
+    def test_mobile_device_inventory_completed_updates_known_machine(self):
+        serial_number = get_random_string(12)
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree(self._ms_tree(serial_number, 5))
+        client = self._make_client(serial_number)
+
+        events = self._process(client, "jamf_mobile_device_inventory_completed", serial_number)
+
+        client.get_machine_d_and_tags.assert_called_once_with("mobile_device", 42)
+        self.assertEqual(self._os_minor(serial_number), 6)
+        self.assertEqual(events[-1].event_type, "jamf_mobile_device_inventory_completed")
+        self.assertEqual(events[-1].metadata.machine_serial_number, serial_number)
+
+    def test_mobile_device_checkin_does_not_update_known_machine(self):
+        serial_number = get_random_string(12)
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree(self._ms_tree(serial_number, 5))
+        client = self._make_client(serial_number)
+
+        events = self._process(client, "jamf_mobile_device_checkin", serial_number)
+
+        client.get_machine_d_and_tags.assert_not_called()
+        self.assertEqual(self._os_minor(serial_number), 5)
+        self.assertEqual([e.event_type for e in events], ["jamf_mobile_device_checkin"])
+
+    def test_mobile_device_checkin_updates_unknown_machine(self):
+        serial_number = get_random_string(12)
+        client = self._make_client(serial_number)
+
+        self._process(client, "jamf_mobile_device_checkin", serial_number)
+
+        client.get_machine_d_and_tags.assert_called_once_with("mobile_device", 42)
+        self.assertEqual(self._os_minor(serial_number), 6)

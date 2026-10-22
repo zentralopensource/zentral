@@ -189,7 +189,7 @@ class WebhookEventPreprocessor(object):
         serial_number = raw_event.get("serial_number")
 
         # machine needs update ?
-        if event_type == "jamf_computer_inventory_completed" \
+        if event_type in ("jamf_computer_inventory_completed", "jamf_mobile_device_inventory_completed") \
            or (serial_number and not self._is_known_machine(client, serial_number)):
             device_type = raw_event.get("device_type")
             jamf_machine_id = raw_event.get("jamf_id")

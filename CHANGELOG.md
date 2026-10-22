@@ -394,6 +394,8 @@ The inventory history cleanup deletes in bounded batches now. One unbounded stat
 
 Fixed the Jamf API requests that failed with a `401` error after the bearer token expired. Zentral asked for a new token 5 minutes after the end of the token, and not 5 minutes before, so it did not update the machines during these 5 minutes. When the Jamf server closes the connection of a token request, Zentral sends the request one more time now.
 
+Fixed the Jamf mobile devices that Zentral did not update after the first import. Zentral read a mobile device from Jamf the first time it saw its serial number, and then only when the device entered or left a smart group, so its OS version and its name could stay old. Zentral reads the device from Jamf each time the device sends its inventory now, with the `MobileDeviceInventoryCompleted` webhook of Jamf Pro 10.47 and later. Click *Setup webhooks* on the page of each Jamf instance to add the webhook.
+
 Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.
 
 Fixed nine MDM API list endpoints that ignored the `ordering` query parameter: the enrolled devices one and the eight artifact ones. The queries had no `ORDER BY`, so a client that read the pages could miss rows and get others two times. The seven endpoints of an artifact version order on the artifact version timestamps now. Each endpoint also orders on the primary key.

@@ -1,9 +1,11 @@
 import copy
 from datetime import timedelta
 from unittest.mock import patch, Mock
+from xml.etree import ElementTree as ET
 import requests
 from django.test import SimpleTestCase
 from zentral.contrib.jamf.api_client import APIClient, APIClientError
+from zentral.contrib.jamf.events import JAMF_EVENTS
 from zentral.utils.time import naive_utcnow
 from .data import computer_response, mobile_device_response
 
@@ -629,3 +631,26 @@ class JamfAPIClientTestCase(SimpleTestCase):
         with self.assertRaises(APIClientError) as cm:
             api_client.get_or_create_text_computer_extension_attribute("YOLO", "General")
         self.assertEqual(cm.exception.args[0], "Could not get created text computer extension attribute ID")
+
+    # webhooks setup
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    @patch("zentral.contrib.jamf.api_client.requests.Session.get")
+    def test_setup_creates_the_missing_webhooks(self, session_get, session_post):
+        responses = {
+            "/webhooks": {"webhooks": [{"id": 1}, {"id": 2}]},
+            "/webhooks/id/1": {"webhook": {"id": 1, "event": "ComputerCheckIn",
+                                           "url": "https://zentral.example.com/jamf/post_event/sec/"}},
+            "/webhooks/id/2": {"webhook": {"id": 2, "event": "ComputerAdded",
+                                           "url": "https://other.example.com/hook/"}},
+            "/computers": {"computers": [{"id": 1}]},
+        }
+        session_get.side_effect = lambda url: self._mocked_response(
+            200, responses[url.removeprefix("https://host:443/JSSResource")]
+        )
+        session_post.return_value = self._mocked_response(201)
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        self.assertEqual(api_client.setup(), "Webhooks setup OK. 1 machine(s).")
+        created_events = [ET.fromstring(c.kwargs["data"]).findtext("event") for c in session_post.call_args_list]
+        self.assertEqual(sorted(created_events), sorted(set(JAMF_EVENTS) - {"ComputerCheckIn"}))
+        self.assertIn("MobileDeviceInventoryCompleted", created_events)

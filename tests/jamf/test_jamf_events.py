@@ -46,3 +46,10 @@ class JamfEventsTestCase(TestCase):
         serial_number = self.commit_minimal_ms_tree()
         event_cls = event_cls_from_type("jamf_computer_inventory_completed")
         self.assertEqual(event_cls.get_machine_heartbeat_timeout(serial_number), 7203)
+
+    def test_mobile_device_inventory_completed_event(self):
+        serial_number = self.commit_minimal_ms_tree()
+        event_cls = event_cls_from_type("jamf_mobile_device_inventory_completed")
+        self.assertEqual(event_cls.__name__, "JamfMobileDeviceInventoryCompleted")
+        self.assertEqual(event_cls.tags, ["jamf", "jamf_webhook", "heartbeat"])
+        self.assertIsNone(event_cls.get_machine_heartbeat_timeout(serial_number))

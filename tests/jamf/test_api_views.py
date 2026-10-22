@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 from django.urls import reverse
 from django.test import TestCase
 from zentral.contrib.jamf.models import JamfInstance
@@ -29,6 +30,30 @@ COMPUTER_CHECKIN = {
 PAYLOAD = {"webhook": {"webhookEvent": "ComputerCheckIn"},
            "event": COMPUTER_CHECKIN}
 
+MOBILE_DEVICE_INVENTORY_COMPLETED = {
+    "udid": "00008103-0000000000000001",
+    "deviceName": "iPad",
+    "version": "26.3",
+    "model": "iPad Pro 11-inch (M4)",
+    "bluetoothMacAddress": "",
+    "wifiMacAddress": "AC:23:23:23:23:24",
+    "imei": "",
+    "icciID": "",
+    "product": "",
+    "serialNumber": "C02MOBILE0001",
+    "userDirectoryID": "-1",
+    "room": "",
+    "osVersion": "26.3",
+    "osBuild": "23D127",
+    "modelDisplay": "iPad Pro 11-inch (M4)",
+    "username": "",
+    "jssID": 42,
+    "ipAddress": "203.0.113.1",
+    "mdmCommand": "MobileDeviceInventoryCompleted",
+    "mdmCommandUUID": "11111111-2222-3333-4444-555555555555",
+    "managementId": "66666666-7777-8888-9999-000000000000",
+}
+
 
 class JssAPIViewsTestCase(TestCase):
     def post_as_json(self, secret, data):
@@ -46,6 +71,22 @@ class JssAPIViewsTestCase(TestCase):
         jamf_instance.save()
         response = self.post_as_json(jamf_instance.secret, PAYLOAD)
         self.assertEqual(response.status_code, 200)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_raw_event")
+    def test_mobile_device_inventory_completed(self, post_raw_event):
+        jamf_instance = JamfInstance.objects.create(host="yo.example.com",
+                                                    user="god", password="zilla")
+        response = self.post_as_json(jamf_instance.secret,
+                                     {"webhook": {"webhookEvent": "MobileDeviceInventoryCompleted"},
+                                      "event": MOBILE_DEVICE_INVENTORY_COMPLETED})
+        self.assertEqual(response.status_code, 200)
+        post_raw_event.assert_called_once()
+        routing_key, raw_event = post_raw_event.call_args.args
+        self.assertEqual(routing_key, "jamf_events")
+        self.assertEqual(raw_event["event_type"], "jamf_mobile_device_inventory_completed")
+        self.assertEqual(raw_event["device_type"], "mobile_device")
+        self.assertEqual(raw_event["jamf_id"], 42)
+        self.assertEqual(raw_event["serial_number"], "C02MOBILE0001")
 
     def test_event_observer_serialization(self):
         jamf_instance = JamfInstance.objects.create(host="yo.example.com",
