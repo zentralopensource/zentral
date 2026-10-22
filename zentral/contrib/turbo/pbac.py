@@ -79,6 +79,22 @@ JOB_UPLOAD_RESOURCE_TYPE = ResourceType(
 )
 
 
+# The state of a job on a machine has two containers: the machine and the schedule. The schedule is a
+# member of its configuration, so a forbid on a configuration also covers this state.
+
+
+ONE_TIME_JOB_MACHINE_RESOURCE_TYPE = ResourceType(
+    "OneTimeJobMachine", get_namespace(),
+    attrs={"job": AttrSpec(JOB_RESOURCE_TYPE, help_text="The job that the schedule runs.")},
+    parents=(MACHINE_RESOURCE_TYPE, ONE_TIME_JOB_RESOURCE_TYPE),
+)
+RECURRING_JOB_MACHINE_RESOURCE_TYPE = ResourceType(
+    "RecurringJobMachine", get_namespace(),
+    attrs={"job": AttrSpec(JOB_RESOURCE_TYPE, help_text="The job that the schedule runs.")},
+    parents=(MACHINE_RESOURCE_TYPE, RECURRING_JOB_RESOURCE_TYPE),
+)
+
+
 def get_configuration_resource(configuration) -> Resource:
     return Resource("Configuration", str(configuration.pk), get_namespace())
 
@@ -264,6 +280,29 @@ download_job_upload_action = engine.register_action(
 )
 
 
+view_one_time_job_machine_action = engine.register_action(
+    "viewOneTimeJobMachine",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
+    applies_to=AppliesTo(principals=(USER, SERVICE_ACCOUNT), resources=(ONE_TIME_JOB_MACHINE_RESOURCE_TYPE,)),
+    help_text="See the state of a one-time job on a machine: the version that the agent has, and the time "
+              "of the last result. The resource is a member of the machine and of the one-time job, so a "
+              "policy can use the machine, its meta business units, the one-time job or its configuration. "
+              "It has the job, so a policy can read `resource.job.kind`.",
+)
+
+
+view_recurring_job_machine_action = engine.register_action(
+    "viewRecurringJobMachine",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
+    applies_to=AppliesTo(principals=(USER, SERVICE_ACCOUNT), resources=(RECURRING_JOB_MACHINE_RESOURCE_TYPE,)),
+    help_text="See the state of a recurring job on a machine: the version and the interval that the agent "
+              "has, and the time of the last result. The resource is a member of the machine and of the "
+              "recurring job, as for viewOneTimeJobMachine.",
+)
+
+
 # requests
 
 
@@ -347,6 +386,39 @@ class DownloadJobUploadRequest(BaseJobUploadRequest):
     pbac_action = download_job_upload_action
 
 
+class BaseJobMachineRequest(Request):
+    # the caller has the row, so there is no preview
+    pbac_action = None
+    resource_type = None
+    schedule_resource_type = None
+    schedule_attr = None
+
+    def __init__(self, user_obj, job_machine, machine) -> None:
+        schedule = getattr(job_machine, self.schedule_attr)
+        super().__init__(
+            Principal.from_user(user_obj),
+            self.pbac_action,
+            Resource(self.resource_type.name, str(job_machine.pk), get_namespace(),
+                     [get_meta_machine_resource(machine),
+                      _get_schedule_resource(self.schedule_resource_type, schedule)],
+                     attrs={"job": get_job_resource(schedule.job)}),
+        )
+
+
+class ViewOneTimeJobMachineRequest(BaseJobMachineRequest):
+    pbac_action = view_one_time_job_machine_action
+    resource_type = ONE_TIME_JOB_MACHINE_RESOURCE_TYPE
+    schedule_resource_type = ONE_TIME_JOB_RESOURCE_TYPE
+    schedule_attr = "one_time_job"
+
+
+class ViewRecurringJobMachineRequest(BaseJobMachineRequest):
+    pbac_action = view_recurring_job_machine_action
+    resource_type = RECURRING_JOB_MACHINE_RESOURCE_TYPE
+    schedule_resource_type = RECURRING_JOB_RESOURCE_TYPE
+    schedule_attr = "recurring_job"
+
+
 # checks
 
 
@@ -393,6 +465,14 @@ def check_download_job_upload(request, upload, schedule):
     check_request(request, DownloadJobUploadRequest(request.user, upload, MetaMachine(upload.serial_number), schedule))
 
 
+def _machines(serial_numbers):
+    # one MetaMachine for each serial number, with the meta business units of all of them in one query:
+    # the machine resources then need no query
+    machines = {serial_number: MetaMachine(serial_number) for serial_number in serial_numbers}
+    MetaMachine.prefetch_meta_business_units(machines.values())
+    return machines
+
+
 def authorize_job_upload_rows(user_obj, uploads):
     """The uploads that the user can see, each with can_download, in one batched decision.
 
@@ -403,7 +483,7 @@ def authorize_job_upload_rows(user_obj, uploads):
     """
     uploads = list(uploads)
     schedules = resolve_upload_schedules(uploads)
-    machines = {}
+    machines = _machines({upload.serial_number for upload in uploads})
     placed = []
     requests = []
     for upload in uploads:
@@ -411,7 +491,7 @@ def authorize_job_upload_rows(user_obj, uploads):
         if schedule is None:
             logger.warning("Turbo upload %s: no schedule %s", upload.pk, upload.schedule_pk)
             continue
-        machine = machines.setdefault(upload.serial_number, MetaMachine(upload.serial_number))
+        machine = machines[upload.serial_number]
         upload.job = schedule.job
         placed.append(upload)
         requests.append(ViewJobUploadRequest(user_obj, upload, machine, schedule))
@@ -424,6 +504,16 @@ def authorize_job_upload_rows(user_obj, uploads):
         upload.can_download = requests[2 * index + 1].is_authorized
         visible.append(upload)
     return visible
+
+
+def authorize_job_machine_rows(user_obj, request_class, job_machines):
+    """The states of jobs on machines that the user can see, in one batched decision."""
+    job_machines = list(job_machines)
+    machines = _machines({job_machine.serial_number for job_machine in job_machines})
+    requests = [request_class(user_obj, job_machine, machines[job_machine.serial_number])
+                for job_machine in job_machines]
+    engine.authorize_requests(requests)
+    return [job_machine for job_machine, pbac_request in zip(job_machines, requests) if pbac_request.is_authorized]
 
 
 def _authorize_schedule_rows(user_obj, update_request_class, delete_request_class, schedules):

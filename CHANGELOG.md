@@ -179,6 +179,8 @@ The page of an enrolled machine lists the artifacts that its jobs collected, wit
 
 In a policy, the resource of the two actions is the upload. It is a member of its machine and of its schedule, and the schedule is a member of its configuration. So one `forbid` on a configuration covers the scheduling and the artifacts. It has the artifact name and the job, so a policy can also read `resource.job.kind`.
 
+The new `/api/turbo/one_time_jobs/<pk>/machines/` and `/api/turbo/recurring_jobs/<pk>/machines/` endpoints give the state of a job on each machine, as the machine page does. For a one-time job, each machine has the artifacts that the job collected, with a download URL. Two new PBAC actions, `Turbo::Action::"viewOneTimeJobMachine"` and `Turbo::Action::"viewRecurringJobMachine"`, control the machines, and the two artifact actions control the artifacts.
+
 If you manage your own deployment, add rules to the bucket. Zentral does not delete the artifacts: an `Expiration` rule on `turbo/uploads/` deletes them, for example after 14 days. An `AbortIncompleteMultipartUpload` rule on the bucket deletes the parts of an upload that the agent never reports. On a bucket with versioning, an `ExpiredObjectDeleteMarker` rule deletes the delete markers.
 
 

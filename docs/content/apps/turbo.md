@@ -513,7 +513,7 @@ forbid (
 ) when { resource.job.kind == "file_export" };
 ```
 
-The machine page also needs the `turbo.view_enrolledmachine` permission, which is global. A meta business unit scope for the machine pages is separate work.
+The machine page also needs the `turbo.view_enrolledmachine` permission, which is global. A meta business unit scope for the machine pages is separate work. The [API](#apiturboone_time_jobsuuidpkmachines) uses the typed actions only.
 
 **Verification never reopens a one-time job.** That is what the two axes are for: the job was done on that machine when the agent reported, whatever the storage says afterwards. A `mismatch` does not give the agent another destination, and it does not make Zentral ask for the file again.
 
@@ -1846,6 +1846,31 @@ curl \
   https://$ZTL_FQDN/api/turbo/recurring_jobs/a4193fe0-4011-4926-8f54-b83d3e9d6987/
 ```
 
+### /api/turbo/recurring_jobs/`<uuid:pk>`/machines/
+
+#### List the machines of a recurring job
+
+The state of the job on each machine, as the machine page gives it.
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewRecurringJobMachine"`, for each machine
+* `<uuid:pk>`: the primary key of the recurring job
+* Optional filter parameter:
+    * `serial_number`: the serial number of a machine
+
+The resource of the action is a member of the machine and of the recurring job, and the recurring job is a member of its configuration. So a policy can use the machine, its meta business units, the recurring job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`.
+
+A machine is in the list after the agent reports the job in its status. The attributes are the same as for a [one-time job](#apiturboone_time_jobsuuidpkmachines), with one more: `seen_interval`, the interval that the agent uses, in seconds. On a recurring job, `last_result_at` is the time of the last run, and Zentral continues to serve the job. A recurring job has no artifacts.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/recurring_jobs/3a1f1d3b-6f22-4a76-9a4a-b1d1a1f08b2a/machines/ \
+  |python3 -m json.tool
+```
+
 ### /api/turbo/one_time_jobs/
 
 Terraform resource: [`zentral_turbo_one_time_job`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/turbo_one_time_job)
@@ -2007,6 +2032,106 @@ curl \
   -H "Authorization: Token $ZTL_API_TOKEN" \
   -X DELETE \
   https://$ZTL_FQDN/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/
+```
+
+### /api/turbo/one_time_jobs/`<uuid:pk>`/machines/
+
+#### List the machines of a one-time job
+
+The state of the job on each machine, with the artifacts that the job collected from it.
+
+* method: GET
+* PBAC action: `Turbo::Action::"viewOneTimeJobMachine"`, for each machine
+* PBAC actions: `Turbo::Action::"viewJobUpload"` and `Turbo::Action::"downloadJobUpload"`, for each artifact
+* `<uuid:pk>`: the primary key of the one-time job
+* Optional filter parameter:
+    * `serial_number`: the serial number of a machine
+
+The resource of `viewOneTimeJobMachine` is a member of the machine and of the one-time job, and the one-time job is a member of its configuration. So a policy can use the machine, its meta business units, the one-time job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`.
+
+`artifacts` has only the artifacts that the caller can see. See [See and download an artifact](#see-and-download-an-artifact). `download_url` is `null` when the `status` is not `uploaded`, or when the caller cannot download the artifact.
+
+Example:
+
+```bash
+curl \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  https://$ZTL_FQDN/api/turbo/one_time_jobs/94c61ba9-abc9-4aaf-99f3-b9ea2552d62a/machines/ \
+  |python3 -m json.tool
+```
+
+Response:
+
+```json
+{
+    "count": 1,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "serial_number": "012345678",
+            "seen_version": 1,
+            "last_result_version": 1,
+            "first_seen_at": "2026-08-20T09:10:02.511601",
+            "last_seen_at": "2026-08-20T09:14:55.207650",
+            "first_result_at": "2026-08-20T09:16:02.511601",
+            "last_result_at": "2026-08-20T09:16:02.511601",
+            "removed_at": null,
+            "artifacts": [
+                {
+                    "id": "1f0f7a53-5a5e-4d6b-9a76-5b4f7e0b1c2d",
+                    "run_id": "0f3b06d2-3f4e-4c2a-90c7-4d6c9dbb3d4c",
+                    "artifact": "archive",
+                    "mode": "put",
+                    "size": 31457280,
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "truncated": false,
+                    "attempts": 1,
+                    "status": "uploaded",
+                    "error_reason": null,
+                    "verification": "verified",
+                    "created_at": "2026-08-20T09:15:41.207650",
+                    "updated_at": "2026-08-20T09:16:02.511873",
+                    "completed_at": "2026-08-20T09:16:02.511601",
+                    "verified_at": "2026-08-20T09:16:02.511601",
+                    "download_url": "https://zentral.example.com/api/turbo/artifacts/1f0f7a53-5a5e-4d6b-9a76-5b4f7e0b1c2d/download/"
+                }
+            ]
+        }
+    ]
+}
+```
+
+|Attribute|Description|
+|---|---|
+|`seen_version`|The [version](#job-versions) of the job in the last status of the agent.|
+|`first_seen_at`, `last_seen_at`|The first and the last status of the agent with the job.|
+|`last_result_version`|The version of the latest run.|
+|`first_result_at`, `last_result_at`|The first and the latest run of the current version. When `last_result_at` is set, the job is done on this machine, and Zentral does not serve it again.|
+|`removed_at`|Set when the agent does not report the job anymore. `null` while the agent reports it.|
+|`artifacts`|The artifacts of all the runs of the job on this machine. `run_id` tells the runs apart. `status` is what the agent reported, and `verification` is what the storage holds. See [Verification](#verification).|
+
+A machine is in the list after the agent reports the job in its status. When `last_result_at` is set, the result closed the artifacts of the run.
+
+### /api/turbo/artifacts/`<uuid:pk>`/download/
+
+#### Download an artifact
+
+* method: GET
+* PBAC action: `Turbo::Action::"downloadJobUpload"`
+* `<uuid:pk>`: the `id` of the artifact
+
+Use the `download_url` of the artifact. With S3 or Google Cloud Storage, the response is a `302` to a signed URL of the storage. With the file system storage, the response has the file. The response is a `404` when the `status` is not `uploaded`, or when a bucket rule deleted the file.
+
+Compare the SHA-256 of the file with the `sha256` of the artifact.
+
+Example:
+
+```bash
+curl -L \
+  -H "Authorization: Token $ZTL_API_TOKEN" \
+  -o archive.tar.gz \
+  https://$ZTL_FQDN/api/turbo/artifacts/1f0f7a53-5a5e-4d6b-9a76-5b4f7e0b1c2d/download/
 ```
 
 ## Device API

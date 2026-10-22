@@ -7,8 +7,9 @@ from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 
 from .command_backends import get_command_backend_class
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
-from .models import (Configuration, Enrollment, FileExport, Job, MSCPCheck, OneTimeJob, RecurringJob,
-                     ScheduleMode, Script, Sysdiagnose)
+from .models import (Configuration, Enrollment, FileExport, Job, JobUpload, MSCPCheck, OneTimeJob,
+                     OneTimeJobMachine, RecurringJob, RecurringJobMachine, ScheduleMode, Script, Sysdiagnose,
+                     UploadStatus)
 
 
 class ConfigurationSerializer(serializers.ModelSerializer):
@@ -288,3 +289,35 @@ class OneTimeJobSerializer(JobScopeSerializerMixin, serializers.ModelSerializer)
         if not_before and not_after and not_before > not_after:
             raise serializers.ValidationError({"not_after": "not_after must be on or after not_before"})
         return data
+
+
+class ArtifactSerializer(serializers.ModelSerializer):
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JobUpload
+        fields = ("id", "run_id", "artifact", "mode", "size", "sha256", "truncated", "attempts", "status",
+                  "error_reason", "verification", "created_at", "updated_at", "completed_at", "verified_at",
+                  "download_url")
+
+    def get_download_url(self, obj):
+        # null when there is no file, or when the caller cannot download it
+        if obj.status != UploadStatus.UPLOADED or not obj.can_download:
+            return None
+        return f"{api_base_url()}{reverse('turbo_api:artifact_download', args=(obj.pk,))}"
+
+
+class OneTimeJobMachineSerializer(serializers.ModelSerializer):
+    artifacts = ArtifactSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = OneTimeJobMachine
+        fields = ("serial_number", "seen_version", "last_result_version", "first_seen_at", "last_seen_at",
+                  "first_result_at", "last_result_at", "removed_at", "artifacts")
+
+
+class RecurringJobMachineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecurringJobMachine
+        fields = ("serial_number", "seen_version", "seen_interval", "last_result_version", "first_seen_at",
+                  "last_seen_at", "first_result_at", "last_result_at", "removed_at")

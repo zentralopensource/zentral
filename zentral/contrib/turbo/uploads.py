@@ -1,18 +1,22 @@
 import logging
+import os.path
 import re
 
 from django.conf import settings
+from django.core.files.storage import storages
 from django.core.signing import BadSignature, TimestampSigner
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
 
 from zentral.conf import api_base_url
 from zentral.utils.storage import (create_multipart_upload, file_storage_has_multipart_uploads,
-                                   file_storage_has_presigned_uploads, file_storage_recorded_digests,
+                                   file_storage_has_presigned_uploads, file_storage_has_signed_urls,
+                                   file_storage_recorded_digests, generate_presigned_get,
                                    generate_presigned_part, generate_presigned_put, sha256_object,
                                    stat_object)
 
-from .models import UploadMode, UploadVerification
+from .models import UploadMode, UploadStatus, UploadVerification
 
 
 logger = logging.getLogger("zentral.contrib.turbo.uploads")
@@ -307,3 +311,23 @@ def start_multipart_upload(upload, artifact, storage):
     """
     upload.upload_id = create_multipart_upload(upload.key, artifact.content_type, storage)
     upload.part_size = MULTIPART_PART_SIZE
+
+
+def build_download_response(upload):
+    """The download of a collected artifact, for the console and for the API.
+
+    A redirect to a signed URL, or the file of the file system storage.
+    """
+    if upload.status != UploadStatus.UPLOADED:
+        # no object at this key
+        raise Http404
+    # the storage of all the upload calls. select_dist_storage() is for the MDM artifacts, and a separate dist
+    # storage does not have the artifact.
+    storage = storages["default"]
+    filename = os.path.basename(upload.key)
+    if file_storage_has_signed_urls(storage):
+        return HttpResponseRedirect(generate_presigned_get(upload.key, filename, storage))
+    if not storage.exists(upload.key):
+        # expected: the bucket rule deletes objects, and the rows stay
+        raise Http404
+    return FileResponse(storage.open(upload.key), filename=filename, as_attachment=True)

@@ -1,11 +1,12 @@
 from django.urls import path
-from .api_views import (ConfigurationList, ConfigurationDetail,
+from .api_views import (ArtifactDownload,
+                        ConfigurationList, ConfigurationDetail,
                         EnrollmentList, EnrollmentDetail,
                         EnrollmentPlist, EnrollmentConfigurationProfile,
                         FileExportList, FileExportDetail,
                         MSCPCheckList, MSCPCheckDetail,
-                        OneTimeJobList, OneTimeJobDetail,
-                        RecurringJobList, RecurringJobDetail,
+                        OneTimeJobList, OneTimeJobDetail, OneTimeJobMachineList,
+                        RecurringJobList, RecurringJobDetail, RecurringJobMachineList,
                         ScriptList, ScriptDetail,
                         SysdiagnoseList, SysdiagnoseDetail)
 
@@ -29,6 +30,9 @@ urlpatterns = [
     path('file_exports/<uuid:pk>/', FileExportDetail.as_view(), name="file_export"),
     path('recurring_jobs/', RecurringJobList.as_view(), name="recurring_jobs"),
     path('recurring_jobs/<uuid:pk>/', RecurringJobDetail.as_view(), name="recurring_job"),
+    path('recurring_jobs/<uuid:pk>/machines/', RecurringJobMachineList.as_view(), name="recurring_job_machines"),
     path('one_time_jobs/', OneTimeJobList.as_view(), name="one_time_jobs"),
     path('one_time_jobs/<uuid:pk>/', OneTimeJobDetail.as_view(), name="one_time_job"),
+    path('one_time_jobs/<uuid:pk>/machines/', OneTimeJobMachineList.as_view(), name="one_time_job_machines"),
+    path('artifacts/<uuid:pk>/download/', ArtifactDownload.as_view(), name="artifact_download"),
 ]
