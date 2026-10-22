@@ -6,7 +6,7 @@ from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
 from pbac.cedar import (_serialize_requests, authorize_request, authorize_requests,
-                        PoliciesCache, policies_cache)
+                        PoliciesCache, policies_cache, undecided_policies)
 from pbac.engine import engine
 from pbac.entities import Action, Entity, Namespace, Principal, Request, Resource
 from zentral.utils.drf import PBACPermission
@@ -311,6 +311,23 @@ class PBACCedarPreviewTestCase(TestCase):
         self.assertFalse(request.is_authorized)
         self.assertIn("Cedar errors for", cm.output[0])
 
+    def test_a_policy_that_errors_does_not_refuse_the_preview(self):
+        # the addition overflows: Cedar skips the forbid and answers with the permit, for the full request too
+        self._policy(f'permit (principal in Role::"{self.group.pk}", '
+                     f'action == Santa::Action::"forceCleanSync", resource) '
+                     f'when {{ context.syncType == "CLEAN_ALL" }};\n'
+                     f'forbid (principal, action == Santa::Action::"forceCleanSync", resource) '
+                     f'when {{ 9223372036854775807 + 1 > 0 && context.syncType == "CLEAN_ALL" }};')
+        preview = self._request(unknown_context=True)
+        full_request = self._request(unknown_context=False, context=self._full_context())
+        with self.assertLogs("zentral.pbac.cedar", level="ERROR") as cm:
+            engine.authorize_request(preview)
+            engine.authorize_request(full_request)
+        self.assertTrue(preview.is_authorized)
+        self.assertTrue(full_request.is_authorized)
+        self.assertEqual(len(cm.output), 2)
+        self.assertIn("overflow", cm.output[0])
+
     def test_a_full_request_that_cedar_cannot_evaluate_is_refused_and_logged(self):
         self._policy(f'permit (principal in Role::"{self.group.pk}", '
                      f'action == Santa::Action::"forceCleanSync", resource);')
@@ -510,3 +527,142 @@ class PBACCedarContextEntityTestCase(SerializeMixin, TestCase):
                          {"other": {"__entity": {"type": "Job", "id": "right"}}})
         self.assertEqual(entities[("Job", "right")]["attrs"],
                          {"other": {"__entity": {"type": "Job", "id": "left"}}})
+
+
+TRUE = {"Value": True}
+UNKNOWN_RESOURCE = {"unknown": [{"Value": "resource"}]}
+
+
+def _and(left, right):
+    return {"&&": {"left": left, "right": right}}
+
+
+def _residual(effect, body):
+    return {"effect": effect, "principal": {"op": "All"}, "action": {"op": "All"}, "resource": {"op": "All"},
+            "conditions": [{"kind": "when", "body": body}]}
+
+
+class PBACCedarUnknownResourceTestCase(SerializeMixin, TestCase):
+    """undecided_policies: a request without a resource, for all the rows of a list.
+
+    The format of the answer is not in the semver guarantee of Cedar. These tests keep examples of it.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.com")
+        cls.group = Group.objects.create(name=get_random_string(12))
+        cls.user.groups.add(cls.group)
+        cls.action = engine.get_action("viewOneTimeJobMachine", engine.get_namespace("Turbo"))
+
+    def setUp(self):
+        policies_cache.clear()
+
+    def _policy(self, source):
+        Policy.objects.filter(name="Tests").delete()
+        policy = Policy(name="Tests", source=format_policies(source))
+        policy.full_clean()
+        policy.save()
+        policies_cache.clear()
+
+    def _permit(self, scope="resource", condition=""):
+        return (f'permit (principal in Role::"{self.group.pk}", '
+                f'action == Turbo::Action::"viewOneTimeJobMachine", {scope}) {condition};\n')
+
+    def _request(self, action=None):
+        return Request(Principal.from_user(self.user), action or self.action, None)
+
+    def test_a_request_without_a_resource_sends_none(self):
+        request = self._request()
+        self.assertTrue(request.unknown_resource)
+        serialized_requests, entities = self.serialize([request])
+        self.assertIsNone(serialized_requests[0]["resource"])
+        # the principal, its roles, the action and its groups
+        self.assertEqual({entity_type for entity_type, _ in entities}, {"User", "Role", "Turbo::Action", "Action"})
+
+    def test_the_full_evaluator_refuses_a_request_without_a_resource(self):
+        with self.assertRaises(ValueError) as cm:
+            authorize_request(self._request())
+        self.assertEqual(cm.exception.args[0], "A request with an unknown resource needs undecided_policies")
+
+    def test_the_preview_refuses_a_request_without_a_resource(self):
+        request = Request(Principal.from_user(self.user), self.action, None, unknown_context=True)
+        with self.assertRaises(ValueError) as cm:
+            engine.authorize_request(request)
+        self.assertEqual(cm.exception.args[0], "A request with an unknown resource needs undecided_policies")
+
+    def test_the_batch_evaluator_refuses_a_request_without_a_resource(self):
+        with self.assertRaises(ValueError) as cm:
+            authorize_requests([self._request()])
+        self.assertEqual(cm.exception.args[0], "A request with an unknown resource needs undecided_policies")
+
+    def test_an_unconditional_permit_is_true(self):
+        self._policy(self._permit())
+        self.assertIs(undecided_policies(self._request()), True)
+
+    def test_no_policy_is_false(self):
+        self.assertIs(undecided_policies(self._request()), False)
+
+    def test_an_unconditional_forbid_is_false(self):
+        self._policy(self._permit() + "forbid (principal, action, resource);")
+        self.assertIs(undecided_policies(self._request()), False)
+
+    def test_a_request_that_cedar_cannot_read_is_false_and_logged(self):
+        # Cedar answers NoDecision without a policy: the same answer as for an undecided request
+        self._policy(self._permit())
+        request = self._request(Action('view"OneTimeJobMachine', Namespace("Turbo")))
+        with self.assertLogs("zentral.pbac.cedar", level="ERROR") as cm:
+            self.assertIs(undecided_policies(request), False)
+        self.assertIn("Cedar errors for", cm.output[0])
+
+    def test_a_forbid_unless_a_meta_business_unit(self):
+        self._policy(self._permit()
+                     + 'forbid (principal, action == Turbo::Action::"viewOneTimeJobMachine", resource) '
+                       'unless { resource in Inventory::MetaBusinessUnit::"1" };')
+        self.assertEqual(undecided_policies(self._request()), {
+            "policy0": _residual("permit", TRUE),
+            "policy1": _residual("forbid", _and(TRUE, _and(TRUE, _and(TRUE, {"!": {"arg": {"in": {
+                "left": UNKNOWN_RESOURCE,
+                "right": {"Value": {"__entity": {"type": "Inventory::MetaBusinessUnit", "id": "1"}}},
+            }}}})))),
+        })
+
+    def test_a_resource_scope_and_an_attribute_path(self):
+        self._policy(self._permit('resource in Turbo::Configuration::"c1"',
+                                  'when { resource.job.kind != "script" '
+                                  '       || resource == Turbo::OneTimeJobMachine::"5" }'))
+        kind = {".": {"left": {".": {"left": UNKNOWN_RESOURCE, "attr": "job"}}, "attr": "kind"}}
+        self.assertEqual(undecided_policies(self._request()), {
+            "policy0": _residual("permit", _and(TRUE, _and(TRUE, _and(
+                {"in": {"left": UNKNOWN_RESOURCE,
+                        "right": {"Value": {"__entity": {"type": "Turbo::Configuration", "id": "c1"}}}}},
+                {"||": {
+                    "left": {"!": {"arg": {"==": {"left": kind, "right": {"Value": "script"}}}}},
+                    "right": {"==": {
+                        "left": UNKNOWN_RESOURCE,
+                        "right": {"Value": {"__entity": {"type": "Turbo::OneTimeJobMachine", "id": "5"}}},
+                    }},
+                }},
+            )))),
+        })
+
+    def test_an_is_scope_and_a_set(self):
+        self._policy(self._permit('resource is Turbo::OneTimeJobMachine in Turbo::Configuration::"c1"',
+                                  'when { resource in [Inventory::MetaBusinessUnit::"1", '
+                                  '                    Inventory::MetaBusinessUnit::"2"] }'))
+        mbus = [{"Value": {"__entity": {"type": "Inventory::MetaBusinessUnit", "id": pk}}} for pk in ("1", "2")]
+        self.assertEqual(undecided_policies(self._request()), {
+            "policy0": _residual("permit", _and(TRUE, _and(TRUE, _and(
+                # the in of the scope is not in the is
+                _and({"is": {"left": UNKNOWN_RESOURCE, "entity_type": "Turbo::OneTimeJobMachine"}},
+                     {"in": {"left": UNKNOWN_RESOURCE,
+                             "right": {"Value": {"__entity": {"type": "Turbo::Configuration", "id": "c1"}}}}}),
+                {"in": {"left": UNKNOWN_RESOURCE, "right": {"Set": mbus}}},
+            )))),
+        })
+
+    def test_a_policy_of_another_action_is_false(self):
+        self._policy(self._permit(condition='when { resource.job.kind == "script" }')
+                     + 'permit (principal, action == Turbo::Action::"viewJobUpload", resource);')
+        policies = undecided_policies(self._request())
+        self.assertEqual(policies["policy1"], _residual("permit", {"Value": False}))
