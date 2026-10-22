@@ -1,4 +1,5 @@
 import copy
+import json
 from datetime import timedelta
 from unittest.mock import patch, Mock
 from xml.etree import ElementTree as ET
@@ -175,6 +176,44 @@ class JamfAPIClientTestCase(SimpleTestCase):
         self.assertEqual(cm.exception.message, "Could not get bearer token: reset")
         self.assertEqual(len(lcm.output), 1)
         self.assertEqual(session_post.call_count, 2)
+
+    # request timeouts
+
+    @staticmethod
+    def _http_response(json_value):
+        response = requests.Response()
+        response.status_code = 200
+        response._content = json.dumps(json_value).encode("utf-8")
+        return response
+
+    @patch("requests.adapters.HTTPAdapter.send")
+    def test_token_request_timeout(self, adapter_send):
+        expires = (naive_utcnow() + timedelta(minutes=20)).isoformat(timespec="milliseconds") + "Z"
+        adapter_send.return_value = self._http_response({"token": "new", "expires": expires})
+        api_client = self._token_client()
+        self.assertEqual(api_client.update_token_if_necessary(), "new")
+        request = adapter_send.call_args.args[0]
+        self.assertEqual(request.url, "https://host:443/api/v1/auth/token")
+        self.assertEqual(adapter_send.call_args.kwargs["timeout"], 15)
+
+    @patch("requests.adapters.HTTPAdapter.send")
+    def test_api_request_timeout(self, adapter_send):
+        adapter_send.return_value = self._http_response({"computers": []})
+        api_client = APIClient("host", 443, "/JSSResource", "user", "pwd", "sec")
+        self.assertEqual(api_client._computers(), [])
+        request = adapter_send.call_args.args[0]
+        self.assertEqual(request.url, "https://host:443/JSSResource/computers")
+        self.assertEqual(adapter_send.call_args.kwargs["timeout"], 15)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_token_request_read_timeout(self, session_post):
+        session_post.side_effect = requests.exceptions.ReadTimeout("read timeout")
+        api_client = self._token_client()
+        with (self.assertRaises(APIClientError) as cm,
+              self.assertNoLogs("zentral.contrib.jamf.api_client", level="WARNING")):
+            api_client.update_token_if_necessary()
+        self.assertEqual(cm.exception.message, "Could not get bearer token: read timeout")
+        session_post.assert_called_once()
 
     # machines missing from jamf
 

@@ -394,6 +394,8 @@ The inventory history cleanup deletes in bounded batches now. One unbounded stat
 
 Fixed the Jamf API requests that failed with a `401` error after the bearer token expired. Zentral asked for a new token 5 minutes after the end of the token, and not 5 minutes before, so it did not update the machines during these 5 minutes. When the Jamf server closes the connection of a token request, Zentral sends the request one more time now.
 
+The Jamf bearer token request has a timeout of 15 seconds now, like the other Jamf API requests. Before, a Jamf server that did not answer this request stopped the event preprocessing worker, with no time limit.
+
 Fixed the Jamf mobile devices that Zentral did not update after the first import. Zentral read a mobile device from Jamf the first time it saw its serial number, and then only when the device entered or left a smart group, so its OS version and its name could stay old. Zentral reads the device from Jamf each time the device sends its inventory now, with the `MobileDeviceInventoryCompleted` webhook of Jamf Pro 10.47 and later. Click *Setup webhooks* on the page of each Jamf instance to add the webhook.
 
 Fixed the iPads imported from Jamf, which had the iOS platform. Jamf gives iOS as the OS of an iPad, and Zentral used this name. An iPad with OS version 13.1 or later has the iPadOS platform now. The iPads change platform at their next update from Jamf: add iPadOS to the compliance checks and to the probe filters that select the iPads with the iOS platform.

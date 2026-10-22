@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import requests
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
@@ -33,12 +34,13 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
 
     # utility methods
 
-    def _force_jamf_instance(self):
+    def _force_jamf_instance(self, bearer_token_authentication=False):
         jamf_instance = JamfInstance.objects.create(
             host="{}.example.com".format(get_random_string(12)),
             port=443,
             path="/JSSResource",
-            user=get_random_string(12)
+            user=get_random_string(12),
+            bearer_token_authentication=bearer_token_authentication,
         )
         jamf_instance.set_password(get_random_string(12))
         super(JamfInstance, jamf_instance).save()
@@ -221,6 +223,18 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
         self.login()
         response = self.client.get(reverse("jamf:setup_jamf_instance", args=(jamf_instance.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    @patch("zentral.contrib.jamf.api_client.requests.Session.post")
+    def test_setup_jamf_instance_token_read_timeout(self, session_post):
+        session_post.side_effect = requests.exceptions.ReadTimeout("read timeout")
+        jamf_instance = self._force_jamf_instance(bearer_token_authentication=True)
+        self.login("jamf.change_jamfinstance", "jamf.view_jamfinstance")
+        with self.assertLogs("zentral.contrib.jamf.views", level="ERROR"):
+            response = self.client.get(reverse("jamf:setup_jamf_instance", args=(jamf_instance.pk,)), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
+        self.assertContains(response, "Could not setup webhooks on")
+        session_post.assert_called_once()
 
     # update jamf instance
 

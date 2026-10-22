@@ -58,8 +58,9 @@ class APIClient(object):
         else:
             self.token_auth = (user, password)
             self.token = None
+        # base_url, and not api_base_url: the bearer token request needs the timeout too
         self.session.mount(
-            self.api_base_url,
+            self.base_url,
             CustomHTTPAdapter(self.default_timeout, self.max_retries)
         )
         self.mobile_device_groups = {}
@@ -118,6 +119,8 @@ class APIClient(object):
                 if attempt == 2:
                     raise APIClientError(f"Could not get bearer token: {e}")
                 logger.warning("Could not get bearer token for %s. Retry.", self.base_url)
+            except requests.exceptions.RequestException as e:
+                raise APIClientError(f"Could not get bearer token: {e}")
 
     def get_source_d(self):
         return {"module": "zentral.contrib.jamf",
