@@ -1,16 +1,13 @@
 import logging
-from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import REDIRECT_FIELD_NAME
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import api_base_url
-from zentral.utils.views import RequestUserFormMixin, UserPaginationListView
+from zentral.utils.views import LocalUserRequiredMixin, RequestUserFormMixin, UserPaginationListView
 from .backends.registry import backend_classes
 from .forms import (AddRealmUserToGroupForm, RealmGroupMappingForm, RealmGroupSearchForm, RealmUserSearchForm,
                     RoleMappingForm)
@@ -32,21 +29,6 @@ class IndexView(LoginRequiredMixin, TemplateView):
             raise PermissionDenied("Not allowed")
         ctx = super().get_context_data(**kwargs)
         return ctx
-
-
-class LocalUserRequiredMixin:
-    """Verify that the current user is not a remote user and has authenticated locally."""
-
-    def dispatch(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return redirect_to_login(self.request.get_full_path(),
-                                     settings.LOGIN_URL,
-                                     REDIRECT_FIELD_NAME)
-        if request.user.is_remote:
-            raise PermissionDenied("Remote users cannot access this view.")
-        if request.realm_authentication_session.is_remote:
-            raise PermissionDenied("Log in without using a realm to access this view.")
-        return super().dispatch(request, *args, **kwargs)
 
 
 class RealmListView(PermissionRequiredMixin, ListView):

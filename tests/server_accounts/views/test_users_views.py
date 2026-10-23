@@ -363,6 +363,29 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotContains(response, "Realm users")
         self.assertNotContains(response, "SCIM inactive")
 
+    def test_user_list_remote_session_no_write_links(self):
+        self.login("accounts.view_user", "accounts.add_user", "accounts.add_apitoken",
+                   "accounts.change_user", "accounts.delete_user", realm_user=True)
+        response = self.client.get(reverse("accounts:users"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
+        self.assertContains(response, self.user.username)
+        for text in (reverse("accounts:invite_user"),
+                     reverse("accounts:create_service_account"),
+                     reverse("accounts:delete_user", args=(self.user.pk,)),
+                     reverse("accounts:update_user", args=(self.user.pk,)),
+                     reverse("accounts:delete_user", args=(self.service_account.pk,)),
+                     reverse("accounts:update_user", args=(self.service_account.pk,))):
+            self.assertNotContains(response, text)
+
+    def test_user_detail_remote_session_no_write_links(self):
+        self.login("accounts.view_user", "accounts.change_user", "accounts.delete_user", realm_user=True)
+        response = self.client.get(reverse("accounts:user", args=(self.user.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
+        self.assertNotContains(response, reverse("accounts:delete_user", args=(self.user.pk,)))
+        self.assertNotContains(response, reverse("accounts:update_user", args=(self.user.pk,)))
+
     # user detail — policies that reference the user
 
     def test_view_user_realm_users(self):
@@ -521,6 +544,10 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.login("accounts.view_user")
         self.permission_denied("invite_user")
 
+    def test_user_invite_remote_session_permission_denied(self):
+        self.login("accounts.add_user", realm_user=True)
+        self.permission_denied("invite_user")
+
     def test_user_invite_get(self):
         self.login("accounts.add_user")
         response = self.client.get(reverse("accounts:invite_user"))
@@ -628,6 +655,10 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     def test_create_service_account_permission_denied(self):
         self.login("accounts.view_user")
+        self.permission_denied("create_service_account")
+
+    def test_create_service_account_remote_session_permission_denied(self):
+        self.login("accounts.add_user", "accounts.add_apitoken", realm_user=True)
         self.permission_denied("create_service_account")
 
     def test_create_service_account_form(self):
@@ -762,15 +793,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotIn("email", form.fields)
         self.assertIn("groups", form.fields)
 
-    def test_remote_session_superuser_requester_cannot_see_username_and_email(self):
-        self._promote_ui_user_to_superuser()
-        self.login("accounts.change_user", realm_user=True)
-        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
-        form = response.context["form"]
-        self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
-        self.assertNotIn("username", form.fields)
-        self.assertNotIn("email", form.fields)
-
     def test_user_update_own_username_and_email_get(self):
         self.login("accounts.change_user")
         response = self.client.get(reverse("accounts:update_user", args=(self.ui_user.id,)))
@@ -778,12 +800,9 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertIn("username", form.fields)
         self.assertIn("email", form.fields)
 
-    def test_user_update_own_username_and_email_remote_session_get(self):
+    def test_user_update_own_remote_session_permission_denied(self):
         self.login("accounts.change_user", realm_user=True)
-        response = self.client.get(reverse("accounts:update_user", args=(self.ui_user.id,)))
-        form = response.context["form"]
-        self.assertNotIn("username", form.fields)
-        self.assertNotIn("email", form.fields)
+        self.permission_denied("update_user", self.ui_user.id)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_non_superuser_requester_cannot_change_username_and_email(self, post_event):
@@ -828,15 +847,10 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         form = response.context["form"]
         self.assertNotIn("is_superuser", form.fields)
 
-    def test_remote_session_superuser_requester_cannot_see_is_superuser(self):
-        # Even a local superuser, if logged in through a realm (remote
-        # session), cannot grant superuser status.
+    def test_user_update_remote_session_superuser_permission_denied(self):
         self._promote_ui_user_to_superuser()
-        self.login("accounts.change_user", realm_user=True)
-        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
-        form = response.context["form"]
-        self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
-        self.assertNotIn("is_superuser", form.fields)
+        self.login(realm_user=True)
+        self.permission_denied("update_user", self.user.id)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_non_superuser_requester_cannot_grant_superuser(self, post_event):
@@ -859,28 +873,23 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertFalse(event.payload["object"]["new_value"]["is_superuser"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_remote_session_superuser_requester_cannot_grant_superuser(self, post_event):
-        # smuggling is_superuser=True through a POST from a remote session must be ignored
-        self._promote_ui_user_to_superuser()
+    def test_user_update_remote_session_post_permission_denied(self, post_event):
         self.login("accounts.change_user", "accounts.view_user", realm_user=True)
-        # realm-based login itself posts a LoginEvent; drop it so the audit
-        # event is the only call we assert on.
+        # the realm login posts a login event
         post_event.reset_mock()
-        self.assertFalse(self.user.is_superuser)
+        email = "{}@zentral.io".format(get_random_string(12))
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            self.client.post(
+            response = self.client.post(
                 reverse("accounts:update_user", args=(self.user.id,)),
                 {"username": self.user.username,
-                 "email": self.user.email,
-                 "items_per_page": 10,
-                 "is_superuser": "on"},
-                follow=True,
+                 "email": email,
+                 "items_per_page": 10},
             )
+        self.assertEqual(response.status_code, 403)
         self.user.refresh_from_db()
-        self.assertFalse(self.user.is_superuser)
-        self.assertEqual(len(callbacks), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertFalse(event.payload["object"]["new_value"]["is_superuser"])
+        self.assertNotEqual(self.user.email, email)
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_local_superuser_requester_can_grant_superuser(self, post_event):
@@ -1229,9 +1238,21 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
     def test_user_delete_login_redirect(self):
         self.login_redirect("delete_user", self.user.id)
 
+    def test_user_delete_login_redirect_same_answer_for_each_id(self):
+        # without a login, an unknown id and a superuser get the answer of a user
+        for pk in (self.user.id, self.superuser.id, 0):
+            self.login_redirect("delete_user", pk)
+            self.login_redirect("delete_user", pk, data={"yolo": "fomo"})
+
     def test_user_delete_permission_denied(self):
         self.login("accounts.add_user")
         self.permission_denied("delete_user", self.user.id)
+
+    def test_user_delete_remote_session_permission_denied(self):
+        self.login("accounts.delete_user", "accounts.view_user", realm_user=True)
+        response = self.client.post(reverse("accounts:delete_user", args=(self.user.id,)))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
 
     def test_user_delete_form(self):
         self.login("accounts.delete_user", "accounts.view_user")
@@ -1251,11 +1272,15 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_superuser_delete_redirect(self, post_event):
+        # nobody deletes a superuser, a superuser included
+        self._promote_ui_user_to_superuser()
         self.login("accounts.delete_user", "accounts.view_user")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(reverse("accounts:delete_user", args=(self.superuser.id,)))
-        self.assertRedirects(response, reverse("accounts:users"))
-        self.assertEqual(len(callbacks), 0)
+        for method in ("get", "post"):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = getattr(self.client, method)(reverse("accounts:delete_user", args=(self.superuser.id,)))
+            self.assertRedirects(response, reverse("accounts:users"))
+            self.assertEqual(len(callbacks), 0)
+        self.assertTrue(User.objects.filter(pk=self.superuser.pk).exists())
         self.assertEqual(len(post_event.call_args_list), 0)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

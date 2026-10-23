@@ -149,6 +149,21 @@ class RequestUserFormMixin:
         return kwargs
 
 
+def has_local_login(request):
+    return not request.user.is_remote and not request.realm_authentication_session.is_remote
+
+
+class LocalUserRequiredMixin(AccessMixin):
+    """Verify that the current user is not a remote user and has authenticated locally."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        if not has_local_login(request):
+            raise PermissionDenied("Log in without using a realm to access this view.")
+        return super().dispatch(request, *args, **kwargs)
+
+
 class LocalSuperuserRequiredMixin(AccessMixin):
     """Require an authenticated superuser logged in with a local (non-realm)
     session. Used for capabilities that effectively grant root — like editing
@@ -160,7 +175,7 @@ class LocalSuperuserRequiredMixin(AccessMixin):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        if not request.user.is_superuser or request.realm_authentication_session.is_remote:
+        if not request.user.is_superuser or not has_local_login(request):
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 

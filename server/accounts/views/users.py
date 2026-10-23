@@ -18,7 +18,8 @@ from accounts.models import Policy, User
 from pbac.entities import Principal
 from realms.models import get_matching_realm_users
 from zentral.core.events.base import AuditEvent
-from zentral.utils.views import CreateViewWithAudit, RequestUserFormMixin, UpdateViewWithAudit
+from zentral.utils.views import (CreateViewWithAudit, LocalUserRequiredMixin, RequestUserFormMixin,
+                                 UpdateViewWithAudit)
 
 logger = logging.getLogger("zentral.accounts.views.users")
 
@@ -41,7 +42,7 @@ class UsersView(PermissionRequiredMixin, TemplateView):
         return ctx
 
 
-class InviteUserView(PermissionRequiredMixin, CreateViewWithAudit):
+class InviteUserView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = 'accounts.add_user'
     template_name = "accounts/user_form.html"
     form_class = InviteUserForm
@@ -53,7 +54,8 @@ class InviteUserView(PermissionRequiredMixin, CreateViewWithAudit):
         return ctx
 
 
-class CreateServiceAccountView(PermissionRequiredMixin, RequestUserFormMixin, CreateViewWithAudit):
+class CreateServiceAccountView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
+                               CreateViewWithAudit):
     permission_required = ('accounts.add_user',)
     template_name = "accounts/user_form.html"
     form_class = ServiceAccountForm
@@ -110,7 +112,7 @@ class UserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateUserView(PermissionRequiredMixin, RequestUserFormMixin, UpdateViewWithAudit):
+class UpdateUserView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, UpdateViewWithAudit):
     permission_required = "accounts.change_user"
     model = User
     # to avoid context collisions
@@ -121,12 +123,6 @@ class UpdateUserView(PermissionRequiredMixin, RequestUserFormMixin, UpdateViewWi
             return ServiceAccountForm
         else:
             return UpdateUserForm
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        if not self.object.is_service_account:
-            kwargs["request_session_is_remote"] = self.request.realm_authentication_session.is_remote
-        return kwargs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -145,15 +141,20 @@ class UpdateUserView(PermissionRequiredMixin, RequestUserFormMixin, UpdateViewWi
         return response
 
 
-class DeleteUserView(PermissionRequiredMixin, TemplateView):
+class DeleteUserView(LocalUserRequiredMixin, PermissionRequiredMixin, TemplateView):
     permission_required = "accounts.delete_user"
     template_name = "accounts/delete_user.html"
 
-    def dispatch(self, request, *args, **kwargs):
-        self.user = get_object_or_404(User, pk=kwargs["pk"])
-        if not self.user.deletable():
+    # not in dispatch: the user is loaded after the login and permission checks of the mixins,
+    # so that a request without them cannot tell an unknown id from a superuser
+    def load_user(self):
+        self.user = get_object_or_404(User, pk=self.kwargs["pk"])
+        return self.user.deletable()
+
+    def get(self, request, *args, **kwargs):
+        if not self.load_user():
             return redirect("accounts:users")
-        return super().dispatch(request, *args, **kwargs)
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -162,6 +163,8 @@ class DeleteUserView(PermissionRequiredMixin, TemplateView):
         return ctx
 
     def post(self, request, *args, **kwargs):
+        if not self.load_user():
+            return redirect("accounts:users")
         if self.user.is_service_account:
             msg = "Service account {} deleted".format(self.user)
         else:

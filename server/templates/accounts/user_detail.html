@@ -12,11 +12,11 @@
     <div class="d-flex align-items-center mb-1">
         <h3 class="m-0">{{ object.get_type_display|title }} {{ object }}</h3>
         <div class="ms-auto">
-            {% if perms.accounts.change_user and object.editable %}
+            {% if perms.accounts.change_user and object.editable and not request.realm_authentication_session.is_remote %}
                 {% url 'accounts:update_user' object.pk as url %}
                 {% button 'UPDATE' url "Edit User" %}
             {% endif %}
-            {% if perms.accounts.delete_user and object.deletable %}
+            {% if perms.accounts.delete_user and object.deletable and not request.realm_authentication_session.is_remote %}
                 {% url 'accounts:delete_user' object.pk as url %}
                 {% button 'DELETE' url "Delete User" %}
             {% endif %}
