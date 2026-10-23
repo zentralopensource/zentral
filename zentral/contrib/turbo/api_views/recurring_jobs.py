@@ -1,6 +1,6 @@
 from ..models import RecurringJob
 from ..pbac import CreateRecurringJobRequest, DeleteRecurringJobRequest, UpdateRecurringJobRequest
-from ..serializers import RecurringJobSerializer
+from ..serializers import RecurringJobSerializer, RecurringJobUpdateSerializer
 from .base import BaseJobScopeDetail, BaseJobScopeList
 
 
@@ -13,6 +13,6 @@ class RecurringJobList(BaseJobScopeList):
 
 class RecurringJobDetail(BaseJobScopeDetail):
     queryset = RecurringJob.objects.select_related("job", "configuration").all()
-    serializer_class = RecurringJobSerializer
+    serializer_class = RecurringJobUpdateSerializer
     update_pbac_request_class = UpdateRecurringJobRequest
     delete_pbac_request_class = DeleteRecurringJobRequest

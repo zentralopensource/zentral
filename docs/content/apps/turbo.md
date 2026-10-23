@@ -1807,7 +1807,7 @@ curl \
 * PBAC action: `Turbo::Action::"updateRecurringJob"`
 * `<uuid:pk>`: the primary key of the recurring job
 
-`configuration` and `job` cannot be changed – send their current values. The interval and the scope can be updated.
+`configuration` and `job` cannot be changed – send their current values. The interval and the scope can be updated. Send every attribute, with `null` or `[]` for an empty one: an attribute that is not in the body is a `400`.
 
 Example:
 
@@ -1997,7 +1997,7 @@ curl \
 * PBAC action: `Turbo::Action::"updateOneTimeJob"`
 * `<uuid:pk>`: the primary key of the one-time job
 
-`configuration` and `job` cannot be changed – send their current values. The delivery window and the scope can be updated.
+`configuration` and `job` cannot be changed – send their current values. The delivery window and the scope can be updated. Send every attribute, with `null` or `[]` for an empty one: an attribute that is not in the body is a `400`.
 
 Example:
 

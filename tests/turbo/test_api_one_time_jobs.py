@@ -5,8 +5,8 @@ from django.urls import reverse
 from accounts.models import Policy
 from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.models import OneTimeJob
-from .utils import (TurboAPITestCase, forbid_job_kind_policy, force_command,
-                    force_configuration, force_one_time_job, force_script, turbo_policy)
+from .utils import (TurboAPITestCase, forbid_job_kind_policy, force_command, force_configuration,
+                    force_one_time_job, force_script, one_time_job_update_data, turbo_policy)
 
 
 class TurboOneTimeJobAPITestCase(TurboAPITestCase):
@@ -114,19 +114,30 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         one_time_job = force_one_time_job()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(one_time_job.configuration.pk),
-                             "job": str(one_time_job.job.pk), "not_before": "2026-08-01T09:00:00Z"})
+                            one_time_job_update_data(one_time_job, not_before="2026-08-01T09:00:00Z"))
         self.assertEqual(response.status_code, 200)
         one_time_job.refresh_from_db()
         self.assertIsNotNone(one_time_job.not_before)
+
+    def test_update_one_time_job_without_an_attribute(self):
+        # The role cannot see the schedule. A field that the body leaves out would keep its stored
+        # value, and the response would give it back.
+        one_time_job = force_one_time_job(serial_numbers=["ABC123"])
+        self.set_policy(turbo_policy(self.group))
+        response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
+                            {"configuration": str(one_time_job.configuration.pk),
+                             "job": str(one_time_job.job.pk)})
+        self.assertEqual(response.json(), {field: ["This field is required."]
+                                           for field in ("not_before", "not_after", "tags", "excluded_tags",
+                                                         "serial_numbers", "excluded_serial_numbers")})
+        self.assertEqual(response.status_code, 400)
 
     def test_update_one_time_job_configuration_immutable(self):
         one_time_job = force_one_time_job()
         other_configuration = force_configuration()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(other_configuration.pk),
-                             "job": str(one_time_job.job.pk)})
+                            one_time_job_update_data(one_time_job, configuration=str(other_configuration.pk)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"configuration": ["This field cannot be changed"]})
 
@@ -135,8 +146,7 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         other_script = force_script()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(one_time_job.configuration.pk),
-                             "job": str(other_script.job.pk)})
+                            one_time_job_update_data(one_time_job, job=str(other_script.job.pk)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"job": ["This field cannot be changed"]})
 
@@ -200,8 +210,7 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         self.set_policy(turbo_policy(self.group))
         self._forbid_kind("file_export")
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(one_time_job.configuration.pk),
-                             "job": str(command.job.pk), "not_after": "2027-01-01T09:00:00Z"})
+                            one_time_job_update_data(one_time_job, not_after="2027-01-01T09:00:00Z"))
         self.assertEqual(response.status_code, 403)
         one_time_job.refresh_from_db()
         self.assertIsNone(one_time_job.not_after)
@@ -213,8 +222,7 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         self._forbid_kind("file_export")
         with self.captureOnCommitCallbacks(execute=True):
             response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                                {"configuration": str(one_time_job.configuration.pk),
-                                 "job": str(command.job.pk), "not_after": "2027-01-01T09:00:00Z"})
+                                one_time_job_update_data(one_time_job, not_after="2027-01-01T09:00:00Z"))
         self.assertEqual(response.status_code, 200)
         one_time_job.refresh_from_db()
         self.assertIsNotNone(one_time_job.not_after)

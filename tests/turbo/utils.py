@@ -90,6 +90,20 @@ def force_one_time_job(configuration=None, job=None, not_before=None, not_after=
     return one_time_job
 
 
+# a PUT is a full update: the body is the state
+
+def recurring_job_update_data(recurring_job, **kwargs):
+    return {"configuration": str(recurring_job.configuration.pk), "job": str(recurring_job.job.pk),
+            "interval": None, "tags": [], "excluded_tags": [],
+            "serial_numbers": [], "excluded_serial_numbers": [], **kwargs}
+
+
+def one_time_job_update_data(one_time_job, **kwargs):
+    return {"configuration": str(one_time_job.configuration.pk), "job": str(one_time_job.job.pk),
+            "not_before": None, "not_after": None, "tags": [], "excluded_tags": [],
+            "serial_numbers": [], "excluded_serial_numbers": [], **kwargs}
+
+
 def force_enrollment(
     configuration=None,
     enrollment_secret=None,

@@ -231,6 +231,16 @@ A test walks the URL configuration and asserts that no endpoint answers a `PATCH
 restriction no longer depends on the base class a view inherits.
 
 
+#### 🧨 A PUT on a Turbo schedule carries every attribute
+
+`PUT /api/turbo/one_time_jobs/<pk>/` and `PUT /api/turbo/recurring_jobs/<pk>/` refuse a partial
+body now: an attribute that is not in the body is a 400. Before, it kept its stored value, and
+the checks that read two attributes (the tags and the excluded tags, the serial numbers and the
+excluded serial numbers, the window) answered on a value that the caller did not send. Send
+every attribute, with `null` or `[]` for an empty one. The Terraform provider already sends all
+of them.
+
+
 #### 🧨 Santa path regexes are anchored
 
 The path regexes of a Santa configuration are combined with the scoped path regexes now, and the combination is anchored at the start of the path. A configuration with no entry gets `^(?:(?:its pattern))`.

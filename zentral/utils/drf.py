@@ -104,8 +104,8 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
 
 class RetrieveUpdateAPIViewWithAudit(generics.RetrieveUpdateAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
-    # Zentral only does full updates — PATCH is a 405 everywhere, so the serializers' update()
-    # methods can rely on every declared field being present in validated_data
+    # Zentral only does full updates — PATCH is a 405 everywhere. A PUT can still leave out a field
+    # that is not required, and DRF then keeps its stored value: FullUpdateSerializerMixin requires it
     http_method_names = ["get", "head", "options", "put"]
 
     def get_audit_machine_serial_number(self):
@@ -162,3 +162,21 @@ class RetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateAPIViewWithAudit,
             self.on_commit_callback_extra(instance)
 
         transaction.on_commit(on_commit_callback)
+
+
+# serializers
+
+
+class FullUpdateSerializerMixin:
+    """Requires every field that a PUT writes.
+
+    DRF skips a field that is not required and is not in the body, so the object keeps its stored value.
+    A check that reads two fields would then answer on a value that the caller never sent.
+    """
+
+    def get_fields(self):
+        fields = super().get_fields()
+        for field in fields.values():
+            if not field.read_only:
+                field.required = True
+        return fields

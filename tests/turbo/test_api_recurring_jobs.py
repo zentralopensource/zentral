@@ -7,7 +7,7 @@ from accounts.models import Policy
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.turbo.models import RecurringJob
 from .utils import (TurboAPITestCase, forbid_job_kind_policy, force_command, force_configuration,
-                    force_mscp_check, force_recurring_job, force_script, turbo_policy)
+                    force_mscp_check, force_recurring_job, force_script, recurring_job_update_data, turbo_policy)
 
 
 class TurboRecurringJobAPITestCase(TurboAPITestCase):
@@ -142,11 +142,23 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         recurring_job = force_recurring_job(interval=3600)
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
-                            {"configuration": str(recurring_job.configuration.pk),
-                             "job": str(recurring_job.job.pk), "interval": 7200})
+                            recurring_job_update_data(recurring_job, interval=7200))
         self.assertEqual(response.status_code, 200)
         recurring_job.refresh_from_db()
         self.assertEqual(recurring_job.interval, 7200)
+
+    def test_update_recurring_job_without_an_attribute(self):
+        # The role cannot see the schedule. A field that the body leaves out would keep its stored
+        # value, and the response would give it back.
+        recurring_job = force_recurring_job(interval=3600, serial_numbers=["ABC123"])
+        self.set_policy(turbo_policy(self.group))
+        response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
+                            {"configuration": str(recurring_job.configuration.pk),
+                             "job": str(recurring_job.job.pk)})
+        self.assertEqual(response.json(), {field: ["This field is required."]
+                                           for field in ("interval", "tags", "excluded_tags",
+                                                         "serial_numbers", "excluded_serial_numbers")})
+        self.assertEqual(response.status_code, 400)
 
     def test_update_recurring_job_configuration_immutable(self):
         # re-pointing a schedule to another configuration would retarget that config's whole fleet
@@ -154,8 +166,8 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         other_configuration = force_configuration()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
-                            {"configuration": str(other_configuration.pk),
-                             "job": str(recurring_job.job.pk), "interval": 7200})
+                            recurring_job_update_data(recurring_job, configuration=str(other_configuration.pk),
+                                                      interval=7200))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"configuration": ["This field cannot be changed"]})
         recurring_job.refresh_from_db()
@@ -167,8 +179,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         other_script = force_script()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
-                            {"configuration": str(recurring_job.configuration.pk),
-                             "job": str(other_script.job.pk), "interval": 7200})
+                            recurring_job_update_data(recurring_job, job=str(other_script.job.pk), interval=7200))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"job": ["This field cannot be changed"]})
         recurring_job.refresh_from_db()
@@ -228,8 +239,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         self.set_policy(turbo_policy(self.group))
         self._forbid_kind("script")
         response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
-                            {"configuration": str(recurring_job.configuration.pk),
-                             "job": str(recurring_job.job.pk), "interval": 7200})
+                            recurring_job_update_data(recurring_job, interval=7200))
         self.assertEqual(response.status_code, 403)
         recurring_job.refresh_from_db()
         self.assertEqual(recurring_job.interval, 3600)

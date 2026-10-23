@@ -4,6 +4,7 @@ from rest_framework import serializers
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.utils.drf import FullUpdateSerializerMixin
 
 from .command_backends import get_command_backend_class
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
@@ -222,18 +223,16 @@ class FileExportSerializer(CommandKindSerializer):
 
 
 class JobScopeSerializerMixin:
+    # The checks read the body only, never the stored schedule: a create has nothing stored, and a PUT
+    # carries every field (FullUpdateSerializerMixin).
+
     def _scope_conflicts(self, data):
-        def current(field, many):
-            if field in data:
-                return set(data[field])
-            if self.instance is not None:
-                value = getattr(self.instance, field)
-                return set(value.all() if many else value)
-            return set()
+        def current(field):
+            return set(data.get(field, ()))
         errors = {}
-        if current("tags", True) & current("excluded_tags", True):
+        if current("tags") & current("excluded_tags"):
             errors["excluded_tags"] = "Tags and excluded tags must be disjoint"
-        if current("serial_numbers", False) & current("excluded_serial_numbers", False):
+        if current("serial_numbers") & current("excluded_serial_numbers"):
             errors["excluded_serial_numbers"] = "Serial numbers and excluded serial numbers must be disjoint"
         return errors
 
@@ -242,7 +241,7 @@ class JobScopeSerializerMixin:
         # what a schedule delivers, and where, is fixed at creation (the UI pins both): re-pointing it
         # would retarget another configuration's whole fleet, or strand its per-machine ledger rows
         for field in ("configuration", "job"):
-            if self.instance is not None and field in data and data[field] != getattr(self.instance, field):
+            if self.instance is not None and data[field] != getattr(self.instance, field):
                 raise serializers.ValidationError({field: "This field cannot be changed"})
         errors = self._scope_conflicts(data)
         if errors:
@@ -265,8 +264,8 @@ class RecurringJobSerializer(JobScopeSerializerMixin, serializers.ModelSerialize
         data = super().validate(data)
         # A kind for the one-time mode only cannot use a recurring schedule. The console removes
         # it from the choices. The API must give the error.
-        job = data.get("job") or getattr(self.instance, "job", None)
-        if job is not None and ScheduleMode.RECURRING not in Job.allowed_schedule_modes(job.kind):
+        job = data["job"]
+        if ScheduleMode.RECURRING not in Job.allowed_schedule_modes(job.kind):
             raise serializers.ValidationError(
                 {"job": f"A {job.get_kind_display().lower()} job cannot be scheduled to run repeatedly"})
         return data
@@ -284,11 +283,19 @@ class OneTimeJobSerializer(JobScopeSerializerMixin, serializers.ModelSerializer)
 
     def validate(self, data):
         data = super().validate(data)
-        not_before = data["not_before"] if "not_before" in data else getattr(self.instance, "not_before", None)
-        not_after = data["not_after"] if "not_after" in data else getattr(self.instance, "not_after", None)
+        not_before = data.get("not_before")
+        not_after = data.get("not_after")
         if not_before and not_after and not_before > not_after:
             raise serializers.ValidationError({"not_after": "not_after must be on or after not_before"})
         return data
+
+
+class RecurringJobUpdateSerializer(FullUpdateSerializerMixin, RecurringJobSerializer):
+    pass
+
+
+class OneTimeJobUpdateSerializer(FullUpdateSerializerMixin, OneTimeJobSerializer):
+    pass
 
 
 class ArtifactSerializer(serializers.ModelSerializer):

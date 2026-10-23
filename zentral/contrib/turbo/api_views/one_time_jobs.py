@@ -1,6 +1,6 @@
 from ..models import OneTimeJob
 from ..pbac import CreateOneTimeJobRequest, DeleteOneTimeJobRequest, UpdateOneTimeJobRequest
-from ..serializers import OneTimeJobSerializer
+from ..serializers import OneTimeJobSerializer, OneTimeJobUpdateSerializer
 from .base import BaseJobScopeDetail, BaseJobScopeList
 
 
@@ -13,6 +13,6 @@ class OneTimeJobList(BaseJobScopeList):
 
 class OneTimeJobDetail(BaseJobScopeDetail):
     queryset = OneTimeJob.objects.select_related("job", "configuration").all()
-    serializer_class = OneTimeJobSerializer
+    serializer_class = OneTimeJobUpdateSerializer
     update_pbac_request_class = UpdateOneTimeJobRequest
     delete_pbac_request_class = DeleteOneTimeJobRequest
