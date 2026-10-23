@@ -164,6 +164,28 @@ class RetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateAPIViewWithAudit,
         transaction.on_commit(on_commit_callback)
 
 
+class PBACRetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateDestroyAPIViewWithAudit):
+    # one typed decision for each method, on the stored object: the update action for a PUT, the delete
+    # action for a DELETE, and the view action for the other methods
+    permission_classes = [PBACPermission]
+    view_pbac_request_class = None
+    update_pbac_request_class = None
+    delete_pbac_request_class = None
+
+    def get_object(self):
+        # read once: the permission resolves it to build the request, the handler uses it
+        if not hasattr(self, "_object"):
+            self._object = super().get_object()
+        return self._object
+
+    def get_pbac_request(self, request):
+        request_class = {
+            "PUT": self.update_pbac_request_class,
+            "DELETE": self.delete_pbac_request_class,
+        }.get(request.method, self.view_pbac_request_class)
+        return request_class(request.user, self.get_object())
+
+
 # serializers
 
 

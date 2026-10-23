@@ -1730,7 +1730,7 @@ Response:
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"createRecurringJob"`
 
-`job` is the `job_id` of a script or an mSCP check. A job can be scheduled at most once per configuration.
+`job` is the `job_id` of a script or an mSCP check. A job can be scheduled at most once per configuration. A caller who cannot create a recurring job in the configuration gets a `403` before the validation of the body.
 
 Example:
 
@@ -1929,7 +1929,7 @@ Response:
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"createOneTimeJob"`
 
-`job` is the `job_id` of a script or an mSCP check. `not_before` and `not_after` are both optional; when both are set, `not_after` must be on or after `not_before`.
+`job` is the `job_id` of a script or an mSCP check. `not_before` and `not_after` are both optional; when both are set, `not_after` must be on or after `not_before`. A caller who cannot create a one-time job in the configuration gets a `403` before the validation of the body.
 
 Example:
 

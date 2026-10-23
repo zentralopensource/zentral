@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -95,6 +96,41 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         response = self.post(reverse("turbo_api:recurring_jobs"),
                              {"configuration": str(configuration.pk), "job": str(script.job.pk),
                               "tags": [tag.pk], "excluded_tags": [tag.pk]})
+        self.assertEqual(response.status_code, 400)
+
+    # a create is refused before the validation, whose errors tell what exists
+
+    def test_create_recurring_job_duplicate_refused_before_the_validation(self):
+        # the 400 would tell that this configuration already runs this job
+        recurring_job = force_recurring_job()
+        self.set_policy("permit ("
+                        f' principal in Role::"{self.group.pk}",'
+                        ' action == Turbo::Action::"createRecurringJob",'
+                        f' resource == Turbo::Configuration::"{force_configuration().pk}"'
+                        ");\n")
+        response = self.post(reverse("turbo_api:recurring_jobs"),
+                             {"configuration": str(recurring_job.configuration.pk),
+                              "job": str(recurring_job.job.pk)})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_recurring_job_unknown_job_refused_before_the_validation(self):
+        response = self.post(reverse("turbo_api:recurring_jobs"),
+                             {"configuration": str(force_configuration().pk), "job": str(uuid.uuid4())})
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_recurring_job_unknown_configuration_left_to_the_validation(self):
+        # its id is a UUID, so the 400 tells nothing that the caller does not already have. Only the
+        # configuration is read: the 400 tells nothing about the job either.
+        job = str(force_script().job.pk)
+        for data in ({"configuration": str(uuid.uuid4()), "job": job},
+                     {"configuration": str(uuid.uuid4()), "job": str(uuid.uuid4())},
+                     {"configuration": "not a UUID", "job": job},
+                     {"configuration": None, "job": job},
+                     {"job": job}):
+            response = self.post(reverse("turbo_api:recurring_jobs"), data)
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(list(response.json()), ["configuration"])
+        response = self.post(reverse("turbo_api:recurring_jobs"), [{"job": job}])
         self.assertEqual(response.status_code, 400)
 
     def test_list_recurring_jobs_without_a_policy(self):
@@ -228,6 +264,26 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
         self.assertEqual(response.json(), {"job": ["This field cannot be changed"]})
         recurring_job.refresh_from_db()
         self.assertEqual(recurring_job.interval, 3600)
+
+    def test_update_recurring_job_without_a_policy(self):
+        # Decided before the validation: its errors would tell a caller that may not update the
+        # schedule if a configuration is the one of the schedule.
+        recurring_job = force_recurring_job(interval=3600)
+        other_configuration = force_configuration()
+        self.set_permissions()
+        response = self.put(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)),
+                            recurring_job_update_data(recurring_job, configuration=str(other_configuration.pk),
+                                                      interval=7200))
+        self.assertEqual(response.status_code, 403)
+        recurring_job.refresh_from_db()
+        self.assertEqual(recurring_job.interval, 3600)
+
+    def test_delete_recurring_job_without_a_policy(self):
+        recurring_job = force_recurring_job()
+        self.set_permissions()
+        response = self.delete(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(RecurringJob.objects.filter(pk=recurring_job.pk).exists())
 
     def test_delete_recurring_job(self):
         recurring_job = force_recurring_job()
