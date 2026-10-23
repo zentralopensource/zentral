@@ -8,7 +8,7 @@ from django.contrib.auth import get_permission_codename
 from django.db.models.base import ModelBase
 
 from .cedar import (authorize_request, authorize_request_preview, authorize_requests,
-                    render_schema_json)
+                    render_schema_json, undecided_policies)
 from .entities import Action, ActionGroup, Namespace, Principal, Request, Resource
 from .schema import build_schema_ir
 from .types import (
@@ -367,6 +367,11 @@ class Engine:
             else:
                 batch.append(request)
         authorize_requests(batch)
+
+    def undecided_policies(self, request: Request):
+        if not request.is_pending:
+            return request.is_authorized
+        return undecided_policies(request)
 
 
 engine = Engine()
