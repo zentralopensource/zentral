@@ -1,19 +1,19 @@
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from ..forms import RecurringJobForm, RecurringJobSearchForm
 from ..models import RecurringJob
-from ..pbac import CreateRecurringJobRequest, DeleteRecurringJobRequest, UpdateRecurringJobRequest
+from ..pbac import (CreateRecurringJobRequest, DeleteRecurringJobRequest, UpdateRecurringJobRequest,
+                    ViewRecurringJobRequest)
 from .base import (BaseCreateConfigurationScopedJobView, BaseDeleteConfigurationScopedJobView,
-                   BaseUpdateConfigurationScopedJobView, SearchFormListView)
+                   BaseUpdateConfigurationScopedJobView, ScheduleListView)
 
 
-class RecurringJobListView(SearchFormListView):
-    permission_required = "turbo.view_recurringjob"
+class RecurringJobListView(ScheduleListView):
+    view_pbac_request_class = ViewRecurringJobRequest
     model = RecurringJob
     search_form_class = RecurringJobSearchForm
 
 
-class CreateRecurringJobView(PermissionRequiredMixin, BaseCreateConfigurationScopedJobView):
-    permission_required = "turbo.view_recurringjob"
+class CreateRecurringJobView(LoginRequiredMixin, BaseCreateConfigurationScopedJobView):
     create_pbac_request_class = CreateRecurringJobRequest
     model = RecurringJob
     form_class = RecurringJobForm

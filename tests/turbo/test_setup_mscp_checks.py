@@ -4,7 +4,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.turbo.models import Job, MSCPCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
-from .utils import TurboSetupTestCase, force_configuration, force_mscp_check, force_recurring_job
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSetupTestCase, force_configuration,
+                    force_mscp_check, force_recurring_job, turbo_policy)
 
 
 class TurboSetupMSCPChecksTestCase(TurboSetupTestCase):
@@ -85,7 +86,8 @@ class TurboSetupMSCPChecksTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         mscp_check = force_mscp_check()
         force_recurring_job(configuration=configuration, job=mscp_check.job)
-        self.login("turbo.view_mscpcheck", "turbo.view_recurringjob", "turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_mscpcheck",
+                                            actions=(VIEW_RECURRING_JOB_ACTION, VIEW_ONE_TIME_JOB_ACTION)))
         response = self.client.get(mscp_check.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Recurring job")

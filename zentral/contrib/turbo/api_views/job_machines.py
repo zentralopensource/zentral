@@ -39,8 +39,8 @@ class BaseScheduleMachineList(generics.ListAPIView):
                                               .order_by("serial_number"))
 
     def filter_queryset(self, queryset):
-        # A machine that the caller cannot see is not in the list, so a caller without a policy gets an empty
-        # list, not a 403.
+        # A machine that the caller cannot see is not in the list, so a caller without a policy gets an empty list,
+        # not a 403.
         return visible_rows(self.request.user, self.pbac_request_class, super().filter_queryset(queryset))
 
 

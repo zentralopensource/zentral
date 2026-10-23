@@ -82,8 +82,9 @@ modules_menu_cfg = {
         ('mscp_checks', 'mSCP checks', False, ('turbo.view_mscpcheck',)),
         ('sysdiagnoses', 'Sysdiagnoses', False, ('turbo.view_sysdiagnose',)),
         ('file_exports', 'File exports', False, ('turbo.view_fileexport',)),
-        ('recurring_jobs', 'Recurring jobs', False, ('turbo.view_recurringjob',)),
-        ('one_time_jobs', 'One-time jobs', False, ('turbo.view_onetimejob',)),
+        # each schedule has its own decision, so the lists only need the module
+        ('recurring_jobs', 'Recurring jobs', False, ('turbo',)),
+        ('one_time_jobs', 'One-time jobs', False, ('turbo',)),
     ),
     'weight': 35,
 }

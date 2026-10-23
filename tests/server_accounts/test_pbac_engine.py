@@ -521,8 +521,6 @@ class PBACEngineTestCase(TestCase):
                 "turbo.view_enrollment",
                 "turbo.view_fileexport",
                 "turbo.view_mscpcheck",
-                "turbo.view_onetimejob",
-                "turbo.view_recurringjob",
                 "turbo.view_script",
                 "turbo.view_sysdiagnose",
                 "wsone.add_instance",
