@@ -9,13 +9,13 @@ from django.utils.crypto import get_random_string
 from accounts.models import Policy, User
 from pbac.cedar import policies_cache
 from pbac.entities import Action, Namespace
-from pbac.scoping import _MAX_DEPTH, SQLMap, compile_policies, scope_queryset, values_q
+from pbac.scoping import _MAX_DEPTH, SQLMap, compile_policies, scope_queryset, values_q, visible_rows
 from pbac.types import USER, AppliesTo, AttrSpec, ResourceType, SetOf
 from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE
 from zentral.contrib.turbo.models import OneTimeJobMachine
 from zentral.contrib.turbo.pbac import (CONFIGURATION_RESOURCE_TYPE, JOB_RESOURCE_TYPE,
                                         ONE_TIME_JOB_MACHINE_RESOURCE_TYPE, ONE_TIME_JOB_RESOURCE_TYPE,
-                                        view_one_time_job_machine_action)
+                                        ViewOneTimeJobMachineRequest, view_one_time_job_machine_action)
 from tests.turbo.utils import force_configuration, force_mscp_check, force_one_time_job, force_script
 
 
@@ -31,6 +31,16 @@ SQL_MAP = SQLMap(
     attributes={"job": "one_time_job__job", "job.kind": "one_time_job__job__kind"},
 )
 JOB_UUID = "0f6c2c1a-3c1e-4bb0-9a43-9e5b4d0e8f21"
+
+
+class ViewRowWithContextRequest(ViewOneTimeJobMachineRequest):
+    pbac_action = Action("viewRowWithContext", Namespace("Tests"),
+                         applies_to=AppliesTo(principals=(USER,), resources=(ONE_TIME_JOB_MACHINE_RESOURCE_TYPE,),
+                                              context={"kind": AttrSpec(str)}))
+
+    def __init__(self, user_obj, job_machine, machine):
+        super().__init__(user_obj, job_machine, machine)
+        self.context = {"kind": job_machine.one_time_job.job.kind}
 
 
 # the JSON policy format of Cedar
@@ -598,3 +608,18 @@ class ScopeQuerysetTestCase(TestCase):
                 expr = binary("||", resource_in("Turbo::OneTimeJobMachine", "0"), expr)
         q = compile_policies({"policy0": permit(expr)}, SQL_MAP)
         self.assertEqual(list(self.queryset.filter(q)), [self.rows[0]])
+
+    # visible_rows
+
+    def test_visible_rows_with_an_action_with_a_context(self):
+        # no list without a row: one decision for each row, with the context of the row
+        Policy.objects.filter(name="Tests").delete()
+        Policy.objects.create(name="Tests", source=format_policies(
+            f'permit (principal in Role::"{self.group.pk}", action == {ViewRowWithContextRequest.pbac_action}, '
+            'resource) unless { context.kind == "script" };'
+        ))
+        policies_cache.clear()
+        self.assertEqual(list(visible_rows(self.user, ViewRowWithContextRequest, self.queryset)), [self.rows[1]])
+        superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.com",
+                                             is_superuser=True)
+        self.assertEqual(set(visible_rows(superuser, ViewRowWithContextRequest, self.queryset)), set(self.rows))

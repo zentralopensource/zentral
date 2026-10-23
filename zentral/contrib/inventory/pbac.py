@@ -1,5 +1,7 @@
+from django.db.models import Exists, OuterRef, Q
 from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace, Principal, Request, Resource
+from pbac.scoping import id_value, values_q
 from pbac.types import (
     LEGACY_PERM_APPLIES_TO,
     SERVICE_ACCOUNT,
@@ -10,7 +12,7 @@ from pbac.types import (
     ResourceType,
 )
 
-from .models import MetaBusinessUnit, MetaMachine, Tag
+from .models import MachineSnapshot, MetaBusinessUnit, MetaMachine, Tag
 
 # namespace
 
@@ -122,6 +124,35 @@ def get_meta_machine_resource(machine: MetaMachine) -> Resource:
         )
         setattr(machine, entity_cache_name, resource)
     return getattr(machine, entity_cache_name)
+
+
+def get_machine_sql_entities(serial_number_lookup):
+    """The machine and its meta business units, for the pbac.scoping.SQLMap of a row with a serial number.
+
+    They must give the same answers as get_meta_machine_resource.
+    """
+
+    def machine(entity_ids):
+        serial_numbers = []
+        for entity_id in entity_ids:
+            try:
+                serial_number = MetaMachine.from_urlsafe_serial_number(entity_id).serial_number
+            except ValueError:
+                continue
+            if MetaMachine.make_urlsafe_serial_number(serial_number) == entity_id:
+                serial_numbers.append(serial_number)
+        return values_q(serial_number_lookup, serial_numbers)
+
+    def meta_business_unit(entity_ids):
+        pks = (id_value(MetaBusinessUnit._meta.pk, entity_id) for entity_id in entity_ids)
+        mbu_q = values_q("business_unit__meta_business_unit", (pk for pk in pks if pk is not None))
+        if mbu_q is False:
+            return False
+        # the set of MetaMachine.meta_business_units: the current snapshots, API enrollment included
+        return Q(Exists(MachineSnapshot.objects.current().filter(mbu_q,
+                                                                 serial_number=OuterRef(serial_number_lookup))))
+
+    return {MACHINE_RESOURCE_TYPE: machine, MBU_RESOURCE_TYPE: meta_business_unit}
 
 
 # requests

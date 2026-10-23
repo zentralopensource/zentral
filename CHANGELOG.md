@@ -181,6 +181,8 @@ In a policy, the resource of the two actions is the upload. It is a member of it
 
 The new `/api/turbo/one_time_jobs/<pk>/machines/` and `/api/turbo/recurring_jobs/<pk>/machines/` endpoints give the state of a job on each machine, as the machine page does. For a one-time job, each machine has the artifacts that the job collected, with a download URL. Two new PBAC actions, `Turbo::Action::"viewOneTimeJobMachine"` and `Turbo::Action::"viewRecurringJobMachine"`, control the machines, and the two artifact actions control the artifacts.
 
+The two endpoints filter the machines in the database when the policies use only `in`, `==`, `is`, `!=`, `&&`, `||` and `!` on the resource, its job and the kind of its job. A call then reads only the machines of its page. With another expression, for example `has` or `like`, Zentral decides for each machine of the job, and a call takes more time.
+
 If you manage your own deployment, add rules to the bucket. Zentral does not delete the artifacts: an `Expiration` rule on `turbo/uploads/` deletes them, for example after 14 days. An `AbortIncompleteMultipartUpload` rule on the bucket deletes the parts of an upload that the agent never reports. On a bucket with versioning, an `ExpiredObjectDeleteMarker` rule deletes the delete markers.
 
 

@@ -6,12 +6,13 @@ from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
+from pbac.scoping import visible_rows
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.drf import MaxLimitOffsetPagination, PBACPermission
 from ..models import (JobUpload, OneTimeJob, OneTimeJobMachine, RecurringJob, RecurringJobMachine,
                       resolve_upload_schedules)
 from ..pbac import (DownloadJobUploadRequest, ViewOneTimeJobMachineRequest, ViewRecurringJobMachineRequest,
-                    authorize_job_machine_rows, authorize_job_upload_rows)
+                    authorize_job_upload_rows)
 from ..serializers import OneTimeJobMachineSerializer, RecurringJobMachineSerializer
 from ..uploads import build_download_response
 
@@ -38,11 +39,9 @@ class BaseScheduleMachineList(generics.ListAPIView):
                                               .order_by("serial_number"))
 
     def filter_queryset(self, queryset):
-        # One decision for each machine, before the page: a page cut first drops machines that the caller
-        # can see. A machine that the caller cannot see is not in the list, so a caller without a policy
-        # gets an empty list, not a 403.
-        return authorize_job_machine_rows(self.request.user, self.pbac_request_class,
-                                          super().filter_queryset(queryset))
+        # A machine that the caller cannot see is not in the list, so a caller without a policy gets an empty
+        # list, not a 403.
+        return visible_rows(self.request.user, self.pbac_request_class, super().filter_queryset(queryset))
 
 
 class OneTimeJobMachineList(BaseScheduleMachineList):
