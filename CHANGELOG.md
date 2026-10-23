@@ -206,6 +206,11 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 `create_zentral_user --superuser` refuses `--with-api-token` and exits with the code 8, and refuses `--role` and exits with the code 9. A superuser skips PBAC: its API token is a credential that no policy bounds, and a role grants it nothing it cannot already do. Use a service account for an automation, with the roles that its work needs — `--service-account --role "Editor"` makes the account, adds the role and prints its first API token. A superuser that already has an API token keeps it: delete it from the web console or with the API.
 
 
+#### 🧨 Privilege escalation hardening — realm groups
+
+In the console, a user who is not a superuser can create or change a role mapping only for a role that they have. A realm group mapping, and a user added to a realm group, follow the same rule: the realm group and its parents must map only roles that the user has. The user and service account forms already applied this rule.
+
+
 #### 🧨 The block and the unblock of an MDM device have their own PBAC actions
 
 `MDM::Action::"updateEnrolledDevice"` does not let a role block or unblock a device anymore. The block and unblock buttons, and the `block/` and `unblock/` API endpoints, use `MDM::Action::"blockEnrolledDevice"` and `MDM::Action::"unblockEnrolledDevice"` now. A policy that grants the `AdminActions` or the `UserActions` group needs no change. A role with the `UserActions` group can block and unblock a device too. A policy that names `updateEnrolledDevice` must also name the two new actions, to keep these operations. The policies that Zentral made from the legacy roles name `updateEnrolledDevice` for each role that had the `mdm.change_enrolleddevice` permission: examine them before the upgrade.

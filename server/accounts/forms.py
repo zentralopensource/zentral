@@ -101,6 +101,15 @@ class ServiceAccountNameValidator(validators.RegexValidator):
     flags = 0
 
 
+def role_grant_error(request_user, roles):
+    """The error for the roles that request_user does not have, and so cannot give. None for a superuser."""
+    if request_user.is_superuser:
+        return None
+    disallowed = sorted(r.name for r in roles if r.pk not in request_user.group_pk_set)
+    if disallowed:
+        return "You cannot grant role membership you don't have: " + ", ".join(disallowed) + "."
+
+
 class RoleMembershipGrantMixin:
     """Form mixin for ModelForms that expose a ``groups`` field on the User
     model. Captures the requesting user from form kwargs, relabels the field
@@ -116,7 +125,8 @@ class RoleMembershipGrantMixin:
     GROUPS_WIDGET_SIZE = 10
 
     def __init__(self, *args, **kwargs):
-        self.request_user = kwargs.pop("request_user", None)
+        # required: a form without the requester would give any role
+        self.request_user = kwargs.pop("request_user")
         super().__init__(*args, **kwargs)
         self._disable_ungrantable_group_options()
         self._prepare_groups_field()
@@ -134,10 +144,9 @@ class RoleMembershipGrantMixin:
         rendered widget. The set we *can't* disable is groups the target user
         already belongs to — those must stay selectable so the actor can
         leave them on (or remove them; removals are unrestricted). Superusers
-        and the no-requester case are exempt — the full choice set renders
-        normally.
+        are exempt — the full choice set renders normally.
         """
-        if self.request_user is None or self.request_user.is_superuser:
+        if self.request_user.is_superuser:
             return
         if field_name not in self.fields:
             return
@@ -147,8 +156,7 @@ class RoleMembershipGrantMixin:
             set(self.instance.groups.values_list("pk", flat=True))
             if self.instance.pk else set()
         )
-        actor_pks = set(self.request_user.groups.values_list("pk", flat=True))
-        disabled = all_pks - current_pks - actor_pks
+        disabled = all_pks - current_pks - self.request_user.group_pk_set
         if not disabled:
             return
         field.widget = SelectMultipleWithDisabledOptions(disabled_values=disabled)
@@ -161,14 +169,11 @@ class RoleMembershipGrantMixin:
         A non-superuser editing another user's group set may only add groups
         they themselves belong to — the in-code expression of escalation
         prevention: you can't grant memberships you don't have. Superusers
-        (and forms instantiated without a request_user, e.g. management
-        commands or tests) are exempt.
+        are exempt.
 
         Removals are intentionally unrestricted — escalation risk is granting,
         not revoking.
         """
-        if self.request_user is None or self.request_user.is_superuser:
-            return
         new_groups = self.cleaned_data.get(field_name)
         if not new_groups:
             return
@@ -176,16 +181,9 @@ class RoleMembershipGrantMixin:
             set(self.instance.groups.values_list("pk", flat=True))
             if self.instance.pk else set()
         )
-        actor_pks = set(self.request_user.groups.values_list("pk", flat=True))
-        disallowed = sorted(
-            g.name for g in new_groups
-            if g.pk not in current_pks and g.pk not in actor_pks
-        )
-        if disallowed:
-            self.add_error(
-                field_name,
-                "You cannot grant role membership you don't have: " + ", ".join(disallowed) + ".",
-            )
+        error = role_grant_error(self.request_user, [g for g in new_groups if g.pk not in current_pks])
+        if error:
+            self.add_error(field_name, error)
 
 
 class ServiceAccountForm(RoleMembershipGrantMixin, forms.ModelForm):
@@ -248,11 +246,7 @@ class UpdateUserForm(RoleMembershipGrantMixin, forms.ModelForm):
         # Only superusers logged in with a local (non-realm) session can grant
         # or revoke superuser status. A local user can still log in through a
         # realm, so the relevant signal is the session, not user.is_remote.
-        return (
-            self.request_user is not None
-            and self.request_user.is_superuser
-            and not self.request_session_is_remote
-        )
+        return self.request_user.is_superuser and not self.request_session_is_remote
 
     def clean(self):
         cleaned = super().clean()

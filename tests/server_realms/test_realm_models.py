@@ -1,6 +1,7 @@
 from django.test import TestCase
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
-from .utils import force_realm, force_realm_group, force_realm_user
+from realms.models import RoleMapping
+from .utils import force_group, force_realm, force_realm_group, force_realm_user
 
 
 class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
@@ -71,6 +72,22 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
              'scim_external_id': None,
              'updated_at': realm_group.updated_at.isoformat()}
         )
+
+    def test_realm_group_mapped_roles(self):
+        parent_realm_group = force_realm_group()
+        realm_group = force_realm_group(realm=parent_realm_group.realm, parent=parent_realm_group)
+        # a loop in the parents
+        parent_realm_group.parent = realm_group
+        parent_realm_group.save()
+        parent_role = force_group()
+        role = force_group()
+        RoleMapping.objects.create(realm_group=parent_realm_group, group=parent_role)
+        RoleMapping.objects.create(realm_group=realm_group, group=parent_role)
+        RoleMapping.objects.create(realm_group=realm_group, group=role)
+        mapped_roles = list(realm_group.mapped_roles())
+        self.assertEqual(len(mapped_roles), 2)
+        self.assertEqual(set(mapped_roles), {parent_role, role})
+        self.assertEqual(list(force_realm_group().mapped_roles()), [])
 
     def test_realm_user_serialize_for_event_keys_only(self):
         realm, realm_user = force_realm_user()

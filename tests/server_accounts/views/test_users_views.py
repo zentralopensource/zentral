@@ -5,6 +5,7 @@ import time
 from unittest.mock import patch
 
 import pyotp
+from accounts.forms import UpdateUserForm
 from accounts.models import User, UserTOTP, UserWebAuthn
 from accounts.password_validation import PasswordNotAlreadyUsedValidator
 from django.contrib.auth.models import Group
@@ -1025,6 +1026,12 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         form._disable_ungrantable_group_options(field_name="not_a_field")
         # If we got here without raising, the guards did their job.
         self.assertNotIn("not_a_field", form.fields)
+
+    def test_role_grant_forms_need_the_request_user(self):
+        from accounts.forms import ServiceAccountForm
+        for form_class in (ServiceAccountForm, UpdateUserForm):
+            with self.assertRaises(KeyError):
+                form_class(instance=self.user)
 
     def _role_option_tag(self, html, pk):
         """Return the rendered ``<option>`` tag for a role/group pk in the

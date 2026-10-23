@@ -18,7 +18,7 @@ from accounts.models import Policy, User
 from pbac.entities import Principal
 from realms.models import get_matching_realm_users
 from zentral.core.events.base import AuditEvent
-from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
+from zentral.utils.views import CreateViewWithAudit, RequestUserFormMixin, UpdateViewWithAudit
 
 logger = logging.getLogger("zentral.accounts.views.users")
 
@@ -53,7 +53,7 @@ class InviteUserView(PermissionRequiredMixin, CreateViewWithAudit):
         return ctx
 
 
-class CreateServiceAccountView(PermissionRequiredMixin, CreateViewWithAudit):
+class CreateServiceAccountView(PermissionRequiredMixin, RequestUserFormMixin, CreateViewWithAudit):
     permission_required = ('accounts.add_user',)
     template_name = "accounts/user_form.html"
     form_class = ServiceAccountForm
@@ -62,11 +62,6 @@ class CreateServiceAccountView(PermissionRequiredMixin, CreateViewWithAudit):
         ctx = super().get_context_data(**kwargs)
         ctx["title"] = "Create service account"
         return ctx
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["request_user"] = self.request.user
-        return kwargs
 
 
 class UserView(PermissionRequiredMixin, DetailView):
@@ -115,7 +110,7 @@ class UserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateUserView(PermissionRequiredMixin, UpdateViewWithAudit):
+class UpdateUserView(PermissionRequiredMixin, RequestUserFormMixin, UpdateViewWithAudit):
     permission_required = "accounts.change_user"
     model = User
     # to avoid context collisions
@@ -129,7 +124,6 @@ class UpdateUserView(PermissionRequiredMixin, UpdateViewWithAudit):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs["request_user"] = self.request.user
         if not self.object.is_service_account:
             kwargs["request_session_is_remote"] = self.request.realm_authentication_session.is_remote
         return kwargs

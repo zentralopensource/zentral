@@ -553,6 +553,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
             "realms.view_realmgroupmapping"
         )
         realm_group = force_realm_group()
+        RoleMapping.objects.create(realm_group=realm_group, group=self.ui_group)
         separator = get_random_string(13)
         response = self.client.post(
             reverse("realms:create_realm_group_mapping"),
@@ -574,6 +575,42 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
         self.assertContains(response, realm_group.realm.get_absolute_url())
         self.assertContains(response, realm_group.get_absolute_url())
+
+    def test_create_realm_group_mapping_post_role_not_held(self):
+        parent_role_mapping = force_role_mapping()
+        realm_group = force_realm_group(realm=parent_role_mapping.realm_group.realm,
+                                        parent=parent_role_mapping.realm_group)
+        RoleMapping.objects.create(realm_group=realm_group, group=self.ui_group)
+        self.login("realms.add_realmgroupmapping")
+        response = self.client.post(
+            reverse("realms:create_realm_group_mapping"),
+            {"claim": "Yolo",
+             "value": "Fomo",
+             "realm_group": realm_group.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_form.html")
+        self.assertFormError(
+            response.context["form"], "realm_group",
+            f"You cannot grant role membership you don't have: {parent_role_mapping.group.name}."
+        )
+        self.assertFalse(RealmGroupMapping.objects.exists())
+
+    def test_create_realm_group_mapping_post_superuser_role_not_held(self):
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+        role_mapping = force_role_mapping()
+        self.login()
+        response = self.client.post(
+            reverse("realms:create_realm_group_mapping"),
+            {"claim": "Yolo",
+             "value": "Fomo",
+             "realm_group": role_mapping.realm_group.pk},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_list.html")
+        self.assertEqual(RealmGroupMapping.objects.get().realm_group, role_mapping.realm_group)
 
     # update realm group mapping
 
@@ -626,6 +663,25 @@ class RealmViewsTestCase(TestCase, LoginCase):
         rgm.refresh_from_db()
         self.assertEqual(rgm.realm_group, realm_group)
         self.assertEqual(rgm.separator, separator)
+
+    def test_update_realm_group_mapping_post_role_not_held(self):
+        rgm = force_realm_group_mapping()
+        role_mapping = force_role_mapping()
+        self.login("realms.change_realmgroupmapping")
+        response = self.client.post(
+            reverse("realms:update_realm_group_mapping", args=(rgm.pk,)),
+            {"claim": rgm.claim,
+             "value": rgm.value,
+             "realm_group": role_mapping.realm_group.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmgroupmapping_form.html")
+        self.assertFormError(
+            response.context["form"], "realm_group",
+            f"You cannot grant role membership you don't have: {role_mapping.group.name}."
+        )
+        rgm.refresh_from_db()
+        self.assertNotEqual(rgm.realm_group, role_mapping.realm_group)
 
     # delete realm group mapping
 
@@ -739,7 +795,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "realms/rolemapping_form.html")
 
     def test_create_role_mapping_no_view_perm(self):
-        group = force_group()
+        group = self.ui_group
         realm_group = force_realm_group()
         self.login("realms.add_rolemapping", "realms.view_rolemapping")
         response = self.client.post(
@@ -762,6 +818,41 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, realm_group.realm.get_absolute_url())
         self.assertNotContains(response, realm_group.get_absolute_url())
         self.assertNotContains(response, reverse("accounts:group", args=(group.pk,)))
+
+    def test_create_role_mapping_role_not_held(self):
+        group = force_group()
+        realm_group = force_realm_group()
+        self.login("realms.add_rolemapping")
+        response = self.client.post(
+            reverse("realms:create_role_mapping"),
+            {"group": group.pk,
+             "realm_group": realm_group.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/rolemapping_form.html")
+        self.assertFormError(
+            response.context["form"], "group",
+            f"You cannot grant role membership you don't have: {group.name}."
+        )
+        self.assertFalse(RoleMapping.objects.exists())
+
+    def test_create_role_mapping_superuser_role_not_held(self):
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+        group = force_group()
+        realm_group = force_realm_group()
+        self.login()
+        response = self.client.post(
+            reverse("realms:create_role_mapping"),
+            {"group": group.pk,
+             "realm_group": realm_group.pk},
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/rolemapping_list.html")
+        role_mapping = RoleMapping.objects.get()
+        self.assertEqual(role_mapping.group, group)
+        self.assertEqual(role_mapping.realm_group, realm_group)
 
     # update role mapping
 
@@ -796,7 +887,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
             "realms.change_rolemapping",
             "realms.view_rolemapping"
         )
-        group = force_group()
+        group = self.ui_group
         realm_group = force_realm_group()
         response = self.client.post(
             reverse("realms:update_role_mapping", args=(rm.pk,)),
@@ -812,6 +903,24 @@ class RealmViewsTestCase(TestCase, LoginCase):
         rm.refresh_from_db()
         self.assertEqual(rm.group, group)
         self.assertEqual(rm.realm_group, realm_group)
+
+    def test_update_role_mapping_post_role_not_held(self):
+        rm = force_role_mapping()
+        realm_group = force_realm_group()
+        self.login("realms.change_rolemapping")
+        response = self.client.post(
+            reverse("realms:update_role_mapping", args=(rm.pk,)),
+            {"group": rm.group.pk,
+             "realm_group": realm_group.pk},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/rolemapping_form.html")
+        self.assertFormError(
+            response.context["form"], "group",
+            f"You cannot grant role membership you don't have: {rm.group.name}."
+        )
+        rm.refresh_from_db()
+        self.assertNotEqual(rm.realm_group, realm_group)
 
     # delete role mapping
 
@@ -1261,6 +1370,22 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("realms:remove_user_from_group", args=(user.pk, scim_group.pk)))
         self.assertContains(response, reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
         send_robust.assert_called_once()
+
+    @patch("realms.views.realm_group_members_updated.send_robust")
+    def test_add_realm_user_to_group_post_role_not_held(self, send_robust):
+        role_mapping = force_role_mapping()
+        _, user = force_realm_user(realm=role_mapping.realm_group.realm)
+        self.login("realms.change_realmgroup")
+        response = self.client.post(reverse("realms:add_user_to_group", args=(user.pk,)),
+                                    {"realm_group": str(role_mapping.realm_group.pk)})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "realms/realmuser_add_to_group.html")
+        self.assertFormError(
+            response.context["form"], "realm_group",
+            f"You cannot grant role membership you don't have: {role_mapping.group.name}."
+        )
+        self.assertFalse(user.groups.exists())
+        send_robust.assert_not_called()
 
     # remove realm user from group
 

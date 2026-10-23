@@ -105,6 +105,35 @@ class Realm(models.Model):
         return d
 
 
+def iter_realm_group_chain(*, realm_group_pk=None, realm_user_pk=None):
+    """The realm group, or the realm groups of the realm user, as "direct", and their parents, as "indirect".
+
+    UNION drops the rows that are already there, so a loop in the parents ends.
+    """
+    if realm_user_pk is not None:
+        where = "rg.uuid IN (SELECT rugm.group_id FROM realms_realmusergroupmembership rugm WHERE rugm.user_id = %s)"
+        param = realm_user_pk
+    else:
+        where = "rg.uuid = %s"
+        param = realm_group_pk
+    sql = (
+        "WITH RECURSIVE groups(value, display, type, parent_id) AS ("
+        "  SELECT rg.uuid, rg.display_name, 'direct' type, rg.parent_id"
+        "  FROM realms_realmgroup rg"
+        f"  WHERE {where}"
+        "  UNION"
+        "  SELECT prg.uuid, prg.display_name, 'indirect' type, prg.parent_id"
+        "  FROM groups"
+        "  JOIN realms_realmgroup prg ON (prg.uuid = groups.parent_id)"
+        ") SELECT value, display, type FROM groups"
+    )
+    cursor = connection.cursor()
+    cursor.execute(sql, [param])
+    columns = [col[0] for col in cursor.description]
+    for result in cursor.fetchall():
+        yield dict(zip(columns, result))
+
+
 class RealmGroupManager(models.Manager):
     def for_deletion(self):
         return self.filter(scim_managed=False)
@@ -158,6 +187,11 @@ class RealmGroup(models.Model):
 
     def can_be_updated(self):
         return RealmGroup.objects.for_update().filter(pk=self.pk).exists()
+
+    def mapped_roles(self):
+        # a member of a group is also a member of its parents
+        realm_group_pks = [g["value"] for g in iter_realm_group_chain(realm_group_pk=self.pk)]
+        return Group.objects.filter(rolemapping__realm_group__in=realm_group_pks).distinct()
 
 
 class RealmUser(models.Model):
@@ -237,23 +271,7 @@ class RealmUser(models.Model):
     # groups
 
     def iter_raw_groups(self):
-        sql = (
-            "WITH RECURSIVE groups(value, display, type, parent_id) AS ("
-            "  SELECT rg.uuid, rg.display_name, 'direct' type, rg.parent_id"
-            "  FROM realms_realmgroup rg"
-            "  JOIN realms_realmusergroupmembership rugm ON (rugm.group_id = rg.uuid)"
-            "  WHERE rugm.user_id = %s"
-            "  UNION"
-            "  SELECT prg.uuid, prg.display_name, 'indirect' type, prg.parent_id"
-            "  FROM groups"
-            "  JOIN realms_realmgroup prg ON (prg.uuid = groups.parent_id)"
-            ") SELECT value, display, type FROM groups"
-        )
-        cursor = connection.cursor()
-        cursor.execute(sql, [self.pk])
-        columns = [col[0] for col in cursor.description]
-        for result in cursor.fetchall():
-            yield dict(zip(columns, result))
+        return iter_realm_group_chain(realm_user_pk=self.pk)
 
     def groups_with_types(self):
         raw_groups = {sg["value"]: sg["type"] for sg in self.iter_raw_groups()}

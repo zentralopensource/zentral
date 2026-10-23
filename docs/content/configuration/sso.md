@@ -101,6 +101,8 @@ If you can view the Realm Users, these pages show their SCIM status:
 5. Select the target Realm Group from the drop-down  
 6. Click Save
 
+In the console, if you are not a superuser, the Realm Group and its parents must map only Roles that you have. The same rule applies when you add a Realm User to a Realm Group in the console.
+
 ## Roles
 
 Roles are named labels that group users and service accounts. A Role on its own grants no access — you authorize it by writing a [PBAC policy](pbac.md) that references it.
@@ -125,6 +127,8 @@ The Role is now an empty label. To grant it access, see [Writing a policy](pbac.
 3. Click the \+ icon to create a new Role mapping.
 4. Select the Realm Group and select the Role.
 5. Click Save.
+
+If you are not a superuser, you can map only a Role that you have.
 
 ## SSO Setup Guides
 

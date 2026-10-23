@@ -142,6 +142,13 @@ def server_error(request, *args, **kwargs):
     return django_server_error(request)
 
 
+class RequestUserFormMixin:
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request_user"] = self.request.user
+        return kwargs
+
+
 class LocalSuperuserRequiredMixin(AccessMixin):
     """Require an authenticated superuser logged in with a local (non-realm)
     session. Used for capabilities that effectively grant root — like editing

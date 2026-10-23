@@ -10,9 +10,10 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import api_base_url
-from zentral.utils.views import UserPaginationListView
+from zentral.utils.views import RequestUserFormMixin, UserPaginationListView
 from .backends.registry import backend_classes
-from .forms import AddRealmUserToGroupForm, RealmGroupSearchForm, RealmUserSearchForm
+from .forms import (AddRealmUserToGroupForm, RealmGroupMappingForm, RealmGroupSearchForm, RealmUserSearchForm,
+                    RoleMappingForm)
 from .models import (Realm, RealmAuthenticationSession,
                      RealmGroup, RealmGroupMapping, RoleMapping,
                      RealmUser, RealmUserGroupMembership,
@@ -273,7 +274,7 @@ class RealmUserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class AddRealmUserToGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, FormView):
+class AddRealmUserToGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, FormView):
     permission_required = "realms.change_realmgroup"
     template_name = "realms/realmuser_add_to_group.html"
     form_class = AddRealmUserToGroupForm
@@ -342,17 +343,17 @@ class RealmGroupMappingListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
+class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, CreateView):
     permission_required = "realms.add_realmgroupmapping"
     model = RealmGroupMapping
-    fields = "__all__"
+    form_class = RealmGroupMappingForm
     success_url = reverse_lazy("realms:realm_group_mappings")
 
 
-class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
+class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, UpdateView):
     permission_required = "realms.change_realmgroupmapping"
     model = RealmGroupMapping
-    fields = "__all__"
+    form_class = RealmGroupMappingForm
     success_url = reverse_lazy("realms:realm_group_mappings")
 
 
@@ -378,16 +379,16 @@ class RoleMappingListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
+class CreateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, CreateView):
     permission_required = "realms.add_rolemapping"
     model = RoleMapping
-    fields = ("realm_group", "group",)
+    form_class = RoleMappingForm
 
 
-class UpdateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
+class UpdateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, UpdateView):
     permission_required = "realms.change_rolemapping"
     model = RoleMapping
-    fields = ("realm_group", "group",)
+    form_class = RoleMappingForm
 
 
 class DeleteRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
