@@ -243,6 +243,18 @@ every attribute, with `null` or `[]` for an empty one. The Terraform provider al
 of them.
 
 
+#### 🧨 The mass tagging API decides on each machine
+
+`POST /api/inventory/machines/tags/` decides `Inventory::Action::"createMachineTag"` and
+`Inventory::Action::"deleteMachineTag"` for each machine and each tag, as the machine page does.
+Before, it made one decision on `System::"any"`, so a `forbid` on some machines, for example with
+`resource in Inventory::MetaBusinessUnit::"…"`, did not apply to it, and a `permit` on some machines
+did not open it. Zentral makes all the decisions before it changes a machine: one refused machine
+or tag refuses the request with a 403, and no machine changes. The legacy permissions
+`inventory.add_machinetag` and `inventory.delete_machinetag` do not map to a PBAC action anymore. A
+policy that grants the two actions, or the `AdminActions` or `UserActions` group, needs no change.
+
+
 #### 🧨 Santa path regexes are anchored
 
 The path regexes of a Santa configuration are combined with the scoped path regexes now, and the combination is anchored at the start of the path. A configuration with no entry gets `^(?:(?:its pattern))`.

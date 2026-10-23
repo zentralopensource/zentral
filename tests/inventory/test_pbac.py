@@ -7,8 +7,8 @@ from accounts.models import Policy, User
 from pbac.engine import engine
 from pbac.entities import Principal, Request
 from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
-from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, MBU_RESOURCE_TYPE, get_machine_sql_entities,
-                                            get_meta_machine_resource)
+from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, MBU_RESOURCE_TYPE, create_machine_tag_action,
+                                            get_machine_sql_entities, get_meta_machine_resource)
 
 
 class InventoryPBACMachineResourceTestCase(TestCase):
@@ -32,7 +32,7 @@ class InventoryPBACMachineResourceTestCase(TestCase):
     def _request(self, serial_number):
         return Request(
             Principal.from_user(self.user),
-            engine.legacy_perm_actions["inventory.add_machinetag"],
+            create_machine_tag_action,
             self._resource(serial_number),
         )
 

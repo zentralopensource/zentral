@@ -145,7 +145,7 @@ class HasLegacyPermTestCase(TestCase):
             name="Tests",
             source=format_policies(
                 f'permit (principal in Role::"{cls.group.pk}", '
-                f'action == Inventory::Action::"createMachineTag", resource);'
+                f'action == MDM::Action::"viewAdminPassword", resource);'
             ),
         )
 
@@ -157,11 +157,11 @@ class HasLegacyPermTestCase(TestCase):
                 delattr(self.user, attr)
 
     def test_has_legacy_perm_grants_when_policy_matches(self):
-        self.assertTrue(engine.has_legacy_perm(self.user, "inventory.add_machinetag"))
+        self.assertTrue(engine.has_legacy_perm(self.user, "mdm.view_admin_password"))
 
     def test_has_legacy_perm_denies_when_no_policy_matches(self):
-        # The seed policy only covers add_machinetag; delete_machinetag must deny.
-        self.assertFalse(engine.has_legacy_perm(self.user, "inventory.delete_machinetag"))
+        # The seed policy only covers view_admin_password; view_device_lock_pin must deny.
+        self.assertFalse(engine.has_legacy_perm(self.user, "mdm.view_device_lock_pin"))
 
     def test_has_legacy_perm_unknown_perm_denies(self):
         self.assertFalse(engine.has_legacy_perm(self.user, "foo.bar_baz"))
@@ -201,7 +201,7 @@ class SerializeRequestsEntitiesTestCase(SerializeMixin, TestCase):
         principal = Principal.from_user(self.user)
         _, entities = self.serialize([
             Request(principal, engine.legacy_perm_actions[perm], engine.system_any_resource)
-            for perm in ("accounts.view_user", "inventory.add_machinetag")
+            for perm in ("accounts.view_user", "inventory.add_tag")
         ])
         # every namespace registers its own action groups, under the same ids
         self.assertIn(("Accounts::Action", "AdminActions"), entities)
@@ -440,7 +440,7 @@ class PBACCedarContextEntityTestCase(SerializeMixin, TestCase):
     def _request(self, context):
         return Request(
             Principal.from_user(User(username="u", pk=1)),
-            engine.legacy_perm_actions["inventory.add_machinetag"],
+            engine.get_action("createMachineTag", engine.get_namespace("Inventory")),
             engine.system_any_resource,
             context,
         )
@@ -494,7 +494,7 @@ class PBACCedarContextEntityTestCase(SerializeMixin, TestCase):
     def test_a_preview_sends_no_context(self):
         request = Request(
             Principal.from_user(User(username="u", pk=1)),
-            engine.legacy_perm_actions["inventory.add_machinetag"],
+            engine.get_action("createMachineTag", engine.get_namespace("Inventory")),
             engine.system_any_resource,
             unknown_context=True,
         )

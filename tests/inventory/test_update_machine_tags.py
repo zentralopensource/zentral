@@ -4,11 +4,12 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from accounts.models import APIToken, User
+from accounts.models import APIToken, Policy, User
+from pbac.engine import engine
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.events import MachineTagEvent
-from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, Tag, Taxonomy
+from zentral.contrib.inventory.models import MachineSnapshotCommit, MachineTag, MetaMachine, Tag, Taxonomy
 
 
 class InventoryAPITests(TestCase, LoginCase, RequestCase):
@@ -45,16 +46,26 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
     def post(self, data, include_token=True):
         return super().post(self.url, data, include_token)
 
-    def set_required_permission(self):
-        self.set_permissions("inventory.add_tag", "inventory.add_taxonomy",
-                             "inventory.add_machinetag", "inventory.delete_machinetag")
+    def set_required_permission(self, *policies, machine_tag_actions=True):
+        # the legacy perms create the tags and the taxonomies, the typed actions tag the machines
+        self.set_permissions("inventory.add_tag", "inventory.add_taxonomy")
+        sources = [Policy.objects.get(name="Tests").source]
+        if machine_tag_actions:
+            sources.append(
+                f'permit (principal in Role::"{self.group.pk}", '
+                'action in [Inventory::Action::"createMachineTag", Inventory::Action::"deleteMachineTag"], '
+                'resource);'
+            )
+        sources.extend(policies)
+        self.set_policy("\n".join(sources))
 
-    def _force_machine(self):
+    def _force_machine(self, business_unit=False):
         serial_number = get_random_string(12)
         unique_id = get_random_string(12)
         principal_name = get_random_string(12)
-        MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
-            "source": {'module': 'io.zentral.tests', 'name': 'zentral'},
+        source = {'module': 'io.zentral.tests', 'name': 'zentral'}
+        tree = {
+            "source": source,
             "serial_number": serial_number,
             "principal_user": {
                 "source": {"type": "LOGGED_IN_USER", "properties": {"method": "System Configuration"}},
@@ -62,7 +73,11 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
                 "principal_name": principal_name,
                 "display_name": get_random_string(12),
             },
-        })
+        }
+        if business_unit:
+            tree["business_unit"] = {"name": get_random_string(12), "reference": get_random_string(12),
+                                     "source": source}
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree(tree)
         return serial_number, unique_id, principal_name
 
     def _force_machine_tags(self, serial_number, number):
@@ -83,6 +98,75 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
     def test_post_permission_denied(self):
         response = self.post({}, include_token=True)
         self.assertEqual(response.status_code, 403)
+
+    def test_post_machine_tag_actions_required(self):
+        # the legacy perms of the tags and the taxonomies do not tag a machine
+        self.set_required_permission(machine_tag_actions=False)
+        serial_number, _, _ = self._force_machine()
+        tag_name = get_random_string(12)
+        with self.assertLogs("zentral.contrib.inventory.api_views", level="ERROR") as cm:
+            response = self.post({
+                "operations": [{"kind": "ADD", "names": [tag_name]}],
+                "serial_numbers": [serial_number],
+            })
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn('Inventory::Action::"createMachineTag"', cm.output[0])
+        self.assertEqual(MachineTag.objects.filter(serial_number=serial_number).count(), 0)
+
+    def test_post_forbid_on_a_meta_business_unit(self):
+        # One refused machine refuses the request, before the first write. A decision on System::"any"
+        # would not see the meta business unit of the machine.
+        serial_number0, _, _ = self._force_machine()
+        serial_number1, _, _ = self._force_machine(business_unit=True)
+        mbu, = MetaMachine(serial_number1).meta_business_units
+        self.set_required_permission(
+            'forbid (principal, action == Inventory::Action::"createMachineTag", resource) '
+            f'when {{ resource in Inventory::MetaBusinessUnit::"{mbu.pk}" }};'
+        )
+        tag_name = get_random_string(12)
+        with self.assertLogs("zentral.contrib.inventory.api_views", level="ERROR") as cm:
+            response = self.post({
+                "operations": [{"kind": "ADD", "names": [tag_name]}],
+                "serial_numbers": [serial_number0, serial_number1],
+            })
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn(serial_number1, cm.output[0])
+        self.assertEqual(MachineTag.objects.filter(tag__name=tag_name).count(), 0)
+
+    def test_post_forbid_the_removal_of_a_tag(self):
+        serial_number, _, _ = self._force_machine()
+        taxonomy_name, (tag_name_1, tag_name_2) = self._force_machine_tags(serial_number, 2)
+        self.set_required_permission(
+            'forbid (principal, action == Inventory::Action::"deleteMachineTag", resource) '
+            f'when {{ context has tagName && context.tagName == "{tag_name_2}" }};'
+        )
+        with self.assertLogs("zentral.contrib.inventory.api_views", level="ERROR"):
+            response = self.post({
+                "operations": [{"kind": "SET", "taxonomy": taxonomy_name, "names": [tag_name_1]}],
+                "serial_numbers": [serial_number],
+            })
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            set(MachineTag.objects.filter(serial_number=serial_number).values_list("tag__name", flat=True)),
+            {tag_name_1, tag_name_2}
+        )
+
+    def test_post_one_decision_for_a_machine_named_two_times(self):
+        self.set_required_permission()
+        serial_number, _, _ = self._force_machine()
+        tag_name = get_random_string(12)
+        with patch("zentral.contrib.inventory.api_views.engine.authorize_requests",
+                   wraps=engine.authorize_requests) as authorize_requests:
+            response = self.post({
+                "operations": [{"kind": "ADD", "names": [tag_name]}],
+                "serial_numbers": [serial_number, serial_number],
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"machines": {"found": 2}, "tags": {"added": 1, "removed": 0}})
+        pbac_requests, = authorize_requests.call_args.args
+        self.assertEqual(len(pbac_requests), 1)
 
     def test_post_empty_tags(self):
         self.set_required_permission()

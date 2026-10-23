@@ -5,7 +5,6 @@ from pbac.scoping import id_value, values_q
 from pbac.types import (
     LEGACY_PERM_APPLIES_TO,
     SERVICE_ACCOUNT,
-    SYSTEM,
     USER,
     AppliesTo,
     AttrSpec,
@@ -33,20 +32,14 @@ MACHINE_RESOURCE_TYPE = ResourceType("Machine", get_namespace(), parents=(MBU_RE
 
 # actions
 #
-# createMachineTag and deleteMachineTag are reachable via two paths:
-#   - PBACViewMixin -> Create/DeleteMachineTagRequest, with a Machine resource
-#     and the tag context built from BaseMachineTagRequest below.
-#   - the legacy-perm path (user.has_perm("inventory.{add,delete}_machinetag")),
-#     which constructs a Request(... resource=engine.system_any_resource ...)
-#     with an empty context.
-#
-# applies_to therefore lists both Machine and System as accepted resource
-# types, and every context attribute is marked optional so the empty-context
-# legacy requests remain valid.
+# createMachineTag and deleteMachineTag take the machine, with the tag in the context. They have no
+# legacy perm: a decision on System::"any" never matches a policy scoped to machines, so a forbid on a
+# meta business unit would not apply to it. The console and the mass tagging API make one request
+# for each machine and tag, with Create/DeleteMachineTagRequest.
 
 _MACHINE_TAG_APPLIES_TO = AppliesTo(
     principals=(USER, SERVICE_ACCOUNT),
-    resources=(MACHINE_RESOURCE_TYPE, SYSTEM),
+    resources=(MACHINE_RESOURCE_TYPE,),
     context={
         "tagName": AttrSpec(
             str, required=False,
@@ -75,7 +68,6 @@ create_machine_tag_action = engine.register_action(
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=_MACHINE_TAG_APPLIES_TO,
-    legacy_perm="inventory.add_machinetag",
     help_text="Add a tag to a machine.",
 )
 
@@ -85,7 +77,6 @@ delete_machine_tag_action = engine.register_action(
     get_namespace(),
     [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
     applies_to=_MACHINE_TAG_APPLIES_TO,
-    legacy_perm="inventory.delete_machinetag",
     help_text="Remove a tag from a machine.",
 )
 

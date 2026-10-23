@@ -98,7 +98,6 @@ class BuildSchemaIRTestCase(SimpleTestCase):
             "createMachineTag", ns,
             [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
             applies_to=applies_to,
-            legacy_perm="inventory.add_machinetag",
         )
         ir = build_schema_ir(self.engine)
         action_ir = ir.namespaces["Inventory"].actions["createMachineTag"]
@@ -243,7 +242,6 @@ class RenderSchemaJSONTestCase(SimpleTestCase):
                 resources=(machine,),
                 context={"tagName": AttrSpec(str, required=False)},
             ),
-            legacy_perm="inventory.add_machinetag",
         )
 
     def test_every_namespace_has_both_keys(self):
