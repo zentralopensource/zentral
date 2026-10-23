@@ -1,0 +1,131 @@
+#!/bin/bash
+# Run the Zentral tests in the OSS Scanner image. Start the services that the tests use first, if necessary.
+#
+#   zentral-tests                       all the tests
+#   zentral-tests tests.santa           some of the tests (the arguments go to `manage.py test`)
+#   zentral-tests --start-services      start the services only
+#   zentral-tests --stop-services       stop the services
+#   zentral-tests --build               create the test database, during `docker build`
+set -euo pipefail
+
+ES_PID_FILE=/opt/elasticsearch/elasticsearch.pid
+CLICKHOUSE_PID_FILE=/var/lib/clickhouse/clickhouse-server.pid
+
+wait_for() {
+    for _ in $(seq 180); do
+        if "$@" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    echo "ERROR: timeout: $*" >&2
+    return 1
+}
+
+add_service_names() {
+    # The tests use the names of the docker compose services. Elasticsearch does not start if the host name does
+    # not resolve, and with no network, docker does not add it.
+    if grep -q " rabbitmq" /etc/hosts; then
+        return
+    fi
+    { echo "127.0.0.1 $(hostname) db redis rabbitmq elastic opensearch clickhouse" >> /etc/hosts; } 2>/dev/null || {
+        echo "ERROR: cannot add the service names to /etc/hosts. The tests need them." >&2
+        exit 1
+    }
+}
+
+start_services() {
+    pg_isready -q || service postgresql start >/dev/null
+    su postgres -c "psql -q" <<'SQL'
+SELECT 'CREATE ROLE zentral LOGIN CREATEDB PASSWORD ''zentral'''
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'zentral')\gexec
+SQL
+    redis-cli ping >/dev/null 2>&1 || redis-server --daemonize yes --save "" --appendonly no >/dev/null
+    if ! rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+        rabbitmq-server -detached >/dev/null 2>&1
+        wait_for rabbitmq-diagnostics -q check_running
+    fi
+    if ! clickhouse-client -q "SELECT 1" >/dev/null 2>&1; then
+        runuser -u clickhouse -- clickhouse-server --daemon --pid-file="$CLICKHOUSE_PID_FILE" \
+            --config-file=/etc/clickhouse-server/config.xml
+        wait_for clickhouse-client -q "SELECT 1"
+    fi
+    clickhouse-client --user zentral_tests --password zentral_tests -q "CREATE DATABASE IF NOT EXISTS zentral_tests"
+    if ! curl -fs http://127.0.0.1:9200 >/dev/null; then
+        # the settings of docker-compose.yml
+        runuser -u elasticsearch -- env ES_JAVA_OPTS="-Xms512m -Xmx512m" \
+            /opt/elasticsearch/bin/elasticsearch -d -p "$ES_PID_FILE" \
+            -E discovery.type=single-node \
+            -E xpack.security.enabled=false \
+            -E cluster.routing.allocation.disk.watermark.low=200mb \
+            -E cluster.routing.allocation.disk.watermark.high=100mb \
+            -E cluster.routing.allocation.disk.watermark.flood_stage=50mb >/dev/null
+        wait_for curl -fs "http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=1s"
+    fi
+}
+
+stop_pid_file() {
+    if [ -f "$1" ]; then
+        local pid
+        pid=$(cat "$1")
+        kill "$pid" 2>/dev/null || true
+        for _ in $(seq 60); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+        done
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "WARNING: process $pid of $1 did not stop, kill it" >&2
+            kill -9 "$pid"
+        fi
+        rm -f "$1"
+    fi
+}
+
+stop_services() {
+    stop_pid_file "$ES_PID_FILE"
+    stop_pid_file "$CLICKHOUSE_PID_FILE"
+    rabbitmqctl -q stop >/dev/null 2>&1 || true
+    redis-cli shutdown nosave >/dev/null 2>&1 || true
+    service postgresql stop >/dev/null
+}
+
+set_tests_env() {
+    # the same environment as the tests in CI
+    local exports
+    exports=$(python -c '
+import runpy, shlex
+for key, value in runpy.run_path("/src/docker-entrypoint.py")["TESTS_EXTRA_ENV"].items():
+    print(f"export {key}={shlex.quote(value)}")
+')
+    eval "$exports"
+    export POSTGRES_HOST=127.0.0.1 POSTGRES_PASSWORD=zentral
+}
+
+cd /src
+case "${1:-}" in
+    --start-services)
+        add_service_names
+        start_services
+        exit 0
+        ;;
+    --stop-services)
+        stop_services
+        exit 0
+        ;;
+    --build)
+        # /etc/hosts is read-only during `docker build`, but the test database does not need the service names.
+        start_services
+        set_tests_env
+        python server/manage.py shell --no-imports -c "
+from django.test.utils import setup_databases
+setup_databases(verbosity=1, interactive=False, keepdb=True)
+"
+        stop_services
+        exit 0
+        ;;
+esac
+
+add_service_names
+start_services
+set_tests_env
+exec python server/manage.py test --keepdb --noinput "${@:-tests/}"

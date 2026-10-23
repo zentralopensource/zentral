@@ -1,0 +1,18 @@
+# Used instead of the root .dockerignore, which is for the production image.
+# Only the files that the build, the tests and the linters use go into the image.
+*
+!.oss-scanner
+!conf/start
+!docker-entrypoint.py
+!ee
+!package.json
+!package-lock.json
+!pyproject.toml
+!requirements*.txt
+!server
+!tests
+!tox.ini
+!webpack.config.js
+!zentral
+**/__pycache__
+**/*.pyc

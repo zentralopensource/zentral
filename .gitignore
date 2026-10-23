@@ -13,6 +13,7 @@ __pycache__
 !/.dockerignore
 !/.github
 !/.devcontainer
+!/.oss-scanner
 
 /venv/
 
