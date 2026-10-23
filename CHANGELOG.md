@@ -206,6 +206,11 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 `create_zentral_user --superuser` refuses `--with-api-token` and exits with the code 8, and refuses `--role` and exits with the code 9. A superuser skips PBAC: its API token is a credential that no policy bounds, and a role grants it nothing it cannot already do. Use a service account for an automation, with the roles that its work needs — `--service-account --role "Editor"` makes the account, adds the role and prints its first API token. A superuser that already has an API token keeps it: delete it from the web console or with the API.
 
 
+#### 🧨 Privilege escalation hardening — superusers
+
+Only a superuser can change a superuser. For a user who is not a superuser, the update and delete pages of a superuser answer 403, also with the `Accounts::Action::"updateUser"` and `Accounts::Action::"deleteUser"` actions, and Zentral logs the refusal. The user pages do not show the button. Only a superuser logged in without a realm can give or remove the superuser status, as before.
+
+
 #### 🧨 Privilege escalation hardening — realms
 
 Only a superuser logged in without a realm can create or change a realm. The `Realms::Action::"createRealm"` and `Realms::Action::"updateRealm"` PBAC actions do not give these pages anymore.

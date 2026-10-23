@@ -13,7 +13,7 @@
     <h3 class="mb-3">User{{ user_count|pluralize }} ({{ user_count }})</h3>
 
     <div class="ms-auto">
-        {% if perms.accounts.add_user and not request.realm_authentication_session.is_remote %}
+        {% if perms.accounts.add_user and local_login %}
         <a href="{% url 'accounts:invite_user' %}" class="btn btn-link" type="button"
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Send an email invitation">
             <span class="bi bi-envelope-plus" aria-hidden="true"></span>
@@ -28,6 +28,9 @@
         <th>Username</th>
         <th>Email</th>
         <th style="width:10%">Remote?</th>
+        {% if request.user.is_superuser %}
+        <th style="width:10%">Superuser?</th>
+        {% endif %}
         {% if perms.realms.view_realmuser %}
         <th>Realm users</th>
         {% endif %}
@@ -40,15 +43,13 @@
         {% for managed_user in users %}
         <tr class="data-row">
         <td>
-            {% if managed_user.is_superuser %}
-            <span class="glyphicon glyphicon-fire" aria-hidden="true"></span>
-            {% else %}
-            <span class="glyphicon glyphicon-user" aria-hidden="true"></span>
-            {% endif %}
             <a href="{% url 'accounts:user' managed_user.pk %}">{{ managed_user.username }}</a>
         </td>
         <td>{{ managed_user.email }}</td>
         <td>{% if managed_user.is_remote %}yes{% endif %}</td>
+        {% if request.user.is_superuser %}
+        <td>{% if managed_user.is_superuser %}yes{% endif %}</td>
+        {% endif %}
         {% if perms.realms.view_realmuser %}
         <td>
             {% for realm_user in managed_user.realm_users %}
@@ -63,13 +64,11 @@
         <td>{{ managed_user.apitoken_set.exists|yesno }}</td>
         {% endif %}
         <td class="text-end py-0">
-            {% if perms.accounts.change_user and managed_user.editable and not request.realm_authentication_session.is_remote %}
-                {% url 'accounts:update_user' managed_user.id as url %}
-                {% button 'UPDATE' url "Edit User" %}
+            {% if managed_user.update_url %}
+                {% button 'UPDATE' managed_user.update_url "Edit User" %}
             {% endif %}
-            {% if perms.accounts.delete_user and managed_user.deletable and not request.realm_authentication_session.is_remote %}
-                {% url 'accounts:delete_user' managed_user.id as url %}
-                {% button 'DELETE' url "Delete User" %}
+            {% if managed_user.delete_url %}
+                {% button 'DELETE' managed_user.delete_url "Delete User" %}
             {% endif %}
         </td>
         </tr>
@@ -82,7 +81,7 @@
     <h3 class="mb-3">Service account{{ service_account_count|pluralize }} ({{ service_account_count }})</h3>
 
     <div class="ms-auto">
-        {% if perms.accounts.add_user and perms.accounts.add_apitoken and not request.realm_authentication_session.is_remote %}
+        {% if perms.accounts.add_user and perms.accounts.add_apitoken and local_login %}
             {% url 'accounts:create_service_account' as url %}
             {% button 'CREATE' url "Create new Service Account" %}
         {% endif %}
@@ -109,13 +108,11 @@
         <td>{{ service_account.apitoken_set.exists|yesno }}</td>
         {% endif %}
         <td class="text-end py-0">
-            {% if perms.accounts.change_user and service_account.editable and not request.realm_authentication_session.is_remote %}
-                {% url 'accounts:update_user' service_account.id as url %}
-                {% button 'UPDATE' url "Edit Sevice Account" %}
+            {% if service_account.update_url %}
+                {% button 'UPDATE' service_account.update_url "Edit Sevice Account" %}
             {% endif %}
-            {% if perms.accounts.delete_user and service_account.deletable and not request.realm_authentication_session.is_remote %}
-                {% url 'accounts:delete_user' service_account.id as url %}
-                {% button 'DELETE' url "Delete Service Account" %}
+            {% if service_account.delete_url %}
+                {% button 'DELETE' service_account.delete_url "Delete Service Account" %}
             {% endif %}
         </td>
         </tr>

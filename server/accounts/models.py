@@ -93,9 +93,6 @@ class User(AbstractUser):
         return (not self.is_superuser or
                 User.objects.exclude(pk=self.pk).filter(is_superuser=True).count() > 0)
 
-    def editable(self):
-        return self.username_and_email_editable() or self.is_superuser_editable()
-
     def deletable(self):
         return not self.is_superuser
 

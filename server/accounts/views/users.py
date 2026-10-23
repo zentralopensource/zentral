@@ -2,10 +2,11 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, TemplateView
 
 from accounts.events import post_group_membership_updates
@@ -19,9 +20,37 @@ from pbac.entities import Principal
 from realms.models import get_matching_realm_users
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import (CreateViewWithAudit, LocalUserRequiredMixin, RequestUserFormMixin,
-                                 UpdateViewWithAudit)
+                                 UpdateViewWithAudit, has_local_login)
 
 logger = logging.getLogger("zentral.accounts.views.users")
+
+
+def is_protected_superuser(request, user):
+    return user.is_superuser and not request.user.is_superuser
+
+
+def get_user_to_write(request, pk):
+    user = get_object_or_404(User, pk=pk)
+    # only a superuser changes a superuser. A 403 tells nothing that the requester cannot read:
+    # a write action includes the read of its resource (PBAC rule 8)
+    if is_protected_superuser(request, user):
+        logger.error("Permission denied on superuser %s", user.pk, extra={"request": request})
+        raise PermissionDenied
+    return user
+
+
+def set_write_urls(request, users, local_login):
+    # no link to a page that would refuse the request
+    can_update = request.user.has_perm("accounts.change_user")
+    can_delete = request.user.has_perm("accounts.delete_user")
+    for user in users:
+        user.update_url = user.delete_url = None
+        if not local_login or is_protected_superuser(request, user):
+            continue
+        if can_update:
+            user.update_url = reverse("accounts:update_user", args=(user.pk,))
+        if can_delete and user.deletable():
+            user.delete_url = reverse("accounts:delete_user", args=(user.pk,))
 
 
 class UsersView(PermissionRequiredMixin, TemplateView):
@@ -35,10 +64,13 @@ class UsersView(PermissionRequiredMixin, TemplateView):
             matching_realm_users = get_matching_realm_users(users)
             for user in users:
                 user.realm_users = matching_realm_users[user.pk]
+        service_accounts = list(User.objects.filter(is_service_account=True))
+        ctx["local_login"] = has_local_login(self.request)
+        set_write_urls(self.request, users + service_accounts, ctx["local_login"])
         ctx["users"] = users
         ctx["user_count"] = len(users)
-        ctx["service_accounts"] = User.objects.filter(is_service_account=True)
-        ctx["service_account_count"] = ctx["service_accounts"].count()
+        ctx["service_accounts"] = service_accounts
+        ctx["service_account_count"] = len(service_accounts)
         return ctx
 
 
@@ -76,6 +108,7 @@ class UserView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["title"] = "{} {}".format(self.object.get_type_display().title(), self.object)
+        set_write_urls(self.request, [self.object], has_local_login(self.request))
         groups = self.object.groups.all().order_by(Lower("name"))
         ctx["groups"] = groups
         ctx["group_count"] = groups.count()
@@ -118,6 +151,9 @@ class UpdateUserView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUse
     # to avoid context collisions
     context_object_name = "user_to_update"
 
+    def get_object(self, queryset=None):
+        return get_user_to_write(self.request, self.kwargs["pk"])
+
     def get_form_class(self):
         if self.object.is_service_account:
             return ServiceAccountForm
@@ -148,7 +184,7 @@ class DeleteUserView(LocalUserRequiredMixin, PermissionRequiredMixin, TemplateVi
     # not in dispatch: the user is loaded after the login and permission checks of the mixins,
     # so that a request without them cannot tell an unknown id from a superuser
     def load_user(self):
-        self.user = get_object_or_404(User, pk=self.kwargs["pk"])
+        self.user = get_user_to_write(self.request, self.kwargs["pk"])
         return self.user.deletable()
 
     def get(self, request, *args, **kwargs):

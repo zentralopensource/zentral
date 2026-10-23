@@ -295,10 +295,27 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         for text in (reverse("accounts:delete_user", args=(self.user.pk,)),
                      reverse("accounts:update_user", args=(self.user.pk,)),
                      reverse("accounts:delete_user", args=(self.remote_user.pk,)),
-                     reverse("accounts:update_user", args=(self.remote_user.pk,)),
-                     reverse("accounts:update_user", args=(self.superuser.pk,))):
+                     reverse("accounts:update_user", args=(self.remote_user.pk,))):
             self.assertContains(response, text)
+        # only a superuser can change a superuser
+        self.assertNotContains(response, reverse("accounts:update_user", args=(self.superuser.pk,)))
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
+        self._promote_ui_user_to_superuser()
+        response = self.client.get(reverse("accounts:users"))
+        self.assertContains(response, reverse("accounts:update_user", args=(self.superuser.pk,)))
+        self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
+
+    def test_user_list_superuser_column(self):
+        self.login("accounts.view_user")
+        response = self.client.get(reverse("accounts:users"))
+        self.assertNotContains(response, "Superuser?")
+        # the remote user
+        self.assertContains(response, "<td>yes</td>", count=1)
+        self._promote_ui_user_to_superuser()
+        response = self.client.get(reverse("accounts:users"))
+        self.assertContains(response, "Superuser?", count=1)
+        # the remote user, the superuser and the promoted UI user
+        self.assertContains(response, "<td>yes</td>", count=3)
 
     def _force_realm_user(self, realm=None, username=None, email=None, scim_active=None):
         # scim_active None: a realm user that a login made
@@ -377,6 +394,19 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
                      reverse("accounts:delete_user", args=(self.service_account.pk,)),
                      reverse("accounts:update_user", args=(self.service_account.pk,))):
             self.assertNotContains(response, text)
+
+    def test_superuser_detail_no_update_link_for_non_superuser(self):
+        self.login("accounts.view_user", "accounts.change_user")
+        response = self.client.get(reverse("accounts:user", args=(self.superuser.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("accounts:update_user", args=(self.superuser.pk,)))
+
+    def test_superuser_detail_update_link_for_superuser(self):
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.view_user")
+        response = self.client.get(reverse("accounts:user", args=(self.superuser.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("accounts:update_user", args=(self.superuser.pk,)))
 
     def test_user_detail_remote_session_no_write_links(self):
         self.login("accounts.view_user", "accounts.change_user", "accounts.delete_user", realm_user=True)
@@ -713,6 +743,71 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertTemplateUsed(response, "accounts/user_form.html")
         self.assertContains(response, 'A user with this name already exists.')
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_non_superuser_service_account_flow_with_own_role(self, post_event):
+        # a role administrator who is not a superuser: create a service account in a role they have,
+        # give it a token, change it
+        other_group = Group.objects.create(name=get_random_string(12))
+        self.login("accounts.add_user", "accounts.change_user", "accounts.view_user",
+                   "accounts.add_apitoken", "accounts.view_apitoken")
+        self.assertFalse(self.ui_user.is_superuser)
+        response = self.client.get(reverse("accounts:create_service_account"))
+        self.assertEqual(response.status_code, 200)
+        widget = response.context["form"].fields["groups"].widget
+        self.assertEqual(widget.disabled_values, {other_group.pk})
+        username = "ci-bot-" + get_random_string(6)
+        response = self.client.post(reverse("accounts:create_service_account"),
+                                    {"username": username,
+                                     "description": "",
+                                     "groups": [self.ui_group.pk]},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        service_account = User.objects.get(username=username)
+        self.assertTrue(service_account.is_service_account)
+        self.assertFalse(service_account.is_superuser)
+        self.assertEqual(list(service_account.groups.all()), [self.ui_group])
+        self.assertTrue(response.context["can_add_token"])
+        self.assertContains(response, reverse("accounts:create_user_api_token", args=(service_account.pk,)))
+        self.assertContains(response, reverse("accounts:update_user", args=(service_account.pk,)))
+        # token
+        response = self.client.post(reverse("accounts:create_user_api_token", args=(service_account.pk,)),
+                                    {"name": "ci"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/user_api_token.html")
+        self.assertEqual(service_account.apitoken_set.count(), 1)
+        # change
+        response = self.client.post(reverse("accounts:update_user", args=(service_account.pk,)),
+                                    {"username": username,
+                                     "description": "CI",
+                                     "groups": [self.ui_group.pk]},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        service_account.refresh_from_db()
+        self.assertEqual(service_account.description, "CI")
+        self.assertEqual(list(service_account.groups.all()), [self.ui_group])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_non_superuser_user_flow_with_own_role(self, post_event):
+        self.login("accounts.add_user", "accounts.change_user", "accounts.view_user")
+        self.assertFalse(self.ui_user.is_superuser)
+        self.client.post(reverse("accounts:invite_user"),
+                         {"username": "test",
+                          "email": "test@example.com"},
+                         follow=True)
+        user = User.objects.get(email="test@example.com")
+        self.assertFalse(user.is_superuser)
+        self.assertEqual(len(mail.outbox), 1)
+        response = self.client.post(reverse("accounts:update_user", args=(user.pk,)),
+                                    {"username": "test",
+                                     "email": "test@example.com",
+                                     "items_per_page": 10,
+                                     "groups": [self.ui_group.pk]},
+                                    follow=True)
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        user.refresh_from_db()
+        self.assertEqual(list(user.groups.all()), [self.ui_group])
+        self.assertFalse(user.is_superuser)
+
     # update
 
     def test_user_update_login_redirect(self):
@@ -839,6 +934,37 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.ui_user.refresh_from_db()
         self.assertEqual(self.ui_user.username, "toto")
         self.assertEqual(self.ui_user.email, "tata@example.com")
+
+    def test_superuser_update_non_superuser_requester_403(self):
+        # a write action includes the read of its resource: the refusal hides nothing, and is logged
+        self.login("accounts.change_user")
+        with self.assertLogs("zentral.accounts.views.users", level="ERROR") as cm:
+            response = self.client.get(reverse("accounts:update_user", args=(self.superuser.id,)))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(cm.output, [f"ERROR:zentral.accounts.views.users:Permission denied on superuser "
+                                     f"{self.superuser.pk}"])
+        with self.assertNoLogs("zentral.accounts.views.users", level="ERROR"):
+            response = self.client.get(reverse("accounts:update_user", args=(0,)))
+        self.assertEqual(response.status_code, 404)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_superuser_update_post_non_superuser_requester_403(self, post_event):
+        self.login("accounts.change_user", "accounts.view_user")
+        email = "{}@zentral.io".format(get_random_string(12))
+        with self.captureOnCommitCallbacks(execute=True) as callbacks, \
+             self.assertLogs("zentral.accounts.views.users", level="ERROR"):
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.superuser.id,)),
+                {"username": self.superuser.username,
+                 "email": email,
+                 "items_per_page": 10},
+            )
+        self.assertEqual(response.status_code, 403)
+        self.superuser.refresh_from_db()
+        self.assertNotEqual(self.superuser.email, email)
+        self.assertTrue(self.superuser.is_superuser)
+        self.assertEqual(len(callbacks), 0)
+        post_event.assert_not_called()
 
     def test_non_superuser_requester_cannot_see_is_superuser(self):
         # ui_user has change_user perm but is not a superuser
@@ -1243,6 +1369,20 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         for pk in (self.user.id, self.superuser.id, 0):
             self.login_redirect("delete_user", pk)
             self.login_redirect("delete_user", pk, data={"yolo": "fomo"})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_superuser_delete_non_superuser_requester_403(self, post_event):
+        self.login("accounts.delete_user", "accounts.view_user")
+        for method in ("get", "post"):
+            with self.assertLogs("zentral.accounts.views.users", level="ERROR") as cm, \
+                 self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = getattr(self.client, method)(reverse("accounts:delete_user", args=(self.superuser.id,)))
+            self.assertEqual(response.status_code, 403)
+            self.assertEqual(cm.output, [f"ERROR:zentral.accounts.views.users:Permission denied on superuser "
+                                         f"{self.superuser.pk}"])
+            self.assertEqual(len(callbacks), 0)
+        self.assertTrue(User.objects.filter(pk=self.superuser.pk).exists())
+        post_event.assert_not_called()
 
     def test_user_delete_permission_denied(self):
         self.login("accounts.add_user")
