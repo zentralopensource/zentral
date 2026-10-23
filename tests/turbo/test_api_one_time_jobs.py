@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -67,6 +68,36 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         response = self.post(reverse("turbo_api:one_time_jobs"),
                              {"configuration": str(configuration.pk), "job": str(script.job.pk),
                               "serial_numbers": ["ABC123"], "excluded_serial_numbers": ["ABC123"]})
+        self.assertEqual(response.status_code, 400)
+
+    # a create is refused before the validation, whose errors tell what exists
+
+    def test_create_one_time_job_refused_before_the_validation(self):
+        configuration = force_configuration()
+        self.set_policy("permit ("
+                        f' principal in Role::"{self.group.pk}",'
+                        ' action == Turbo::Action::"createOneTimeJob",'
+                        f' resource == Turbo::Configuration::"{force_configuration().pk}"'
+                        ");\n")
+        for job in (str(uuid.uuid4()), str(force_script().job.pk)):
+            response = self.post(reverse("turbo_api:one_time_jobs"),
+                                 {"configuration": str(configuration.pk), "job": job,
+                                  "not_before": "2026-07-02T10:00:00Z", "not_after": "2026-07-01T10:00:00Z"})
+            self.assertEqual(response.status_code, 403)
+
+    def test_create_one_time_job_unknown_configuration_left_to_the_validation(self):
+        # its id is a UUID, so the 400 tells nothing that the caller does not already have. Only the
+        # configuration is read: the 400 tells nothing about the job either.
+        job = str(force_script().job.pk)
+        for data in ({"configuration": str(uuid.uuid4()), "job": job},
+                     {"configuration": str(uuid.uuid4()), "job": str(uuid.uuid4())},
+                     {"configuration": "not a UUID", "job": job},
+                     {"configuration": None, "job": job},
+                     {"job": job}):
+            response = self.post(reverse("turbo_api:one_time_jobs"), data)
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(list(response.json()), ["configuration"])
+        response = self.post(reverse("turbo_api:one_time_jobs"), [{"job": job}])
         self.assertEqual(response.status_code, 400)
 
     def test_create_one_time_job_allows_duplicate(self):
@@ -193,6 +224,23 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
                             one_time_job_update_data(one_time_job, job=str(other_script.job.pk)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"job": ["This field cannot be changed"]})
+
+    def test_update_one_time_job_without_a_policy(self):
+        # Decided before the validation: its errors would tell a caller that may not update the
+        # schedule if a configuration is the one of the schedule.
+        one_time_job = force_one_time_job()
+        other_configuration = force_configuration()
+        self.set_permissions()
+        response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
+                            one_time_job_update_data(one_time_job, configuration=str(other_configuration.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_one_time_job_without_a_policy(self):
+        one_time_job = force_one_time_job()
+        self.set_permissions()
+        response = self.delete(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(OneTimeJob.objects.filter(pk=one_time_job.pk).exists())
 
     def test_delete_one_time_job(self):
         one_time_job = force_one_time_job()

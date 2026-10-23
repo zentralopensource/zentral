@@ -222,6 +222,15 @@ class FileExportSerializer(CommandKindSerializer):
         model = FileExport
 
 
+class JobScopeResourceSerializer(serializers.Serializer):
+    """Reads the configuration of a create body, and nothing else.
+
+    The configuration is the resource of the create preview, which is decided before the validation of
+    the body.
+    """
+    configuration = serializers.PrimaryKeyRelatedField(queryset=Configuration.objects.all())
+
+
 class JobScopeSerializerMixin:
     # The checks read the body only, never the stored schedule: a create has nothing stored, and a PUT
     # carries every field (FullUpdateSerializerMixin).

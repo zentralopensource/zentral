@@ -21,7 +21,8 @@ from zentral.contrib.santa.utils import build_configuration_plist, build_configu
 from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
                                ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
-                               PBACPermission, RetrieveUpdateDestroyAPIViewWithAudit)
+                               PBACPermission, PBACRetrieveUpdateDestroyAPIViewWithAudit,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
 from .models import (Configuration, EnrolledMachine, Rule, RuleSet, ScopedClientMode,
                      ScopedPathRegex, Target, Enrollment)
@@ -265,29 +266,11 @@ class BaseScopedConfigurationItemList(ListCreateAPIViewWithAudit):
         return [i for i, r in zip(items, requests) if r.is_authorized]
 
 
-class BaseScopedConfigurationItemDetail(RetrieveUpdateDestroyAPIViewWithAudit):
-    permission_classes = [PBACPermission]
-    view_pbac_request_class = None
-    update_pbac_request_class = None
-    delete_pbac_request_class = None
-
+class BaseScopedConfigurationItemDetail(PBACRetrieveUpdateDestroyAPIViewWithAudit):
     def get_queryset(self):
         # the PBAC resource reads the configuration. A prefetch of the tags saves no query: on
         # a retrieve it costs as much as it saves, and set() drops the cache on a write
         return self.model.objects.select_related("configuration")
-
-    def get_object(self):
-        # read once: the permission resolves it to build the request, the handler uses it
-        if not hasattr(self, "_object"):
-            self._object = super().get_object()
-        return self._object
-
-    def get_pbac_request(self, request):
-        request_class = {
-            "PUT": self.update_pbac_request_class,
-            "DELETE": self.delete_pbac_request_class,
-        }.get(request.method, self.view_pbac_request_class)
-        return request_class(request.user, self.get_object())
 
 
 class ScopedClientModeList(BaseScopedConfigurationItemList):

@@ -1,8 +1,9 @@
+from zentral.utils.drf import PBACRetrieveUpdateDestroyAPIViewWithAudit
 from ..models import OneTimeJob
 from ..pbac import (CreateOneTimeJobRequest, DeleteOneTimeJobRequest, UpdateOneTimeJobRequest,
                     ViewOneTimeJobRequest)
 from ..serializers import OneTimeJobSerializer, OneTimeJobUpdateSerializer
-from .base import BaseJobScopeDetail, BaseJobScopeList
+from .base import BaseJobScopeList
 
 
 class OneTimeJobList(BaseJobScopeList):
@@ -13,7 +14,7 @@ class OneTimeJobList(BaseJobScopeList):
     view_pbac_request_class = ViewOneTimeJobRequest
 
 
-class OneTimeJobDetail(BaseJobScopeDetail):
+class OneTimeJobDetail(PBACRetrieveUpdateDestroyAPIViewWithAudit):
     queryset = OneTimeJob.objects.select_related("job", "configuration").all()
     serializer_class = OneTimeJobUpdateSerializer
     view_pbac_request_class = ViewOneTimeJobRequest
