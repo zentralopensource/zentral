@@ -36,6 +36,8 @@ RECURRING_ACTION = 'Turbo::Action::"viewRecurringJobMachine"'
 VIEW_ARTIFACT_ACTION = 'Turbo::Action::"viewJobUpload"'
 DOWNLOAD_ARTIFACT_ACTION = 'Turbo::Action::"downloadJobUpload"'
 ALL_ACTIONS = (ONE_TIME_ACTION, RECURRING_ACTION, VIEW_ARTIFACT_ACTION, DOWNLOAD_ARTIFACT_ACTION)
+ONE_TIME_JOB_ACTION = 'Turbo::Action::"viewOneTimeJob"'
+RECURRING_JOB_ACTION = 'Turbo::Action::"viewRecurringJob"'
 
 
 class TurboJobMachineAPITestCase(TurboAPITestCase):
@@ -143,6 +145,14 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
         response = self._one_time_list(one_time_job)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"count": 0, "next": None, "previous": None, "results": []})
+
+    def test_one_time_without_the_view_of_the_job(self):
+        # one action decides each machine: the view of the job is another decision
+        one_time_job = self._one_time_job(backend=CommandBackend.FILE_EXPORT)
+        otjm = self._otjm(one_time_job)
+        self._allow(*ALL_ACTIONS, forbid=f'in Turbo::OneTimeJob::"{one_time_job.pk}"',
+                    forbid_actions=(ONE_TIME_JOB_ACTION,))
+        self.assertEqual(self._serials(self._one_time_list(one_time_job)), [otjm.serial_number])
 
     def test_one_time(self):
         one_time_job = self._one_time_job(backend=CommandBackend.FILE_EXPORT)
@@ -353,6 +363,14 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
                 "removed_at": None,
             }],
         })
+
+    def test_recurring_without_the_view_of_the_job(self):
+        # one action decides each machine: the view of the job is another decision
+        recurring_job = force_recurring_job(configuration=force_configuration(), job=force_script().job)
+        rjm = self._rjm(recurring_job)
+        self._allow(*ALL_ACTIONS, forbid=f'in Turbo::RecurringJob::"{recurring_job.pk}"',
+                    forbid_actions=(RECURRING_JOB_ACTION,))
+        self.assertEqual(self._serials(self._recurring_list(recurring_job)), [rjm.serial_number])
 
     def test_recurring_a_configuration_forbid(self):
         recurring_job = force_recurring_job(configuration=force_configuration(), job=force_script().job)

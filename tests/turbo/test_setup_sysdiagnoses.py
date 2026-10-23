@@ -1,8 +1,8 @@
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.turbo.command_backends import CommandBackend
-from .utils import (TurboSetupTestCase, force_command, force_configuration, force_enrolled_machine,
-                    force_one_time_job, force_script, turbo_policy)
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, TurboSetupTestCase, force_command, force_configuration,
+                    force_enrolled_machine, force_one_time_job, force_script, turbo_policy)
 
 
 class TurboSetupSysdiagnosesTestCase(TurboSetupTestCase):
@@ -94,7 +94,7 @@ class TurboSetupSysdiagnosesTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         sysdiagnose = force_command()
         one_time_job = force_one_time_job(configuration=configuration, job=sysdiagnose.job)
-        self.login("turbo.view_sysdiagnose", "turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_sysdiagnose", actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:sysdiagnose", args=(sysdiagnose.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["one_time_jobs"]), [one_time_job])
@@ -108,7 +108,7 @@ class TurboSetupSysdiagnosesTestCase(TurboSetupTestCase):
         sysdiagnose = force_command()
         force_one_time_job(configuration=configuration, job=sysdiagnose.job)
         force_one_time_job(configuration=configuration, job=force_script().job)
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("turbo:sysdiagnose", args=(sysdiagnose.pk,)))

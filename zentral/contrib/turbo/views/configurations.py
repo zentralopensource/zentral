@@ -3,12 +3,14 @@ from django.db.models import Count, F, TextField
 from django.db.models.functions import Coalesce
 from django.urls import reverse_lazy
 from django.views.generic import DetailView
+from pbac.scoping import visible_rows
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
                                  UserPaginationListView)
 from ..forms import ConfigurationForm
 from ..models import Configuration, Job
-from ..pbac import (authorize_one_time_job_rows, authorize_recurring_job_rows, can_create_one_time_job,
+from ..pbac import (ViewOneTimeJobRequest, authorize_one_time_job_rows, can_create_one_time_job,
                     can_create_recurring_job)
+from .base import visible_recurring_job_rows
 
 
 class ConfigurationListView(PermissionRequiredMixin, UserPaginationListView):
@@ -59,18 +61,18 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
                                         output_field=TextField()))
             .order_by("job_name", "pk")
         )
-        # one decision for each row, because the rows have different jobs
-        recurring_jobs = authorize_recurring_job_rows(self.request.user, recurring_jobs)
+        recurring_jobs = visible_recurring_job_rows(self.request.user, recurring_jobs)
         ctx["recurring_jobs"] = recurring_jobs
         ctx["recurring_job_count"] = len(recurring_jobs)
         ctx["can_edit_recurring_job"] = any(rj.can_update or rj.can_delete for rj in recurring_jobs)
         ctx["can_create_recurring_job"] = can_create_recurring_job(self.request.user, self.object)
-        one_time_job_qs = (
+        one_time_job_qs = visible_rows(self.request.user, ViewOneTimeJobRequest, (
             self.object.onetimejob_set
             .select_related(*Job.definition_relations("job__"))
             .prefetch_related("tags", "excluded_tags")
             .order_by(F("not_before").desc(nulls_last=True), "-created_at")
-        )
+        ))
+        # counted and cut after the view decisions
         ctx["one_time_job_count"] = one_time_job_qs.count()
         # one decision for each row, because the rows have different jobs
         one_time_jobs = authorize_one_time_job_rows(

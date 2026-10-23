@@ -3,8 +3,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.turbo.models import Configuration, Enrollment
-from .utils import (TurboSetupTestCase, force_configuration, force_enrollment, force_recurring_job,
-                    make_enrolled_machine)
+from .utils import (TurboSetupTestCase, force_configuration, force_enrollment, force_one_time_job,
+                    force_recurring_job, make_enrolled_machine)
 
 
 class TurboSetupConfigurationsTestCase(TurboSetupTestCase):
@@ -60,6 +60,19 @@ class TurboSetupConfigurationsTestCase(TurboSetupTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/configuration_detail.html")
         self.assertContains(response, configuration.name)
+
+    def test_configuration_detail_schedules_without_a_view_policy(self):
+        # the sections are there, without the schedules that the user cannot see
+        configuration = force_configuration()
+        force_recurring_job(configuration=configuration)
+        force_one_time_job(configuration=configuration)
+        self.login("turbo.view_configuration")
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Recurring jobs (0)")
+        self.assertContains(response, "One-time jobs (0)")
+        self.assertEqual(list(response.context["recurring_jobs"]), [])
+        self.assertEqual(list(response.context["one_time_jobs"]), [])
 
     def test_configuration_detail_enrollments_not_loaded_without_permission(self):
         # the enrollments (with their secrets) are only fetched for a user allowed to view them

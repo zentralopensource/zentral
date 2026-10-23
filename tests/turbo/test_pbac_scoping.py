@@ -9,8 +9,9 @@ from pbac.engine import engine
 from pbac.scoping import scope_queryset
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaBusinessUnit, MetaMachine
 from zentral.contrib.turbo.command_backends import CommandBackend
-from zentral.contrib.turbo.models import OneTimeJobMachine, RecurringJobMachine
-from zentral.contrib.turbo.pbac import ViewOneTimeJobMachineRequest, ViewRecurringJobMachineRequest
+from zentral.contrib.turbo.models import OneTimeJob, OneTimeJobMachine, RecurringJob, RecurringJobMachine
+from zentral.contrib.turbo.pbac import (ViewOneTimeJobMachineRequest, ViewOneTimeJobRequest,
+                                        ViewRecurringJobMachineRequest, ViewRecurringJobRequest)
 
 from .utils import (force_command, force_configuration, force_mscp_check, force_one_time_job, force_recurring_job,
                     force_script)
@@ -219,3 +220,58 @@ class TurboPBACScopingTestCase(TestCase):
 
     def test_recurring_job_machine_atoms(self):
         self._assert_atoms(ViewRecurringJobMachineRequest, RecurringJobMachine, *self._recurring_atoms())
+
+    # schedules
+
+    def _schedule_atoms(self, row_type, row, kind, job, other_row):
+        """The conditions of the policies: the five of the generated sets first, then the others."""
+        core = {
+            "all": "true",
+            "configuration": f'resource in Turbo::Configuration::"{self.c1.pk}"',
+            "kind": f'resource.job.kind == "{kind}"',
+            "job": f'resource.job == Turbo::Job::"{job.pk}"',
+            "row ==": f'resource == {row_type}::"{row.pk}"',
+        }
+        others = {
+            "row in": f'resource in {row_type}::"{row.pk}"',
+            "not an ancestor": f"resource in {other_row}",
+            "a meta business unit is not an ancestor":
+                f'resource in Inventory::MetaBusinessUnit::"{self.mbu_a.pk}"',
+            "the job is not a parent": f'resource in Turbo::Job::"{job.pk}"',
+            "upper case uuid": f'resource in Turbo::Configuration::"{str(self.c1.pk).upper()}"',
+            "kind with a nul": f'resource.job.kind == "{kind}\\0"',
+            "is": f"resource is {row_type}",
+            "is another type": "resource is Turbo::JobUpload",
+            "is another type and outside the subset": 'resource is Turbo::JobUpload && resource.artifact == "archive"',
+            "is in": f'resource is {row_type} in Turbo::Configuration::"{self.c2.pk}"',
+            "set": f'resource in [Turbo::Configuration::"{self.c2.pk}"]',
+            "set of configurations": f'resource in [Turbo::Configuration::"{self.c1.pk}", '
+                                     f'Turbo::Configuration::"{str(self.c2.pk).upper()}", '
+                                     f'Turbo::Configuration::"{self.c2.pk}"]',
+            "and": f'resource in Turbo::Configuration::"{self.c1.pk}" && resource.job.kind != "{kind}"',
+            "or": f'resource.job.kind == "{kind}" || resource in Turbo::Configuration::"{self.c2.pk}"',
+            "not": f'!(resource in Turbo::Configuration::"{self.c2.pk}")',
+        }
+        return core, others
+
+    def _one_time_schedule_atoms(self):
+        return self._schedule_atoms("Turbo::OneTimeJob", self.o1, "script", self.o2.job,
+                                    f'Turbo::RecurringJob::"{self.r1.pk}"')
+
+    def test_one_time_jobs(self):
+        atoms, others = self._one_time_schedule_atoms()
+        count = self._assert_same_rows(ViewOneTimeJobRequest, OneTimeJob, atoms, others)
+        self.assertEqual(count, 5 * 2 * (1 + 5 * 2) + len(others) * 4 + 1 * 2 * 2 + 1)
+
+    def test_one_time_job_atoms(self):
+        self._assert_atoms(ViewOneTimeJobRequest, OneTimeJob, *self._one_time_schedule_atoms())
+
+    def _recurring_schedule_atoms(self):
+        return self._schedule_atoms("Turbo::RecurringJob", self.r1, "script", self.r2.job,
+                                    f'Turbo::OneTimeJob::"{self.o1.pk}"')
+
+    def test_recurring_jobs(self):
+        self._assert_same_rows(ViewRecurringJobRequest, RecurringJob, *self._recurring_schedule_atoms())
+
+    def test_recurring_job_atoms(self):
+        self._assert_atoms(ViewRecurringJobRequest, RecurringJob, *self._recurring_schedule_atoms())

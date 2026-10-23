@@ -8,9 +8,9 @@ from zentral.contrib.inventory.models import Tag
 from accounts.models import Policy
 from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.models import OneTimeJob
-from .utils import (TurboSetupTestCase, forbid_job_kind_policy, force_command,
-                    force_configuration, force_mscp_check, force_one_time_job, force_script,
-                    turbo_policy)
+from .utils import (SCHEDULE_ACTIONS, VIEW_ONE_TIME_JOB_ACTION, TurboSetupTestCase, forbid_job_kind_policy,
+                    force_command, force_configuration, force_mscp_check, force_one_time_job, force_script,
+                    turbo_policy, view_schedule_policy)
 
 
 class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
@@ -19,32 +19,57 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     def test_one_time_jobs_redirect(self):
         self.login_redirect("one_time_jobs")
 
-    def test_one_time_jobs_permission_denied(self):
+    def test_one_time_jobs_without_a_policy(self):
+        # each schedule has its own decision, so the list needs no permission, and it is empty
+        one_time_job = force_one_time_job()
         self.login()
         response = self.client.get(reverse("turbo:one_time_jobs"))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, str(one_time_job.job.definition))
 
     def test_one_time_jobs(self):
         one_time_job = force_one_time_job()
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/onetimejob_list.html")
         self.assertContains(response, str(one_time_job.job.definition))
 
+    def test_one_time_jobs_only_the_visible_ones(self):
+        visible = force_one_time_job()
+        hidden = force_one_time_job()
+        self.login_with_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        response = self.client.get(reverse("turbo:one_time_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, str(visible.job.definition))
+        self.assertNotContains(response, str(hidden.job.definition))
+
     def test_one_time_jobs_search_by_configuration(self):
         one_time_job = force_one_time_job()
         force_one_time_job()
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
+                                            actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"),
                                    {"configuration": one_time_job.configuration.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["object_list"]), [one_time_job])
 
+    def test_one_time_jobs_no_configuration_search_without_its_permission(self):
+        visible = force_one_time_job()
+        hidden = force_one_time_job()
+        self.login_with_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        response = self.client.get(reverse("turbo:one_time_jobs"), {"configuration": hidden.configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("configuration", response.context["form"].fields)
+        self.assertNotContains(response, hidden.configuration.name)
+        self.assertEqual(list(response.context["object_list"]), [visible])
+
     def test_one_time_jobs_filter_by_kind(self):
         force_one_time_job()
         mscp_one_time_job = force_one_time_job(job=force_mscp_check().job)
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"), {"kind": "mscp_check"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["object_list"]), [mscp_one_time_job])
@@ -52,14 +77,14 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     def test_one_time_jobs_search_by_q(self):
         one_time_job = force_one_time_job()
         force_one_time_job()
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"), {"q": str(one_time_job.job.definition)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["object_list"]), [one_time_job])
 
     def test_one_time_jobs_list_constant_query_count(self):
         # scope tags/excluded_tags are prefetched: more jobs must not add per-row M2M queries
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
 
         def list_query_count(n):
             OneTimeJob.objects.all().delete()
@@ -74,14 +99,14 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
 
     def test_one_time_jobs_search_no_result_shows_empty_results(self):
         force_one_time_job()
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"), {"q": get_random_string(20)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["object_list"]), [])
         self.assertContains(response, "We didn't find any item")
 
     def test_one_time_jobs_empty_shows_no_entities(self):
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "There are no Turbo one-time jobs created.")
@@ -91,7 +116,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         force_one_time_job()
         self.user.items_per_page = 1
         self.user.save()
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:one_time_jobs"), {"page": 2})
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(response.context.get("reset_link"))
@@ -100,26 +125,104 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
 
     def test_update_one_time_job_get(self):
         otj = force_one_time_job()
-        self.login_with_policy(turbo_policy(self.group))
+        self.login_with_policy(turbo_policy(self.group, actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:update_one_time_job", args=(otj.configuration.pk, otj.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/onetimejob_form.html")
 
     def test_delete_one_time_job_get(self):
         otj = force_one_time_job()
-        self.login_with_policy(turbo_policy(self.group))
+        self.login_with_policy(turbo_policy(self.group, actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:delete_one_time_job", args=(otj.configuration.pk, otj.pk)))
         self.assertEqual(response.status_code, 200)
+
+    def test_update_one_time_job_reads_the_schedule_two_times(self):
+        # once for the update decision, with its configuration and its job, once for the form
+        otj = force_one_time_job()
+        self.login_with_policy(turbo_policy(self.group))
+        url = reverse("turbo:update_one_time_job", args=(otj.configuration.pk, otj.pk))
+        self.client.get(url)  # warm process-level caches before measuring
+        with CaptureQueriesContext(connection) as ctx:
+            self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(sum('FROM "turbo_onetimejob"' in query["sql"] for query in ctx.captured_queries), 2)
+        self.assertFalse(any('FROM "turbo_configuration"' in query["sql"] for query in ctx.captured_queries))
+
+    def test_update_one_time_job_redirect(self):
+        otj = force_one_time_job()
+        self.login_redirect("update_one_time_job", otj.configuration.pk, otj.pk)
+
+    def test_update_one_time_job_without_the_view_action(self):
+        # one action decides the page: the view of the schedule is another decision
+        otj = force_one_time_job()
+        self.login_with_policy(turbo_policy(self.group)
+                               + view_schedule_policy(self.group, scope="resource in Turbo::Configuration::"
+                                                                        f'"{force_configuration().pk}"'))
+        url = reverse("turbo:update_one_time_job", args=(otj.configuration.pk, otj.pk))
+        self.assertEqual(self.client.get(url).status_code, 200)
+        response = self.client.post(url, {"job": str(otj.job.pk), "not_before": "2026-08-01 09:00:00",
+                                          "serial_numbers": "", "excluded_serial_numbers": ""})
+        self.assertEqual(response.status_code, 302)
+        otj.refresh_from_db()
+        self.assertIsNotNone(otj.not_before)
+
+    def test_update_one_time_job_needs_the_update_action(self):
+        otj = force_one_time_job()
+        self.login_with_policy(view_schedule_policy(self.group))
+        response = self.client.get(reverse("turbo:update_one_time_job", args=(otj.configuration.pk, otj.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_one_time_job_redirect(self):
+        otj = force_one_time_job()
+        self.login_redirect("delete_one_time_job", otj.configuration.pk, otj.pk)
+
+    def test_delete_one_time_job_without_the_view_action(self):
+        # one action decides the page: the view of the schedule is another decision
+        otj = force_one_time_job()
+        self.login_with_policy(turbo_policy(self.group))
+        url = reverse("turbo:delete_one_time_job", args=(otj.configuration.pk, otj.pk))
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.post(url).status_code, 302)
+        self.assertFalse(OneTimeJob.objects.filter(pk=otj.pk).exists())
+
+    def test_delete_one_time_job_needs_the_delete_action(self):
+        otj = force_one_time_job()
+        self.login_with_policy(view_schedule_policy(self.group))
+        response = self.client.get(reverse("turbo:delete_one_time_job", args=(otj.configuration.pk, otj.pk)))
+        self.assertEqual(response.status_code, 403)
 
     # configuration preview
 
     def test_configuration_detail_shows_one_time_jobs(self):
         one_time_job = force_one_time_job()
-        self.login("turbo.view_configuration", "turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
+                                            actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(one_time_job.configuration.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/configuration_detail.html")
         self.assertContains(response, str(one_time_job.job.definition))
+
+    def test_configuration_detail_shows_and_counts_only_the_visible_one_time_jobs(self):
+        configuration = force_configuration()
+        visible = force_one_time_job(configuration=configuration,
+                                     job=force_command(backend=CommandBackend.SYSDIAGNOSE).job)
+        hidden = force_one_time_job(configuration=configuration,
+                                    job=force_command(backend=CommandBackend.FILE_EXPORT).job)
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration", actions=())
+                               + view_schedule_policy(self.group,
+                                                      condition='when { resource.job.kind == "sysdiagnose" }'))
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "One-time job (1)")
+        self.assertContains(response, str(visible.job.definition))
+        self.assertNotContains(response, str(hidden.job.definition))
+
+    def test_configuration_detail_shows_the_create_button_to_a_role_that_cannot_see_the_schedules(self):
+        configuration = force_configuration()
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration"))
+        response = self.client.get(configuration.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("turbo:create_one_time_job", args=(configuration.pk,)))
+        self.assertContains(response, reverse("turbo:create_recurring_job", args=(configuration.pk,)))
 
     # create
 
@@ -141,25 +244,25 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         response = self.client.get(reverse("turbo:create_one_time_job", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_create_one_time_job_needs_the_view_permission(self):
-        # createOneTimeJob needs the job, which the form has not picked yet, so it cannot gate the
-        # page. turbo.view_onetimejob does, and the scheduling actions alone are not enough.
+    def test_create_one_time_job_opens_with_the_create_action_alone(self):
+        # The create action, with no job yet, is a preview on the configuration. It opens the
+        # page, and the submit decides. No view permission is needed.
         configuration = force_configuration()
         self.login_with_policy(turbo_policy(self.group))
         response = self.client.get(reverse("turbo:create_one_time_job", args=(configuration.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
 
     def test_create_one_time_job_refused_when_no_kind_is_permitted(self):
         # The button is hidden, and the URL is refused too: no policy permits a kind here.
         configuration = force_configuration()
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:create_one_time_job", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_create_one_time_job_refused_in_another_configuration(self):
         allowed = force_configuration()
         other = force_configuration()
-        self.login("turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         Policy.objects.create(
             name="Turbo scoped grant",
             source=("permit ("
@@ -174,7 +277,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
 
     def test_create_one_time_job_get(self):
         configuration = force_configuration()
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_onetimejob"))
+        self.login_with_policy(turbo_policy(self.group, actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.get(reverse("turbo:create_one_time_job", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/onetimejob_form.html")
@@ -184,7 +287,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         script = force_script()
         self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
-                                            "turbo.view_onetimejob"))
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
                 reverse("turbo:create_one_time_job", args=(configuration.pk,)),
@@ -210,7 +313,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     def test_create_one_time_job_window_validation(self):
         configuration = force_configuration()
         script = force_script()
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_onetimejob"))
+        self.login_with_policy(turbo_policy(self.group, actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.post(
             reverse("turbo:create_one_time_job", args=(configuration.pk,)),
             {"job": str(script.job.pk),
@@ -226,7 +329,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         script = force_script()
         tag = Tag.objects.create(name=get_random_string(12))
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_onetimejob"))
+        self.login_with_policy(turbo_policy(self.group, actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.post(
             reverse("turbo:create_one_time_job", args=(configuration.pk,)),
             {"job": str(script.job.pk), "tags": [tag.pk], "excluded_tags": [tag.pk],
@@ -240,7 +343,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     def test_create_one_time_job_allows_duplicate_job(self):
         one_time_job = force_one_time_job()
         self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
-                                            "turbo.view_onetimejob"))
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.post(
             reverse("turbo:create_one_time_job", args=(one_time_job.configuration.pk,)),
             {"job": str(one_time_job.job.pk), "serial_numbers": "", "excluded_serial_numbers": ""},
@@ -258,7 +361,8 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     def test_update_one_time_job(self, post_event):
         one_time_job = force_one_time_job()
         configuration, job = one_time_job.configuration, one_time_job.job
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration"))
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
                 reverse("turbo:update_one_time_job", args=(configuration.pk, one_time_job.pk)),
@@ -277,7 +381,8 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         one_time_job = force_one_time_job()
         configuration, job = one_time_job.configuration, one_time_job.job
         other_script = force_script()
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration"))
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.client.post(
             reverse("turbo:update_one_time_job", args=(configuration.pk, one_time_job.pk)),
             {"job": str(other_script.job.pk), "not_before": "2026-08-01 09:00:00",
@@ -292,7 +397,8 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         # the browser drops the disabled field, so an update posted from the form has no job at all
         one_time_job = force_one_time_job()
         configuration, job = one_time_job.configuration, one_time_job.job
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration"))
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
                 reverse("turbo:update_one_time_job", args=(configuration.pk, one_time_job.pk)),
@@ -311,7 +417,8 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     def test_delete_one_time_job(self, post_event):
         one_time_job = force_one_time_job()
         configuration, pk = one_time_job.configuration, one_time_job.pk
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration"))
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
                 reverse("turbo:delete_one_time_job", args=(configuration.pk, pk)), follow=True)
@@ -337,7 +444,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         allowed = force_command(backend=CommandBackend.SYSDIAGNOSE)
         refused = force_command(backend=CommandBackend.FILE_EXPORT)
         self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
-                                            "turbo.view_onetimejob"))
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         self._forbid_kind("file_export")
         response = self.client.get(reverse("turbo:create_one_time_job", args=(configuration.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -351,7 +458,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         command = force_command(backend=CommandBackend.FILE_EXPORT)
         self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
-                                            "turbo.view_onetimejob"))
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         self._forbid_kind("file_export")
         response = self.client.post(
             reverse("turbo:create_one_time_job", args=(configuration.pk,)),
@@ -363,7 +470,7 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         configuration = force_configuration()
         command = force_command(backend=CommandBackend.SYSDIAGNOSE)
         self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
-                                            "turbo.view_onetimejob"))
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         self._forbid_kind("file_export")
         response = self.client.post(
             reverse("turbo:create_one_time_job", args=(configuration.pk,)),
@@ -375,7 +482,8 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     def test_update_one_time_job_refused_by_a_forbidden_kind(self):
         command = force_command(backend=CommandBackend.FILE_EXPORT)
         one_time_job = force_one_time_job(job=command.job)
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration"))
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_configuration",
+                                            actions=SCHEDULE_ACTIONS + (VIEW_ONE_TIME_JOB_ACTION,)))
         self._forbid_kind("file_export")
         response = self.client.post(
             reverse("turbo:update_one_time_job", args=(one_time_job.configuration.pk, one_time_job.pk)),

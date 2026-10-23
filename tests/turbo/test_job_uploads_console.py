@@ -14,8 +14,9 @@ from zentral.contrib.turbo.models import (JobUpload, UploadStatus, UploadVerific
                                           resolve_upload_schedules)
 from zentral.contrib.turbo.pbac import authorize_job_upload_rows
 
-from .utils import (TurboSetupTestCase, force_command, force_configuration, force_enrolled_machine,
-                    force_one_time_job, force_recurring_job, turbo_policy)
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSetupTestCase, force_command,
+                    force_configuration, force_enrolled_machine, force_one_time_job, force_recurring_job,
+                    turbo_policy)
 
 
 SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -37,6 +38,7 @@ SPLIT_STORAGE = {"default": {"BACKEND": "django.core.files.storage.FileSystemSto
                  "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
 
 ARTIFACT_ACTIONS = ('Turbo::Action::"viewJobUpload"', 'Turbo::Action::"downloadJobUpload"')
+VIEW_SCHEDULE_ACTIONS = (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)
 
 
 class TurboJobUploadConsoleTestCase(TurboSetupTestCase):
@@ -109,11 +111,23 @@ class TurboJobUploadConsoleTestCase(TurboSetupTestCase):
     def test_without_the_view_action_the_artifact_is_absent(self):
         # not on the page, not only without a link: its name and its size stay hidden
         _, serial_number, _, upload = self._machine_with_upload()
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine", actions=()))
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine", actions=VIEW_SCHEDULE_ACTIONS))
         response = self.client.get(self._machine_url(serial_number))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Collected artifacts (0)")
         self.assertNotContains(response, reverse("turbo:download_job_upload", args=(upload.pk,)))
+
+    def test_without_the_view_of_its_schedule_the_artifact_is_listed(self):
+        # one action decides each artifact: the view of its schedule is another decision
+        self.login_with_policy(
+            turbo_policy(self.group, "turbo.view_enrolledmachine", actions=ARTIFACT_ACTIONS)
+            + f'forbid (principal, action in [{", ".join(VIEW_SCHEDULE_ACTIONS)}], resource);\n'
+        )
+        for recurring in (False, True):
+            _, serial_number, _, upload = self._machine_with_upload(recurring=recurring)
+            response = self.client.get(self._machine_url(serial_number))
+            self.assertContains(response, "Collected artifacts (1)")
+            self.assertContains(response, reverse("turbo:download_job_upload", args=(upload.pk,)))
 
     def test_view_without_download_shows_the_row_and_no_link(self):
         # the difference between the two actions

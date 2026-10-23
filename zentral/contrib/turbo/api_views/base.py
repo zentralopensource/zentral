@@ -1,22 +1,25 @@
-from zentral.utils.drf import (DefaultDjangoModelPermissions, ListCreateAPIViewWithAudit,
-                               MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
+from zentral.utils.drf import (ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
+from pbac.scoping import visible_rows
 from pbac.utils import check_request
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 
-class JobScopePermissions(DefaultDjangoModelPermissions):
-    # The add, change and delete permissions of a schedule map to no action, so they cannot gate a
-    # request here. perform_create, perform_update and perform_destroy authorize the write methods,
-    # on validated objects and not on primary keys from the request. GET keeps the view
-    # permission, which is still mapped.
-    perms_map = dict(DefaultDjangoModelPermissions.perms_map,
-                     POST=[], PUT=[], PATCH=[], DELETE=[])
+# The permissions of a schedule map to no action, so they cannot gate a request here. Each method has
+# its own typed decision: the list and the object for the reads, and perform_create, perform_update and
+# perform_destroy for the writes, on validated objects and not on primary keys from the request.
 
 
 class BaseJobScopeList(ListCreateAPIViewWithAudit):
-    permission_classes = [JobScopePermissions]
+    permission_classes = [IsAuthenticated]
     pagination_class = MaxLimitOffsetPagination
     filterset_fields = ("configuration", "job")
     create_pbac_request_class = None
+    view_pbac_request_class = None
+
+    def filter_queryset(self, queryset):
+        return visible_rows(self.request.user, self.view_pbac_request_class, super().filter_queryset(queryset))
 
     def perform_create(self, serializer):
         # After the validation, so the configuration and the job are instances, not primary keys
@@ -29,9 +32,15 @@ class BaseJobScopeList(ListCreateAPIViewWithAudit):
 
 
 class BaseJobScopeDetail(RetrieveUpdateDestroyAPIViewWithAudit):
-    permission_classes = [JobScopePermissions]
+    permission_classes = [IsAuthenticated]
+    view_pbac_request_class = None
     update_pbac_request_class = None
     delete_pbac_request_class = None
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        check_request(request, self.view_pbac_request_class(request.user, instance))
+        return Response(self.get_serializer(instance).data)
 
     def perform_update(self, serializer):
         # The instance, not validated_data. The schedule is the resource, and the serializer

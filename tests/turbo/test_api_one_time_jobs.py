@@ -5,8 +5,9 @@ from django.urls import reverse
 from accounts.models import Policy
 from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.models import OneTimeJob
-from .utils import (TurboAPITestCase, forbid_job_kind_policy, force_command, force_configuration,
-                    force_one_time_job, force_script, one_time_job_update_data, turbo_policy)
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, TurboAPITestCase, forbid_job_kind_policy, force_command,
+                    force_configuration, force_one_time_job, force_script, one_time_job_update_data, turbo_policy,
+                    view_schedule_policy)
 
 
 class TurboOneTimeJobAPITestCase(TurboAPITestCase):
@@ -80,10 +81,23 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
             2,
         )
 
+    def test_list_one_time_jobs_without_a_policy(self):
+        # each one-time job has its own decision, so the list needs no permission, and it is empty
+        force_one_time_job()
+        self.set_permissions()
+        response = self.get(reverse("turbo_api:one_time_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"count": 0, "next": None, "previous": None, "results": []})
+
+    def test_get_one_time_job_without_a_policy(self):
+        one_time_job = force_one_time_job()
+        self.set_permissions()
+        self.assertEqual(self.get(reverse("turbo_api:one_time_job", args=(one_time_job.pk,))).status_code, 403)
+
     def test_list_one_time_jobs(self):
         # creation order — LimitOffset pagination over an unordered queryset returns unstable pages
         one_time_jobs = [force_one_time_job() for _ in range(2)]
-        self.set_permissions("turbo.view_onetimejob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.get(reverse("turbo_api:one_time_jobs"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 2)
@@ -92,7 +106,7 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
 
     def test_list_one_time_jobs_constant_query_count(self):
         # the serializer renders tags/excluded_tags; the list queryset prefetches them → no per-row N+1
-        self.set_permissions("turbo.view_onetimejob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         force_one_time_job()
         self.get(reverse("turbo_api:one_time_jobs"))  # warm process-level caches
         with CaptureQueriesContext(connection) as one:
@@ -103,9 +117,39 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
             self.assertEqual(self.get(reverse("turbo_api:one_time_jobs")).status_code, 200)
         self.assertEqual(len(one.captured_queries), len(five.captured_queries))
 
+    def test_list_one_time_jobs_only_the_visible_ones(self):
+        visible = force_one_time_job()
+        force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        response = self.get(reverse("turbo_api:one_time_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual([j["id"] for j in response.json()["results"]], [str(visible.pk)])
+
+    def test_list_one_time_jobs_a_policy_that_sql_cannot_express(self):
+        # like: one decision for each schedule, with the same rows
+        visible = force_one_time_job()
+        force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, condition=(f'when {{ resource in Turbo::Configuration::"{visible.configuration.pk}" '
+                                   '&& resource.job.kind like "*" }')))
+        response = self.get(reverse("turbo_api:one_time_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual([j["id"] for j in response.json()["results"]], [str(visible.pk)])
+
+    def test_get_one_time_job_not_visible(self):
+        visible = force_one_time_job()
+        hidden = force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        self.assertEqual(self.get(reverse("turbo_api:one_time_job", args=(visible.pk,))).status_code, 200)
+        self.assertEqual(self.get(reverse("turbo_api:one_time_job", args=(hidden.pk,))).status_code, 403)
+
     def test_get_one_time_job(self):
         one_time_job = force_one_time_job()
-        self.set_permissions("turbo.view_onetimejob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.get(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(one_time_job.pk))

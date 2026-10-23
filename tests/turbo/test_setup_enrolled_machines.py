@@ -6,10 +6,14 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaMachine
 from accounts.models import Policy
 from zentral.contrib.turbo.command_backends import CommandBackend
-from zentral.contrib.turbo.models import OneTimeJob, RecurringJobMachine
-from .utils import (TurboSetupTestCase, forbid_job_kind_policy, force_command,
-                    force_configuration, force_enrolled_machine, force_enrollment,
-                    force_mscp_check, force_recurring_job, force_script, turbo_policy)
+from zentral.contrib.turbo.models import OneTimeJob, OneTimeJobMachine, RecurringJobMachine
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSetupTestCase,
+                    forbid_job_kind_policy, force_command, force_configuration, force_enrolled_machine,
+                    force_enrollment, force_mscp_check, force_one_time_job, force_recurring_job, force_script,
+                    turbo_policy)
+
+
+JOB_MACHINE_ACTIONS = ('Turbo::Action::"viewOneTimeJobMachine"', 'Turbo::Action::"viewRecurringJobMachine"')
 
 
 class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
@@ -119,7 +123,8 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
         recurring_job = force_recurring_job(configuration=configuration)
         RecurringJobMachine.objects.create(serial_number=serial_number, recurring_job=recurring_job,
                                            seen_version=recurring_job.job.version)
-        self.login("turbo.view_enrolledmachine")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine",
+                                            actions=JOB_MACHINE_ACTIONS))
         response = self.client.get(reverse("turbo:enrolled_machine", args=(serial_number,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "turbo/enrolledmachine_detail.html")
@@ -135,12 +140,99 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
         mscp_rj = force_recurring_job(configuration=configuration, job=force_mscp_check().job)
         RecurringJobMachine.objects.create(serial_number=serial_number, recurring_job=script_rj)
         RecurringJobMachine.objects.create(serial_number=serial_number, recurring_job=mscp_rj)
-        self.login("turbo.view_enrolledmachine")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine",
+                                            actions=JOB_MACHINE_ACTIONS))
         response = self.client.get(reverse("turbo:enrolled_machine", args=(serial_number,)),
                                    {"kind": "mscp_check"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual([m.recurring_job.job_id for m in response.context["recurring_job_machines"]],
                          [mscp_rj.job_id])
+
+    # a job state needs its own view, and nothing else
+
+    def _machine_with_job_states(self):
+        configuration = force_configuration()
+        _, serial_number, _ = force_enrolled_machine(configuration=configuration, meta_business_unit=self.mbu)
+        other_configuration = force_configuration()
+        schedules = {}
+        for schedule_configuration in (configuration, other_configuration):
+            one_time_job = force_one_time_job(configuration=schedule_configuration)
+            OneTimeJobMachine.objects.create(serial_number=serial_number, one_time_job=one_time_job)
+            recurring_job = force_recurring_job(configuration=schedule_configuration)
+            RecurringJobMachine.objects.create(serial_number=serial_number, recurring_job=recurring_job)
+            schedules[schedule_configuration] = (one_time_job, recurring_job)
+        return serial_number, configuration, other_configuration, schedules
+
+    def _get_job_states(self, serial_number):
+        response = self.client.get(reverse("turbo:enrolled_machine", args=(serial_number,)))
+        self.assertEqual(response.status_code, 200)
+        return (response,
+                [otjm.one_time_job for otjm in response.context["one_time_job_machines"]],
+                [rjm.recurring_job for rjm in response.context["recurring_job_machines"]])
+
+    def test_enrolled_machine_detail_job_states_without_a_view_policy(self):
+        serial_number, _, _, schedules = self._machine_with_job_states()
+        self.login("turbo.view_enrolledmachine")
+        response, one_time_jobs, recurring_jobs = self._get_job_states(serial_number)
+        self.assertEqual(one_time_jobs, [])
+        self.assertEqual(recurring_jobs, [])
+        self.assertContains(response, "One-time (0)")
+        self.assertContains(response, "Recurring (0)")
+        for one_time_job, recurring_job in schedules.values():
+            self.assertNotContains(response, str(one_time_job.job.definition))
+            self.assertNotContains(response, str(recurring_job.job.definition))
+
+    def test_enrolled_machine_detail_only_the_visible_job_states(self):
+        serial_number, configuration, _, schedules = self._machine_with_job_states()
+        self.login_with_policy(
+            turbo_policy(self.group, "turbo.view_enrolledmachine", actions=())
+            + turbo_policy(self.group, actions=JOB_MACHINE_ACTIONS,
+                           condition=f'resource in Turbo::Configuration::"{configuration.pk}"')
+        )
+        response, one_time_jobs, recurring_jobs = self._get_job_states(serial_number)
+        one_time_job, recurring_job = schedules[configuration]
+        self.assertEqual(one_time_jobs, [one_time_job])
+        self.assertEqual(recurring_jobs, [recurring_job])
+        self.assertContains(response, "One-time (1)")
+        self.assertContains(response, "Recurring (1)")
+
+    def test_enrolled_machine_detail_job_states_without_the_view_of_the_schedule(self):
+        # one action decides each state: the view of its schedule is another decision
+        serial_number, _, _, schedules = self._machine_with_job_states()
+        self.login_with_policy(
+            turbo_policy(self.group, "turbo.view_enrolledmachine", actions=JOB_MACHINE_ACTIONS)
+            + f"forbid (principal, action in [{VIEW_ONE_TIME_JOB_ACTION}, {VIEW_RECURRING_JOB_ACTION}], resource);\n"
+        )
+        _, one_time_jobs, recurring_jobs = self._get_job_states(serial_number)
+        self.assertCountEqual(one_time_jobs, [one_time_job for one_time_job, _ in schedules.values()])
+        self.assertCountEqual(recurring_jobs, [recurring_job for _, recurring_job in schedules.values()])
+
+    def test_enrolled_machine_detail_job_states_need_their_own_view(self):
+        serial_number, configuration, _, schedules = self._machine_with_job_states()
+        self.login_with_policy(
+            turbo_policy(self.group, "turbo.view_enrolledmachine",
+                         actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION))
+            + turbo_policy(self.group, actions=JOB_MACHINE_ACTIONS,
+                           condition=f'resource in Turbo::Configuration::"{configuration.pk}"')
+        )
+        _, one_time_jobs, recurring_jobs = self._get_job_states(serial_number)
+        one_time_job, recurring_job = schedules[configuration]
+        self.assertEqual(one_time_jobs, [one_time_job])
+        self.assertEqual(recurring_jobs, [recurring_job])
+
+    def test_enrolled_machine_detail_job_states_one_decision_for_each_row(self):
+        # like is not in the SQL subset: the same rows, with one decision for each state
+        serial_number, configuration, _, schedules = self._machine_with_job_states()
+        self.login_with_policy(
+            turbo_policy(self.group, "turbo.view_enrolledmachine", actions=())
+            + turbo_policy(self.group, actions=JOB_MACHINE_ACTIONS,
+                           condition=f'resource in Turbo::Configuration::"{configuration.pk}" '
+                                     '&& resource.job.kind like "*"')
+        )
+        _, one_time_jobs, recurring_jobs = self._get_job_states(serial_number)
+        one_time_job, recurring_job = schedules[configuration]
+        self.assertEqual(one_time_jobs, [one_time_job])
+        self.assertEqual(recurring_jobs, [recurring_job])
 
     def test_enrolled_machines_pagination_reset_link(self):
         force_enrolled_machine(meta_business_unit=self.mbu)

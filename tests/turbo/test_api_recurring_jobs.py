@@ -6,8 +6,9 @@ from django.utils.crypto import get_random_string
 from accounts.models import Policy
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.turbo.models import RecurringJob
-from .utils import (TurboAPITestCase, forbid_job_kind_policy, force_command, force_configuration,
-                    force_mscp_check, force_recurring_job, force_script, recurring_job_update_data, turbo_policy)
+from .utils import (VIEW_RECURRING_JOB_ACTION, TurboAPITestCase, forbid_job_kind_policy, force_command,
+                    force_configuration, force_mscp_check, force_recurring_job, force_script,
+                    recurring_job_update_data, turbo_policy, view_schedule_policy)
 
 
 class TurboRecurringJobAPITestCase(TurboAPITestCase):
@@ -96,10 +97,23 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
                               "tags": [tag.pk], "excluded_tags": [tag.pk]})
         self.assertEqual(response.status_code, 400)
 
+    def test_list_recurring_jobs_without_a_policy(self):
+        # each recurring job has its own decision, so the list needs no permission, and it is empty
+        force_recurring_job()
+        self.set_permissions()
+        response = self.get(reverse("turbo_api:recurring_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"count": 0, "next": None, "previous": None, "results": []})
+
+    def test_get_recurring_job_without_a_policy(self):
+        recurring_job = force_recurring_job()
+        self.set_permissions()
+        self.assertEqual(self.get(reverse("turbo_api:recurring_job", args=(recurring_job.pk,))).status_code, 403)
+
     def test_list_recurring_jobs(self):
         # creation order — LimitOffset pagination over an unordered queryset returns unstable pages
         recurring_jobs = [force_recurring_job() for _ in range(2)]
-        self.set_permissions("turbo.view_recurringjob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_RECURRING_JOB_ACTION,)))
         response = self.get(reverse("turbo_api:recurring_jobs"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 2)
@@ -108,7 +122,7 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
 
     def test_list_recurring_jobs_constant_query_count(self):
         # the serializer renders tags/excluded_tags; the list queryset prefetches them → no per-row N+1
-        self.set_permissions("turbo.view_recurringjob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_RECURRING_JOB_ACTION,)))
         force_recurring_job()
         self.get(reverse("turbo_api:recurring_jobs"))  # warm process-level caches
         with CaptureQueriesContext(connection) as one:
@@ -122,16 +136,46 @@ class TurboRecurringJobAPITestCase(TurboAPITestCase):
     def test_list_recurring_jobs_filter_by_configuration(self):
         recurring_job = force_recurring_job()
         force_recurring_job()
-        self.set_permissions("turbo.view_recurringjob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_RECURRING_JOB_ACTION,)))
         response = self.get(reverse("turbo_api:recurring_jobs"),
                             {"configuration": str(recurring_job.configuration.pk)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual(response.json()["results"][0]["id"], str(recurring_job.pk))
 
+    def test_list_recurring_jobs_only_the_visible_ones(self):
+        visible = force_recurring_job()
+        force_recurring_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        response = self.get(reverse("turbo_api:recurring_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual([j["id"] for j in response.json()["results"]], [str(visible.pk)])
+
+    def test_list_recurring_jobs_a_policy_that_sql_cannot_express(self):
+        # like: one decision for each schedule, with the same rows
+        visible = force_recurring_job()
+        force_recurring_job()
+        self.set_policy(view_schedule_policy(
+            self.group, condition=(f'when {{ resource in Turbo::Configuration::"{visible.configuration.pk}" '
+                                   '&& resource.job.kind like "*" }')))
+        response = self.get(reverse("turbo_api:recurring_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual([j["id"] for j in response.json()["results"]], [str(visible.pk)])
+
+    def test_get_recurring_job_not_visible(self):
+        visible = force_recurring_job()
+        hidden = force_recurring_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        self.assertEqual(self.get(reverse("turbo_api:recurring_job", args=(visible.pk,))).status_code, 200)
+        self.assertEqual(self.get(reverse("turbo_api:recurring_job", args=(hidden.pk,))).status_code, 403)
+
     def test_get_recurring_job(self):
         recurring_job = force_recurring_job(interval=3600)
-        self.set_permissions("turbo.view_recurringjob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_RECURRING_JOB_ACTION,)))
         response = self.get(reverse("turbo_api:recurring_job", args=(recurring_job.pk,)))
         self.assertEqual(response.status_code, 200)
         data = response.json()
