@@ -734,6 +734,29 @@ class PBACEngineRegistrationTestCase(TestCase):
         with self.assertRaises(LookupError):
             self.engine.get_action("createMachineTag", self.namespace)
 
+    def test_register_action_legacy_perm_on_rows(self):
+        # a legacy perm is a decision on System::"any", which a policy scoped to rows never matches
+        with self.assertRaises(ValueError) as cm:
+            self.engine.register_action(
+                "viewMachine", self.namespace,
+                [ActionGroupBasename.ADMIN],
+                applies_to=AppliesTo(principals=(USER,), resources=(ResourceType("Machine", self.namespace),)),
+                legacy_perm="inventory.view_machine",
+            )
+        self.assertEqual(cm.exception.args[0],
+                         "Action 'viewMachine' does not take System: it cannot have a legacy perm")
+        self.assertNotIn(("viewMachine", "Inventory"), self.engine.actions)
+        self.assertNotIn("inventory.view_machine", self.engine.legacy_perm_actions)
+
+    def test_register_action_legacy_perm_on_rows_and_system(self):
+        action = self.engine.register_action(
+            "createMachineTag", self.namespace,
+            [ActionGroupBasename.ADMIN],
+            applies_to=AppliesTo(principals=(USER,), resources=(ResourceType("Machine", self.namespace), SYSTEM)),
+            legacy_perm="inventory.add_machinetag",
+        )
+        self.assertIs(self.engine.legacy_perm_actions["inventory.add_machinetag"], action)
+
     def test_get_action_returns_registered(self):
         action = self.engine.register_action(
             "createMachineTag", self.namespace,

@@ -243,7 +243,6 @@ class RenderSchemaJSONTestCase(SimpleTestCase):
                 resources=(machine,),
                 context={"tagName": AttrSpec(str, required=False)},
             ),
-            legacy_perm="inventory.add_machinetag",
         )
 
     def test_every_namespace_has_both_keys(self):

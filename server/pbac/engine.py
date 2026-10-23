@@ -162,11 +162,15 @@ class Engine:
         ``legacy_perm`` is the optional Django-perm string (e.g.
         ``"inventory.add_machinetag"``) that maps to this action via
         ``ZentralBackend.has_perm``. It's intended to be retired once every
-        view uses PBACViewMixin directly.
+        view uses PBACViewMixin directly. It is a decision on System::"any",
+        so the action must take System.
 
         ``help_text`` describes what the action authorizes, for the schema
         browser. Documentation only — it never reaches the authorization
         backend.
+
+        Raises ValueError if ``legacy_perm`` is set and ``applies_to`` does
+        not take System.
 
         Raises ActionRegistrationConflict if (id, namespace) is already
         registered with different action groups, a different applies_to, a
@@ -175,6 +179,10 @@ class Engine:
 
         Any EntityType referenced in ``applies_to`` is auto-registered.
         """
+        # A policy scoped to rows never matches System::"any", so a legacy perm on an action on rows would
+        # change what its has_perm() calls mean. Its callers need typed requests instead.
+        if legacy_perm and SYSTEM not in applies_to.resources:
+            raise ValueError(f"Action {id!r} does not take System: it cannot have a legacy perm")
         key = (id, namespace.id)
         new_groups = self._build_action_groups(namespace, group_basenames)
         action = self.actions.get(key)
