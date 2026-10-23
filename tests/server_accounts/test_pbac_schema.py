@@ -24,7 +24,6 @@ from pbac.types import (
     AppliesTo,
     AttrSpec,
     LEGACY_PERM_APPLIES_TO,
-    PrincipalType,
     PrimitiveType,
     ResourceType,
     SYSTEM,
