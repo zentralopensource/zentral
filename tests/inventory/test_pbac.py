@@ -1,12 +1,14 @@
 from django.contrib.auth.models import Group
+from django.db.models import Q
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
 from pbac.engine import engine
 from pbac.entities import Principal, Request
-from zentral.contrib.inventory.models import MetaMachine
-from zentral.contrib.inventory.pbac import get_meta_machine_resource
+from zentral.contrib.inventory.models import MachineSnapshot, MetaMachine
+from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, MBU_RESOURCE_TYPE, get_machine_sql_entities,
+                                            get_meta_machine_resource)
 
 
 class InventoryPBACMachineResourceTestCase(TestCase):
@@ -81,3 +83,51 @@ class InventoryPBACMachineResourceTestCase(TestCase):
     def test_the_resource_is_cached_on_the_meta_machine(self):
         machine = MetaMachine("C02ABCDEFGH")
         self.assertIs(get_meta_machine_resource(machine), get_meta_machine_resource(machine))
+
+
+class InventoryPBACMachineSQLEntitiesTestCase(TestCase):
+    """The ids that no machine has give False. The turbo scoping tests compare the rows with Cedar."""
+
+    def setUp(self):
+        entities = get_machine_sql_entities("serial_number")
+        self.machine = entities[MACHINE_RESOURCE_TYPE]
+        self.meta_business_unit = entities[MBU_RESOURCE_TYPE]
+
+    def test_a_serial_number(self):
+        self.assertEqual(self.machine(["C02ABCDEFGH"]), Q(serial_number="C02ABCDEFGH"))
+
+    def test_an_encoded_serial_number(self):
+        self.assertEqual(self.machine([".QUIiQ0Q"]), Q(serial_number='AB"CD'))
+
+    def test_serial_numbers(self):
+        self.assertEqual(self.machine(["C02ABCDEFGH", ".A", ".QUIiQ0Q"]),
+                         Q(serial_number__in=["C02ABCDEFGH", 'AB"CD']))
+
+    def test_machine_ids_that_no_machine_has(self):
+        for entity_id in (
+            ".A",  # not base64
+            ".gA",  # not UTF-8
+            ".QzAyQUJDREVGR0g",  # C02ABCDEFGH, which needs no encoding
+            ".AA",  # NUL, which no text column has
+        ):
+            with self.subTest(entity_id=entity_id):
+                self.assertIs(self.machine([entity_id]), False)
+
+    def _meta_business_unit_sql(self, entity_ids):
+        return str(MachineSnapshot.objects.filter(self.meta_business_unit(entity_ids)).query)
+
+    def test_a_meta_business_unit(self):
+        sql = self._meta_business_unit_sql(["1", "01"])
+        self.assertEqual(sql.count("EXISTS"), 1)
+        self.assertIn('"meta_business_unit_id" = 1', sql)
+
+    def test_meta_business_units(self):
+        # one EXISTS for all the units
+        sql = self._meta_business_unit_sql(["1", "yolo", "2"])
+        self.assertEqual(sql.count("EXISTS"), 1)
+        self.assertIn('"meta_business_unit_id" IN (1, 2)', sql)
+
+    def test_meta_business_unit_ids_that_no_meta_business_unit_has(self):
+        for entity_id in ("yolo", "01", " 1", ""):
+            with self.subTest(entity_id=entity_id):
+                self.assertIs(self.meta_business_unit([entity_id]), False)

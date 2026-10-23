@@ -348,14 +348,18 @@ def compile_policies(policies, sql_map):
     return _and(permits, _not(forbids))
 
 
+def _has_context(action):
+    # Cedar evaluates the list with an empty context, so a forbid that reads the context of a row would not apply
+    return action.applies_to is not None and bool(action.applies_to.context)
+
+
 def scope_queryset(user_obj, action, queryset, sql_map):
     """The rows of the queryset that the user can see with the action, with one SQL filter.
 
     Return None when a policy has an expression that this module cannot write as SQL. The caller then makes
     one decision for each row.
     """
-    # Cedar evaluates the list with an empty context, so a forbid that reads the context of a row would not apply
-    if action.applies_to is not None and action.applies_to.context:
+    if _has_context(action):
         raise ValueError("An action with a context needs one decision for each row")
     policies = engine.undecided_policies(Request(Principal.from_user(user_obj), action, None))
     if not isinstance(policies, bool):
@@ -367,3 +371,22 @@ def scope_queryset(user_obj, action, queryset, sql_map):
     if policies is False:
         return queryset.none()
     return queryset.filter(policies)
+
+
+def visible_rows(user_obj, request_class, queryset):
+    """The rows of the queryset that the user can see with request_class.pbac_action, as a queryset.
+
+    One SQL filter with request_class.sql_map when the action has no context and the policies allow it. Else
+    one decision for each row: request_class.requests_for_rows(user_obj, rows) gives the requests, with the
+    context of each row, and request_class.row_relations names the relations that the requests read.
+    """
+    action = request_class.pbac_action
+    if not _has_context(action):
+        scoped_queryset = scope_queryset(user_obj, action, queryset, request_class.sql_map)
+        if scoped_queryset is not None:
+            return scoped_queryset
+    # all the rows, before the page: a page cut first drops rows that the user can see
+    rows = list(queryset.select_related(*request_class.row_relations).prefetch_related(None))
+    requests = request_class.requests_for_rows(user_obj, rows)
+    engine.authorize_requests(requests)
+    return queryset.filter(pk__in=[row.pk for row, request in zip(rows, requests) if request.is_authorized])

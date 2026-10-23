@@ -1861,7 +1861,7 @@ The state of the job on each machine, as the machine page gives it.
 * Optional filter parameter:
     * `serial_number`: the serial number of a machine
 
-The resource of the action is a member of the machine and of the recurring job, and the recurring job is a member of its configuration. So a policy can use the machine, its meta business units, the recurring job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`.
+The resource of the action is a member of the machine and of the recurring job, and the recurring job is a member of its configuration. So a policy can use the machine, its meta business units, the recurring job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`. Zentral filters the machines in the database with the same expressions as for a [one-time job](#apiturboone_time_jobsuuidpkmachines).
 
 A machine is in the list after the agent reports the job in its status. The attributes are the same as for a [one-time job](#apiturboone_time_jobsuuidpkmachines), with one more: `seen_interval`, the interval that the agent uses, in seconds. On a recurring job, `last_result_at` is the time of the last run, and Zentral continues to serve the job. A recurring job has no artifacts.
 
@@ -2051,6 +2051,16 @@ The state of the job on each machine, with the artifacts that the job collected 
     * `serial_number`: the serial number of a machine
 
 The resource of `viewOneTimeJobMachine` is a member of the machine and of the one-time job, and the one-time job is a member of its configuration. So a policy can use the machine, its meta business units, the one-time job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`.
+
+Zentral filters the machines in the database when the policies of `viewOneTimeJobMachine` use only these expressions on the resource:
+
+* `resource in` an entity or a set of entities, `resource ==` an entity, and `resource is` a type
+* `resource.job ==` a job, and `resource.job.kind ==` a string
+* `!=`, `&&`, `||` and `!`
+
+A call then reads only the machines of its page. With another expression on the resource, for example `has` or `like`, Zentral decides for each machine of the job before it cuts the page. The time of such a call then grows with the number of machines of the job, for any `limit`.
+
+The policies can use any expression on the principal and on the action. A policy for all the actions, or for an action group that contains `viewOneTimeJobMachine`, is also a policy of `viewOneTimeJobMachine`.
 
 `artifacts` has only the artifacts that the caller can see. See [See and download an artifact](#see-and-download-an-artifact). `download_url` is `null` when the `status` is not `uploaded`, or when the caller cannot download the artifact.
 
