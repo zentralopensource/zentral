@@ -158,6 +158,27 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         self.assertEqual(response.json()["count"], 1)
         self.assertEqual([j["id"] for j in response.json()["results"]], [str(visible.pk)])
 
+    def test_list_one_time_jobs_filters(self):
+        one_time_job = force_one_time_job()
+        hidden = force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{one_time_job.configuration.pk}"'))
+        for params, pks in (({"configuration": str(one_time_job.configuration.pk)}, [str(one_time_job.pk)]),
+                            ({"job": str(one_time_job.job.pk)}, [str(one_time_job.pk)]),
+                            # the ids are not loaded: an unknown id gives the empty list of a hidden one
+                            ({"configuration": str(hidden.configuration.pk)}, []),
+                            ({"configuration": str(uuid.uuid4())}, []),
+                            ({"job": str(uuid.uuid4())}, [])):
+            response = self.get(reverse("turbo_api:one_time_jobs"), params)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual([j["id"] for j in response.json()["results"]], pks)
+
+    def test_list_one_time_jobs_malformed_filters(self):
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
+        response = self.get(reverse("turbo_api:one_time_jobs"), {"configuration": "yolo", "job": "fomo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"configuration": ["Enter a valid UUID."], "job": ["Enter a valid UUID."]})
+
     def test_list_one_time_jobs_a_policy_that_sql_cannot_express(self):
         # like: one decision for each schedule, with the same rows
         visible = force_one_time_job()

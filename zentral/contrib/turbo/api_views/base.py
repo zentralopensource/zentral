@@ -1,3 +1,4 @@
+from django_filters import rest_framework as filters
 from zentral.utils.drf import ListCreateAPIViewWithAudit, MaxLimitOffsetPagination
 from pbac.scoping import visible_rows
 from pbac.utils import check_request
@@ -13,10 +14,16 @@ from ..serializers import JobScopeResourceSerializer
 # configuration and the job of a schedule cannot change.
 
 
+class JobScopeFilter(filters.FilterSet):
+    # the ids are not loaded: an unknown id and an id that the caller cannot see give the same empty list
+    configuration = filters.UUIDFilter()
+    job = filters.UUIDFilter()
+
+
 class BaseJobScopeList(ListCreateAPIViewWithAudit):
     permission_classes = [IsAuthenticated]
     pagination_class = MaxLimitOffsetPagination
-    filterset_fields = ("configuration", "job")
+    filterset_class = JobScopeFilter
     create_pbac_request_class = None
     view_pbac_request_class = None
 
