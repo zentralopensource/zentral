@@ -1,4 +1,4 @@
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -86,13 +86,11 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         return ctx
 
 
-class DownloadJobUploadView(PermissionRequiredMixin, View):
+class DownloadJobUploadView(LoginRequiredMixin, View):
     """Download a collected artifact.
 
-    view_enrolledmachine gives access to the machine page. The typed action decides if the user can
-    read the data in the artifact.
+    Only the typed action decides, as in the API: the download acts on the artifact alone.
     """
-    permission_required = "turbo.view_enrolledmachine"
 
     def get(self, request, **kwargs):
         upload = get_object_or_404(JobUpload, pk=kwargs["pk"])

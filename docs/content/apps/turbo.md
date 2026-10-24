@@ -515,7 +515,7 @@ forbid (
 ) when { resource.job.kind == "file_export" };
 ```
 
-The machine page also needs the `turbo.view_enrolledmachine` permission, which is global. A meta business unit scope for the machine pages is separate work. The [API](#apiturboone_time_jobsuuidpkmachines) uses the typed actions only.
+The machine page also needs the `turbo.view_enrolledmachine` permission, which is global. A meta business unit scope for the machine pages is separate work. The download needs `downloadJobUpload` only, in the console as in the [API](#apiturboone_time_jobsuuidpkmachines).
 
 **Verification never reopens a one-time job.** That is what the two axes are for: the job was done on that machine when the agent reported, whatever the storage says afterwards. A `mismatch` does not give the agent another destination, and it does not make Zentral ask for the file again.
 

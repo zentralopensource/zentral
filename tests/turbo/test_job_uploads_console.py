@@ -294,13 +294,16 @@ class TurboJobUploadConsoleTestCase(TurboSetupTestCase):
             self.client.get(reverse("turbo:download_job_upload", args=(upload.pk,))).status_code,
             403)
 
-    def test_the_download_needs_the_machine_page_permission_too(self):
-        # without the permission of the machine page, the download is refused before the lookup of the upload
+    def test_the_download_needs_its_action_only(self):
+        # one action decides the download, as in the API: not the permission of the machine page
         _, _, _, upload = self._machine_with_upload()
-        self.login_with_policy(turbo_policy(self.group, actions=ARTIFACT_ACTIONS))
-        self.assertEqual(
-            self.client.get(reverse("turbo:download_job_upload", args=(upload.pk,))).status_code,
-            403)
+        storage = storages["default"]
+        storage.save(upload.key, ContentFile(b"a sysdiagnose"))
+        self.addCleanup(storage.delete, upload.key)
+        self.login_with_policy(turbo_policy(self.group, actions=('Turbo::Action::"downloadJobUpload"',)))
+        response = self.client.get(reverse("turbo:download_job_upload", args=(upload.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"a sysdiagnose")
 
     def test_an_upload_that_never_landed_is_not_downloadable(self):
         _, _, _, upload = self._machine_with_upload(status=UploadStatus.FAILED,
