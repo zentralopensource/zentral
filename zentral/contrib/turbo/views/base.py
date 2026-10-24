@@ -101,8 +101,11 @@ class SearchFormMixin:
     # a list view driven by a search form exposing get_queryset(); subclasses set search_form_class
     search_form_class = None
 
+    def get_search_form_kwargs(self):
+        return {}
+
     def get_search_form(self):
-        return self.search_form_class(self.request.GET)
+        return self.search_form_class(self.request.GET, **self.get_search_form_kwargs())
 
     def get(self, request, *args, **kwargs):
         self.form = self.get_search_form()
@@ -127,16 +130,24 @@ class SearchFormListView(PermissionRequiredMixin, SearchFormMixin, UserPaginatio
     pass
 
 
-class ScheduleListView(LoginRequiredMixin, SearchFormMixin, UserPaginationListView):
-    # no permission: each schedule has its own decision, and the list has only the visible ones
-    view_pbac_request_class = None
-
+class ConfigurationFilterMixin:
     def get_search_form(self):
         form = super().get_search_form()
-        # its choices are all the configurations, and the list needs no permission
+        # its choices are all the configurations
         if not self.request.user.has_perm("turbo.view_configuration"):
             del form.fields["configuration"]
         return form
+
+
+class JobListView(ConfigurationFilterMixin, SearchFormListView):
+    # the "Scheduled in" filter reads the schedules that the user can see
+    def get_search_form_kwargs(self):
+        return {"user": self.request.user}
+
+
+class ScheduleListView(LoginRequiredMixin, ConfigurationFilterMixin, SearchFormMixin, UserPaginationListView):
+    # no permission: each schedule has its own decision, and the list has only the visible ones
+    view_pbac_request_class = None
 
     def get_queryset(self):
         return visible_rows(self.request.user, self.view_pbac_request_class, super().get_queryset())

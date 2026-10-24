@@ -1,8 +1,9 @@
 import logging
 
+from django.db.models import Q
 from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace, Principal, Request, Resource
-from pbac.scoping import SQLMap
+from pbac.scoping import SQLMap, visible_rows
 from pbac.types import SERVICE_ACCOUNT, USER, AppliesTo, AttrSpec, ResourceType
 from pbac.utils import check_request
 
@@ -528,6 +529,15 @@ def offerable_jobs(user_obj, create_request_class, configuration, queryset):
     requests = [create_request_class(user_obj, configuration, job) for job in jobs]
     engine.authorize_requests(requests)
     return [job for job, pbac_request in zip(jobs, requests) if pbac_request.is_authorized]
+
+
+def scheduled_in(user_obj, configuration):
+    # the jobs scheduled in the configuration, only through the schedules that the user can see: a hidden
+    # schedule must not make its job match
+    return (Q(job__in=visible_rows(user_obj, ViewRecurringJobRequest,
+                                   RecurringJob.objects.filter(configuration=configuration)).values("job"))
+            | Q(job__in=visible_rows(user_obj, ViewOneTimeJobRequest,
+                                     OneTimeJob.objects.filter(configuration=configuration)).values("job")))
 
 
 def check_download_job_upload(request, upload, schedule):

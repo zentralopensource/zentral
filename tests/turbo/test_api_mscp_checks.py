@@ -3,8 +3,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.turbo.models import Job, MSCPCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
-from .utils import (TurboAPITestCase, force_configuration, force_mscp_check,
-                    force_one_time_job, force_recurring_job)
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboAPITestCase, force_configuration,
+                    force_mscp_check, force_one_time_job, force_recurring_job, turbo_policy)
 
 
 class TurboMSCPCheckAPITestCase(TurboAPITestCase):
@@ -97,7 +97,8 @@ class TurboMSCPCheckAPITestCase(TurboAPITestCase):
         one_time_check = force_mscp_check()
         force_one_time_job(configuration=configuration, job=one_time_check.job)
         force_mscp_check()  # unscheduled
-        self.set_permissions("turbo.view_mscpcheck")
+        self.set_policy(turbo_policy(self.group, "turbo.view_mscpcheck",
+                                                 actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
         response = self.get(reverse("turbo_api:mscp_checks"), {"configuration": str(configuration.pk)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual({r["id"] for r in response.json()["results"]},

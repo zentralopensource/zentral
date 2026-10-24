@@ -7,8 +7,10 @@ It writes only a small part of the policy language: the expressions that cannot 
 Cedar skips a policy that errors, and the SQL filter must give the same rows. For all other expressions, it
 returns None, and the caller makes one decision for each row.
 """
+from collections import Counter
+
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Count, Q
 
 from .engine import engine
 from .entities import Principal, Request
@@ -373,6 +375,21 @@ def scope_queryset(user_obj, action, queryset, sql_map):
     return queryset.filter(policies)
 
 
+def _scoped_queryset(user_obj, request_class, queryset):
+    action = request_class.pbac_action
+    if _has_context(action):
+        return None
+    return scope_queryset(user_obj, action, queryset, request_class.sql_map)
+
+
+def _decided_rows(user_obj, request_class, queryset):
+    # all the rows, before the page: a page cut first drops rows that the user can see
+    rows = list(queryset.select_related(*request_class.row_relations).prefetch_related(None))
+    requests = request_class.requests_for_rows(user_obj, rows)
+    engine.authorize_requests(requests)
+    return [row for row, request in zip(rows, requests) if request.is_authorized]
+
+
 def visible_rows(user_obj, request_class, queryset):
     """The rows of the queryset that the user can see with request_class.pbac_action, as a queryset.
 
@@ -380,13 +397,17 @@ def visible_rows(user_obj, request_class, queryset):
     one decision for each row: request_class.requests_for_rows(user_obj, rows) gives the requests, with the
     context of each row, and request_class.row_relations names the relations that the requests read.
     """
-    action = request_class.pbac_action
-    if not _has_context(action):
-        scoped_queryset = scope_queryset(user_obj, action, queryset, request_class.sql_map)
-        if scoped_queryset is not None:
-            return scoped_queryset
-    # all the rows, before the page: a page cut first drops rows that the user can see
-    rows = list(queryset.select_related(*request_class.row_relations).prefetch_related(None))
-    requests = request_class.requests_for_rows(user_obj, rows)
-    engine.authorize_requests(requests)
-    return queryset.filter(pk__in=[row.pk for row, request in zip(rows, requests) if request.is_authorized])
+    scoped_queryset = _scoped_queryset(user_obj, request_class, queryset)
+    if scoped_queryset is not None:
+        return scoped_queryset
+    return queryset.filter(pk__in=[row.pk for row in _decided_rows(user_obj, request_class, queryset)])
+
+
+def visible_row_counts(user_obj, request_class, queryset, field_name):
+    """The number of rows of visible_rows for each value of the field."""
+    scoped_queryset = _scoped_queryset(user_obj, request_class, queryset)
+    if scoped_queryset is not None:
+        return dict(scoped_queryset.values_list(field_name).annotate(Count("pk")).order_by())
+    # the decisions load the rows, so they are counted here, not with a second query on all their keys
+    attname = queryset.model._meta.get_field(field_name).attname
+    return Counter(getattr(row, attname) for row in _decided_rows(user_obj, request_class, queryset))

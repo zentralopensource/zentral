@@ -3,7 +3,18 @@ from zentral.utils.drf import ListCreateAPIViewWithAudit, MaxLimitOffsetPaginati
 from pbac.scoping import visible_rows
 from pbac.utils import check_request
 from rest_framework.permissions import IsAuthenticated
+from ..pbac import scheduled_in
 from ..serializers import JobScopeResourceSerializer
+
+
+class ScheduledInFilterSet(filters.FilterSet):
+    # The configuration of a job is reached through its schedules, like the "Scheduled in" search of the
+    # console. Only the schedules that the caller can see count, and the id is not loaded: an unknown id gives
+    # an empty list.
+    configuration = filters.UUIDFilter(method="filter_configuration")
+
+    def filter_configuration(self, queryset, name, value):
+        return queryset.filter(scheduled_in(self.request.user, value))
 
 
 class JobScopeFilter(filters.FilterSet):

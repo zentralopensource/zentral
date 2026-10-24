@@ -4,10 +4,10 @@ from django.views.generic import DetailView
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from ..forms import ScriptForm, ScriptSearchForm
 from ..models import Script
-from .base import JobDetailMixin, SearchFormListView
+from .base import JobDetailMixin, JobListView
 
 
-class ScriptListView(SearchFormListView):
+class ScriptListView(JobListView):
     permission_required = "turbo.view_script"
     model = Script
     search_form_class = ScriptSearchForm

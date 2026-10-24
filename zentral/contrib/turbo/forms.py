@@ -5,7 +5,7 @@ from django.db.models.functions import Coalesce
 
 from zentral.contrib.inventory.models import Tag
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
-from .pbac import CreateOneTimeJobRequest, CreateRecurringJobRequest, offerable_jobs
+from .pbac import CreateOneTimeJobRequest, CreateRecurringJobRequest, offerable_jobs, scheduled_in
 from .models import (Configuration, EnrolledMachine, Enrollment, FileExport, Job, MSCPCheck, OneTimeJob,
                      RecurringJob, ScheduleMode, Script, Sysdiagnose)
 
@@ -71,7 +71,21 @@ class ScriptForm(forms.ModelForm):
         return script
 
 
-class ScriptSearchForm(forms.Form):
+class ScheduledInSearchFormMixin:
+    # The "Scheduled in" filter finds the jobs through their schedules. Only the schedules that the user
+    # can see count.
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def filter_scheduled_in(self, qs):
+        configuration = self.cleaned_data.get("configuration")
+        if configuration:
+            qs = qs.filter(scheduled_in(self.user, configuration))
+        return qs
+
+
+class ScriptSearchForm(ScheduledInSearchFormMixin, forms.Form):
     template_name = "django/forms/search.html"
 
     q = forms.CharField(
@@ -87,16 +101,10 @@ class ScriptSearchForm(forms.Form):
         q = self.cleaned_data.get("q")
         if q:
             qs = qs.filter(Q(name__icontains=q) | Q(source__icontains=q))
-        configuration = self.cleaned_data.get("configuration")
-        if configuration:
-            qs = qs.filter(
-                Q(job__recurringjob__configuration=configuration)
-                | Q(job__onetimejob__configuration=configuration)
-            ).distinct()
-        return qs
+        return self.filter_scheduled_in(qs)
 
 
-class CommandKindSearchForm(forms.Form):
+class CommandKindSearchForm(ScheduledInSearchFormMixin, forms.Form):
     # A subclass sets model to the proxy model of a kind.
     model = None
     template_name = "django/forms/search.html"
@@ -114,13 +122,7 @@ class CommandKindSearchForm(forms.Form):
         q = self.cleaned_data.get("q")
         if q:
             qs = qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
-        configuration = self.cleaned_data.get("configuration")
-        if configuration:
-            qs = qs.filter(
-                Q(job__recurringjob__configuration=configuration)
-                | Q(job__onetimejob__configuration=configuration)
-            ).distinct()
-        return qs
+        return self.filter_scheduled_in(qs)
 
 
 class SysdiagnoseSearchForm(CommandKindSearchForm):
@@ -163,7 +165,7 @@ class MSCPCheckForm(forms.ModelForm):
         return mscp_check
 
 
-class MSCPCheckSearchForm(forms.Form):
+class MSCPCheckSearchForm(ScheduledInSearchFormMixin, forms.Form):
     template_name = "django/forms/search.html"
 
     q = forms.CharField(
@@ -179,13 +181,7 @@ class MSCPCheckSearchForm(forms.Form):
         q = self.cleaned_data.get("q")
         if q:
             qs = qs.filter(Q(rule_id__icontains=q) | Q(baseline__icontains=q))
-        configuration = self.cleaned_data.get("configuration")
-        if configuration:
-            qs = qs.filter(
-                Q(job__recurringjob__configuration=configuration)
-                | Q(job__onetimejob__configuration=configuration)
-            ).distinct()
-        return qs
+        return self.filter_scheduled_in(qs)
 
 
 class JobChoiceField(forms.ModelChoiceField):

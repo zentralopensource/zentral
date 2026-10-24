@@ -31,12 +31,10 @@ class ConfigurationManager(models.Manager):
         )
 
     def summary(self):
-        # per-configuration counts for the overview; correlated subqueries so the four aggregates
+        # per-configuration counts for the overview; correlated subqueries so the two aggregates
         # don't fan out against each other (machines = distinct serials, an enrollment may re-enroll)
         query = (
             "select c.id as pk, c.name,"
-            "(select count(*) from turbo_recurringjob where configuration_id = c.id) as recurring_job_count,"
-            "(select count(*) from turbo_onetimejob where configuration_id = c.id) as one_time_job_count,"
             "(select count(*) from turbo_enrollment where configuration_id = c.id) as enrollment_count,"
             "(select count(distinct m.serial_number) from turbo_enrolledmachine as m"
             " join turbo_enrollment as e on (m.enrollment_id = e.id)"
