@@ -17,6 +17,7 @@ from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.events import TurboArtifactDownloadedEvent
 from zentral.contrib.turbo.models import (JobUpload, OneTimeJobMachine, RecurringJobMachine, UploadStatus,
                                           UploadVerification)
+from zentral.contrib.turbo.pbac import ViewOneTimeJobMachineRequest
 from zentral.core.events.base import EventMetadata
 from zentral.utils.storage import StorageError
 
@@ -35,6 +36,8 @@ RECURRING_ACTION = 'Turbo::Action::"viewRecurringJobMachine"'
 VIEW_ARTIFACT_ACTION = 'Turbo::Action::"viewJobUpload"'
 DOWNLOAD_ARTIFACT_ACTION = 'Turbo::Action::"downloadJobUpload"'
 ALL_ACTIONS = (ONE_TIME_ACTION, RECURRING_ACTION, VIEW_ARTIFACT_ACTION, DOWNLOAD_ARTIFACT_ACTION)
+ONE_TIME_JOB_ACTION = 'Turbo::Action::"viewOneTimeJob"'
+RECURRING_JOB_ACTION = 'Turbo::Action::"viewRecurringJob"'
 
 
 class TurboJobMachineAPITestCase(TurboAPITestCase):
@@ -142,6 +145,14 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
         response = self._one_time_list(one_time_job)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"count": 0, "next": None, "previous": None, "results": []})
+
+    def test_one_time_without_the_view_of_the_job(self):
+        # one action decides each machine: the view of the job is another decision
+        one_time_job = self._one_time_job(backend=CommandBackend.FILE_EXPORT)
+        otjm = self._otjm(one_time_job)
+        self._allow(*ALL_ACTIONS, forbid=f'in Turbo::OneTimeJob::"{one_time_job.pk}"',
+                    forbid_actions=(ONE_TIME_JOB_ACTION,))
+        self.assertEqual(self._serials(self._one_time_list(one_time_job)), [otjm.serial_number])
 
     def test_one_time(self):
         one_time_job = self._one_time_job(backend=CommandBackend.FILE_EXPORT)
@@ -273,6 +284,58 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
             counts.append(len(queries.captured_queries))
         self.assertEqual(counts[0], counts[1])
 
+    def _forbid_outside_the_meta_business_unit(self):
+        self.set_policy(turbo_policy(self.group, actions=ALL_ACTIONS)
+                        + f"forbid (principal, action == {ONE_TIME_ACTION}, resource) "
+                          f'unless {{ resource in Inventory::MetaBusinessUnit::"{self.mbu.pk}" }};\n')
+
+    @patch.object(ViewOneTimeJobMachineRequest, "requests_for_rows")
+    def test_one_time_the_policies_are_one_sql_filter(self, requests_for_rows):
+        one_time_job = self._one_time_job()
+        for in_mbu in (True, False, True):
+            self._otjm(one_time_job, in_mbu=in_mbu)
+        self._forbid_outside_the_meta_business_unit()
+        with CaptureQueriesContext(connection) as queries:
+            response_json = self._one_time_list(one_time_job, limit=1).json()
+        requests_for_rows.assert_not_called()
+        self.assertEqual(response_json["count"], 2)
+        self.assertEqual(len(response_json["results"]), 1)
+        # the count and the page, in SQL
+        row_queries = [q["sql"] for q in queries.captured_queries if 'FROM "turbo_onetimejobmachine"' in q["sql"]]
+        self.assertEqual(len(row_queries), 2)
+        self.assertIn("COUNT(", row_queries[0])
+        self.assertIn("LIMIT 1", row_queries[1])
+
+    def test_one_time_a_policy_that_sql_cannot_express(self):
+        # like: one decision for each machine, with the same rows
+        sysdiagnose_job = self._one_time_job()
+        otjm = self._otjm(sysdiagnose_job)
+        file_export_job = self._one_time_job(backend=CommandBackend.FILE_EXPORT)
+        self._otjm(file_export_job)
+        self.set_policy(turbo_policy(self.group, actions=ALL_ACTIONS)
+                        + f"forbid (principal, action == {ONE_TIME_ACTION}, resource) "
+                          'when { resource.job.kind like "file*" };\n')
+        with patch.object(ViewOneTimeJobMachineRequest, "requests_for_rows",
+                          wraps=ViewOneTimeJobMachineRequest.requests_for_rows) as requests_for_rows:
+            self.assertEqual(self._serials(self._one_time_list(sysdiagnose_job)), [otjm.serial_number])
+            self.assertEqual(self._serials(self._one_time_list(file_export_job)), [])
+        self.assertEqual(requests_for_rows.call_count, 2)
+
+    def test_one_time_queries_do_not_grow_with_the_machines_with_a_filter(self):
+        self._forbid_outside_the_meta_business_unit()
+        counts = []
+        for machine_count in (2, 5):
+            one_time_job = self._one_time_job()
+            for _ in range(machine_count):
+                otjm = self._otjm(one_time_job, in_mbu=True)
+                self._artifact(one_time_job, otjm.serial_number)
+            self._otjm(one_time_job)  # outside the meta business unit
+            with CaptureQueriesContext(connection) as queries:
+                response = self._one_time_list(one_time_job)
+            self.assertEqual(response.json()["count"], machine_count)
+            counts.append(len(queries.captured_queries))
+        self.assertEqual(counts[0], counts[1])
+
     # recurring job machines
 
     def test_recurring_unknown_job(self):
@@ -300,6 +363,14 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
                 "removed_at": None,
             }],
         })
+
+    def test_recurring_without_the_view_of_the_job(self):
+        # one action decides each machine: the view of the job is another decision
+        recurring_job = force_recurring_job(configuration=force_configuration(), job=force_script().job)
+        rjm = self._rjm(recurring_job)
+        self._allow(*ALL_ACTIONS, forbid=f'in Turbo::RecurringJob::"{recurring_job.pk}"',
+                    forbid_actions=(RECURRING_JOB_ACTION,))
+        self.assertEqual(self._serials(self._recurring_list(recurring_job)), [rjm.serial_number])
 
     def test_recurring_a_configuration_forbid(self):
         recurring_job = force_recurring_job(configuration=force_configuration(), job=force_script().job)

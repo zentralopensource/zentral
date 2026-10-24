@@ -1,16 +1,17 @@
-from django.contrib.auth.mixins import PermissionRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.generic import TemplateView, View
 from zentral.contrib.inventory.models import MetaMachine
+from pbac.scoping import visible_rows
 from zentral.utils.views import CreateViewWithAudit
 from ..forms import EnrolledMachineSearchForm, MachineOneTimeJobForm
 from ..models import (EnrolledMachine, Job, JobUpload, OneTimeJob, OneTimeJobMachine,
                       RecurringJobMachine, resolve_upload_schedules)
-from ..pbac import (authorize_job_upload_rows, can_create_one_time_job, check_create_one_time_job,
-                    check_download_job_upload)
+from ..pbac import (ViewOneTimeJobMachineRequest, ViewRecurringJobMachineRequest, authorize_job_upload_rows,
+                    can_create_one_time_job, check_create_one_time_job, check_download_job_upload)
 from ..uploads import build_download_response
 from .base import SearchFormListView
 
@@ -70,13 +71,15 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         if kind:
             one_time = one_time.filter(one_time_job__job__kind=kind)
             recurring = recurring.filter(recurring_job__job__kind=kind)
-        ctx["one_time_job_machines"] = one_time
-        ctx["recurring_job_machines"] = recurring
+        # a state that the user cannot see is not on the page, as in the machine lists of the API
+        user = self.request.user
+        ctx["one_time_job_machines"] = visible_rows(user, ViewOneTimeJobMachineRequest, one_time)
+        ctx["recurring_job_machines"] = visible_rows(user, ViewRecurringJobMachineRequest, recurring)
         ctx["kind_choices"] = Job.Kind.choices
         ctx["selected_kind"] = kind
         # the artifacts of this machine, newest first. An upload that the user cannot see is not on the page.
         uploads = authorize_job_upload_rows(
-            self.request.user,
+            user,
             JobUpload.objects.filter(serial_number=serial_number).order_by("-created_at"))
         if kind:
             # after the decision, with the job that it found: a filter before the decision looks for each schedule two
@@ -86,13 +89,11 @@ class EnrolledMachineDetailView(PermissionRequiredMixin, TemplateView):
         return ctx
 
 
-class DownloadJobUploadView(PermissionRequiredMixin, View):
+class DownloadJobUploadView(LoginRequiredMixin, View):
     """Download a collected artifact.
 
-    view_enrolledmachine gives access to the machine page. The typed action decides if the user can
-    read the data in the artifact.
+    Only the typed action decides, as in the API: the download acts on the artifact alone.
     """
-    permission_required = "turbo.view_enrolledmachine"
 
     def get(self, request, **kwargs):
         upload = get_object_or_404(JobUpload, pk=kwargs["pk"])

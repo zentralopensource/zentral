@@ -5,7 +5,8 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.turbo.models import Job, Script
 from zentral.core.compliance_checks.models import ComplianceCheck
-from .utils import TurboSetupTestCase, force_configuration, force_one_time_job, force_recurring_job, force_script
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSetupTestCase, force_configuration,
+                    force_one_time_job, force_recurring_job, force_script, turbo_policy)
 
 
 class TurboSetupScriptsTestCase(TurboSetupTestCase):
@@ -39,10 +40,35 @@ class TurboSetupScriptsTestCase(TurboSetupTestCase):
         scheduled = force_script()
         force_recurring_job(configuration=configuration, job=scheduled.job)
         force_script()  # not scheduled anywhere
-        self.login("turbo.view_script")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_script", "turbo.view_configuration",
+                                            actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
         response = self.client.get(reverse("turbo:scripts"), {"configuration": configuration.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["object_list"]), [scheduled])
+
+    def test_scripts_search_by_configuration_ignores_a_hidden_schedule(self):
+        # a hidden schedule does not make its script match
+        configuration = force_configuration()
+        scheduled = force_script()
+        force_recurring_job(configuration=configuration, job=scheduled.job)
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_script", "turbo.view_configuration",
+                                            actions=()))
+        response = self.client.get(reverse("turbo:scripts"), {"configuration": configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["object_list"]), [])
+
+    def test_scripts_no_configuration_search_without_its_permission(self):
+        # its choices are all the configurations
+        configuration = force_configuration()
+        scheduled = force_script()
+        force_recurring_job(configuration=configuration, job=scheduled.job)
+        other = force_script()
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_script",
+                                                        actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
+        response = self.client.get(reverse("turbo:scripts"), {"configuration": configuration.pk})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("configuration", response.context["form"].fields)
+        self.assertEqual(set(response.context["object_list"]), {scheduled, other})
 
     def test_scripts_search_no_result_shows_empty_results(self):
         force_script()
@@ -87,7 +113,8 @@ class TurboSetupScriptsTestCase(TurboSetupTestCase):
         script = force_script()
         force_recurring_job(configuration=configuration, job=script.job)
         force_one_time_job(configuration=configuration, job=script.job)
-        self.login("turbo.view_script", "turbo.view_recurringjob", "turbo.view_onetimejob")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_script",
+                                            actions=(VIEW_RECURRING_JOB_ACTION, VIEW_ONE_TIME_JOB_ACTION)))
         response = self.client.get(script.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         # The headings carry the count. A list has no count() without an argument, and the
@@ -96,14 +123,16 @@ class TurboSetupScriptsTestCase(TurboSetupTestCase):
         self.assertContains(response, "One-time job (1)")
         self.assertContains(response, configuration.get_absolute_url())
 
-    def test_script_detail_jobs_hidden_without_permission(self):
+    def test_script_detail_jobs_without_a_view_policy(self):
+        # the sections are there, without the schedules that the user cannot see
         configuration = force_configuration()
         script = force_script()
         force_recurring_job(configuration=configuration, job=script.job)
         self.login("turbo.view_script")
         response = self.client.get(script.get_absolute_url())
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Recurring job")
+        self.assertContains(response, "No recurring jobs.")
+        self.assertNotContains(response, configuration.name)
 
     # create script
 

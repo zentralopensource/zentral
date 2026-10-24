@@ -31,12 +31,10 @@ class ConfigurationManager(models.Manager):
         )
 
     def summary(self):
-        # per-configuration counts for the overview; correlated subqueries so the four aggregates
+        # per-configuration counts for the overview; correlated subqueries so the two aggregates
         # don't fan out against each other (machines = distinct serials, an enrollment may re-enroll)
         query = (
             "select c.id as pk, c.name,"
-            "(select count(*) from turbo_recurringjob where configuration_id = c.id) as recurring_job_count,"
-            "(select count(*) from turbo_onetimejob where configuration_id = c.id) as one_time_job_count,"
             "(select count(*) from turbo_enrollment where configuration_id = c.id) as enrollment_count,"
             "(select count(distinct m.serial_number) from turbo_enrolledmachine as m"
             " join turbo_enrollment as e on (m.enrollment_id = e.id)"
@@ -673,11 +671,9 @@ COMMAND_KIND_MODELS = {model.command_backend: model for model in (Sysdiagnose, F
 class JobScope(models.Model):
     # Shared by the scheduling models: WHICH configuration + machines a job is delivered to.
     #
-    # pbac.py registers create, update and delete by hand, on the configuration or on the row.
-    # An auto-registered action takes System with no context, so a policy cannot refuse one
-    # kind. Only view stays auto-registered. A typed view action must scope a list, which
-    # means a policy filters a queryset instead of a decision on one request.
-    pbac_excluded_default_permissions = ("add", "change", "delete")
+    # pbac.py registers the four actions by hand: create on the configuration, view, update and
+    # delete on the row. An auto-registered action takes System, so a policy cannot refuse one kind.
+    pbac_excluded_default_permissions = ("add", "change", "delete", "view")
 
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     tags = models.ManyToManyField(Tag, blank=True, related_name="%(app_label)s_%(class)s_tags")

@@ -96,7 +96,6 @@ class PBACEngineTestCase(TestCase):
                 "inventory.add_link",
                 "inventory.add_machinegroup",
                 "inventory.add_machinesnapshot",
-                "inventory.add_machinetag",
                 "inventory.add_metabusinessunit",
                 "inventory.add_osxapp",
                 "inventory.add_osxappinstance",
@@ -130,7 +129,6 @@ class PBACEngineTestCase(TestCase):
                 "inventory.delete_link",
                 "inventory.delete_machinegroup",
                 "inventory.delete_machinesnapshot",
-                "inventory.delete_machinetag",
                 "inventory.delete_metabusinessunit",
                 "inventory.delete_osxapp",
                 "inventory.delete_osxappinstance",
@@ -523,8 +521,6 @@ class PBACEngineTestCase(TestCase):
                 "turbo.view_enrollment",
                 "turbo.view_fileexport",
                 "turbo.view_mscpcheck",
-                "turbo.view_onetimejob",
-                "turbo.view_recurringjob",
                 "turbo.view_script",
                 "turbo.view_sysdiagnose",
                 "wsone.add_instance",
@@ -733,6 +729,35 @@ class PBACEngineRegistrationTestCase(TestCase):
     def test_get_action_missing_raises(self):
         with self.assertRaises(LookupError):
             self.engine.get_action("createMachineTag", self.namespace)
+
+    def test_register_action_legacy_perm_on_rows(self):
+        # a legacy perm is a decision on System::"any", which a policy scoped to rows never matches
+        with self.assertRaises(ValueError) as cm:
+            self.engine.register_action(
+                "viewMachine", self.namespace,
+                [ActionGroupBasename.ADMIN],
+                applies_to=AppliesTo(principals=(USER,), resources=(ResourceType("Machine", self.namespace),)),
+                legacy_perm="inventory.view_machine",
+            )
+        self.assertEqual(cm.exception.args[0],
+                         "Action 'viewMachine' takes another resource than System: it cannot have a legacy perm")
+        self.assertNotIn(("viewMachine", "Inventory"), self.engine.actions)
+        self.assertNotIn("inventory.view_machine", self.engine.legacy_perm_actions)
+
+    def test_register_action_legacy_perm_on_rows_and_system(self):
+        # a forbid on the rows would not apply to has_perm()
+        with self.assertRaises(ValueError) as cm:
+            self.engine.register_action(
+                "createMachineTag", self.namespace,
+                [ActionGroupBasename.ADMIN],
+                applies_to=AppliesTo(principals=(USER,),
+                                     resources=(ResourceType("Machine", self.namespace), SYSTEM)),
+                legacy_perm="inventory.add_machinetag",
+            )
+        self.assertEqual(cm.exception.args[0],
+                         "Action 'createMachineTag' takes another resource than System: it cannot have a legacy perm")
+        self.assertNotIn(("createMachineTag", "Inventory"), self.engine.actions)
+        self.assertNotIn("inventory.add_machinetag", self.engine.legacy_perm_actions)
 
     def test_get_action_returns_registered(self):
         action = self.engine.register_action(
@@ -995,11 +1020,14 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
         self.assertEqual(engine.entity_types[("Machine", "Inventory")].name, "Machine")
         self.assertEqual(engine.entity_types[("MetaBusinessUnit", "Inventory")].name, "MetaBusinessUnit")
 
-    def test_create_machine_tag_action_accepts_machine_and_system(self):
-        action = engine.legacy_perm_actions["inventory.add_machinetag"]
-        self.assertIsNotNone(action.applies_to)
-        resource_names = {r.name for r in action.applies_to.resources}
-        self.assertEqual(resource_names, {"Machine", "System"})
+    def test_machine_tag_write_actions_take_the_machine_only(self):
+        # no legacy perm: a decision on System::"any" would skip a forbid on a meta business unit
+        namespace = engine.get_namespace("Inventory")
+        for action_id, legacy_perm in (("createMachineTag", "inventory.add_machinetag"),
+                                       ("deleteMachineTag", "inventory.delete_machinetag")):
+            action = engine.get_action(action_id, namespace)
+            self.assertEqual({r.name for r in action.applies_to.resources}, {"Machine"})
+            self.assertNotIn(legacy_perm, engine.legacy_perm_actions)
 
     def test_view_machine_tag_action_belongs_to_admin_user_and_viewer_groups(self):
         # viewMachineTag is read-only, so — like every model-default view*
@@ -1021,7 +1049,7 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
             engine.get_action_group(ActionGroupBasename.VIEWER, namespace),
             engine.get_action_group(ActionGroupBasename.VIEWER),
         )
-        for legacy_perm in ("inventory.add_machinetag", "inventory.delete_machinetag"):
-            action = engine.legacy_perm_actions[legacy_perm]
+        for action_id in ("createMachineTag", "deleteMachineTag"):
+            action = engine.get_action(action_id, namespace)
             for group in viewer_groups:
                 self.assertNotIn(group, action.parents)

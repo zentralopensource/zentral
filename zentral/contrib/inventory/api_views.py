@@ -1,3 +1,5 @@
+import logging
+from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.http import Http404
 from django.urls import reverse
@@ -10,6 +12,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
+from pbac.engine import engine
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
                                RetrieveUpdateDestroyAPIViewWithAudit)
@@ -20,6 +23,7 @@ from .models import (JMESPathCheck,
                      MetaBusinessUnit,
                      MetaMachine,
                      Tag, Taxonomy)
+from .pbac import CreateMachineTagRequest, DeleteMachineTagRequest
 from .serializers import (CleanupInventorySerializer,
                           FullExportSerializer,
                           JMESPathCheckSerializer,
@@ -41,12 +45,15 @@ from .tasks import (cleanup_inventory,
 from .utils import MSQuery, add_machine_tags, archive_machine_snapshots, remove_machine_tags
 
 
+logger = logging.getLogger("zentral.contrib.inventory.api_views")
+
+
 # Machine mass tagging
 
 
 class UpdateMachineTags(APIView):
-    permission_required = ("inventory.add_tag", "inventory.add_taxonomy",
-                           "inventory.add_machinetag", "inventory.delete_machinetag")
+    # The legacy perms create the tags and the taxonomies. Each machine and tag has its own typed decision.
+    permission_required = ("inventory.add_tag", "inventory.add_taxonomy")
     permission_classes = [DjangoPermissionRequired]
 
     def _prepare_taxonomies_and_tags(self):
@@ -108,47 +115,69 @@ class UpdateMachineTags(APIView):
         for t in cursor.fetchall():
             yield t[0]
 
-    def _update_machine_tags(self, serial_number):
-        total_removed = 0
-        total_added = 0
+    def _get_machine_tag_operations(self, serial_number):
+        # in order: a taxonomy is cleared, then its tags are set
+        operations = []
         if self.taxonomies_to_clear:
-            total_removed += remove_machine_tags(
-                serial_number,
+            operations.append((
+                DeleteMachineTagRequest, remove_machine_tags,
                 [mt.tag
-                 for mt in MachineTag.objects.select_related("tag")
+                 for mt in MachineTag.objects.select_related("tag__taxonomy")
                                              .filter(serial_number=serial_number,
                                                      tag__taxonomy__name__in=self.taxonomies_to_clear)],
-                self.request,
-            )
+            ))
         for taxonomy, tags in self.tags_to_set.items():
-            total_added += add_machine_tags(serial_number, tags, self.request)
-            total_removed += remove_machine_tags(
-                serial_number,
+            operations.append((CreateMachineTagRequest, add_machine_tags, tags))
+            operations.append((
+                DeleteMachineTagRequest, remove_machine_tags,
                 [mt.tag
-                 for mt in MachineTag.objects.select_related("tag")
+                 for mt in MachineTag.objects.select_related("tag__taxonomy")
                                              .filter(serial_number=serial_number,
                                                      tag__taxonomy=taxonomy)
                                              .exclude(tag__in=tags)],
-                self.request,
-            )
-        total_added += add_machine_tags(serial_number, self.tags_to_add, self.request)
-        total_removed += remove_machine_tags(serial_number, self.tags_to_remove, self.request)
-        return total_removed, total_added
+            ))
+        operations.append((CreateMachineTagRequest, add_machine_tags, self.tags_to_add))
+        operations.append((DeleteMachineTagRequest, remove_machine_tags, self.tags_to_remove))
+        return operations
+
+    def _check_machine_tag_operations(self, machine_operations):
+        machines = {serial_number: MetaMachine(serial_number) for serial_number, _ in machine_operations}
+        MetaMachine.prefetch_meta_business_units(machines.values())
+        pbac_requests = {}
+        for serial_number, operations in machine_operations:
+            for request_class, _, tags in operations:
+                for tag in tags:
+                    key = (request_class, serial_number, tag.pk)
+                    if key not in pbac_requests:
+                        pbac_requests[key] = request_class(self.request.user, machines[serial_number], tag)
+        engine.authorize_requests(list(pbac_requests.values()))
+        refused = False
+        for pbac_request in pbac_requests.values():
+            if not pbac_request.is_authorized:
+                logger.error("Permission denied %s", pbac_request, extra={"request": self.request})
+                refused = True
+        if refused:
+            raise PermissionDenied
 
     def post(self, request, *args, **kwargs):
         serializer = MachineTagsUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.data = serializer.data
         self._prepare_taxonomies_and_tags()
-        found_machines = 0
+        # all the decisions before the first write: a refused machine or tag leaves all the machines unchanged
+        machine_operations = [(serial_number, self._get_machine_tag_operations(serial_number))
+                              for serial_number in self._iter_serial_numbers()]
+        self._check_machine_tag_operations(machine_operations)
         total_removed = 0
         total_added = 0
-        for serial_number in self._iter_serial_numbers():
-            found_machines += 1
-            removed, added = self._update_machine_tags(serial_number)
-            total_removed += removed
-            total_added += added
-        return Response({"machines": {"found": found_machines},
+        for serial_number, operations in machine_operations:
+            for request_class, write, tags in operations:
+                count = write(serial_number, tags, request)
+                if request_class is CreateMachineTagRequest:
+                    total_added += count
+                else:
+                    total_removed += count
+        return Response({"machines": {"found": len(machine_operations)},
                          "tags": {"added": total_added,
                                   "removed": total_removed}})
 

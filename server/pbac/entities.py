@@ -108,13 +108,14 @@ class Request:
         self,
         principal: Principal,
         action: Action,
-        resource: Resource,
+        resource: Optional[Resource],
         context: Optional[Dict] = None,
         unknown_context: bool = False,
     ) -> None:
         # all or nothing: Cedar cannot be told that one key is missing, it errors on it instead
         if unknown_context and context:
             raise ValueError("A request with an unknown context cannot carry one")
+        # no resource: the request is for all the rows of a list
         self.principal = principal
         self.action = action
         self.resource = resource
@@ -125,6 +126,10 @@ class Request:
         else:
             self.is_authorized = None
         self.correlation_id = uuid.uuid4().hex
+
+    @property
+    def unknown_resource(self):
+        return self.resource is None
 
     @property
     def is_pending(self):

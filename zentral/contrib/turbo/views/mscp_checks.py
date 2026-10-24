@@ -4,10 +4,10 @@ from django.views.generic import DetailView
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from ..forms import MSCPCheckForm, MSCPCheckSearchForm
 from ..models import MSCPCheck
-from .base import JobDetailMixin, SearchFormListView
+from .base import JobDetailMixin, JobListView
 
 
-class MSCPCheckListView(SearchFormListView):
+class MSCPCheckListView(JobListView):
     permission_required = "turbo.view_mscpcheck"
     model = MSCPCheck
     search_form_class = MSCPCheckSearchForm

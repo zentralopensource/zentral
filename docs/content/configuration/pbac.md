@@ -114,6 +114,8 @@ Note what the two halves do here: the `resource in` clause restricts *which mach
 
 The `resource in` clause works because membership is transitive: the action applies to `Inventory::Machine`, and a machine is a member of the meta business units it belongs to. The Schema browser shows the types a principal or a resource is a member of, after the word *in*. A clause can name the type the action declares, or any of those.
 
+Each row has its own action, so a `forbid` on the view action of a container does not hide its rows: forbid the action of the rows, with `resource in` the container. An action that changes or deletes a resource also shows it, so a `forbid` on the view action alone does not hide a resource from a role that can change or delete it ([PBAC rules](../development/pbac-rules.md)).
+
 ## Finding the action you need
 
 Four options, in order of usefulness:

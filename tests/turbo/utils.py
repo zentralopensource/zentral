@@ -90,6 +90,20 @@ def force_one_time_job(configuration=None, job=None, not_before=None, not_after=
     return one_time_job
 
 
+# a PUT is a full update: the body is the state
+
+def recurring_job_update_data(recurring_job, **kwargs):
+    return {"configuration": str(recurring_job.configuration.pk), "job": str(recurring_job.job.pk),
+            "interval": None, "tags": [], "excluded_tags": [],
+            "serial_numbers": [], "excluded_serial_numbers": [], **kwargs}
+
+
+def one_time_job_update_data(one_time_job, **kwargs):
+    return {"configuration": str(one_time_job.configuration.pk), "job": str(one_time_job.job.pk),
+            "not_before": None, "not_after": None, "tags": [], "excluded_tags": [],
+            "serial_numbers": [], "excluded_serial_numbers": [], **kwargs}
+
+
 def force_enrollment(
     configuration=None,
     enrollment_secret=None,
@@ -210,16 +224,19 @@ class TurboAPITestCase(TestCase, LoginCase, RequestCase):
 
 # PBAC helpers
 #
-# The add, change and delete permissions of the schedules map to no action now, so
-# set_permissions() cannot permit the scheduling. These helpers build the policy: the legacy
-# permissions that a test needs, and the typed scheduling actions.
+# The permissions of the schedules map to no action, so set_permissions() cannot permit the
+# scheduling or the view of a schedule. These helpers build the policy: the legacy permissions that
+# a test needs, and the typed schedule actions.
 
-SCHEDULE_ACTIONS = ('Turbo::Action::"createOneTimeJob"',
-                    'Turbo::Action::"updateOneTimeJob"',
-                    'Turbo::Action::"deleteOneTimeJob"',
-                    'Turbo::Action::"createRecurringJob"',
-                    'Turbo::Action::"updateRecurringJob"',
-                    'Turbo::Action::"deleteRecurringJob"')
+VIEW_ONE_TIME_JOB_ACTION = 'Turbo::Action::"viewOneTimeJob"'
+VIEW_RECURRING_JOB_ACTION = 'Turbo::Action::"viewRecurringJob"'
+CREATE_SCHEDULE_ACTIONS = ('Turbo::Action::"createOneTimeJob"',
+                           'Turbo::Action::"createRecurringJob"')
+ROW_SCHEDULE_ACTIONS = ('Turbo::Action::"updateOneTimeJob"',
+                        'Turbo::Action::"deleteOneTimeJob"',
+                        'Turbo::Action::"updateRecurringJob"',
+                        'Turbo::Action::"deleteRecurringJob"')
+SCHEDULE_ACTIONS = CREATE_SCHEDULE_ACTIONS + ROW_SCHEDULE_ACTIONS
 
 
 def turbo_policy(group, *legacy_perms, actions=SCHEDULE_ACTIONS, condition=None):
@@ -237,11 +254,24 @@ def turbo_policy(group, *legacy_perms, actions=SCHEDULE_ACTIONS, condition=None)
 
 
 def forbid_job_kind_policy(kind):
-    # One policy for all six actions, on the job in the context. A create has no row, so the
-    # context is all that it can supply. No has guard: the question before the operator picks a
-    # job is a preview, and the expression residualizes.
+    # Two policies. A create has no schedule, so its context carries the job; no has guard, because
+    # the question before the operator picks a job is a preview, and the expression residualizes.
+    # An update and a delete read the job of the schedule.
     return ("forbid (\n"
             "  principal,\n"
-            f"  action in [{', '.join(SCHEDULE_ACTIONS)}],\n"
+            f"  action in [{', '.join(CREATE_SCHEDULE_ACTIONS)}],\n"
             "  resource\n"
-            f') when {{ context.job.kind == "{kind}" }};\n')
+            f') when {{ context.job.kind == "{kind}" }};\n'
+            "forbid (\n"
+            "  principal,\n"
+            f"  action in [{', '.join(ROW_SCHEDULE_ACTIONS)}],\n"
+            "  resource\n"
+            f') when {{ resource.job.kind == "{kind}" }};\n')
+
+
+def view_schedule_policy(group, scope="resource", condition=""):
+    return ("permit (\n"
+            f'  principal in Role::"{group.pk}",\n'
+            f"  action in [{VIEW_ONE_TIME_JOB_ACTION}, {VIEW_RECURRING_JOB_ACTION}],\n"
+            f"  {scope}\n"
+            f") {condition};\n")

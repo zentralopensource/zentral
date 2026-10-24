@@ -77,7 +77,7 @@ Zentral only stores the SHA-256 hash of the token: the plaintext is returned onc
 
 A machine can be moved to a different configuration by simply deploying a different Turbo payload. Since its per-machine job history and its Turbo compliance statuses belong to the configuration it is leaving, both are dropped when it re-homes; they are rebuilt from the new configuration's jobs as results come in.
 
-Enrolled machines are listed under *Turbo > Enrolled machines*, with the date they were last seen and the state of every job that has been delivered to them.
+Enrolled machines are listed under *Turbo > Enrolled machines*, with the date they were last seen and the state of every job that has been delivered to them. The page of a machine shows the state of a job when `viewOneTimeJobMachine` or `viewRecurringJobMachine` permits it, as for [the machines of a one-time job](#apiturboone_time_jobsuuidpkmachines).
 
 ## Jobs
 
@@ -191,30 +191,41 @@ Collecting a `sysdiagnose` archive, and even more so collecting arbitrary files,
 
 ### Scheduling permissions
 
-Six actions authorize the scheduling of a job:
+Eight actions authorize the scheduling of a job, and the view of the schedules:
 
-|Action|Resource|
-|---|---|
-|`Turbo::Action::"createOneTimeJob"`|The **configuration**. The schedule does not exist yet, so the resource is the configuration it will be created in.|
-|`Turbo::Action::"updateOneTimeJob"`|The **schedule**.|
-|`Turbo::Action::"deleteOneTimeJob"`|The **schedule**.|
-|`Turbo::Action::"createRecurringJob"`|The **configuration**, as for a one-time job.|
-|`Turbo::Action::"updateRecurringJob"`|The **schedule**.|
-|`Turbo::Action::"deleteRecurringJob"`|The **schedule**.|
+|Action|Resource|Context|
+|---|---|---|
+|`Turbo::Action::"createOneTimeJob"`|The **configuration**. The schedule does not exist yet, so the resource is the configuration it will be created in.|`job`, the job to schedule|
+|`Turbo::Action::"viewOneTimeJob"`|The **schedule**.|None|
+|`Turbo::Action::"updateOneTimeJob"`|The **schedule**.|None|
+|`Turbo::Action::"deleteOneTimeJob"`|The **schedule**.|None|
+|`Turbo::Action::"createRecurringJob"`|The **configuration**, as for a one-time job.|`job`, the job to schedule|
+|`Turbo::Action::"viewRecurringJob"`|The **schedule**.|None|
+|`Turbo::Action::"updateRecurringJob"`|The **schedule**.|None|
+|`Turbo::Action::"deleteRecurringJob"`|The **schedule**.|None|
 
-A schedule is a member of its configuration, so a policy scoped to a configuration covers the six actions. All six carry the job in `context.job`, so one policy can name them all. Refuse a kind with a `forbid`:
+A schedule is a member of its configuration, so a policy scoped to a configuration covers the eight actions. A schedule has its job in `resource.job`. A create has no schedule yet, so it has the job in `context.job`. The configuration and the job of a schedule cannot be changed.
+
+To refuse a kind, write two `forbid` policies, one for the create and one for the other actions:
 
 ```
 forbid (
   principal,
-  action in [Turbo::Action::"createOneTimeJob",
-             Turbo::Action::"updateOneTimeJob",
-             Turbo::Action::"deleteOneTimeJob"],
+  action == Turbo::Action::"createOneTimeJob",
   resource
 ) when { context.job.kind == "file_export" };
+
+forbid (
+  principal,
+  action in [Turbo::Action::"updateOneTimeJob",
+             Turbo::Action::"deleteOneTimeJob"],
+  resource
+) when { resource.job.kind == "file_export" };
 ```
 
-The kinds are `script`, `mscp_check`, `sysdiagnose` and `file_export`. Every kind is covered, so the same policy shape restricts a script. A file export runs one time only, so this policy names the one-time actions only. A script and an mSCP check can also run on a recurring job. To refuse one of them, add `createRecurringJob`, `updateRecurringJob` and `deleteRecurringJob` to the list.
+The policy form refuses `context.job` on an action that takes the schedule, so one policy cannot name the create and the other actions.
+
+The kinds are `script`, `mscp_check`, `sysdiagnose` and `file_export`. Every kind is covered, so the same policy shape restricts a script. A file export runs one time only, so these policies name the one-time actions only. A script and an mSCP check can also run on a recurring job. To refuse one of them, add `createRecurringJob` to the first policy, and `updateRecurringJob` and `deleteRecurringJob` to the second. To hide the schedules of a kind too, add `viewOneTimeJob` to the second policy.
 
 A grant can name the kind directly, and needs no companion `forbid`:
 
@@ -226,46 +237,36 @@ permit (
 ) when { context.job.kind == "sysdiagnose" };
 ```
 
-That role can schedule a `sysdiagnose` and nothing else. It still opens the *Schedule one-time job* page, which the view permission gates, and the picker there offers the kinds that the policy permits. The submit is what applies the policy. Zentral hides the action, and refuses the page, only when **no** kind could be permitted.
+That role can schedule a `sysdiagnose` and nothing else. It opens the *Schedule one-time job* page, and the picker there offers the kinds that the policy permits. The submit is what applies the policy. Zentral hides the action, and refuses the page, only when **no** kind could be permitted.
 
-Because the resource is the configuration or one of its schedules, one grant can give the scheduling in one configuration:
+Because the resource is the configuration or one of its schedules, one grant can give the scheduling and the view in one configuration:
 
 ```
 permit (
   principal in Role::"<role id>",
   action in [Turbo::Action::"createOneTimeJob",
+             Turbo::Action::"viewOneTimeJob",
              Turbo::Action::"updateOneTimeJob",
              Turbo::Action::"deleteOneTimeJob",
              Turbo::Action::"createRecurringJob",
+             Turbo::Action::"viewRecurringJob",
              Turbo::Action::"updateRecurringJob",
              Turbo::Action::"deleteRecurringJob"],
   resource in Turbo::Configuration::"<configuration id>"
 );
 ```
 
-`updateOneTimeJob` is included in the refusal above because the job of a schedule cannot be changed, but its tags, its serial numbers and its window can. Widening the reach of a `file_export` schedule is a scheduling act.
+`updateOneTimeJob` is in the refusal above because the job of a schedule cannot be changed, but its tags, its serial numbers and its window can. Widening the reach of a `file_export` schedule is a scheduling act.
 
-`deleteOneTimeJob` is in the list because removing a schedule stops it being served to the machines that have not run it yet. A policy that governs a kind governs its removal too.
-
-An update or delete policy can also read the schedule itself, which a create policy cannot — there is no schedule yet when one is created:
-
-```
-forbid (
-  principal,
-  action == Turbo::Action::"updateOneTimeJob",
-  resource
-) when { resource.job.kind == "file_export" };
-```
-
-Use `context.job` when one policy should cover several actions, and `resource` when a policy needs the schedule — to name one, or to read more of it than the job.
+`deleteOneTimeJob` is in the refusal because removing a schedule stops it being served to the machines that have not run it yet. A policy that governs a kind governs its removal too.
 
 The machines are not the resource. A schedule targets tags and serial numbers, and tag membership changes after the schedule is written, so there is no machine for a policy to name.
 
-The scheduling pages also need a view permission, because a create action needs the job to decide and the form has not picked one yet. Under a configuration, the one-time job page needs `turbo.view_onetimejob`, and the recurring job page needs `turbo.view_recurringjob`. The machine page needs `turbo.view_enrolledmachine`: Zentral knows the configuration only after it resolves the serial number, so the scheduling action cannot be the first gate, and the response must not tell the user if a serial number is enrolled.
+`viewOneTimeJob` and `viewRecurringJob` decide which schedules a user sees. The lists, the configuration page and the job pages show only these schedules. The update and delete pages and endpoints need only the update or the delete action. The lists need no other permission: a user without a policy for these actions gets empty lists. Their menu entries show when a policy permits `Turbo::Action::"NOOP"`, the action that shows the Turbo module in the navigation. A policy for an action group of Turbo permits it. A policy scoped to a configuration does not, because the resource of this action is not a configuration. The *Configuration* filter of the lists needs `turbo.view_configuration`, because its choices are all the configurations. The *Scheduled in* filter of the script, mSCP check, sysdiagnose and file export lists needs it too. This filter, in the console and in the API, and the job counts of the Turbo overview, read only the schedules that the user can see. Zentral filters the schedules in the database when the policies use only the expressions that it filters for [the machines of a one-time job](#apiturboone_time_jobsuuidpkmachines), on the resource and its job. With another expression, for example `has` or `like`, Zentral decides for each schedule.
 
-The `add`, `change` and `delete` permissions of the one-time jobs and of the recurring jobs do not authorize anything. A role schedules a job with these six actions only.
+The *Schedule one-time job* and *Schedule recurring job* pages of a configuration open when the create action could be permitted in this configuration. The machine page needs `turbo.view_enrolledmachine`: Zentral knows the configuration only after it resolves the serial number, so the scheduling action cannot be the first gate, and the response must not tell the user if a serial number is enrolled.
 
-Seeing the schedules is a permission, `turbo.view_onetimejob` or `turbo.view_recurringjob`, not a typed action: scoping a list means filtering it by policy rather than deciding one request, which is a separate piece of work.
+The `add`, `change` and `delete` permissions of the one-time jobs and of the recurring jobs do not authorize anything. A role schedules a job with the create, update and delete actions only.
 
 ### Recurring jobs
 
@@ -515,7 +516,7 @@ forbid (
 ) when { resource.job.kind == "file_export" };
 ```
 
-The machine page also needs the `turbo.view_enrolledmachine` permission, which is global. A meta business unit scope for the machine pages is separate work. The [API](#apiturboone_time_jobsuuidpkmachines) uses the typed actions only.
+The machine page also needs the `turbo.view_enrolledmachine` permission, which is global. A meta business unit scope for the machine pages is separate work. The download needs `downloadJobUpload` only, in the console as in the [API](#apiturboone_time_jobsuuidpkmachines).
 
 **Verification never reopens a one-time job.** That is what the two axes are for: the job was done on that machine when the agent reported, whatever the storage says afterwards. A `mismatch` does not give the agent another destination, and it does not make Zentral ask for the file again.
 
@@ -1043,7 +1044,7 @@ Terraform resource: [`zentral_turbo_script`](https://registry.terraform.io/provi
 * PBAC action: `Turbo::Action::"viewScript"`
 * Optional filter parameters:
     * `name`: name of the script
-    * `configuration`: primary key of a Turbo configuration – the scripts scheduled in it, as a recurring or a one-time job
+    * `configuration`: primary key of a Turbo configuration – the scripts scheduled in it, as a recurring or a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 
@@ -1247,7 +1248,7 @@ Terraform resource: [`zentral_turbo_mscp_check`](https://registry.terraform.io/p
 * Optional filter parameters:
     * `rule_id`: the mSCP rule identifier
     * `baseline`: the mSCP baseline key
-    * `configuration`: primary key of a Turbo configuration – the checks scheduled in it, as a recurring or a one-time job
+    * `configuration`: primary key of a Turbo configuration – the checks scheduled in it, as a recurring or a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 
@@ -1429,7 +1430,7 @@ curl \
 * PBAC action: `Turbo::Action::"viewSysdiagnose"`
 * Optional filter parameters:
     * `name`: name of the sysdiagnose
-    * `configuration`: primary key of a Turbo configuration – the sysdiagnoses scheduled in it
+    * `configuration`: primary key of a Turbo configuration – the sysdiagnoses scheduled in it, as a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 
@@ -1545,7 +1546,7 @@ curl \
 * PBAC action: `Turbo::Action::"viewFileExport"`
 * Optional filter parameters:
     * `name`: name of the file export
-    * `configuration`: primary key of a Turbo configuration – the file exports scheduled in it
+    * `configuration`: primary key of a Turbo configuration – the file exports scheduled in it, as a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 
@@ -1677,10 +1678,12 @@ Terraform resource: [`zentral_turbo_recurring_job`](https://registry.terraform.i
 #### List all recurring jobs
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewRecurringJob"`
+* PBAC action: `Turbo::Action::"viewRecurringJob"`, for each recurring job. The list has only the recurring jobs that the caller can see.
 * Optional filter parameters:
     * `configuration`: primary key of the Turbo configuration
     * `job`: primary key of the job
+
+An unknown id gives an empty list, as an id that the caller cannot see.
 
 Example:
 
@@ -1729,7 +1732,7 @@ Response:
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"createRecurringJob"`
 
-`job` is the `job_id` of a script or an mSCP check. A job can be scheduled at most once per configuration.
+`job` is the `job_id` of a script or an mSCP check. A job can be scheduled at most once per configuration. A caller who cannot create a recurring job in the configuration gets a `403` before the validation of the body.
 
 Example:
 
@@ -1788,7 +1791,7 @@ Leave `interval` out, or set it to `null`, to use the configuration's `default_c
 #### Get a recurring job
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewRecurringJob"`
+* PBAC action: `Turbo::Action::"viewRecurringJob"`, on the recurring job
 * `<uuid:pk>`: the primary key of the recurring job
 
 Example:
@@ -1807,7 +1810,7 @@ curl \
 * PBAC action: `Turbo::Action::"updateRecurringJob"`
 * `<uuid:pk>`: the primary key of the recurring job
 
-`configuration` and `job` cannot be changed – send their current values. The interval and the scope can be updated.
+`configuration` and `job` cannot be changed – send their current values. The interval and the scope can be updated. Send every attribute, with `null` or `[]` for an empty one: an attribute that is not in the body is a `400`.
 
 Example:
 
@@ -1861,7 +1864,7 @@ The state of the job on each machine, as the machine page gives it.
 * Optional filter parameter:
     * `serial_number`: the serial number of a machine
 
-The resource of the action is a member of the machine and of the recurring job, and the recurring job is a member of its configuration. So a policy can use the machine, its meta business units, the recurring job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`.
+The resource of the action is a member of the machine and of the recurring job, and the recurring job is a member of its configuration. So a policy can use the machine, its meta business units, the recurring job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`. Zentral filters the machines in the database with the same expressions as for a [one-time job](#apiturboone_time_jobsuuidpkmachines).
 
 A machine is in the list after the agent reports the job in its status. The attributes are the same as for a [one-time job](#apiturboone_time_jobsuuidpkmachines), with one more: `seen_interval`, the interval that the agent uses, in seconds. On a recurring job, `last_result_at` is the time of the last run, and Zentral continues to serve the job. A recurring job has no artifacts.
 
@@ -1881,10 +1884,12 @@ Terraform resource: [`zentral_turbo_one_time_job`](https://registry.terraform.io
 #### List all one-time jobs
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewOneTimeJob"`
+* PBAC action: `Turbo::Action::"viewOneTimeJob"`, for each one-time job. The list has only the one-time jobs that the caller can see.
 * Optional filter parameters:
     * `configuration`: primary key of the Turbo configuration
     * `job`: primary key of the job
+
+An unknown id gives an empty list, as an id that the caller cannot see.
 
 Example:
 
@@ -1928,7 +1933,7 @@ Response:
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"createOneTimeJob"`
 
-`job` is the `job_id` of a script or an mSCP check. `not_before` and `not_after` are both optional; when both are set, `not_after` must be on or after `not_before`.
+`job` is the `job_id` of a script or an mSCP check. `not_before` and `not_after` are both optional; when both are set, `not_after` must be on or after `not_before`. A caller who cannot create a one-time job in the configuration gets a `403` before the validation of the body.
 
 Example:
 
@@ -1978,7 +1983,7 @@ Response:
 #### Get a one-time job
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewOneTimeJob"`
+* PBAC action: `Turbo::Action::"viewOneTimeJob"`, on the one-time job
 * `<uuid:pk>`: the primary key of the one-time job
 
 Example:
@@ -1997,7 +2002,7 @@ curl \
 * PBAC action: `Turbo::Action::"updateOneTimeJob"`
 * `<uuid:pk>`: the primary key of the one-time job
 
-`configuration` and `job` cannot be changed – send their current values. The delivery window and the scope can be updated.
+`configuration` and `job` cannot be changed – send their current values. The delivery window and the scope can be updated. Send every attribute, with `null` or `[]` for an empty one: an attribute that is not in the body is a `400`.
 
 Example:
 
@@ -2051,6 +2056,16 @@ The state of the job on each machine, with the artifacts that the job collected 
     * `serial_number`: the serial number of a machine
 
 The resource of `viewOneTimeJobMachine` is a member of the machine and of the one-time job, and the one-time job is a member of its configuration. So a policy can use the machine, its meta business units, the one-time job or its configuration. The resource also has the job, so a policy can read `resource.job.kind`. The list has only the machines that the caller can see. A caller without a policy gets an empty list, not a `403`.
+
+Zentral filters the machines in the database when the policies of `viewOneTimeJobMachine` use only these expressions on the resource:
+
+* `resource in` an entity or a set of entities, `resource ==` an entity, and `resource is` a type
+* `resource.job ==` a job, and `resource.job.kind ==` a string
+* `!=`, `&&`, `||` and `!`
+
+A call then reads only the machines of its page. With another expression on the resource, for example `has` or `like`, Zentral decides for each machine of the job before it cuts the page. The time of such a call then grows with the number of machines of the job, for any `limit`.
+
+The policies can use any expression on the principal and on the action. A policy for all the actions, or for an action group that contains `viewOneTimeJobMachine`, is also a policy of `viewOneTimeJobMachine`.
 
 `artifacts` has only the artifacts that the caller can see. See [See and download an artifact](#see-and-download-an-artifact). `download_url` is `null` when the `status` is not `uploaded`, or when the caller cannot download the artifact.
 

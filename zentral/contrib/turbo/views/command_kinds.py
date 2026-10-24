@@ -2,7 +2,7 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.views.generic import DetailView
 from ..forms import FileExportSearchForm, SysdiagnoseSearchForm
 from ..models import FileExport, Sysdiagnose
-from .base import JobDetailMixin, SearchFormListView
+from .base import JobDetailMixin, JobListView
 
 
 # Read-only in the console for now. An operator defines a sysdiagnose or a file export through
@@ -17,7 +17,7 @@ class CommandKindDetailMixin(JobDetailMixin):
         return ctx
 
 
-class SysdiagnoseListView(SearchFormListView):
+class SysdiagnoseListView(JobListView):
     permission_required = "turbo.view_sysdiagnose"
     model = Sysdiagnose
     search_form_class = SysdiagnoseSearchForm
@@ -30,7 +30,7 @@ class SysdiagnoseView(PermissionRequiredMixin, CommandKindDetailMixin, DetailVie
         return Sysdiagnose.objects.select_related("job")
 
 
-class FileExportListView(SearchFormListView):
+class FileExportListView(JobListView):
     permission_required = "turbo.view_fileexport"
     model = FileExport
     search_form_class = FileExportSearchForm

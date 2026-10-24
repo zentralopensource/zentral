@@ -8,7 +8,7 @@ from django.contrib.auth import get_permission_codename
 from django.db.models.base import ModelBase
 
 from .cedar import (authorize_request, authorize_request_preview, authorize_requests,
-                    render_schema_json)
+                    render_schema_json, undecided_policies)
 from .entities import Action, ActionGroup, Namespace, Principal, Request, Resource
 from .schema import build_schema_ir
 from .types import (
@@ -160,13 +160,17 @@ class Engine:
         are only reachable via the legacy-perm path.
 
         ``legacy_perm`` is the optional Django-perm string (e.g.
-        ``"inventory.add_machinetag"``) that maps to this action via
+        ``"monolith.sync_repository"``) that maps to this action via
         ``ZentralBackend.has_perm``. It's intended to be retired once every
-        view uses PBACViewMixin directly.
+        view uses PBACViewMixin directly. It is a decision on System::"any",
+        so the action must take System and no other resource.
 
         ``help_text`` describes what the action authorizes, for the schema
         browser. Documentation only — it never reaches the authorization
         backend.
+
+        Raises ValueError if ``legacy_perm`` is set and ``applies_to`` takes
+        another resource than System.
 
         Raises ActionRegistrationConflict if (id, namespace) is already
         registered with different action groups, a different applies_to, a
@@ -175,6 +179,11 @@ class Engine:
 
         Any EntityType referenced in ``applies_to`` is auto-registered.
         """
+        # A policy scoped to rows never matches System::"any", so a legacy perm on an action on rows would
+        # change what its has_perm() calls mean, even if the action also takes System: a forbid on the rows
+        # would not apply to has_perm(). Its callers need typed requests instead.
+        if legacy_perm and tuple(applies_to.resources) != (SYSTEM,):
+            raise ValueError(f"Action {id!r} takes another resource than System: it cannot have a legacy perm")
         key = (id, namespace.id)
         new_groups = self._build_action_groups(namespace, group_basenames)
         action = self.actions.get(key)
@@ -367,6 +376,11 @@ class Engine:
             else:
                 batch.append(request)
         authorize_requests(batch)
+
+    def undecided_policies(self, request: Request):
+        if not request.is_pending:
+            return request.is_authorized
+        return undecided_policies(request)
 
 
 engine = Engine()

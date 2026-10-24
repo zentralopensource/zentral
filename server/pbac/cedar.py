@@ -126,11 +126,12 @@ def _serialize_requests(requests: list[Request], with_correlation_ids: bool = Fa
     serialized_requests = []
     for request in requests:
         for entity in (request.principal, request.action, request.resource):
-            _serialize_entity(entity, collected_entities)
+            if entity is not None:
+                _serialize_entity(entity, collected_entities)
         data = {
             "principal": str(request.principal),
             "action": str(request.action),
-            "resource": str(request.resource),
+            "resource": None if request.unknown_resource else str(request.resource),
             # None means "not known yet"; an empty context means "known and empty", and a
             # policy that reads a key from that one errors
             "context": None if request.unknown_context else _serialize_value(request.context,
@@ -152,6 +153,8 @@ def _log_cedar_errors(request: Request, cedar_result) -> None:
 def authorize_request(request: Request) -> None:
     if request.unknown_context:
         raise ValueError("A request with an unknown context needs authorize_request_preview")
+    if request.unknown_resource:
+        raise ValueError("A request with an unknown resource needs undecided_policies")
     # Note: we deliberately do not pass the engine schema here. Schema
     # validation happens once at policy-write time (Policy.clean calls
     # cedarpy.validate_policies against engine.cedar_schema_json) so the
@@ -176,6 +179,8 @@ def authorize_request_preview(request: Request) -> None:
     Cedar answers NoDecision in two cases: a policy needs the missing context, or Cedar could not
     read the request at all. Only the first one can be allowed. The errors tell them apart.
     """
+    if request.unknown_resource:
+        raise ValueError("A request with an unknown resource needs undecided_policies")
     serialized_requests, entities = _serialize_requests([request])
     cedar_result = is_authorized_partial(serialized_requests[0], policies_cache.policy_set, entities)
     _log_cedar_errors(request, cedar_result)
@@ -189,12 +194,34 @@ def authorize_requests(requests: list[Request]) -> None:
         return
     if any(r.unknown_context for r in requests):
         raise ValueError("A request with an unknown context needs authorize_request_preview")
+    if any(r.unknown_resource for r in requests):
+        raise ValueError("A request with an unknown resource needs undecided_policies")
     req_dict = {r.correlation_id: r for r in requests}
     serialized_requests, entities = _serialize_requests(requests, with_correlation_ids=True)
     for cedar_result in is_authorized_batch(serialized_requests, policies_cache.policy_set, entities):
         request = req_dict[cedar_result.correlation_id]
         _log_cedar_errors(request, cedar_result)
         request.is_authorized = cedar_result.allowed
+
+
+def undecided_policies(request: Request):
+    """Answer a request without a resource.
+
+    Return True or False when the answer is the same for all the resources. Else return the policies that
+    Cedar cannot decide without the resource, by policy id, in the JSON policy format of Cedar.
+
+    This format is not in the semver guarantee of Cedar, and a patch release can change it. The tests have
+    examples of it, so that a cedarpy update that changes it fails.
+    """
+    serialized_requests, entities = _serialize_requests([request])
+    cedar_result = is_authorized_partial(serialized_requests[0], policies_cache.policy_set, entities)
+    _log_cedar_errors(request, cedar_result)
+    if cedar_result.decision == Decision.Allow:
+        return True
+    # NoDecision without a policy is also the answer when Cedar cannot read the request
+    if cedar_result.decision == Decision.Deny or not cedar_result.residuals:
+        return False
+    return cedar_result.residuals
 
 
 # Cedar schema rendering

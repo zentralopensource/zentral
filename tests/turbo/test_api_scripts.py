@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -7,8 +8,8 @@ from zentral.contrib.inventory.models import Tag
 from zentral.contrib.turbo.compliance_checks import TurboScript
 from zentral.contrib.turbo.models import Script
 from zentral.core.compliance_checks.models import ComplianceCheck
-from .utils import (TurboAPITestCase, force_configuration, force_one_time_job,
-                    force_recurring_job, force_script)
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboAPITestCase, force_configuration,
+                    force_one_time_job, force_recurring_job, force_script, turbo_policy)
 
 
 class TurboScriptAPITestCase(TurboAPITestCase):
@@ -99,11 +100,37 @@ class TurboScriptAPITestCase(TurboAPITestCase):
         one_time_script = force_script()
         force_one_time_job(configuration=configuration, job=one_time_script.job)
         force_script()  # unscheduled
-        self.set_permissions("turbo.view_script")
+        self.set_policy(turbo_policy(self.group, "turbo.view_script",
+                                                 actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
         response = self.get(reverse("turbo_api:scripts"), {"configuration": str(configuration.pk)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual({r["id"] for r in response.json()["results"]},
                          {str(recurring_script.pk), str(one_time_script.pk)})
+
+    def test_list_scripts_filter_by_configuration_ignores_a_hidden_schedule(self):
+        configuration = force_configuration()
+        scheduled = force_script()
+        force_recurring_job(configuration=configuration, job=scheduled.job)
+        self.set_policy(turbo_policy(self.group, "turbo.view_script", actions=()))
+        response = self.get(reverse("turbo_api:scripts"), {"configuration": str(configuration.pk)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
+
+    def test_list_scripts_filter_by_unknown_configuration(self):
+        # the id is not loaded: an unknown id gives the empty list of a hidden one
+        force_recurring_job(configuration=force_configuration(), job=force_script().job)
+        self.set_policy(turbo_policy(self.group, "turbo.view_script",
+                                                 actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
+        response = self.get(reverse("turbo_api:scripts"), {"configuration": str(uuid.uuid4())})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
+
+    def test_list_scripts_filter_by_malformed_configuration(self):
+        self.set_policy(turbo_policy(self.group, "turbo.view_script",
+                                                 actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
+        response = self.get(reverse("turbo_api:scripts"), {"configuration": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"configuration": ["Enter a valid UUID."]})
 
     def test_create_script_no_architecture(self):
         # a script that runs on neither architecture would silently never run — rejected like the UI

@@ -1,14 +1,18 @@
 import logging
 
+from django.db.models import Q
 from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace, Principal, Request, Resource
+from pbac.scoping import SQLMap, visible_rows
 from pbac.types import SERVICE_ACCOUNT, USER, AppliesTo, AttrSpec, ResourceType
 from pbac.utils import check_request
 
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
+from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, get_machine_sql_entities,
+                                            get_meta_machine_resource)
 
-from .models import Job, OneTimeJob, resolve_upload_schedules
+from .models import (Job, OneTimeJob, OneTimeJobMachine, RecurringJob, RecurringJobMachine,
+                     resolve_upload_schedules)
 
 
 logger = logging.getLogger("zentral.contrib.turbo.pbac")
@@ -126,24 +130,22 @@ def get_job_upload_resource(upload, machine, schedule) -> Resource:
 
 # actions
 #
-# Only viewOneTimeJob and viewRecurringJob stay on the legacy permission path. A typed view action
-# must scope a LIST, which means a policy filters a queryset instead of a decision on one request.
-# That is separate work. JobScope excludes add, change and delete from the auto-registration, and
-# this module registers them, so nothing can ask them through has_perm with System::"any".
+# A create takes the configuration, and carries the job in its context: the schedule does not
+# exist yet. A view, an update and a delete take the schedule, which carries its job. The
+# configuration and the job of a schedule cannot change, so an update has no new value for the
+# context. To refuse a kind on the scheduling, a policy reads the context on the create and the
+# resource on the others:
 #
-# The context carries the JOB as an entity, on all six, so one policy can name them all:
+#   forbid (principal, action == Turbo::Action::"createOneTimeJob", resource)
+#   when { context.job.kind == "file_export" };
 #
-#   forbid (
-#     principal,
-#     action in [Turbo::Action::"createOneTimeJob",
-#                Turbo::Action::"updateOneTimeJob",
-#                Turbo::Action::"deleteOneTimeJob"],
-#     resource
-#   ) when { context.job.kind == "file_export" };
+#   forbid (principal, action in [Turbo::Action::"updateOneTimeJob", Turbo::Action::"deleteOneTimeJob"],
+#           resource)
+#   when { resource.job.kind == "file_export" };
 #
-# The context carries an entity, not a kind string. `context.job.kind` gives what a `job_kind` key
-# gives. A policy can also read any other attribute that the job declares later, and the actions
-# keep their shape.
+# The view actions have no context, so one SQL filter can scope a list of schedules. The view, add,
+# change and delete permissions of the schedules map to nothing, so nothing can ask these actions
+# with System::"any".
 
 
 _JOB_CONTEXT = {
@@ -151,8 +153,7 @@ _JOB_CONTEXT = {
     # before the operator picks a job, to decide if it offers the action. That question is a
     # preview: its context is unknown, not empty. Partial evaluation residualizes the expression
     # instead of a failure on a record without the attribute.
-    "job": AttrSpec(JOB_RESOURCE_TYPE, help_text="The job being scheduled, or the job the schedule "
-                                                 "being changed or removed runs."),
+    "job": AttrSpec(JOB_RESOURCE_TYPE, help_text="The job being scheduled."),
 }
 
 
@@ -166,14 +167,12 @@ _CREATE_SCHEDULE_APPLIES_TO = AppliesTo(
 _ROW_ONE_TIME_JOB_APPLIES_TO = AppliesTo(
     principals=(USER, SERVICE_ACCOUNT),
     resources=(ONE_TIME_JOB_RESOURCE_TYPE,),
-    context=_JOB_CONTEXT,
 )
 
 
 _ROW_RECURRING_JOB_APPLIES_TO = AppliesTo(
     principals=(USER, SERVICE_ACCOUNT),
     resources=(RECURRING_JOB_RESOURCE_TYPE,),
-    context=_JOB_CONTEXT,
 )
 
 
@@ -189,16 +188,27 @@ create_one_time_job_action = engine.register_action(
 )
 
 
+view_one_time_job_action = engine.register_action(
+    "viewOneTimeJob",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
+    applies_to=_ROW_ONE_TIME_JOB_APPLIES_TO,
+    help_text="See a one-time job. The resource is the schedule, which is a member of its configuration "
+              "and carries the job it runs in `resource.job`. A list has only the schedules that the "
+              "caller can see.",
+)
+
+
 update_one_time_job_action = engine.register_action(
     "updateOneTimeJob",
     get_namespace(),
     [ActionGroupBasename.ADMIN],
     applies_to=_ROW_ONE_TIME_JOB_APPLIES_TO,
-    help_text="Change a one-time job. The resource is the schedule itself, which is a member of its "
-              "configuration and carries the job it runs, so `resource.job` and `context.job` are the "
-              "same job. The job of a schedule cannot be changed; what an update can change is where "
-              "and when it delivers — its tags, its serial numbers and its window. Widening the reach "
-              "of a file_export schedule is a scheduling act.",
+    help_text="Change a one-time job. The resource is the schedule, which is a member of its "
+              "configuration and carries the job it runs in `resource.job`. The job of a schedule "
+              "cannot be changed; what an update can change is where and when it delivers — its tags, "
+              "its serial numbers and its window. Widening the reach of a file_export schedule is a "
+              "scheduling act.",
 )
 
 
@@ -224,14 +234,24 @@ create_recurring_job_action = engine.register_action(
 )
 
 
+view_recurring_job_action = engine.register_action(
+    "viewRecurringJob",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER],
+    applies_to=_ROW_RECURRING_JOB_APPLIES_TO,
+    help_text="See a recurring job. The resource is the schedule, as for viewOneTimeJob. A list has only "
+              "the schedules that the caller can see.",
+)
+
+
 update_recurring_job_action = engine.register_action(
     "updateRecurringJob",
     get_namespace(),
     [ActionGroupBasename.ADMIN],
     applies_to=_ROW_RECURRING_JOB_APPLIES_TO,
     help_text="Change a recurring job. The resource is the schedule, which is a member of its "
-              "configuration and carries the job it runs. The job of a schedule cannot be changed. An "
-              "update changes its tags, its serial numbers and its interval.",
+              "configuration and carries the job it runs in `resource.job`. The job of a schedule cannot "
+              "be changed. An update changes its tags, its serial numbers and its interval.",
 )
 
 
@@ -332,18 +352,42 @@ class CreateRecurringJobRequest(BaseCreateScheduleRequest):
 
 
 class BaseScheduleRequest(Request):
-    # The schedule exists, so there is no preview. Every caller has the schedule, and thus the
-    # job. These requests always have a context.
+    # The schedule exists, so there is no preview, and its job is on the resource
     pbac_action = None
     resource_type = None
+    row_relations = ("configuration", "job")
 
     def __init__(self, user_obj, schedule) -> None:
         super().__init__(
             Principal.from_user(user_obj),
             self.pbac_action,
             _get_schedule_resource(self.resource_type, schedule),
-            {"job": get_job_resource(schedule.job)},
         )
+
+    @classmethod
+    def requests_for_rows(cls, user_obj, schedules):
+        return [cls(user_obj, schedule) for schedule in schedules]
+
+
+def _schedule_sql_map(model, resource_type):
+    # the same parent and attributes as the resource of BaseScheduleRequest
+    return SQLMap(
+        model, resource_type,
+        entities={resource_type: "pk", CONFIGURATION_RESOURCE_TYPE: "configuration"},
+        attributes={"job": "job", "job.kind": "job__kind"},
+    )
+
+
+class ViewOneTimeJobRequest(BaseScheduleRequest):
+    pbac_action = view_one_time_job_action
+    resource_type = ONE_TIME_JOB_RESOURCE_TYPE
+    sql_map = _schedule_sql_map(OneTimeJob, ONE_TIME_JOB_RESOURCE_TYPE)
+
+
+class ViewRecurringJobRequest(BaseScheduleRequest):
+    pbac_action = view_recurring_job_action
+    resource_type = RECURRING_JOB_RESOURCE_TYPE
+    sql_map = _schedule_sql_map(RecurringJob, RECURRING_JOB_RESOURCE_TYPE)
 
 
 class UpdateOneTimeJobRequest(BaseScheduleRequest):
@@ -386,12 +430,27 @@ class DownloadJobUploadRequest(BaseJobUploadRequest):
     pbac_action = download_job_upload_action
 
 
+def _job_machine_sql_map(model, resource_type, schedule_resource_type, schedule_field):
+    # the same parents and attributes as the resource of BaseJobMachineRequest
+    return SQLMap(
+        model, resource_type,
+        entities={
+            resource_type: "pk",
+            **get_machine_sql_entities("serial_number"),
+            schedule_resource_type: schedule_field,
+            CONFIGURATION_RESOURCE_TYPE: f"{schedule_field}__configuration",
+        },
+        attributes={"job": f"{schedule_field}__job", "job.kind": f"{schedule_field}__job__kind"},
+    )
+
+
 class BaseJobMachineRequest(Request):
     # the caller has the row, so there is no preview
     pbac_action = None
     resource_type = None
     schedule_resource_type = None
     schedule_attr = None
+    sql_map = None
 
     def __init__(self, user_obj, job_machine, machine) -> None:
         schedule = getattr(job_machine, self.schedule_attr)
@@ -404,12 +463,20 @@ class BaseJobMachineRequest(Request):
                      attrs={"job": get_job_resource(schedule.job)}),
         )
 
+    @classmethod
+    def requests_for_rows(cls, user_obj, job_machines):
+        machines = _machines({job_machine.serial_number for job_machine in job_machines})
+        return [cls(user_obj, job_machine, machines[job_machine.serial_number]) for job_machine in job_machines]
+
 
 class ViewOneTimeJobMachineRequest(BaseJobMachineRequest):
     pbac_action = view_one_time_job_machine_action
     resource_type = ONE_TIME_JOB_MACHINE_RESOURCE_TYPE
     schedule_resource_type = ONE_TIME_JOB_RESOURCE_TYPE
     schedule_attr = "one_time_job"
+    row_relations = ("one_time_job__configuration", "one_time_job__job")
+    sql_map = _job_machine_sql_map(OneTimeJobMachine, ONE_TIME_JOB_MACHINE_RESOURCE_TYPE, ONE_TIME_JOB_RESOURCE_TYPE,
+                                   "one_time_job")
 
 
 class ViewRecurringJobMachineRequest(BaseJobMachineRequest):
@@ -417,6 +484,9 @@ class ViewRecurringJobMachineRequest(BaseJobMachineRequest):
     resource_type = RECURRING_JOB_MACHINE_RESOURCE_TYPE
     schedule_resource_type = RECURRING_JOB_RESOURCE_TYPE
     schedule_attr = "recurring_job"
+    row_relations = ("recurring_job__configuration", "recurring_job__job")
+    sql_map = _job_machine_sql_map(RecurringJobMachine, RECURRING_JOB_MACHINE_RESOURCE_TYPE,
+                                   RECURRING_JOB_RESOURCE_TYPE, "recurring_job")
 
 
 # checks
@@ -459,6 +529,15 @@ def offerable_jobs(user_obj, create_request_class, configuration, queryset):
     requests = [create_request_class(user_obj, configuration, job) for job in jobs]
     engine.authorize_requests(requests)
     return [job for job, pbac_request in zip(jobs, requests) if pbac_request.is_authorized]
+
+
+def scheduled_in(user_obj, configuration):
+    # the jobs scheduled in the configuration, only through the schedules that the user can see: a hidden
+    # schedule must not make its job match
+    return (Q(job__in=visible_rows(user_obj, ViewRecurringJobRequest,
+                                   RecurringJob.objects.filter(configuration=configuration)).values("job"))
+            | Q(job__in=visible_rows(user_obj, ViewOneTimeJobRequest,
+                                     OneTimeJob.objects.filter(configuration=configuration)).values("job")))
 
 
 def check_download_job_upload(request, upload, schedule):
@@ -504,16 +583,6 @@ def authorize_job_upload_rows(user_obj, uploads):
         upload.can_download = requests[2 * index + 1].is_authorized
         visible.append(upload)
     return visible
-
-
-def authorize_job_machine_rows(user_obj, request_class, job_machines):
-    """The states of jobs on machines that the user can see, in one batched decision."""
-    job_machines = list(job_machines)
-    machines = _machines({job_machine.serial_number for job_machine in job_machines})
-    requests = [request_class(user_obj, job_machine, machines[job_machine.serial_number])
-                for job_machine in job_machines]
-    engine.authorize_requests(requests)
-    return [job_machine for job_machine, pbac_request in zip(job_machines, requests) if pbac_request.is_authorized]
 
 
 def _authorize_schedule_rows(user_obj, update_request_class, delete_request_class, schedules):

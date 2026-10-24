@@ -174,7 +174,6 @@
     {% endif %}
 {% endif %}
 
-{% if perms.turbo.view_recurringjob %}
 <div class="d-flex justify-content-between mb-3">
     <h3 id="recurring-jobs">Recurring job{{ recurring_job_count|pluralize }} ({{ recurring_job_count }})</h3>
     <div class="ms-auto">
@@ -237,9 +236,7 @@
     </table>
 </div>
 {% endif %}
-{% endif %}
 
-{% if perms.turbo.view_onetimejob %}
 <div class="d-flex justify-content-between mb-3">
     <h3 id="one-time-jobs">One-time job{{ one_time_job_count|pluralize }} ({{ one_time_job_count }})</h3>
     <div class="ms-auto">
@@ -305,6 +302,5 @@
     <a href="{% url 'turbo:one_time_jobs' %}?configuration={{ object.pk }}">See all {{ one_time_job_count }} one-time jobs</a>
     {% endif %}
 </div>
-{% endif %}
 {% endif %}
 {% endblock %}

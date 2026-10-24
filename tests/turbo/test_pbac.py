@@ -1,13 +1,16 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import Group
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
 from pbac.engine import engine
+from pbac.scoping import visible_rows
 from pbac.types import LEGACY_PERM_APPLIES_TO
 from zentral.contrib.turbo.command_backends import CommandBackend
-from zentral.contrib.turbo.models import Job
+from zentral.contrib.turbo.models import Job, OneTimeJob, RecurringJob
 from zentral.contrib.turbo.pbac import (JOB_RESOURCE_TYPE, CreateOneTimeJobRequest, CreateRecurringJobRequest,
                                         DeleteOneTimeJobRequest, DeleteRecurringJobRequest,
                                         UpdateOneTimeJobRequest, UpdateRecurringJobRequest,
@@ -17,7 +20,9 @@ from zentral.contrib.turbo.pbac import (JOB_RESOURCE_TYPE, CreateOneTimeJobReque
                                         create_one_time_job_action, create_recurring_job_action,
                                         delete_one_time_job_action, delete_recurring_job_action,
                                         get_configuration_resource,
-                                        update_one_time_job_action, update_recurring_job_action)
+                                        update_one_time_job_action, update_recurring_job_action,
+                                        view_one_time_job_action, view_recurring_job_action,
+                                        ViewOneTimeJobRequest, ViewRecurringJobRequest)
 
 from .utils import (forbid_job_kind_policy, force_command, force_configuration, force_mscp_check,
                     force_one_time_job, force_recurring_job, force_script, turbo_policy)
@@ -27,6 +32,9 @@ class TurboPBACTestCase(TestCase):
     maxDiff = None
     ACTIONS = (create_one_time_job_action, update_one_time_job_action, delete_one_time_job_action,
                create_recurring_job_action, update_recurring_job_action, delete_recurring_job_action)
+    CREATE_ACTIONS = (create_one_time_job_action, create_recurring_job_action)
+    ROW_ACTIONS = (view_one_time_job_action, update_one_time_job_action, delete_one_time_job_action,
+                   view_recurring_job_action, update_recurring_job_action, delete_recurring_job_action)
 
     @classmethod
     def setUpTestData(cls):
@@ -63,9 +71,9 @@ class TurboPBACTestCase(TestCase):
         # at an update or a delete, and is the resource.
         for action in (create_one_time_job_action, create_recurring_job_action):
             self.assertEqual([r.name for r in action.applies_to.resources], ["Configuration"])
-        for action in (update_one_time_job_action, delete_one_time_job_action):
+        for action in (view_one_time_job_action, update_one_time_job_action, delete_one_time_job_action):
             self.assertEqual([r.name for r in action.applies_to.resources], ["OneTimeJob"])
-        for action in (update_recurring_job_action, delete_recurring_job_action):
+        for action in (view_recurring_job_action, update_recurring_job_action, delete_recurring_job_action):
             self.assertEqual([r.name for r in action.applies_to.resources], ["RecurringJob"])
 
     def test_the_row_is_a_member_of_its_configuration(self):
@@ -128,27 +136,34 @@ class TurboPBACTestCase(TestCase):
         self.assertTrue(self._authorized(UpdateOneTimeJobRequest(self.user, inside)))
         self.assertFalse(self._authorized(UpdateOneTimeJobRequest(self.user, outside)))
 
-    def test_an_update_request_is_never_a_preview(self):
+    def test_a_request_on_a_schedule_is_never_a_preview_and_has_no_context(self):
         one_time_job = force_one_time_job()
-        self.assertFalse(UpdateOneTimeJobRequest(self.user, one_time_job).unknown_context)
+        for request_class in (ViewOneTimeJobRequest, UpdateOneTimeJobRequest, DeleteOneTimeJobRequest):
+            request = request_class(self.user, one_time_job)
+            self.assertFalse(request.unknown_context)
+            self.assertEqual(request.context, {})
 
     # the context
 
-    def test_job_is_the_only_context_attribute(self):
-        for action in self.ACTIONS:
+    def test_only_a_create_has_a_context(self):
+        # The schedule does not exist at the create, so the context carries its job. The other
+        # actions read the job on the schedule, and a list of schedules needs no context.
+        for action in self.CREATE_ACTIONS:
             self.assertEqual(list(action.applies_to.context), ["job"])
+        for action in self.ROW_ACTIONS:
+            self.assertIsNone(action.applies_to.context)
 
     def test_the_context_job_is_an_entity(self):
         # An entity, not a kind string. context.job.kind gives what a job_kind key gives, and a
         # policy can read any other attribute of the job without a change to the actions.
-        for action in self.ACTIONS:
+        for action in self.CREATE_ACTIONS:
             self.assertIs(action.applies_to.context["job"].type, JOB_RESOURCE_TYPE)
 
     def test_the_context_job_is_required(self):
         # The question before the operator picks a job is a preview. Its context is unknown, not
         # empty, so a policy that reads it residualizes and does not fail. No action declares the
         # attribute optional, and no policy needs a has guard.
-        for action in self.ACTIONS:
+        for action in self.CREATE_ACTIONS:
             self.assertTrue(action.applies_to.context["job"].required)
 
     def test_the_job_kind_values_are_declared_on_the_job_type(self):
@@ -194,17 +209,17 @@ class TurboPBACTestCase(TestCase):
     def test_actions_are_not_legacy_mapped(self):
         # the reason for the retirement: nothing can ask them with System and an empty context
         for model_name in ("onetimejob", "recurringjob"):
-            for operation in ("add", "change", "delete"):
+            for operation in ("add", "change", "delete", "view"):
                 self.assertNotIn(f"turbo.{operation}_{model_name}", engine.legacy_perm_actions)
 
-    def test_view_stays_legacy_mapped(self):
-        # Not typed, deliberately. A typed view action must scope a list, which means a policy
-        # filters a queryset instead of a decision on one request.
-        typed = [(a_id, ns) for (a_id, ns), a in engine.actions.items()
-                 if a.applies_to is not LEGACY_PERM_APPLIES_TO]
-        for model_name, action_id in (("onetimejob", "viewOneTimeJob"), ("recurringjob", "viewRecurringJob")):
-            self.assertIn(f"turbo.view_{model_name}", engine.legacy_perm_actions)
-            self.assertNotIn((action_id, "Turbo"), typed)
+    def test_view_is_typed_on_the_schedule(self):
+        # the same id and the same groups as the action it replaces, so the policies in place keep their meaning
+        for action in (view_one_time_job_action, view_recurring_job_action):
+            self.assertIsNot(action.applies_to, LEGACY_PERM_APPLIES_TO)
+            self.assertEqual({p.id for p in action.parents},
+                             {f"{prefix}{basename}Actions" for prefix in ("", "Global")
+                              for basename in ("Admin", "User", "Viewer")})
+            self.assertTrue(action.help_text)
 
     def test_actions_stay_admin_only(self):
         for action in self.ACTIONS:
@@ -353,9 +368,7 @@ class TurboPBACTestCase(TestCase):
             self._authorized(CreateOneTimeJobRequest(self.user, one_time_job.configuration)))
         self.assertFalse(self._authorized(UpdateOneTimeJobRequest(self.user, one_time_job)))
 
-    def test_one_policy_can_name_all_three_actions_through_the_context(self):
-        # The reason that the job is in the context of all three actions: create has no row, so
-        # one forbid for all three must use the context.
+    def test_a_kind_rule_reads_the_context_on_a_create_and_the_schedule_on_the_others(self):
         self._grant()
         self._forbid_kind("file_export")
         command = force_command(backend=CommandBackend.FILE_EXPORT)
@@ -478,3 +491,50 @@ class TurboPBACTestCase(TestCase):
         rows = authorize_recurring_job_rows(self.user, [refused, allowed])
         self.assertEqual([row.can_update for row in rows], [False, True])
         self.assertEqual([row.can_delete for row in rows], [False, True])
+
+    # the view
+
+    def _view_policy(self, scope="resource", condition=""):
+        Policy.objects.update_or_create(
+            name="Turbo view",
+            defaults={"source": "permit ("
+                                f' principal in Role::"{self.group.pk}",'
+                                ' action in [Turbo::Action::"viewOneTimeJob", Turbo::Action::"viewRecurringJob"],'
+                                f" {scope}"
+                                f") {condition};\n"})
+
+    def test_the_policy_form_refuses_the_context_on_a_schedule_action(self):
+        # a kind rule that names a create and an update in one policy is an error, not a gap
+        policy = Policy(name=get_random_string(12), source=(
+            "forbid (principal,"
+            ' action in [Turbo::Action::"createOneTimeJob", Turbo::Action::"updateOneTimeJob"],'
+            ' resource) when { context.job.kind == "file_export" };\n'))
+        with self.assertRaises(ValidationError):
+            policy.full_clean()
+
+    def test_view_is_decided_on_the_schedule(self):
+        allowed = force_configuration()
+        self._view_policy(f'resource in Turbo::Configuration::"{allowed.pk}"')
+        inside = force_one_time_job(configuration=allowed)
+        outside = force_one_time_job()
+        self.assertTrue(self._authorized(ViewOneTimeJobRequest(self.user, inside)))
+        self.assertFalse(self._authorized(ViewOneTimeJobRequest(self.user, outside)))
+
+    @patch("pbac.scoping.engine.authorize_requests")
+    def test_the_visible_schedules_are_one_sql_filter(self, authorize_requests):
+        allowed = force_configuration()
+        self._view_policy(f'resource in Turbo::Configuration::"{allowed.pk}"')
+        inside = force_recurring_job(configuration=allowed)
+        force_recurring_job()
+        self.assertEqual(list(visible_rows(self.user, ViewRecurringJobRequest, RecurringJob.objects.all())),
+                         [inside])
+        authorize_requests.assert_not_called()
+
+    def test_the_visible_schedules_fall_back_to_one_decision_for_each(self):
+        # like is outside the SQL subset: the same rows, and still a queryset
+        self._view_policy(condition='when { resource.job.kind like "sys*" }')
+        allowed = force_one_time_job(job=force_command(backend=CommandBackend.SYSDIAGNOSE).job)
+        force_one_time_job(job=force_command(backend=CommandBackend.FILE_EXPORT).job)
+        schedules = visible_rows(self.user, ViewOneTimeJobRequest, OneTimeJob.objects.all())
+        self.assertEqual(list(schedules), [allowed])
+        self.assertEqual(schedules.count(), 1)

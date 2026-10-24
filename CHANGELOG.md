@@ -153,7 +153,7 @@ Create them with the `/api/turbo/sysdiagnoses/` and `/api/turbo/file_exports/` e
 
 A sysdiagnose and a file export run one time only: Zentral refuses to attach one to a recurring job.
 
-The one-time jobs and the recurring jobs have typed PBAC actions. `Turbo::Action::"createOneTimeJob"` and `Turbo::Action::"createRecurringJob"` take the configuration as their resource. `Turbo::Action::"updateOneTimeJob"`, `Turbo::Action::"deleteOneTimeJob"`, `Turbo::Action::"updateRecurringJob"` and `Turbo::Action::"deleteRecurringJob"` take the schedule, which is a member of its configuration. The six actions carry the job in `context.job`. A policy can allow one kind of job and refuse another, or allow one configuration and not another. A policy needs no guard: `when { context.job.kind == "sysdiagnose" }` allows that kind and nothing else, and the role still opens the scheduling page. Every kind is covered, scripts and mSCP checks included, in the console and in the API.
+The one-time jobs and the recurring jobs have typed PBAC actions. `Turbo::Action::"createOneTimeJob"` and `Turbo::Action::"createRecurringJob"` take the configuration as their resource, and carry the job in `context.job`. `Turbo::Action::"viewOneTimeJob"`, `Turbo::Action::"updateOneTimeJob"`, `Turbo::Action::"deleteOneTimeJob"` and the three recurring actions take the schedule, which is a member of its configuration, with its job in `resource.job`. A policy can allow one kind of job and refuse another, or allow one configuration and not another. A policy needs no guard: `when { context.job.kind == "sysdiagnose" }` allows that kind and nothing else on a create, and the role still opens the scheduling page. The lists show only the schedules that the user can see. The job counts of the Turbo overview, and the *Scheduled in* filter of the script, mSCP check, sysdiagnose and file export lists, read only these schedules, in the console and in the API. In the API, an unknown id in these filters, and in the `configuration` and `job` filters of the schedule lists, gives an empty list, not a 400. Every kind is covered, scripts and mSCP checks included, in the console and in the API.
 
 A sysdiagnose and a file export upload what they collect. The file does not travel in the result: the agent asks the new `/public/turbo/uploads/` endpoint for a destination, sends the file there, and reports the upload in the result. Zentral asks for the destination one time for each artifact of each run, and never in the configuration payload, which is cached and served again to every machine in scope. The request is built from the blocks of the result: the `run` block, and the `upload` entry without its key, so the agent sends the same two values to the endpoint and in the result. A retry for the same run and artifact gets the same key, and must declare the same size and SHA-256: other bytes are another artifact, and they need a run of their own.
 
@@ -175,11 +175,13 @@ When all the parts are sent, the agent calls the new `/public/turbo/uploads/comp
 
 If the storage does not answer, the upload stays `pending`. Run the new `sweep_turbo_uploads` command every hour to try again. You can run it on more than one server at the same time.
 
-The page of an enrolled machine lists the artifacts that its jobs collected, with a download link. The new `Turbo::Action::"viewJobUpload"` PBAC action shows an artifact, and the new `Turbo::Action::"downloadJobUpload"` action downloads it. The Viewer group has only the first, because a sysdiagnose has the data of the person who uses the machine. An artifact that a user cannot see is not on the page. Each download posts a new `turbo_artifact_downloaded` event.
+The page of an enrolled machine lists the artifacts that its jobs collected, with a download link. The new `Turbo::Action::"viewJobUpload"` PBAC action shows an artifact, and the new `Turbo::Action::"downloadJobUpload"` action downloads it. The Viewer group has only the first, because a sysdiagnose has the data of the person who uses the machine. An artifact that a user cannot see is not on the page. The download needs only the second action, in the console as in the API. Each download posts a new `turbo_artifact_downloaded` event.
 
 In a policy, the resource of the two actions is the upload. It is a member of its machine and of its schedule, and the schedule is a member of its configuration. So one `forbid` on a configuration covers the scheduling and the artifacts. It has the artifact name and the job, so a policy can also read `resource.job.kind`.
 
-The new `/api/turbo/one_time_jobs/<pk>/machines/` and `/api/turbo/recurring_jobs/<pk>/machines/` endpoints give the state of a job on each machine, as the machine page does. For a one-time job, each machine has the artifacts that the job collected, with a download URL. Two new PBAC actions, `Turbo::Action::"viewOneTimeJobMachine"` and `Turbo::Action::"viewRecurringJobMachine"`, control the machines, and the two artifact actions control the artifacts.
+The new `/api/turbo/one_time_jobs/<pk>/machines/` and `/api/turbo/recurring_jobs/<pk>/machines/` endpoints give the state of a job on each machine, as the machine page does. For a one-time job, each machine has the artifacts that the job collected, with a download URL. Two new PBAC actions, `Turbo::Action::"viewOneTimeJobMachine"` and `Turbo::Action::"viewRecurringJobMachine"`, control the machines, and the two artifact actions control the artifacts. The machine page shows a state only when the same action permits it.
+
+The two endpoints filter the machines in the database when the policies use only `in`, `==`, `is`, `!=`, `&&`, `||` and `!` on the resource, its job and the kind of its job. A call then reads only the machines of its page. With another expression, for example `has` or `like`, Zentral decides for each machine of the job, and a call takes more time. The lists of the one-time jobs and of the recurring jobs filter the same way.
 
 If you manage your own deployment, add rules to the bucket. Zentral does not delete the artifacts: an `Expiration` rule on `turbo/uploads/` deletes them, for example after 14 days. An `AbortIncompleteMultipartUpload` rule on the bucket deletes the parts of an upload that the agent never reports. On a bucket with versioning, an `ExpiredObjectDeleteMarker` rule deletes the delete markers.
 
@@ -229,6 +231,28 @@ the body did not carry. It gives a `405` now. Use `PUT` and send every attribute
 
 A test walks the URL configuration and asserts that no endpoint answers a `PATCH`, so the
 restriction no longer depends on the base class a view inherits.
+
+
+#### 🧨 A PUT on a Turbo schedule carries every attribute
+
+`PUT /api/turbo/one_time_jobs/<pk>/` and `PUT /api/turbo/recurring_jobs/<pk>/` refuse a partial
+body now: an attribute that is not in the body is a 400. Before, it kept its stored value, and
+the checks that read two attributes (the tags and the excluded tags, the serial numbers and the
+excluded serial numbers, the window) answered on a value that the caller did not send. Send
+every attribute, with `null` or `[]` for an empty one. The Terraform provider already sends all
+of them.
+
+
+#### 🧨 The mass tagging API decides on each machine
+
+`POST /api/inventory/machines/tags/` decides `Inventory::Action::"createMachineTag"` and
+`Inventory::Action::"deleteMachineTag"` for each machine and each tag, as the machine page does.
+Before, it made one decision on `System::"any"`, so a `forbid` on some machines, for example with
+`resource in Inventory::MetaBusinessUnit::"…"`, did not apply to it, and a `permit` on some machines
+did not open it. Zentral makes all the decisions before it changes a machine: one refused machine
+or tag refuses the request with a 403, and no machine changes. The legacy permissions
+`inventory.add_machinetag` and `inventory.delete_machinetag` do not map to a PBAC action anymore. A
+policy that grants the two actions, or the `AdminActions` or `UserActions` group, needs no change.
 
 
 #### 🧨 Santa path regexes are anchored

@@ -1,3 +1,4 @@
+import uuid
 from unittest.mock import patch
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -5,8 +6,9 @@ from django.urls import reverse
 from accounts.models import Policy
 from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.models import OneTimeJob
-from .utils import (TurboAPITestCase, forbid_job_kind_policy, force_command,
-                    force_configuration, force_one_time_job, force_script, turbo_policy)
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, TurboAPITestCase, forbid_job_kind_policy, force_command,
+                    force_configuration, force_one_time_job, force_script, one_time_job_update_data, turbo_policy,
+                    view_schedule_policy)
 
 
 class TurboOneTimeJobAPITestCase(TurboAPITestCase):
@@ -68,6 +70,36 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
                               "serial_numbers": ["ABC123"], "excluded_serial_numbers": ["ABC123"]})
         self.assertEqual(response.status_code, 400)
 
+    # a create is refused before the validation, whose errors tell what exists
+
+    def test_create_one_time_job_refused_before_the_validation(self):
+        configuration = force_configuration()
+        self.set_policy("permit ("
+                        f' principal in Role::"{self.group.pk}",'
+                        ' action == Turbo::Action::"createOneTimeJob",'
+                        f' resource == Turbo::Configuration::"{force_configuration().pk}"'
+                        ");\n")
+        for job in (str(uuid.uuid4()), str(force_script().job.pk)):
+            response = self.post(reverse("turbo_api:one_time_jobs"),
+                                 {"configuration": str(configuration.pk), "job": job,
+                                  "not_before": "2026-07-02T10:00:00Z", "not_after": "2026-07-01T10:00:00Z"})
+            self.assertEqual(response.status_code, 403)
+
+    def test_create_one_time_job_unknown_configuration_left_to_the_validation(self):
+        # its id is a UUID, so the 400 tells nothing that the caller does not already have. Only the
+        # configuration is read: the 400 tells nothing about the job either.
+        job = str(force_script().job.pk)
+        for data in ({"configuration": str(uuid.uuid4()), "job": job},
+                     {"configuration": str(uuid.uuid4()), "job": str(uuid.uuid4())},
+                     {"configuration": "not a UUID", "job": job},
+                     {"configuration": None, "job": job},
+                     {"job": job}):
+            response = self.post(reverse("turbo_api:one_time_jobs"), data)
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(list(response.json()), ["configuration"])
+        response = self.post(reverse("turbo_api:one_time_jobs"), [{"job": job}])
+        self.assertEqual(response.status_code, 400)
+
     def test_create_one_time_job_allows_duplicate(self):
         one_time_job = force_one_time_job()
         self.set_policy(turbo_policy(self.group))
@@ -80,10 +112,23 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
             2,
         )
 
+    def test_list_one_time_jobs_without_a_policy(self):
+        # each one-time job has its own decision, so the list needs no permission, and it is empty
+        force_one_time_job()
+        self.set_permissions()
+        response = self.get(reverse("turbo_api:one_time_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"count": 0, "next": None, "previous": None, "results": []})
+
+    def test_get_one_time_job_without_a_policy(self):
+        one_time_job = force_one_time_job()
+        self.set_permissions()
+        self.assertEqual(self.get(reverse("turbo_api:one_time_job", args=(one_time_job.pk,))).status_code, 403)
+
     def test_list_one_time_jobs(self):
         # creation order — LimitOffset pagination over an unordered queryset returns unstable pages
         one_time_jobs = [force_one_time_job() for _ in range(2)]
-        self.set_permissions("turbo.view_onetimejob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.get(reverse("turbo_api:one_time_jobs"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["count"], 2)
@@ -92,7 +137,7 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
 
     def test_list_one_time_jobs_constant_query_count(self):
         # the serializer renders tags/excluded_tags; the list queryset prefetches them → no per-row N+1
-        self.set_permissions("turbo.view_onetimejob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         force_one_time_job()
         self.get(reverse("turbo_api:one_time_jobs"))  # warm process-level caches
         with CaptureQueriesContext(connection) as one:
@@ -103,9 +148,60 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
             self.assertEqual(self.get(reverse("turbo_api:one_time_jobs")).status_code, 200)
         self.assertEqual(len(one.captured_queries), len(five.captured_queries))
 
+    def test_list_one_time_jobs_only_the_visible_ones(self):
+        visible = force_one_time_job()
+        force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        response = self.get(reverse("turbo_api:one_time_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual([j["id"] for j in response.json()["results"]], [str(visible.pk)])
+
+    def test_list_one_time_jobs_filters(self):
+        one_time_job = force_one_time_job()
+        hidden = force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{one_time_job.configuration.pk}"'))
+        for params, pks in (({"configuration": str(one_time_job.configuration.pk)}, [str(one_time_job.pk)]),
+                            ({"job": str(one_time_job.job.pk)}, [str(one_time_job.pk)]),
+                            # the ids are not loaded: an unknown id gives the empty list of a hidden one
+                            ({"configuration": str(hidden.configuration.pk)}, []),
+                            ({"configuration": str(uuid.uuid4())}, []),
+                            ({"job": str(uuid.uuid4())}, [])):
+            response = self.get(reverse("turbo_api:one_time_jobs"), params)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual([j["id"] for j in response.json()["results"]], pks)
+
+    def test_list_one_time_jobs_malformed_filters(self):
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
+        response = self.get(reverse("turbo_api:one_time_jobs"), {"configuration": "yolo", "job": "fomo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"configuration": ["Enter a valid UUID."], "job": ["Enter a valid UUID."]})
+
+    def test_list_one_time_jobs_a_policy_that_sql_cannot_express(self):
+        # like: one decision for each schedule, with the same rows
+        visible = force_one_time_job()
+        force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, condition=(f'when {{ resource in Turbo::Configuration::"{visible.configuration.pk}" '
+                                   '&& resource.job.kind like "*" }')))
+        response = self.get(reverse("turbo_api:one_time_jobs"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 1)
+        self.assertEqual([j["id"] for j in response.json()["results"]], [str(visible.pk)])
+
+    def test_get_one_time_job_not_visible(self):
+        visible = force_one_time_job()
+        hidden = force_one_time_job()
+        self.set_policy(view_schedule_policy(
+            self.group, f'resource in Turbo::Configuration::"{visible.configuration.pk}"'))
+        self.assertEqual(self.get(reverse("turbo_api:one_time_job", args=(visible.pk,))).status_code, 200)
+        self.assertEqual(self.get(reverse("turbo_api:one_time_job", args=(hidden.pk,))).status_code, 403)
+
     def test_get_one_time_job(self):
         one_time_job = force_one_time_job()
-        self.set_permissions("turbo.view_onetimejob")
+        self.set_policy(turbo_policy(self.group, actions=(VIEW_ONE_TIME_JOB_ACTION,)))
         response = self.get(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["id"], str(one_time_job.pk))
@@ -114,19 +210,30 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         one_time_job = force_one_time_job()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(one_time_job.configuration.pk),
-                             "job": str(one_time_job.job.pk), "not_before": "2026-08-01T09:00:00Z"})
+                            one_time_job_update_data(one_time_job, not_before="2026-08-01T09:00:00Z"))
         self.assertEqual(response.status_code, 200)
         one_time_job.refresh_from_db()
         self.assertIsNotNone(one_time_job.not_before)
+
+    def test_update_one_time_job_without_an_attribute(self):
+        # The role cannot see the schedule. A field that the body leaves out would keep its stored
+        # value, and the response would give it back.
+        one_time_job = force_one_time_job(serial_numbers=["ABC123"])
+        self.set_policy(turbo_policy(self.group))
+        response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
+                            {"configuration": str(one_time_job.configuration.pk),
+                             "job": str(one_time_job.job.pk)})
+        self.assertEqual(response.json(), {field: ["This field is required."]
+                                           for field in ("not_before", "not_after", "tags", "excluded_tags",
+                                                         "serial_numbers", "excluded_serial_numbers")})
+        self.assertEqual(response.status_code, 400)
 
     def test_update_one_time_job_configuration_immutable(self):
         one_time_job = force_one_time_job()
         other_configuration = force_configuration()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(other_configuration.pk),
-                             "job": str(one_time_job.job.pk)})
+                            one_time_job_update_data(one_time_job, configuration=str(other_configuration.pk)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"configuration": ["This field cannot be changed"]})
 
@@ -135,10 +242,26 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         other_script = force_script()
         self.set_policy(turbo_policy(self.group))
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(one_time_job.configuration.pk),
-                             "job": str(other_script.job.pk)})
+                            one_time_job_update_data(one_time_job, job=str(other_script.job.pk)))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"job": ["This field cannot be changed"]})
+
+    def test_update_one_time_job_without_a_policy(self):
+        # Decided before the validation: its errors would tell a caller that may not update the
+        # schedule if a configuration is the one of the schedule.
+        one_time_job = force_one_time_job()
+        other_configuration = force_configuration()
+        self.set_permissions()
+        response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
+                            one_time_job_update_data(one_time_job, configuration=str(other_configuration.pk)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_delete_one_time_job_without_a_policy(self):
+        one_time_job = force_one_time_job()
+        self.set_permissions()
+        response = self.delete(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(OneTimeJob.objects.filter(pk=one_time_job.pk).exists())
 
     def test_delete_one_time_job(self):
         one_time_job = force_one_time_job()
@@ -200,8 +323,7 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         self.set_policy(turbo_policy(self.group))
         self._forbid_kind("file_export")
         response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                            {"configuration": str(one_time_job.configuration.pk),
-                             "job": str(command.job.pk), "not_after": "2027-01-01T09:00:00Z"})
+                            one_time_job_update_data(one_time_job, not_after="2027-01-01T09:00:00Z"))
         self.assertEqual(response.status_code, 403)
         one_time_job.refresh_from_db()
         self.assertIsNone(one_time_job.not_after)
@@ -213,8 +335,7 @@ class TurboOneTimeJobAPITestCase(TurboAPITestCase):
         self._forbid_kind("file_export")
         with self.captureOnCommitCallbacks(execute=True):
             response = self.put(reverse("turbo_api:one_time_job", args=(one_time_job.pk,)),
-                                {"configuration": str(one_time_job.configuration.pk),
-                                 "job": str(command.job.pk), "not_after": "2027-01-01T09:00:00Z"})
+                                one_time_job_update_data(one_time_job, not_after="2027-01-01T09:00:00Z"))
         self.assertEqual(response.status_code, 200)
         one_time_job.refresh_from_db()
         self.assertIsNotNone(one_time_job.not_after)

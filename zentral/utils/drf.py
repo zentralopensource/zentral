@@ -104,8 +104,8 @@ class ListCreateAPIViewWithAudit(generics.ListCreateAPIView):
 
 class RetrieveUpdateAPIViewWithAudit(generics.RetrieveUpdateAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
-    # Zentral only does full updates — PATCH is a 405 everywhere, so the serializers' update()
-    # methods can rely on every declared field being present in validated_data
+    # Zentral only does full updates — PATCH is a 405 everywhere. A PUT can still leave out a field
+    # that is not required, and DRF then keeps its stored value: FullUpdateSerializerMixin requires it
     http_method_names = ["get", "head", "options", "put"]
 
     def get_audit_machine_serial_number(self):
@@ -162,3 +162,43 @@ class RetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateAPIViewWithAudit,
             self.on_commit_callback_extra(instance)
 
         transaction.on_commit(on_commit_callback)
+
+
+class PBACRetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateDestroyAPIViewWithAudit):
+    # one typed decision for each method, on the stored object: the update action for a PUT, the delete
+    # action for a DELETE, and the view action for the other methods
+    permission_classes = [PBACPermission]
+    view_pbac_request_class = None
+    update_pbac_request_class = None
+    delete_pbac_request_class = None
+
+    def get_object(self):
+        # read once: the permission resolves it to build the request, the handler uses it
+        if not hasattr(self, "_object"):
+            self._object = super().get_object()
+        return self._object
+
+    def get_pbac_request(self, request):
+        request_class = {
+            "PUT": self.update_pbac_request_class,
+            "DELETE": self.delete_pbac_request_class,
+        }.get(request.method, self.view_pbac_request_class)
+        return request_class(request.user, self.get_object())
+
+
+# serializers
+
+
+class FullUpdateSerializerMixin:
+    """Requires every field that a PUT writes.
+
+    DRF skips a field that is not required and is not in the body, so the object keeps its stored value.
+    A check that reads two fields would then answer on a value that the caller never sent.
+    """
+
+    def get_fields(self):
+        fields = super().get_fields()
+        for field in fields.values():
+            if not field.read_only:
+                field.required = True
+        return fields

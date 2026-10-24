@@ -328,6 +328,8 @@ Some examples:
 
 Use this endpoint to tag machines using serial numbers or principal user information (unique IDs or principal names). Three different operations are possible: `ADD`, `REMOVE`, `SET`. For the `SET` operation, the `taxonomy` attribute is required. For the `REMOVE` operation, the `taxonomy` attribute must not be used. For the `ADD` operation and `REMOVE` operation, the `names` attribute must not be empty. To scope the machines, use either `serial_numbers` or `principal_users`.
 
+Zentral decides `createMachineTag` and `deleteMachineTag` for each machine and each tag, before it changes a machine. One refused machine or tag refuses the request with a 403, and no machine changes.
+
 Example payload to tag machines using their principal users:
 
 ```json
