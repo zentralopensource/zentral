@@ -57,6 +57,8 @@ Authorization is granted by writing Cedar policies that reference a Role (or a s
 
 Federated users are not authorized to modify the users and the user federation settings, regardless of which policies target them.
 
+Each view and each endpoint that a typed PBAC action protects follows the [PBAC rules for views and endpoints](pbac-rules.md). These rules also give the leak classes that rate a finding.
+
 ## Cryptography practices
 
 Django uses the platform cryptographic random generator by default.
