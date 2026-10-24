@@ -103,3 +103,25 @@ Because the website supplies the configuration for the published build, the Hugo
 - **Default to no comments.** Don't comment methods, classes, or anything self-explanatory — well-named identifiers already say what the code does.
 - Only add a comment when it explains *why*: a corner case, a non-obvious constraint, a workaround, or something that looks simpler than it actually is and would trip up a future reader.
 - Don't write docstrings or comments that just restate the signature. Don't reference tasks, PRs, or callers in comments — that context belongs in commit messages.
+
+## PBAC rules
+
+A view or an endpoint that a typed PBAC action protects follows [docs/content/development/pbac-rules.md](docs/content/development/pbac-rules.md). Read it before you add or review one: it is the source of truth, and the list below only names the rules.
+
+1. One action for each decision.
+2. Each element of a response has its own decision, with the action of its own resource.
+3. Decide once.
+4. Decide before you validate.
+5. A preview never authorizes a write.
+6. A list filters its rows. It never refuses.
+7. A filter treats a hidden id as an unknown id.
+8. A write action includes the read of its resource.
+9. A PUT carries every attribute.
+10. Use a context only for what does not exist yet.
+11. A typed action is never reachable through `has_perm()`.
+12. Fail closed.
+13. A refusal on a guessable id gives the same answer as an unknown id.
+14. Log every refusal. Audit every write.
+15. Test each endpoint with the same matrix.
+
+In a review, rate a leak with the leak classes of that page. Do not report an accepted class as a defect, and do not fix one with a second decision.
