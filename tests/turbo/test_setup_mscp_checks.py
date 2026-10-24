@@ -39,7 +39,8 @@ class TurboSetupMSCPChecksTestCase(TurboSetupTestCase):
         scheduled = force_mscp_check()
         force_recurring_job(configuration=configuration, job=scheduled.job)
         force_mscp_check()  # not scheduled anywhere
-        self.login("turbo.view_mscpcheck")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_mscpcheck", "turbo.view_configuration",
+                                            actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
         response = self.client.get(reverse("turbo:mscp_checks"), {"configuration": configuration.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["object_list"]), [scheduled])

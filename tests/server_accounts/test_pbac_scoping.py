@@ -2,14 +2,17 @@ import uuid
 
 from cedarpy import format_policies
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.db.models import Q
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
 from pbac.cedar import policies_cache
 from pbac.entities import Action, Namespace
-from pbac.scoping import _MAX_DEPTH, SQLMap, compile_policies, scope_queryset, values_q, visible_rows
+from pbac.scoping import (_MAX_DEPTH, SQLMap, compile_policies, scope_queryset, values_q, visible_row_counts,
+                          visible_rows)
 from pbac.types import USER, AppliesTo, AttrSpec, ResourceType, SetOf
 from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE
 from zentral.contrib.turbo.models import OneTimeJobMachine
@@ -623,3 +626,23 @@ class ScopeQuerysetTestCase(TestCase):
         superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.com",
                                              is_superuser=True)
         self.assertEqual(set(visible_rows(superuser, ViewRowWithContextRequest, self.queryset)), set(self.rows))
+
+    # visible_row_counts
+
+    def test_visible_row_counts_with_one_sql_filter(self):
+        self._policy('when { resource.job.kind == "script" }')
+        self.assertEqual(visible_row_counts(self.user, ViewOneTimeJobMachineRequest, self.queryset, "one_time_job"),
+                         {self.rows[0].one_time_job_id: 1})
+
+    def test_visible_row_counts_with_one_decision_for_each_row(self):
+        Policy.objects.filter(name="Tests").delete()
+        Policy.objects.create(name="Tests", source=format_policies(
+            f'permit (principal in Role::"{self.group.pk}", action == {ViewRowWithContextRequest.pbac_action}, '
+            'resource) unless { context.kind == "script" };'
+        ))
+        policies_cache.clear()
+        with CaptureQueriesContext(connection) as ctx:
+            counts = visible_row_counts(self.user, ViewRowWithContextRequest, self.queryset, "one_time_job")
+        self.assertEqual(counts, {self.rows[1].one_time_job_id: 1})
+        # the rows of the decisions are counted: no second query with their keys
+        self.assertEqual(sum('FROM "turbo_onetimejobmachine"' in query["sql"] for query in ctx.captured_queries), 1)

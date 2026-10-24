@@ -1,22 +1,14 @@
-from django.db.models import Q
 from django_filters import rest_framework as filters
 from rest_framework.exceptions import ValidationError
 from zentral.utils.drf import (ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
                                RetrieveUpdateDestroyAPIViewWithAudit)
-from ..models import Configuration, FileExport, Sysdiagnose
+from ..models import FileExport, Sysdiagnose
 from ..serializers import FileExportSerializer, SysdiagnoseSerializer
+from .base import ScheduledInFilterSet
 
 
-class CommandKindFilter(filters.FilterSet):
+class CommandKindFilter(ScheduledInFilterSet):
     name = filters.CharFilter()
-    # the configuration is reached through the schedules of the Job, like the "Scheduled in" search
-    # of the console
-    configuration = filters.ModelChoiceFilter(queryset=Configuration.objects.all(),
-                                              method="filter_configuration")
-
-    def filter_configuration(self, queryset, name, value):
-        return queryset.filter(Q(job__recurringjob__configuration=value)
-                               | Q(job__onetimejob__configuration=value)).distinct()
 
 
 class BaseCommandKindList(ListCreateAPIViewWithAudit):

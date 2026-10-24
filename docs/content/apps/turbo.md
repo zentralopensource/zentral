@@ -262,7 +262,7 @@ permit (
 
 The machines are not the resource. A schedule targets tags and serial numbers, and tag membership changes after the schedule is written, so there is no machine for a policy to name.
 
-`viewOneTimeJob` and `viewRecurringJob` decide which schedules a user sees. The lists, the configuration page and the job pages show only these schedules. The update and delete pages and endpoints need only the update or the delete action. The lists need no other permission: a user without a policy for these actions gets empty lists. Their menu entries show when a policy permits `Turbo::Action::"NOOP"`, the action that shows the Turbo module in the navigation. A policy for an action group of Turbo permits it. A policy scoped to a configuration does not, because the resource of this action is not a configuration. The *Configuration* filter of the lists needs `turbo.view_configuration`, because its choices are all the configurations. Zentral filters the schedules in the database when the policies use only the expressions that it filters for [the machines of a one-time job](#apiturboone_time_jobsuuidpkmachines), on the resource and its job. With another expression, for example `has` or `like`, Zentral decides for each schedule.
+`viewOneTimeJob` and `viewRecurringJob` decide which schedules a user sees. The lists, the configuration page and the job pages show only these schedules. The update and delete pages and endpoints need only the update or the delete action. The lists need no other permission: a user without a policy for these actions gets empty lists. Their menu entries show when a policy permits `Turbo::Action::"NOOP"`, the action that shows the Turbo module in the navigation. A policy for an action group of Turbo permits it. A policy scoped to a configuration does not, because the resource of this action is not a configuration. The *Configuration* filter of the lists needs `turbo.view_configuration`, because its choices are all the configurations. The *Scheduled in* filter of the script, mSCP check, sysdiagnose and file export lists needs it too. This filter, in the console and in the API, and the job counts of the Turbo overview, read only the schedules that the user can see. Zentral filters the schedules in the database when the policies use only the expressions that it filters for [the machines of a one-time job](#apiturboone_time_jobsuuidpkmachines), on the resource and its job. With another expression, for example `has` or `like`, Zentral decides for each schedule.
 
 The *Schedule one-time job* and *Schedule recurring job* pages of a configuration open when the create action could be permitted in this configuration. The machine page needs `turbo.view_enrolledmachine`: Zentral knows the configuration only after it resolves the serial number, so the scheduling action cannot be the first gate, and the response must not tell the user if a serial number is enrolled.
 
@@ -1044,7 +1044,7 @@ Terraform resource: [`zentral_turbo_script`](https://registry.terraform.io/provi
 * PBAC action: `Turbo::Action::"viewScript"`
 * Optional filter parameters:
     * `name`: name of the script
-    * `configuration`: primary key of a Turbo configuration – the scripts scheduled in it, as a recurring or a one-time job
+    * `configuration`: primary key of a Turbo configuration – the scripts scheduled in it, as a recurring or a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 
@@ -1248,7 +1248,7 @@ Terraform resource: [`zentral_turbo_mscp_check`](https://registry.terraform.io/p
 * Optional filter parameters:
     * `rule_id`: the mSCP rule identifier
     * `baseline`: the mSCP baseline key
-    * `configuration`: primary key of a Turbo configuration – the checks scheduled in it, as a recurring or a one-time job
+    * `configuration`: primary key of a Turbo configuration – the checks scheduled in it, as a recurring or a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 
@@ -1430,7 +1430,7 @@ curl \
 * PBAC action: `Turbo::Action::"viewSysdiagnose"`
 * Optional filter parameters:
     * `name`: name of the sysdiagnose
-    * `configuration`: primary key of a Turbo configuration – the sysdiagnoses scheduled in it
+    * `configuration`: primary key of a Turbo configuration – the sysdiagnoses scheduled in it, as a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 
@@ -1546,7 +1546,7 @@ curl \
 * PBAC action: `Turbo::Action::"viewFileExport"`
 * Optional filter parameters:
     * `name`: name of the file export
-    * `configuration`: primary key of a Turbo configuration – the file exports scheduled in it
+    * `configuration`: primary key of a Turbo configuration – the file exports scheduled in it, as a one-time job that the caller can see. An unknown id gives an empty list.
 
 Example:
 

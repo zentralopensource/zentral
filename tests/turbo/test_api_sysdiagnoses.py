@@ -3,7 +3,8 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.turbo.command_backends import CommandBackend
 from zentral.contrib.turbo.models import Job, Sysdiagnose
-from .utils import TurboAPITestCase, force_command, force_configuration, force_one_time_job
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboAPITestCase, force_command,
+                    force_configuration, force_one_time_job, turbo_policy)
 
 
 class TurboSysdiagnoseAPITestCase(TurboAPITestCase):
@@ -103,7 +104,8 @@ class TurboSysdiagnoseAPITestCase(TurboAPITestCase):
         scheduled = force_command()
         force_one_time_job(configuration=configuration, job=scheduled.job)
         force_command()
-        self.set_permissions("turbo.view_sysdiagnose")
+        self.set_policy(turbo_policy(self.group, "turbo.view_sysdiagnose",
+                                                 actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
         response = self.get(reverse("turbo_api:sysdiagnoses") + f"?configuration={configuration.pk}")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([r["id"] for r in response.json()["results"]], [str(scheduled.pk)])

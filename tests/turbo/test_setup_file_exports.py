@@ -1,6 +1,7 @@
 from django.urls import reverse
 from zentral.contrib.turbo.command_backends import CommandBackend
-from .utils import TurboSetupTestCase, force_command, force_configuration, force_one_time_job
+from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSetupTestCase, force_command,
+                    force_configuration, force_one_time_job, turbo_policy)
 
 
 class TurboSetupFileExportsTestCase(TurboSetupTestCase):
@@ -35,7 +36,8 @@ class TurboSetupFileExportsTestCase(TurboSetupTestCase):
         scheduled = self._force_file_export()
         force_one_time_job(configuration=configuration, job=scheduled.job)
         self._force_file_export()
-        self.login("turbo.view_fileexport")
+        self.login_with_policy(turbo_policy(self.group, "turbo.view_fileexport", "turbo.view_configuration",
+                                            actions=(VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION)))
         response = self.client.get(reverse("turbo:file_exports"), {"configuration": configuration.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["object_list"]), [scheduled])
