@@ -1683,6 +1683,8 @@ Terraform resource: [`zentral_turbo_recurring_job`](https://registry.terraform.i
     * `configuration`: primary key of the Turbo configuration
     * `job`: primary key of the job
 
+An unknown id gives an empty list, as an id that the caller cannot see.
+
 Example:
 
 ```bash
@@ -1886,6 +1888,8 @@ Terraform resource: [`zentral_turbo_one_time_job`](https://registry.terraform.io
 * Optional filter parameters:
     * `configuration`: primary key of the Turbo configuration
     * `job`: primary key of the job
+
+An unknown id gives an empty list, as an id that the caller cannot see.
 
 Example:
 
