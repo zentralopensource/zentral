@@ -5,7 +5,7 @@ from dateutil.parser import ParserError
 from django.core.management.base import BaseCommand
 from django.core.validators import EmailValidator, ValidationError
 from django.db import transaction
-from accounts.models import APIToken, User
+from accounts.models import APIToken, Group, User
 from accounts.password_reset import handler as password_reset_handler
 from zentral.core.events.base import AuditEvent
 from zentral.core.queues import queues
@@ -21,6 +21,8 @@ class Command(BaseCommand):
                             help="Create a service account")
         parser.add_argument('--superuser', action='store_true',
                             help="User has all permissions without explicitly assigning them")
+        parser.add_argument('--role', action='append', dest='roles', metavar='ROLE',
+                            help="Add the user to a role. Can be used multiple times")
         parser.add_argument('--skip-if-existing', action='store_true')
         parser.add_argument('--with-api-token', action='store_true',
                             help="Generate an API token for the user")
@@ -54,6 +56,13 @@ class Command(BaseCommand):
             self.with_api_token = True
             if self.api_token_name is None:
                 self.api_token_name = 'Initial Service Account API Token'
+        if self.superuser:
+            # A super user skips PBAC: its API token is an unbounded credential, and a role
+            # grants nothing it cannot already do.
+            if self.with_api_token:
+                self.exit_with_error("A super user cannot have an API token", 8)
+            elif self.roles:
+                self.exit_with_error("A super user cannot have roles", 9)
         if self.api_token_expiry:
             try:
                 parser.parse(self.api_token_expiry)
@@ -76,6 +85,15 @@ class Command(BaseCommand):
             self.exit_with_error("invalid email address", 12)
         self.context["email"] = email
         self.email = email
+
+    def check_roles(self):
+        self.groups = []
+        for role in self.roles:
+            role = role.strip()
+            try:
+                self.groups.append(Group.objects.get(name=role))
+            except Group.DoesNotExist:
+                self.exit_with_error(f"unknown role: {role}", 15)
 
     def check_user_conflict(self):
         user = None
@@ -101,6 +119,17 @@ class Command(BaseCommand):
                 )
         self.user = user
 
+    def add_roles(self):
+        if not self.groups:
+            return False
+        current_pks = set(self.user.groups.values_list("pk", flat=True))
+        new_groups = [group for group in self.groups if group.pk not in current_pks]
+        if not new_groups:
+            return False
+        self.user.groups.add(*new_groups)
+        self.print("Roles added:", ", ".join(group.name for group in new_groups))
+        return True
+
     def create_or_update_user(self):
         created = updated = False
         if not self.user:
@@ -121,15 +150,25 @@ class Command(BaseCommand):
             transaction.on_commit(on_commit_callback)
 
             self.print("Superuser" if self.superuser else "User", self.username, self.email, "created")
+            self.add_roles()
         else:
             if self.skip_if_existing:
                 self.exit_with_error(f"User {self.username} already exists. Nothing to do.", exit_code=0)
-            if self.user.is_superuser != self.superuser:
+            superuser_change = self.user.is_superuser != self.superuser
+            prev_event_value = self.user.serialize_for_event() if superuser_change or self.groups else None
+            if superuser_change:
                 updated = True
-                prev_event_value = self.user.serialize_for_event()
                 self.user.is_superuser = self.superuser
                 self.user.save()
-
+                if self.superuser:
+                    self.print("Existing user", self.username, self.email, "promoted to superuser")
+                else:
+                    self.print("Existing superuser", self.username, self.email, "demoted")
+            else:
+                self.print("Superuser" if self.superuser else "User", self.username, self.email, "already exists")
+            if self.add_roles():
+                updated = True
+            if updated:
                 def on_commit_callback():
                     event = AuditEvent.build(
                         instance=self.user,
@@ -139,13 +178,6 @@ class Command(BaseCommand):
                     event.post()
 
                 transaction.on_commit(on_commit_callback)
-
-                if self.superuser:
-                    self.print("Existing user", self.username, self.email, "promoted to superuser")
-                else:
-                    self.print("Existing superuser", self.username, self.email, "demoted")
-            else:
-                self.print("Superuser" if self.superuser else "User", self.username, self.email, "already exists")
         self.context.update({
             "created": created,
             "updated": updated
@@ -203,14 +235,17 @@ class Command(BaseCommand):
             self.api_token_name = kwargs.get("api_token_name", '')
             self.api_token_expiry = kwargs.get("api_token_expiry", '')
             self.send_reset = kwargs.get("send_reset", False)
+            self.roles = kwargs.get("roles") or []
             self.context = {
                 "service_account": self.service_account,
                 "superuser": self.superuser,
+                "roles": self.roles,
             }
             self.check_options()
             self.check_username(kwargs["username"])
             self.check_email(kwargs["email"])
             with transaction.atomic():
+                self.check_roles()
                 self.check_user_conflict()
                 self.create_or_update_user()
                 self.create_api_token()

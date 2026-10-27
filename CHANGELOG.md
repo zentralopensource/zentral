@@ -10,6 +10,8 @@ The PBAC Schema browser documents each action now. It shows what the action auth
 
 A task that produces several files has a manifest in its result. The download endpoint of the task gives the manifest with a download URL for each file, and the `file` parameter downloads one file. With an S3 or GCS storage, the manifest also gives the URL of each file in the storage, and the expiration time of the URL when it expires. The tasks pages list the files.
 
+`create_zentral_user` adds the new user to roles with the `--role` option now. Give the name of a role, and repeat the option for several of them. An unknown role stops the command, a role the user already has is skipped, and the roles are in the audit event of the user and in the `--json` output. Use it with `--service-account` to make the account an automation logs in with: the command creates it, adds the roles and prints its first API token.
+
 A read-only HTTP API is available for the compliance checks. `/api/compliance_checks/compliance_checks/` lists the compliance checks, with the number of machines for each status, and the number of machines with a status from a previous version of the check. `/api/compliance_checks/machine_statuses/` lists the status of each machine for each check, and you can filter it on the serial number of the machine and on the compliance check.
 
 
@@ -187,6 +189,11 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 
 
 ### Backward incompatibilities
+
+
+#### 🧨 A superuser gets no API token and no role from `create_zentral_user`
+
+`create_zentral_user --superuser` refuses `--with-api-token` and exits with the code 8, and refuses `--role` and exits with the code 9. A superuser skips PBAC: its API token is a credential that no policy bounds, and a role grants it nothing it cannot already do. Use a service account for an automation, with the roles that its work needs — `--service-account --role "Editor"` makes the account, adds the role and prints its first API token. A superuser that already has an API token keeps it: delete it from the web console or with the API.
 
 
 #### 🧨 The block and the unblock of an MDM device have their own PBAC actions
