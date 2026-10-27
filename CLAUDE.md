@@ -92,6 +92,22 @@ Internal links carry the `.md` extension and are resolved against the page tree 
 
 Because the website supplies the configuration for the published build, the Hugo version and every markup option have to match on both sides. [docs/README.md](docs/README.md) says what is pinned where.
 
+## Manifest
+
+[com.zentral.manifest.json](com.zentral.manifest.json) records what a deployment of this Zentral needs alongside it. Unlike the other repositories that publish one, Zentral ships no artifact of its own, so there is no generator here and nothing to upload: [zentral-images](https://github.com/zentralpro/zentral-images) reads the file at the commit it checks out and supplies the identity, because a file kept in a repository cannot say which commit it is stored at.
+
+One requirement is recorded today: the Zentral Terraform provider, `0.1.83` or later. Upgrading a deployment means bumping it in `required_providers` wherever the Zentral configuration is kept — until now that had to be remembered and written by hand into each upgrade note.
+
+When you add or change an entry:
+
+- Give one lower bound, and only one. `min_version` for something consumed by version, such as a Terraform provider; `min_ref` for a repository with tags; `min_commit` for one without.
+- Name it with `name` and `kind` when it is not a repository, or with `repository` when it is.
+- Write the whole commit, all 40 characters, for `min_commit`. Short commits are not safe: git makes them longer as a repository grows, and nothing resolves them.
+- Add a `note` saying why the bound is there. It reaches customer upgrade notes, so write it for someone outside the team.
+- Do not add an `identity` key. The reader supplies it.
+
+Nothing here checks the file: the suite is Django and runs in the full stack, which a static JSON file does not need. The readers validate it.
+
 ## Style & linting
 
 - **Line length: 119** (both [pyproject.toml](pyproject.toml) ruff config and [tox.ini](tox.ini) flake8 config)

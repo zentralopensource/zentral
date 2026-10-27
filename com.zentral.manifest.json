@@ -1,0 +1,11 @@
+{
+  "schema": "com.zentral.manifest/v1",
+  "requires": [
+    {
+      "name": "zentralopensource/zentral",
+      "kind": "terraform-provider",
+      "min_version": "0.1.83",
+      "note": "The provider release that manages this Zentral's API. Set it in required_providers wherever the Zentral configuration is kept."
+    }
+  ]
+}
