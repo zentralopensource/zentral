@@ -15,7 +15,7 @@ from psycopg2 import sql
 
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.http import user_agent_and_ip_address_from_request
-from zentral.utils.os_version import make_comparable_os_version
+from zentral.utils.os_version import comparable_os_version_in_range, make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
 from zentral.utils.time import naive_utcnow
 
@@ -278,13 +278,10 @@ class Target:
             return False
 
         # OS version
-        min_os_version = item.get(f"{platform_key}_min_version")
-        max_os_version = item.get(f"{platform_key}_max_version")
-        if min_os_version or max_os_version:
-            if min_os_version and self.comparable_os_version < tuple(min_os_version):
-                return False
-            if max_os_version and self.comparable_os_version >= tuple(max_os_version):
-                return False
+        if not comparable_os_version_in_range(self.comparable_os_version,
+                                              item.get(f"{platform_key}_min_version"),
+                                              item.get(f"{platform_key}_max_version")):
+            return False
 
         # excluded tags
         if set(item["excluded_tags"]).intersection(self.tag_ids):
