@@ -1395,6 +1395,8 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
             target, self.request.user, machine
         )
         ctx["target_artifacts_count"] = len(ctx["target_artifacts"])
+        ctx["software_update_enforcement"] = target.software_update_enforcement
+        ctx["software_update_enforcement_declaration"] = target.software_update_enforcement_declaration
         engine.authorize_requests([ctx["block_state_request"]] + force_install_requests)
         # commands
         commands_qs = (

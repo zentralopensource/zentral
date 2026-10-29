@@ -22,6 +22,7 @@ from zentral.contrib.mdm.events import MDMDeviceNotificationEvent
 from zentral.core.events.base import AuditEvent
 
 from .utils import (
+    MACOS_14_CLIENT_CAPABILITIES,
     force_artifact,
     force_blueprint,
     force_blueprint_artifact,
@@ -29,6 +30,7 @@ from .utils import (
     force_enrolled_user,
     force_push_certificate,
     force_ota_enrollment_session,
+    force_software_update_enforcement,
     force_user_enrollment_session,
 )
 
@@ -269,6 +271,58 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("mdm:user_enrollment", args=(session.get_enrollment().pk,)))
         self.assertEqual(response.context["commands_count"], 0)
         self.assertNotContains(response, "See all commands")
+
+    def test_enrolled_device_no_software_update_enforcement(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Software update enforcement")
+        self.assertIsNone(response.context["software_update_enforcement"])
+
+    def _force_enrolled_device_with_software_update_enforcement(self, **kwargs):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        enrolled_device.blueprint = force_blueprint()
+        enrolled_device.save()
+        sue = force_software_update_enforcement(platforms=[enrolled_device.platform], **kwargs)
+        enrolled_device.blueprint.software_update_enforcements.add(sue)
+        return enrolled_device, sue
+
+    def test_enrolled_device_software_update_enforcement_link_no_update(self):
+        # a "latest" enforcement, and a device that has not reported its software update device ID
+        enrolled_device, sue = self._force_enrolled_device_with_software_update_enforcement()
+        self.login("mdm.view_enrolleddevice", "mdm.view_softwareupdateenforcement")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["software_update_enforcement"], sue)
+        self.assertIsNone(response.context["software_update_enforcement_declaration"])
+        self.assertContains(response, sue.name)
+        self.assertContains(response, sue.get_absolute_url())
+        self.assertContains(response, "No update to enforce")
+
+    def test_enrolled_device_software_update_enforcement_target(self):
+        enrolled_device, sue = self._force_enrolled_device_with_software_update_enforcement(
+            os_version="26.4", build_version="25E123"
+        )
+        self.login("mdm.view_enrolleddevice", "mdm.view_softwareupdateenforcement")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["software_update_enforcement"], sue)
+        declaration = response.context["software_update_enforcement_declaration"]
+        self.assertEqual(declaration["Payload"]["TargetOSVersion"], "26.4")
+        self.assertContains(response, f'Target 26.4 (25E123) by {declaration["Payload"]["TargetLocalDateTime"]}')
+        self.assertNotContains(response, "No update to enforce")
+
+    def test_enrolled_device_software_update_enforcement_no_link(self):
+        enrolled_device, sue = self._force_enrolled_device_with_software_update_enforcement()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["software_update_enforcement"], sue)
+        self.assertContains(response, sue.name)
+        self.assertNotContains(response, sue.get_absolute_url())
 
     def test_enrolled_device_enrollment_link(self):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)

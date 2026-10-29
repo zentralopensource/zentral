@@ -417,7 +417,7 @@ The tags rank before the range, so that a tag can move a device out of its OS ve
 2. Add it to the blueprint, and add the tag to the devices. The tag ranks before the range of the macOS 26 configuration, so the tagged devices are enforced to the latest macOS 27 update, and the other macOS 26 devices stay on macOS 26.
 3. After the upgrade, the tagged configuration still matches and keeps the device on the latest macOS 27 update. Remove the tag at any time: the macOS 27 configuration takes over with the same target.
 
-A blueprint has one software update enforcement declaration. A device that moves from one configuration to another gets the new target in the same declaration, and never holds two enforcements.
+A blueprint has one software update enforcement declaration. A device that moves from one configuration to another gets the new target in the same declaration, and never holds two enforcements. The page of an enrolled device shows the configuration that Zentral selected for it, with the target version and date of its declaration, or that there is no update to enforce.
 
 ### Using a Software Update Enforcement configuration in multiple Blueprints
 

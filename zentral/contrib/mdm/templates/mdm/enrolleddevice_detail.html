@@ -136,6 +136,28 @@
           <td>{{ object.declarative_management|yesno }}</td>
         </tr>
         <tr>
+          <th>Software update enforcement</th>
+          <td>
+            {% if software_update_enforcement %}
+              {% if perms.mdm.view_softwareupdateenforcement %}
+                <a href="{{ software_update_enforcement.get_absolute_url }}">{{ software_update_enforcement }}</a>
+              {% else %}
+                {{ software_update_enforcement }}
+              {% endif %}
+              <br>
+              {% if software_update_enforcement_declaration %}
+                {% with payload=software_update_enforcement_declaration.Payload %}
+                Target {{ payload.TargetOSVersion }}{% if payload.TargetBuildVersion %} ({{ payload.TargetBuildVersion }}){% endif %} by {{ payload.TargetLocalDateTime }}
+                {% endwith %}
+              {% else %}
+                No update to enforce
+              {% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
           <th>DEP device{{ dep_device_count|pluralize }}</th>
           <td>
             {% if dep_device_count %}
