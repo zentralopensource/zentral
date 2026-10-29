@@ -107,7 +107,11 @@ view_machine_tag_action = engine.register_action(
 
 
 def get_mbu_resource(mbu: MetaBusinessUnit) -> Resource:
-    return Resource("MetaBusinessUnit", str(mbu.id), get_namespace())
+    return get_mbu_resource_from_pk(mbu.id)
+
+
+def get_mbu_resource_from_pk(mbu_pk: int) -> Resource:
+    return Resource("MetaBusinessUnit", str(mbu_pk), get_namespace())
 
 
 def get_meta_machine_resource(machine: MetaMachine) -> Resource:
