@@ -205,7 +205,7 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 
 #### 🧨 A `PUT` on a software update enforcement must carry every attribute
 
-A `PUT` on `/api/mdm/software_update_enforcements/<id>/` that omits an attribute gets a 400 now, with "This field is required." for each missing one. Before, an omitted optional attribute, such as `tags`, `delay_days` or `local_time`, kept its stored value. The new `min_device_os_version` and `max_device_os_version` attributes are required too, so a Terraform provider or a goztl that predates them cannot update an enforcement anymore. Upgrade the Terraform provider first, to a release that sends the two attributes, then Zentral: the provider sends the two attributes to an older Zentral, which ignores them.
+A `PUT` on `/api/mdm/software_update_enforcements/<id>/` that omits an attribute gets a 400 now, with "This field is required." for each missing one. Before, an omitted optional attribute, such as `tags`, `delay_days` or `local_time`, kept its stored value. The new `min_device_os_version` and `max_device_os_version` attributes are required too, so a Terraform provider or a goztl that predates them cannot update an enforcement anymore. Upgrade the Terraform provider first, to `0.1.85` or later, then Zentral: the provider sends the two attributes to an older Zentral, which ignores them.
 
 
 #### 🧨 The path of tini in the Docker image

@@ -4,8 +4,8 @@
     {
       "name": "zentralopensource/zentral",
       "kind": "terraform-provider",
-      "min_version": "0.1.83",
-      "note": "The provider release that manages this Zentral's API. Set it in required_providers wherever the Zentral configuration is kept."
+      "min_version": "0.1.85",
+      "note": "The provider release that manages this Zentral's API. Set it in required_providers wherever the Zentral configuration is kept. Release 0.1.85 sends the device OS version range of a software update enforcement, which this Zentral requires in each update of an enforcement. An older provider fails each update with a 400."
     }
   ]
 }
