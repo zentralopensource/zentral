@@ -420,7 +420,10 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                                  "max_device_os_version": "",
                                  "max_os_version": "18.1.2",
                                  "delay_days": 3,
-                                 "local_time": "11:11"})
+                                 "local_time": "11:11",
+                                 "os_version": "",
+                                 "build_version": "",
+                                 "local_datetime": None})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         sue.refresh_from_db()
@@ -496,7 +499,10 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                                  "max_device_os_version": "",
                                  "os_version": "18.1.2",
                                  "build_version": "29B12",
-                                 "local_datetime": "2028-12-12T11:11"})
+                                 "local_datetime": "2028-12-12T11:11",
+                                 "max_os_version": "",
+                                 "delay_days": None,
+                                 "local_time": None})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(callbacks), 1)
         sue.refresh_from_db()
@@ -700,6 +706,51 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
             {"min_device_os_version": ["A supplemental OS version extra is not supported"],
              "max_device_os_version": ["An OS version has at most three components"]}
         )
+
+    def test_update_software_update_enforcement_omitted_device_os_version_predicate_error(self):
+        # a PUT carries every attribute: an omitted one is never read from the stored object
+        sue = force_software_update_enforcement(min_device_os_version="26", max_device_os_version="27")
+        self.set_permissions("mdm.change_softwareupdateenforcement")
+        response = self.put(reverse("mdm_api:software_update_enforcement", args=(sue.pk,)),
+                            {"name": sue.name,
+                             "details_url": "",
+                             "platforms": ["macOS"],
+                             "tags": [],
+                             "max_os_version": "27",
+                             "delay_days": 14,
+                             "local_time": "09:30:00",
+                             "os_version": "",
+                             "build_version": "",
+                             "local_datetime": None})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"min_device_os_version": ["This field is required."],
+             "max_device_os_version": ["This field is required."]}
+        )
+        sue.refresh_from_db()
+        self.assertEqual(sue.min_device_os_version, "26")
+        self.assertEqual(sue.max_device_os_version, "27")
+
+    def test_update_software_update_enforcement_omitted_tags_error(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        sue = force_software_update_enforcement(tags=[tag])
+        self.set_permissions("mdm.change_softwareupdateenforcement")
+        response = self.put(reverse("mdm_api:software_update_enforcement", args=(sue.pk,)),
+                            {"name": sue.name,
+                             "details_url": "",
+                             "platforms": ["macOS"],
+                             "min_device_os_version": "",
+                             "max_device_os_version": "",
+                             "max_os_version": "27",
+                             "delay_days": 14,
+                             "local_time": "09:30:00",
+                             "os_version": "",
+                             "build_version": "",
+                             "local_datetime": None})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"tags": ["This field is required."]})
+        self.assertEqual(list(sue.tags.all()), [tag])
 
     def test_update_software_update_enforcement_device_os_version_predicate(self):
         sue = force_software_update_enforcement()

@@ -16,6 +16,7 @@ from zentral.contrib.inventory.models import EnrollmentSecret, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
 from zentral.utils.external_resources import download_external_resource
+from zentral.utils.drf import FullUpdateSerializerMixin
 from zentral.utils.os_version import (make_comparable_os_version, validate_os_version_bound,
                                       validate_os_version_range)
 from zentral.utils.ssl import ensure_bytes
@@ -697,6 +698,10 @@ class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         return data
+
+
+class SoftwareUpdateEnforcementUpdateSerializer(FullUpdateSerializerMixin, SoftwareUpdateEnforcementSerializer):
+    pass
 
 
 class BlueprintSerializer(serializers.ModelSerializer):

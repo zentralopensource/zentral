@@ -3,7 +3,8 @@ from zentral.utils.drf import (ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination,
                                RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.mdm.models import SoftwareUpdateEnforcement
-from zentral.contrib.mdm.serializers import SoftwareUpdateEnforcementSerializer
+from zentral.contrib.mdm.serializers import (SoftwareUpdateEnforcementSerializer,
+                                             SoftwareUpdateEnforcementUpdateSerializer)
 
 
 class SoftwareUpdateEnforcementList(ListCreateAPIViewWithAudit):
@@ -22,7 +23,7 @@ class SoftwareUpdateEnforcementDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     Retrieve, update or delete a SoftwareUpdateEnforcement instance.
     """
     queryset = SoftwareUpdateEnforcement.objects.all()
-    serializer_class = SoftwareUpdateEnforcementSerializer
+    serializer_class = SoftwareUpdateEnforcementUpdateSerializer
 
     def perform_destroy(self, instance):
         if not instance.can_be_deleted():

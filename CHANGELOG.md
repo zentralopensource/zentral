@@ -203,6 +203,11 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 `MDM::Action::"updateEnrolledDevice"` does not let a role block or unblock a device anymore. The block and unblock buttons, and the `block/` and `unblock/` API endpoints, use `MDM::Action::"blockEnrolledDevice"` and `MDM::Action::"unblockEnrolledDevice"` now. A policy that grants the `AdminActions` or the `UserActions` group needs no change. A role with the `UserActions` group can block and unblock a device too. A policy that names `updateEnrolledDevice` must also name the two new actions, to keep these operations. The policies that Zentral made from the legacy roles name `updateEnrolledDevice` for each role that had the `mdm.change_enrolleddevice` permission: examine them before the upgrade.
 
 
+#### 🧨 A `PUT` on a software update enforcement must carry every attribute
+
+A `PUT` on `/api/mdm/software_update_enforcements/<id>/` that omits an attribute gets a 400 now, with "This field is required." for each missing one. Before, an omitted optional attribute, such as `tags`, `delay_days` or `local_time`, kept its stored value. The new `min_device_os_version` and `max_device_os_version` attributes are required too, so a Terraform provider or a goztl that predates them cannot update an enforcement anymore. Upgrade the Terraform provider first, to a release that sends the two attributes, then Zentral: the provider sends the two attributes to an older Zentral, which ignores them.
+
+
 #### 🧨 The path of tini in the Docker image
 
 The Docker image installs tini from the Debian packages. Its path is `/usr/bin/tini` now, not `/tini`. If your deployment sets its own entrypoint with `/tini`, change it to `/usr/bin/tini`.
