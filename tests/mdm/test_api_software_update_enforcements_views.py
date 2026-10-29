@@ -72,6 +72,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                   'details_url': '',
                   'platforms': ['macOS'],
                   'tags': [],
+                  'min_device_os_version': '',
+                  'max_device_os_version': '',
                   'max_os_version': '17.1.2',
                   'delay_days': 14,
                   'local_time': '09:30:00',
@@ -100,6 +102,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                   'details_url': '',
                   'platforms': ['macOS'],
                   'tags': [],
+                  'min_device_os_version': '',
+                  'max_device_os_version': '',
                   'max_os_version': '17.1.2',
                   'delay_days': 14,
                   'local_time': '09:30:00',
@@ -136,6 +140,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
              'details_url': '',
              'platforms': ['macOS'],
              'tags': [],
+             'min_device_os_version': '',
+             'max_device_os_version': '',
              'max_os_version': '17.1.2',
              'delay_days': 14,
              'local_time': '09:30:00',
@@ -280,6 +286,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
              'details_url': '',
              'platforms': ['macOS'],
              'tags': [],
+             'min_device_os_version': '',
+             'max_device_os_version': '',
              'max_os_version': '15',
              'delay_days': 14,
              'local_time': '09:30:00',
@@ -343,6 +351,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
              'details_url': '',
              'platforms': ["macOS"],
              'tags': [],
+             'min_device_os_version': '',
+             'max_device_os_version': '',
              'max_os_version': '',
              'delay_days': None,
              'local_time': None,
@@ -406,6 +416,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                                  "details_url": "https://www.example.com",
                                  "platforms": ["macOS"],
                                  "tags": [t.pk for t in tags],
+                                 "min_device_os_version": "",
+                                 "max_device_os_version": "",
                                  "max_os_version": "18.1.2",
                                  "delay_days": 3,
                                  "local_time": "11:11"})
@@ -429,6 +441,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
              'details_url': 'https://www.example.com',
              'platforms': ['macOS'],
              'tags': [t.pk for t in tags],
+             'min_device_os_version': '',
+             'max_device_os_version': '',
              'max_os_version': '18.1.2',
              'delay_days': 3,
              'local_time': '11:11:00',
@@ -478,6 +492,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
                                  "details_url": "",
                                  "platforms": ["iOS"],
                                  "tags": [],
+                                 "min_device_os_version": "",
+                                 "max_device_os_version": "",
                                  "os_version": "18.1.2",
                                  "build_version": "29B12",
                                  "local_datetime": "2028-12-12T11:11"})
@@ -501,6 +517,8 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
              'details_url': '',
              'platforms': ['iOS'],
              'tags': [],
+             'min_device_os_version': '',
+             'max_device_os_version': '',
              'max_os_version': '',
              'delay_days': None,
              'local_time': None,
@@ -580,3 +598,126 @@ class MDMSoftwareUpdateEnforcementsAPIViewsTestCase(TestCase, LoginCase, Request
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_software_update_enforcement": [str(sue.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+
+    # device OS version predicate
+
+    def test_create_software_update_enforcement_bad_min_device_os_version(self):
+        self.set_permissions("mdm.add_softwareupdateenforcement")
+        response = self.post(reverse("mdm_api:software_update_enforcements"),
+                             {"name": get_random_string(12),
+                              "platforms": ["macOS"],
+                              "max_os_version": "27",
+                              "min_device_os_version": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"min_device_os_version": ["Not a valid OS version"]})
+
+    def test_create_software_update_enforcement_bad_max_device_os_version(self):
+        self.set_permissions("mdm.add_softwareupdateenforcement")
+        response = self.post(reverse("mdm_api:software_update_enforcements"),
+                             {"name": get_random_string(12),
+                              "platforms": ["macOS"],
+                              "max_os_version": "27",
+                              "max_device_os_version": "yolo"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"max_device_os_version": ["Not a valid OS version"]})
+
+    def test_create_software_update_enforcement_device_os_version_range_error(self):
+        self.set_permissions("mdm.add_softwareupdateenforcement")
+        response = self.post(reverse("mdm_api:software_update_enforcements"),
+                             {"name": get_random_string(12),
+                              "platforms": ["macOS"],
+                              "max_os_version": "27",
+                              "min_device_os_version": "26.1",
+                              "max_device_os_version": "26.1"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"max_device_os_version": ["Must be greater than the minimum OS version"]}
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_software_update_enforcement_device_os_version_predicate(self, post_event):
+        self.set_permissions("mdm.add_softwareupdateenforcement")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.post(reverse("mdm_api:software_update_enforcements"),
+                                 {"name": name,
+                                  "platforms": ["macOS"],
+                                  "max_os_version": "27",
+                                  "min_device_os_version": "26",
+                                  "max_device_os_version": "27"})
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        sue = SoftwareUpdateEnforcement.objects.get(name=name)
+        self.assertEqual(sue.min_device_os_version, "26")
+        self.assertEqual(sue.max_device_os_version, "27")
+        self.assertEqual(
+            response.json(),
+            {'id': sue.pk,
+             'name': name,
+             'details_url': '',
+             'platforms': ['macOS'],
+             'tags': [],
+             'min_device_os_version': '26',
+             'max_device_os_version': '27',
+             'max_os_version': '27',
+             'delay_days': 14,
+             'local_time': '09:30:00',
+             'os_version': '',
+             'build_version': '',
+             'local_datetime': None,
+             'created_at': sue.created_at.isoformat(),
+             'updated_at': sue.updated_at.isoformat()}
+        )
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(
+            event.payload["object"]["new_value"],
+            {"pk": sue.pk,
+             "name": name,
+             "platforms": ["macOS"],
+             "tags": [],
+             "min_device_os_version": "26",
+             "max_device_os_version": "27",
+             "max_os_version": "27",
+             "delay_days": 14,
+             "local_time": "09:30:00",
+             "created_at": sue.created_at.isoformat(),
+             "updated_at": sue.updated_at.isoformat()}
+        )
+
+    def test_create_software_update_enforcement_device_os_version_extra_error(self):
+        self.set_permissions("mdm.add_softwareupdateenforcement")
+        response = self.post(reverse("mdm_api:software_update_enforcements"),
+                             {"name": get_random_string(12),
+                              "platforms": ["macOS"],
+                              "max_os_version": "27",
+                              "min_device_os_version": "26.3.1 (a)",
+                              "max_device_os_version": "26.3.1.1"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"min_device_os_version": ["A supplemental OS version extra is not supported"],
+             "max_device_os_version": ["An OS version has at most three components"]}
+        )
+
+    def test_update_software_update_enforcement_device_os_version_predicate(self):
+        sue = force_software_update_enforcement()
+        self.set_permissions("mdm.change_softwareupdateenforcement")
+        response = self.put(reverse("mdm_api:software_update_enforcement", args=(sue.pk,)),
+                            {"name": sue.name,
+                             "details_url": "",
+                             "platforms": ["macOS"],
+                             "tags": [],
+                             "min_device_os_version": "27",
+                             "max_device_os_version": "",
+                             "max_os_version": "28",
+                             "delay_days": 14,
+                             "local_time": "09:30:00",
+                             "os_version": "",
+                             "build_version": "",
+                             "local_datetime": None})
+        self.assertEqual(response.status_code, 200)
+        sue.refresh_from_db()
+        self.assertEqual(sue.min_device_os_version, "27")
+        self.assertEqual(sue.max_device_os_version, "")

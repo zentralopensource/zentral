@@ -16,7 +16,8 @@ from zentral.contrib.inventory.models import EnrollmentSecret, Tag
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
 from zentral.utils.external_resources import download_external_resource
-from zentral.utils.os_version import make_comparable_os_version
+from zentral.utils.os_version import (make_comparable_os_version, validate_os_version_bound,
+                                      validate_os_version_range)
 from zentral.utils.ssl import ensure_bytes
 
 from .app_manifest import read_package_info, validate_configuration
@@ -645,7 +646,24 @@ class SoftwareUpdateEnforcementSerializer(serializers.ModelSerializer):
     def validate_os_version(self, value):
         return self._validate_os_version(value)
 
+    def _validate_device_os_version(self, value):
+        try:
+            validate_os_version_bound(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+        return value
+
+    def validate_min_device_os_version(self, value):
+        return self._validate_device_os_version(value)
+
+    def validate_max_device_os_version(self, value):
+        return self._validate_device_os_version(value)
+
     def validate(self, data):
+        try:
+            validate_os_version_range(data.get("min_device_os_version"), data.get("max_device_os_version"))
+        except ValueError as e:
+            raise serializers.ValidationError({"max_device_os_version": str(e)})
         max_os_version = data.get("max_os_version")
         os_version = data.get("os_version")
         if max_os_version and os_version:

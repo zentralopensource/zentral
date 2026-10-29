@@ -45,7 +45,7 @@ from zentral.core.secret_engines import (
 from zentral.utils.backend_model import BackendInstance
 from zentral.utils.iso_639_1 import ISO_639_1_CHOICES
 from zentral.utils.iso_3166_1 import ISO_3166_1_ALPHA_2_CHOICES
-from zentral.utils.os_version import make_comparable_os_version
+from zentral.utils.os_version import make_comparable_os_version, os_version_in_range
 from zentral.utils.payloads import get_payload_identifier
 from zentral.utils.storage import select_dist_storage
 from zentral.utils.time import naive_truncated_isoformat, naive_utcnow
@@ -363,6 +363,18 @@ class SoftwareUpdateEnforcement(models.Model):
     )
     platforms = ArrayField(models.CharField(max_length=64, choices=Platform.choices))
     tags = models.ManyToManyField(Tag, blank=True)
+    min_device_os_version = models.CharField(
+        verbose_name="Minimum device OS version",
+        help_text="Only the devices with an OS version greater than or equal to this version are enforced.",
+        max_length=32,
+        blank=True,
+    )
+    max_device_os_version = models.CharField(
+        verbose_name="Maximum device OS version",
+        help_text="Only the devices with an OS version lower than this version are enforced.",
+        max_length=32,
+        blank=True,
+    )
     # static enforcement
     os_version = models.CharField(
         verbose_name="Target OS version",
@@ -415,6 +427,13 @@ class SoftwareUpdateEnforcement(models.Model):
     def can_be_deleted(self):
         return SoftwareUpdateEnforcement.objects.can_be_deleted().filter(pk=self.pk).exists()
 
+    @property
+    def has_device_os_version_predicate(self):
+        return bool(self.min_device_os_version or self.max_device_os_version)
+
+    def matches_device_os_version(self, os_version):
+        return os_version_in_range(os_version, self.min_device_os_version, self.max_device_os_version)
+
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "name": self.name}
         if keys_only:
@@ -427,6 +446,7 @@ class SoftwareUpdateEnforcement(models.Model):
             "updated_at": self.updated_at.isoformat(),
         })
         for attr in ("details_url",
+                     "min_device_os_version", "max_device_os_version",
                      "os_version", "build_version", "local_datetime",
                      "max_os_version", "delay_days", "local_time",):
             val = getattr(self, attr)

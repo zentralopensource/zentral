@@ -51,6 +51,14 @@
             {% endfor %}
           </td>
         </tr>
+        <tr>
+          <th>Minimum device OS version</th>
+          <td>{{ object.min_device_os_version|default:"-" }}</td>
+        </tr>
+        <tr>
+          <th>Maximum device OS version</th>
+          <td>{{ object.max_device_os_version|default:"-" }}</td>
+        </tr>
         {% if object.max_os_version %}
         <tr>
           <th>Maximum target OS version</th>

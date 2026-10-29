@@ -382,6 +382,7 @@ To create and manage software update enforcement settings in Zentral, follow the
    - *Details URL*: (Optional) A URL link, to provide info for end users.
    - *Platforms*: Select the platforms to which the enforcement applies (iOS, iPadOS, macOS, tvOS).
    - *Tags*: Add tags to specify which devices or groups the configuration will apply to.
+   - *Minimum device OS version* and *Maximum device OS version*: (Optional) Limit the configuration to the devices that run an OS version in this range. See [Scoping an enforcement by device OS version](#scoping-an-enforcement-by-device-os-version).
    - *Type*: Choose the direction of how the enforcement schedule is set (as outlined above):
         - **One-Time**: Set the *Target OS version*, *Target build version* (optional), and *Target local date and time*.
         - **Latest**: Set the *Maximum target OS version*, *Delay in days*, and *Target local time*.
@@ -397,6 +398,26 @@ To create and manage software update enforcement settings in Zentral, follow the
 ### Enforcing Updates on Different Schedules
 
 Multiple configurations for enforcing software updates can be used within a single blueprint, each targeting specific device groups based on tags. This setup enables gradual rollouts with enforcement based on predefined schedules for different groups of tagged devices. When combined with *Latest Mode*, this approach eliminates the need for manual adjustments with each Apple OS release while maintaining the predefined schedules.
+
+### Scoping an enforcement by device OS version
+
+A configuration can be limited to the devices that run an OS version in a range. Set a *Minimum device OS version*, a *Maximum device OS version*, or both. A device matches when its OS version is greater than or equal to the minimum, and lower than the maximum. The maximum is excluded: a maximum of `27` matches the devices on `26.4`, and not the devices on `27.0`. A bound is a version with at most three components, such as `26` or `26.3.1`, without a supplemental extra such as `(a)`. The range is compared to the OS version the device reports, so a device that has not reported it yet does not match a configuration with a range.
+
+Use it to keep two major versions on their own updates in one blueprint. One configuration with a device OS version range of `26` to `27` and a *Maximum target OS version* of `27` keeps the macOS 26 devices on the latest macOS 26 update. A second configuration with a range of `27` to `28` and a *Maximum target OS version* of `28` does the same for the macOS 27 devices. Without the range, a device above the *Maximum target OS version* of the configuration does not get an enforcement.
+
+When several configurations of a blueprint match a device, Zentral selects one of them in this order:
+
+1. The configuration with the most tags in common with the device. A configuration with no tag in common with the device is never selected.
+2. Among the configurations with the same number of common tags, a configuration with a device OS version range, before a configuration without one.
+3. The oldest configuration, with a warning in the logs. Two configurations that match the same device with the same rank are a mistake in the setup.
+
+The tags rank before the range, so that a tag can move a device out of its OS version cohort. To upgrade some of the macOS 26 devices to macOS 27, in the blueprint above:
+
+1. Create a configuration with a tag, for example `upgrade-27`, no device OS version range, and a *Maximum target OS version* of `28`.
+2. Add it to the blueprint, and add the tag to the devices. The tag ranks before the range of the macOS 26 configuration, so the tagged devices are enforced to the latest macOS 27 update, and the other macOS 26 devices stay on macOS 26.
+3. After the upgrade, the tagged configuration still matches and keeps the device on the latest macOS 27 update. Remove the tag at any time: the macOS 27 configuration takes over with the same target.
+
+A blueprint has one software update enforcement declaration. A device that moves from one configuration to another gets the new target in the same declaration, and never holds two enforcements.
 
 ### Using a Software Update Enforcement configuration in multiple Blueprints
 

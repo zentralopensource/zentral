@@ -13,7 +13,8 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, F, OuterRef, Q
 
 from zentral.contrib.inventory.models import Tag
-from zentral.utils.os_version import make_comparable_os_version
+from zentral.utils.os_version import (make_comparable_os_version, validate_os_version_bound,
+                                      validate_os_version_range)
 from zentral.utils.time import naive_utcnow
 
 from .app_manifest import read_package_info, validate_configuration
@@ -1477,6 +1478,7 @@ class SoftwareUpdateEnforcementForm(forms.ModelForm):
         "details_url",
         "platforms",
         "tags",
+        "min_device_os_version", "max_device_os_version",
         "enforcement_type",
         "os_version", "build_version", "local_datetime",
         "max_os_version", "delay_days", "local_time",
@@ -1509,8 +1511,27 @@ class SoftwareUpdateEnforcementForm(forms.ModelForm):
     def clean_os_version(self):
         return self._clean_os_version(self.cleaned_data.get("os_version"))
 
+    def _clean_device_os_version(self, field):
+        value = self.cleaned_data.get(field)
+        try:
+            validate_os_version_bound(value)
+        except ValueError as e:
+            raise forms.ValidationError(str(e))
+        return value
+
+    def clean_min_device_os_version(self):
+        return self._clean_device_os_version("min_device_os_version")
+
+    def clean_max_device_os_version(self):
+        return self._clean_device_os_version("max_device_os_version")
+
     def clean(self):
         super().clean()
+        try:
+            validate_os_version_range(self.cleaned_data.get("min_device_os_version"),
+                                      self.cleaned_data.get("max_device_os_version"))
+        except ValueError as e:
+            self.add_error("max_device_os_version", str(e))
         if self.cleaned_data.get("enforcement_type") == "ONE_TIME":
             required_fields = (f for f in self.one_time_fields if f != "build_version")
             other_fields = self.latest_fields

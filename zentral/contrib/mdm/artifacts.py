@@ -948,21 +948,26 @@ class Target:
         if not self.supports_software_update_enforcement_specific():
             return
 
-        matching_tag_count = 0
-        selected_sue = None
+        candidates = []
         for sue in (self.blueprint.software_update_enforcements
                                   .filter(platforms__contains=[self.platform])
                                   .prefetch_related("tags")
                                   .order_by("pk")):
+            if not sue.matches_device_os_version(self.os_version):
+                continue
             sue_tag_ids = set(t.pk for t in sue.tags.all())
             common_tag_count = len(sue_tag_ids.intersection(self.tag_ids))
-            if common_tag_count > matching_tag_count or (not sue_tag_ids and not selected_sue):
-                matching_tag_count = common_tag_count
-                selected_sue = sue
-            elif sue_tag_ids and (common_tag_count > 0 and common_tag_count == matching_tag_count):
-                logger.warning("Machine %s: software update enforcement conflict", self.serial_number)
-
-        return selected_sue
+            if sue_tag_ids and not common_tag_count:
+                continue
+            # the tags rank first, so that a tagged enforcement can move a device out of its OS version cohort
+            candidates.append(((common_tag_count, sue.has_device_os_version_predicate), sue))
+        if not candidates:
+            return
+        top_rank = max(rank for rank, _ in candidates)
+        selected_sues = [sue for rank, sue in candidates if rank == top_rank]
+        if len(selected_sues) > 1:
+            logger.warning("Machine %s: software update enforcement conflict", self.serial_number)
+        return selected_sues[0]
 
     @cached_property
     def software_update_enforcement_declaration(self):

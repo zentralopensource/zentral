@@ -507,3 +507,87 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], {"mdm_software_update_enforcement": [str(sue.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
+
+    # device OS version predicate
+
+    def test_create_software_update_enforcement_post_bad_device_os_versions(self):
+        self.login("mdm.add_softwareupdateenforcement")
+        response = self.client.post(reverse("mdm:create_software_update_enforcement"),
+                                    {"name": get_random_string(12),
+                                     "platforms": ["macOS"],
+                                     "enforcement_type": "LATEST",
+                                     "max_os_version": "27",
+                                     "delay_days": 14,
+                                     "local_time": "9:30",
+                                     "min_device_os_version": "yolo",
+                                     "max_device_os_version": "fomo"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_form.html")
+        self.assertFormError(response.context["form"], "min_device_os_version", "Not a valid OS version")
+        self.assertFormError(response.context["form"], "max_device_os_version", "Not a valid OS version")
+
+    def test_create_software_update_enforcement_post_device_os_version_range_error(self):
+        self.login("mdm.add_softwareupdateenforcement")
+        response = self.client.post(reverse("mdm:create_software_update_enforcement"),
+                                    {"name": get_random_string(12),
+                                     "platforms": ["macOS"],
+                                     "enforcement_type": "LATEST",
+                                     "max_os_version": "27",
+                                     "delay_days": 14,
+                                     "local_time": "9:30",
+                                     "min_device_os_version": "27",
+                                     "max_device_os_version": "26.4"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_form.html")
+        self.assertFormError(response.context["form"], "max_device_os_version",
+                             "Must be greater than the minimum OS version")
+
+    def test_create_software_update_enforcement_post_device_os_version_extra_error(self):
+        self.login("mdm.add_softwareupdateenforcement")
+        response = self.client.post(reverse("mdm:create_software_update_enforcement"),
+                                    {"name": get_random_string(12),
+                                     "platforms": ["macOS"],
+                                     "enforcement_type": "LATEST",
+                                     "max_os_version": "27",
+                                     "delay_days": 14,
+                                     "local_time": "9:30",
+                                     "min_device_os_version": "26.3.1 (a)",
+                                     "max_device_os_version": "26.3.1.1"},
+                                    follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_form.html")
+        self.assertFormError(response.context["form"], "min_device_os_version",
+                             "A supplemental OS version extra is not supported")
+        self.assertFormError(response.context["form"], "max_device_os_version",
+                             "An OS version has at most three components")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_create_software_update_enforcement_post_device_os_version_predicate(self, post_event):
+        self.login("mdm.add_softwareupdateenforcement", "mdm.view_softwareupdateenforcement")
+        name = get_random_string(12)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(reverse("mdm:create_software_update_enforcement"),
+                                        {"name": name,
+                                         "platforms": ["macOS"],
+                                         "enforcement_type": "LATEST",
+                                         "max_os_version": "27",
+                                         "delay_days": 14,
+                                         "local_time": "9:30",
+                                         "min_device_os_version": "26",
+                                         "max_device_os_version": "27"},
+                                        follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(callbacks), 1)
+        self.assertTemplateUsed(response, "mdm/softwareupdateenforcement_detail.html")
+        self.assertContains(response, "Minimum device OS version")
+        self.assertContains(response, "<td>26</td>", html=True)
+        self.assertContains(response, "<td>27</td>", html=True)
+        sue = response.context["object"]
+        self.assertEqual(sue.min_device_os_version, "26")
+        self.assertEqual(sue.max_device_os_version, "27")
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, AuditEvent)
+        self.assertEqual(event.payload["object"]["new_value"]["min_device_os_version"], "26")
+        self.assertEqual(event.payload["object"]["new_value"]["max_device_os_version"], "27")

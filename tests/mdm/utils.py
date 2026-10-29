@@ -689,6 +689,8 @@ def force_software_update_enforcement(
     local_time=None,
     delay_days=None,
     tags=None,
+    min_device_os_version="",
+    max_device_os_version="",
 ):
     name = name or get_random_string(12)
     if not os_version:
@@ -707,6 +709,8 @@ def force_software_update_enforcement(
         max_os_version=max_os_version,
         local_time=local_time,
         delay_days=delay_days,
+        min_device_os_version=min_device_os_version,
+        max_device_os_version=max_device_os_version,
     )
     if tags:
         sue.tags.set(tags)

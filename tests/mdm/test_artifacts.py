@@ -2193,6 +2193,125 @@ class TestMDMArtifacts(TestCase):
             target.serial_number
         )
 
+    def test_software_update_enforcement_device_os_version_predicate(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        sue26 = force_software_update_enforcement(min_device_os_version="26", max_device_os_version="27")
+        sue27 = force_software_update_enforcement(min_device_os_version="27", max_device_os_version="28")
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue26, sue27])
+        self.enrolled_device.os_version = "26.1"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, sue26)
+        self.enrolled_device.os_version = "27.0.1"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, sue27)
+        self.enrolled_device.os_version = "28.0"
+        self.assertIsNone(Target(self.enrolled_device).software_update_enforcement)
+
+    def test_software_update_enforcement_device_os_version_predicate_min_only(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        sue = force_software_update_enforcement(min_device_os_version="27")
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue])
+        self.enrolled_device.os_version = "26.1"
+        self.assertIsNone(Target(self.enrolled_device).software_update_enforcement)
+        self.enrolled_device.os_version = "27.0"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, sue)
+
+    def test_software_update_enforcement_device_os_version_predicate_max_only(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        sue = force_software_update_enforcement(max_device_os_version="27")
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue])
+        self.enrolled_device.os_version = "26.1"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, sue)
+        self.enrolled_device.os_version = "27.0"
+        self.assertIsNone(Target(self.enrolled_device).software_update_enforcement)
+
+    def test_software_update_enforcement_device_os_version_predicate_unknown_os_version(self):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        self.assertIsNone(self.enrolled_device.os_version)
+        sue = force_software_update_enforcement(max_device_os_version="27")
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue])
+        self.assertIsNone(Target(self.enrolled_device).software_update_enforcement)
+        open_sue = force_software_update_enforcement()
+        self.enrolled_device.blueprint.software_update_enforcements.add(open_sue)
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, open_sue)
+
+    def test_software_update_enforcement_device_os_version_predicate_unparsable_os_version(self):
+        # the status report value is device-controlled
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        self.enrolled_device.os_version = "yolo"
+        sue = force_software_update_enforcement(max_device_os_version="27")
+        open_sue = force_software_update_enforcement()
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue, open_sue])
+        with self.assertLogs("zentral.utils.os_version", level="WARNING"):
+            self.assertEqual(Target(self.enrolled_device).software_update_enforcement, open_sue)
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_software_update_enforcement_device_os_version_predicate_beats_open(self, logger_warning):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        open_sue = force_software_update_enforcement()
+        sue26 = force_software_update_enforcement(min_device_os_version="26", max_device_os_version="27")
+        self.assertTrue(open_sue.pk < sue26.pk)
+        self.enrolled_device.blueprint.software_update_enforcements.set([open_sue, sue26])
+        self.enrolled_device.os_version = "26.1"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, sue26)
+        self.enrolled_device.os_version = "27.0"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, open_sue)
+        logger_warning.assert_not_called()
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_software_update_enforcement_tag_beats_device_os_version_predicate(self, logger_warning):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        tag = Tag.objects.create(name=get_random_string(12))
+        sue26 = force_software_update_enforcement(min_device_os_version="26", max_device_os_version="27")
+        upgrade_sue = force_software_update_enforcement(tags=[tag])
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue26, upgrade_sue])
+        self.enrolled_device.os_version = "26.1"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, sue26)
+        MachineTag.objects.create(serial_number=self.enrolled_device.serial_number, tag=tag)
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, upgrade_sue)
+        self.enrolled_device.os_version = "27.0"
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, upgrade_sue)
+        logger_warning.assert_not_called()
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_software_update_enforcement_device_os_version_predicate_conflict(self, logger_warning):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        sue = force_software_update_enforcement(min_device_os_version="26")
+        sue2 = force_software_update_enforcement(max_device_os_version="27")
+        self.assertTrue(sue.pk < sue2.pk)
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue, sue2])
+        self.enrolled_device.os_version = "26.1"
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.software_update_enforcement, sue)
+        logger_warning.assert_called_once_with(
+            "Machine %s: software update enforcement conflict",
+            target.serial_number
+        )
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_software_update_enforcement_tie_below_the_winner_no_conflict(self, logger_warning):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        tag = Tag.objects.create(name=get_random_string(12))
+        open_sue = force_software_update_enforcement()
+        open_sue2 = force_software_update_enforcement()
+        tagged_sue = force_software_update_enforcement(tags=[tag])  # highest pk, seen last
+        self.enrolled_device.blueprint.software_update_enforcements.set([open_sue, open_sue2, tagged_sue])
+        MachineTag.objects.create(serial_number=self.enrolled_device.serial_number, tag=tag)
+        self.assertEqual(Target(self.enrolled_device).software_update_enforcement, tagged_sue)
+        logger_warning.assert_not_called()
+
+    @patch("zentral.contrib.mdm.artifacts.logger.warning")
+    def test_software_update_enforcement_open_conflict(self, logger_warning):
+        self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
+        sue = force_software_update_enforcement()
+        sue2 = force_software_update_enforcement()
+        self.assertTrue(sue.pk < sue2.pk)
+        self.enrolled_device.blueprint.software_update_enforcements.set([sue, sue2])
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.software_update_enforcement, sue)
+        logger_warning.assert_called_once_with(
+            "Machine %s: software update enforcement conflict",
+            target.serial_number
+        )
+
     # force_artifact_install
 
     def test_force_artifact_install_device_blocked(self):
