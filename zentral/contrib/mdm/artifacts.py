@@ -1123,41 +1123,31 @@ class Target:
         update_fields = []
         if not self.is_device:
             return update_fields
+        # each key is a status item of its own, that a partial report carries only when it changes
         try:
             operating_system = status_report["StatusItems"]["device"]["operating-system"]
         except KeyError:
-            logger.warning("Enrolled device %s: Missing operating system info in status report", self.udid)
             return update_fields
         supplemental = operating_system.get("supplemental", {})
-        os_version = operating_system.get("version")
-        if os_version and self.target.os_version != os_version:
-            update_fields.append("os_version")
-            self.target.os_version = os_version
-        os_version_extra = supplemental.get("extra-version", "")
-        if os_version and self.target.os_version_extra != os_version_extra:
-            update_fields.append("os_version_extra")
-            self.target.os_version_extra = os_version_extra
-        build_version = operating_system.get("build-version")
-        if build_version and self.target.build_version != build_version:
-            update_fields.append("build_version")
-            self.target.build_version = build_version
-        build_version_extra = supplemental.get("build-version", "")
-        if build_version and self.target.build_version_extra != build_version_extra:
-            update_fields.append("build_version_extra")
-            self.target.build_version_extra = build_version_extra
+        for attr, items, key in (("os_version", operating_system, "version"),
+                                 ("os_version_extra", supplemental, "extra-version"),
+                                 ("build_version", operating_system, "build-version"),
+                                 ("build_version_extra", supplemental, "build-version")):
+            if key in items and getattr(self.target, attr) != items[key]:
+                update_fields.append(attr)
+                setattr(self.target, attr, items[key])
         return update_fields
 
     def update_client_capabilities_with_status_report(self, status_report):
-        update_fields = []
         try:
             client_capabilities = status_report["StatusItems"]["management"]["client-capabilities"]
         except KeyError:
-            logger.warning("Enrolled device %s: Could not find client capabilities in status report", self.udid)
-        else:
-            if client_capabilities != self.client_capabilities:
-                update_fields.append("client_capabilities")
-                self.target.client_capabilities = client_capabilities
-        return update_fields
+            # a partial report carries it only when it changes
+            return []
+        if client_capabilities == self.client_capabilities:
+            return []
+        self.target.client_capabilities = client_capabilities
+        return ["client_capabilities"]
 
     def update_software_update_device_id_with_status_report(self, status_report):
         if not self.is_device:
