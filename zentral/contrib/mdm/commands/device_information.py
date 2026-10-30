@@ -167,11 +167,7 @@ class DeviceInformation(Command):
         else:
             self.enrolled_device.build_version = ""
         # Build version extra
-        build_version_extra = query_responses.get("SupplementalBuildVersion")
-        if build_version_extra and build_version_extra != build_version:
-            self.enrolled_device.build_version_extra = build_version_extra
-        else:
-            self.enrolled_device.build_version_extra = ""
+        self.enrolled_device.set_build_version_extra(query_responses.get("SupplementalBuildVersion"))
         # Apple silicon
         apple_silicon = query_responses.get("IsAppleSilicon")
         if apple_silicon is not None:

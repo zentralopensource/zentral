@@ -191,6 +191,20 @@ class TestMDMEnrolledDeviceModel(TestCase, SerializeForEventAssertions):
         self.assertIsNone(enrolled_device.admin_shortname)
         self.assertFalse(enrolled_device.admin_password_escrowed)
 
+    def test_enrolled_device_set_build_version_extra_build_version(self):
+        enrolled_device = EnrolledDevice(build_version="22E261", build_version_extra="22D772610a")
+        self.assertTrue(enrolled_device.set_build_version_extra("22E261"))
+        self.assertEqual(enrolled_device.build_version_extra, "")
+        for build_version_extra in ("22E261", "", None):
+            self.assertFalse(enrolled_device.set_build_version_extra(build_version_extra))
+            self.assertEqual(enrolled_device.build_version_extra, "")
+
+    def test_enrolled_device_set_build_version_extra_background_security_improvement(self):
+        enrolled_device = EnrolledDevice(build_version="22E261", build_version_extra="")
+        self.assertTrue(enrolled_device.set_build_version_extra("22E772610a"))
+        self.assertEqual(enrolled_device.build_version_extra, "22E772610a")
+        self.assertFalse(enrolled_device.set_build_version_extra("22E772610a"))
+
     def test_enrolled_device_serialize_for_event_keys_only(self):
         enrolled_device = EnrolledDevice.objects.create(
             udid=str(uuid.uuid4()),

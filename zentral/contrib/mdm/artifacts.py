@@ -1131,17 +1131,12 @@ class Target:
         supplemental = operating_system.get("supplemental", {})
         for attr, items, key in (("os_version", operating_system, "version"),
                                  ("os_version_extra", supplemental, "extra-version"),
-                                 ("build_version", operating_system, "build-version"),
-                                 ("build_version_extra", supplemental, "build-version")):
-            if key not in items:
-                continue
-            value = items[key]
-            if attr == "build_version_extra" and value == self.target.build_version:
-                # same value as the DeviceInformation command, or each one changes it back
-                value = ""
-            if getattr(self.target, attr) != value:
+                                 ("build_version", operating_system, "build-version")):
+            if key in items and getattr(self.target, attr) != items[key]:
                 update_fields.append(attr)
-                setattr(self.target, attr, value)
+                setattr(self.target, attr, items[key])
+        if "build-version" in supplemental and self.target.set_build_version_extra(supplemental["build-version"]):
+            update_fields.append("build_version_extra")
         return update_fields
 
     def update_client_capabilities_with_status_report(self, status_report):

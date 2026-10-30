@@ -1259,6 +1259,16 @@ class EnrolledDevice(models.Model):
         self.software_update_device_id = software_update_device_id
         return True
 
+    def set_build_version_extra(self, build_version_extra):
+        # DeviceInformation and the DDM status reports carry it, and without a Background Security Improvement it is
+        # the build version. Both must store "" then, or each one changes it back. Returns True if the value changed.
+        if not build_version_extra or build_version_extra == self.build_version:
+            build_version_extra = ""
+        if build_version_extra == self.build_version_extra:
+            return False
+        self.build_version_extra = build_version_extra
+        return True
+
     def get_urlsafe_serial_number(self):
         if self.serial_number:
             return MetaMachine(self.serial_number).get_urlsafe_serial_number()
