@@ -1159,8 +1159,21 @@ class Target:
                 self.target.client_capabilities = client_capabilities
         return update_fields
 
+    def update_software_update_device_id_with_status_report(self, status_report):
+        if not self.is_device:
+            return []
+        try:
+            software_update_device_id = status_report["StatusItems"]["softwareupdate"]["device-id"]
+        except KeyError:
+            # a partial report carries it only when it changes
+            return []
+        if self.target.set_software_update_device_id(software_update_device_id):
+            return ["software_update_device_id"]
+        return []
+
     def update_target_with_status_report(self, status_report):
         update_fields = self.update_os_info_with_status_report(status_report)
+        update_fields.extend(self.update_software_update_device_id_with_status_report(status_report))
         update_fields.extend(self.update_client_capabilities_with_status_report(status_report))
         if update_fields:
             self.target.save(update_fields=update_fields + ["updated_at"])

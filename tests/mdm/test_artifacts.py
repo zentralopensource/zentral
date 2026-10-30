@@ -1158,6 +1158,25 @@ class TestMDMArtifacts(TestCase):
              f"Enrolled device {self.enrolled_device.udid}: no software update device ID"],
         )
 
+    def test_device_software_update_enforcement_latest_device_id_from_status_report_advertised(self):
+        self.enrolled_device.software_update_device_id = None
+        device_id = get_random_string(8)
+        force_software_update(device_id=device_id,
+                              version="14.1.0",
+                              build="23B74",
+                              posting_date=date(2023, 10, 25))
+        self._force_latest_software_update_enforcement()
+        Target(self.enrolled_device).update_target_with_status_report(
+            {"StatusItems": {"softwareupdate": {"device-id": device_id}}, "Errors": []}
+        )
+        target = Target(self.enrolled_device)
+        identifier = f"zentral.blueprint.{self.blueprint1.pk}.softwareupdate-enforcement-specific"
+        self.assertIn(identifier, target.activation["Payload"]["StandardConfigurations"])
+        self.assertIn(
+            identifier,
+            [c["Identifier"] for c in target.declaration_items["Declarations"]["Configurations"]],
+        )
+
     def test_device_software_update_enforcement_latest_below_device_os_version_not_advertised(self):
         device_id = self.enrolled_device.software_update_device_id
         su = force_software_update(device_id=device_id,
@@ -2071,7 +2090,60 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(self.enrolled_device.build_version, "22E261")
         self.assertEqual(self.enrolled_device.build_version_extra, "22E772610a")
 
+    # test update software update device ID
+
+    def test_update_software_update_device_id_user_channel(self):
+        device_id = self.enrolled_device.software_update_device_id
+        status_report = {"StatusItems": {"softwareupdate": {"device-id": "J313AP"}}}
+        target = Target(self.enrolled_device, self.enrolled_user)
+        self.assertEqual(target.update_software_update_device_id_with_status_report(status_report), [])
+        self.assertEqual(self.enrolled_device.software_update_device_id, device_id)
+
+    def test_update_software_update_device_id_no_software_update_items(self):
+        device_id = self.enrolled_device.software_update_device_id
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.update_software_update_device_id_with_status_report(build_status_report()), [])
+        self.assertEqual(self.enrolled_device.software_update_device_id, device_id)
+
+    def test_update_software_update_device_id_partial_report_without_device_id(self):
+        device_id = self.enrolled_device.software_update_device_id
+        target = Target(self.enrolled_device)
+        for software_update_items in ({"install-state": "downloading"},
+                                      {"pending-version": {"build-version": "25G332", "os-version": "26.7.2"}}):
+            status_report = {"StatusItems": {"softwareupdate": software_update_items}, "Errors": []}
+            self.assertEqual(target.update_software_update_device_id_with_status_report(status_report), [])
+            self.assertEqual(self.enrolled_device.software_update_device_id, device_id)
+
+    def test_update_software_update_device_id_set(self):
+        self.enrolled_device.software_update_device_id = None
+        status_report = {"StatusItems": {"softwareupdate": {"device-id": "J313AP"}}}
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.update_software_update_device_id_with_status_report(status_report),
+                         ["software_update_device_id"])
+        self.assertEqual(self.enrolled_device.software_update_device_id, "J313AP")
+
+    def test_update_software_update_device_id_no_changes(self):
+        self.enrolled_device.software_update_device_id = "J313AP"
+        status_report = {"StatusItems": {"softwareupdate": {"device-id": "J313AP"}}}
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.update_software_update_device_id_with_status_report(status_report), [])
+        self.assertEqual(self.enrolled_device.software_update_device_id, "J313AP")
+
     # test update target with status report
+
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_update_device_target_with_status_report_software_update_device_id(
+        self, send_enrolled_device_notification
+    ):
+        self.enrolled_device.software_update_device_id = None
+        target = Target(self.enrolled_device)
+        status_report = {"StatusItems": {"softwareupdate": {"device-id": "J313AP"}}, "Errors": []}
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            target.update_target_with_status_report(status_report)
+        self.assertEqual(len(callbacks), 1)
+        send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.software_update_device_id, "J313AP")
 
     @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
     def test_update_device_target_with_status_report(self, send_enrolled_device_notification):

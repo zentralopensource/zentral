@@ -1407,6 +1407,23 @@ class MDMViewsTestCase(TestCase):
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
 
+    def test_declarative_management_status_report_software_update_device_id(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        self._add_blueprint(session)
+        self.assertIsNone(session.enrolled_device.software_update_device_id)
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps({"StatusItems": {"softwareupdate": {"device-id": "J313AP"}}, "Errors": []}),
+            "Endpoint": "status",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        session.enrolled_device.refresh_from_db()
+        self.assertEqual(session.enrolled_device.software_update_device_id, "J313AP")
+
     # legacy profile
 
     def test_declarative_management_legacy_profile_declaration_device(self, post_event):
