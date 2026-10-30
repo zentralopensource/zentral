@@ -1925,9 +1925,7 @@ class MDMViewsTestCase(TestCase):
             self.mbu, authenticated=True, completed=True
         )
         device_id = get_random_string(8)
-        session.enrolled_device.device_information = {
-            "SoftwareUpdateDeviceID": device_id
-        }
+        session.enrolled_device.software_update_device_id = device_id
         session.enrolled_device.save()
         force_software_update(
             device_id=device_id, version="14.1.0", posting_date=date(2023, 10, 25)
@@ -1963,9 +1961,7 @@ class MDMViewsTestCase(TestCase):
         )
         device_id = get_random_string(8)
         session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
-        session.enrolled_device.device_information = {
-            "SoftwareUpdateDeviceID": device_id
-        }
+        session.enrolled_device.software_update_device_id = device_id
         session.enrolled_device.save()
         force_software_update(
             device_id=device_id, version="14.1.0", posting_date=date(2023, 10, 25)
@@ -2009,9 +2005,7 @@ class MDMViewsTestCase(TestCase):
         )
         device_id = get_random_string(8)
         session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
-        session.enrolled_device.device_information = {
-            "SoftwareUpdateDeviceID": device_id
-        }
+        session.enrolled_device.software_update_device_id = device_id
         session.enrolled_device.save()
         force_software_update(
             device_id=device_id,
@@ -2059,9 +2053,7 @@ class MDMViewsTestCase(TestCase):
         )
         device_id = get_random_string(8)
         session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
-        session.enrolled_device.device_information = {
-            "SoftwareUpdateDeviceID": device_id
-        }
+        session.enrolled_device.software_update_device_id = device_id
         session.enrolled_device.os_version = "26.3.1"
         session.enrolled_device.build_version = "25D2128"
         session.enrolled_device.save()
@@ -2113,9 +2105,7 @@ class MDMViewsTestCase(TestCase):
         )
         device_id = get_random_string(8)
         session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
-        session.enrolled_device.device_information = {
-            "SoftwareUpdateDeviceID": device_id
-        }
+        session.enrolled_device.software_update_device_id = device_id
         session.enrolled_device.os_version = "14.1"
         session.enrolled_device.build_version = "23B74"
         session.enrolled_device.save()
@@ -2162,9 +2152,7 @@ class MDMViewsTestCase(TestCase):
         )
         device_id = get_random_string(8)
         session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
-        session.enrolled_device.device_information = {
-            "SoftwareUpdateDeviceID": device_id
-        }
+        session.enrolled_device.software_update_device_id = device_id
         session.enrolled_device.save()
         sue = force_software_update_enforcement(
             details_url="https://www.example.com",
@@ -2197,7 +2185,7 @@ class MDMViewsTestCase(TestCase):
         now = naive_utcnow()
         enrolled_device = session.enrolled_device
         enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
-        enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+        enrolled_device.software_update_device_id = device_id
         enrolled_device.os_version = "15.6"
         enrolled_device.build_version = "24G84"
         # inventory up to date and certificate valid, so that the next command is the DDM sync
@@ -2273,9 +2261,7 @@ class MDMViewsTestCase(TestCase):
         )
         device_id = get_random_string(8)
         session.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
-        session.enrolled_device.device_information = {
-            "SoftwareUpdateDeviceID": device_id
-        }
+        session.enrolled_device.software_update_device_id = device_id
         session.enrolled_device.save()
         sue = force_software_update_enforcement(
             details_url="https://www.example.com",

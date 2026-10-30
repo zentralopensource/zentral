@@ -1024,6 +1024,7 @@ class EnrolledDevice(models.Model):
     build_version = models.CharField(max_length=32, null=True)
     build_version_extra = models.CharField(max_length=32, null=True)
     apple_silicon = models.BooleanField(null=True)
+    software_update_device_id = models.TextField(null=True)
 
     # notifications
     push_certificate = models.ForeignKey(PushCertificate, on_delete=models.PROTECT)
@@ -1249,6 +1250,14 @@ class EnrolledDevice(models.Model):
             self.admin_password = rewrap(self.admin_password, **self._get_secret_engine_kwargs("admin_password"))
         if self.device_lock_pin:
             self.device_lock_pin = rewrap(self.device_lock_pin, **self._get_secret_engine_kwargs("device_lock_pin"))
+
+    def set_software_update_device_id(self, software_update_device_id):
+        # DeviceInformation and the DDM status reports carry it, but the 27 DeviceInformation responses do not,
+        # so a missing value never clears it. Returns True if the value changed.
+        if not software_update_device_id or software_update_device_id == self.software_update_device_id:
+            return False
+        self.software_update_device_id = software_update_device_id
+        return True
 
     def get_urlsafe_serial_number(self):
         if self.serial_number:

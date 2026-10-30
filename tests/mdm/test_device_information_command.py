@@ -146,6 +146,23 @@ class DeviceInformationCommandTestCase(TestCase):
         self.assertTrue(enrolled_device.supervised)
         self.assertEqual(enrolled_device.name, "Yolo")
         self.assertEqual(enrolled_device.model, "VirtualMac2,1")
+        self.assertEqual(enrolled_device.software_update_device_id, "VMA2MACOSAP")
+
+    def test_process_acknowledged_response_no_software_update_device_id_kept(self):
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        enrolled_device.software_update_device_id = "J313AP"
+        enrolled_device.save()
+        for device_id in (None, ""):
+            response = copy.deepcopy(self.device_information)
+            if device_id is None:
+                # the macOS & iOS 27 responses
+                response["QueryResponses"].pop("SoftwareUpdateDeviceID")
+            else:
+                response["QueryResponses"]["SoftwareUpdateDeviceID"] = device_id
+            cmd = DeviceInformation.create_for_device(enrolled_device)
+            cmd.process_response(response, self.dep_enrollment_session, self.mbu)
+            enrolled_device.refresh_from_db()
+            self.assertEqual(enrolled_device.software_update_device_id, "J313AP")
 
     def test_process_acknowledged_response_missing_info(self):
         start = naive_utcnow()

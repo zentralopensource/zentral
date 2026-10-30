@@ -43,7 +43,7 @@ class MDMSoftwareUpdateTestCase(TestCase):
         session, _, _ = force_ota_enrollment_session(self.mbu, completed=True)
         enrolled_device = session.enrolled_device
         if device_id is not None:
-            enrolled_device.device_information = {"SoftwareUpdateDeviceID": device_id}
+            enrolled_device.software_update_device_id = device_id
         if os_version:
             enrolled_device.os_version = os_version
         if os_version_extra:

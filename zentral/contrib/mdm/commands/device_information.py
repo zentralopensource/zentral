@@ -176,6 +176,8 @@ class DeviceInformation(Command):
         apple_silicon = query_responses.get("IsAppleSilicon")
         if apple_silicon is not None:
             self.enrolled_device.apple_silicon = apple_silicon
+        # software update device ID, deprecated in macOS & iOS 26 and absent from the 27 responses
+        self.enrolled_device.set_software_update_device_id(query_responses.get("SoftwareUpdateDeviceID"))
         # supervised
         supervised = query_responses.get("IsSupervised")
         if supervised is not None:

@@ -107,7 +107,7 @@ class TestMDMArtifacts(TestCase):
             push_certificate=push_certificate,
             serial_number=get_random_string(64),
             platform="macOS",
-            device_information={"SoftwareUpdateDeviceID": get_random_string(8)},
+            software_update_device_id=get_random_string(8),
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
             push_magic=get_random_string(73),
@@ -117,7 +117,7 @@ class TestMDMArtifacts(TestCase):
             push_certificate=push_certificate,
             serial_number=get_random_string(64),
             platform="macOS",
-            device_information={"SoftwareUpdateDeviceID": get_random_string(8)},
+            software_update_device_id=get_random_string(8),
             blueprint=cls.blueprint1,
             udid=get_random_string(36),
             token=get_random_string(32).encode("utf-8"),
@@ -896,7 +896,7 @@ class TestMDMArtifacts(TestCase):
 
     def test_device_activation_software_update_enforcement_latest_wrong_platform_not_included(self):
         target = Target(self.enrolled_device)
-        force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
+        force_software_update(device_id=self.enrolled_device.software_update_device_id,
                               version="17.1.2",
                               build="21B101",
                               posting_date=date(2023, 11, 30))
@@ -915,7 +915,7 @@ class TestMDMArtifacts(TestCase):
     def test_device_activation_software_update_enforcement_latest_included(self):
         self.enrolled_device.client_capabilities = MACOS_14_CLIENT_CAPABILITIES
         target = Target(self.enrolled_device)
-        force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
+        force_software_update(device_id=self.enrolled_device.software_update_device_id,
                               version="14.1.0",
                               build="23B74",
                               posting_date=date(2023, 10, 25))
@@ -1045,7 +1045,7 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(configurations[1]["ServerToken"], f"{profile_av.pk}")
 
     def test_device_declaration_items_software_update_enforcement_latest_included(self):
-        force_software_update(device_id=self.enrolled_device.device_information["SoftwareUpdateDeviceID"],
+        force_software_update(device_id=self.enrolled_device.software_update_device_id,
                               version="14.1.0",
                               build="23B74",
                               posting_date=date(2023, 10, 25))
@@ -1147,19 +1147,7 @@ class TestMDMArtifacts(TestCase):
         )
 
     def test_device_software_update_enforcement_latest_no_device_id_not_advertised(self):
-        self.enrolled_device.device_information = None
-        self._force_latest_software_update_enforcement()
-        target = Target(self.enrolled_device)
-        with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="INFO") as cm:
-            self._assert_software_update_enforcement_not_advertised(target)
-        self.assertEqual(
-            cm.output,
-            [f"INFO:zentral.contrib.mdm.declarations.software_update:"
-             f"Enrolled device {self.enrolled_device.udid}: no software update device ID"],
-        )
-
-    def test_device_software_update_enforcement_latest_device_information_not_a_dict(self):
-        self.enrolled_device.device_information = ["SoftwareUpdateDeviceID"]
+        self.enrolled_device.software_update_device_id = None
         self._force_latest_software_update_enforcement()
         target = Target(self.enrolled_device)
         with self.assertLogs("zentral.contrib.mdm.declarations.software_update", level="INFO") as cm:
@@ -1171,7 +1159,7 @@ class TestMDMArtifacts(TestCase):
         )
 
     def test_device_software_update_enforcement_latest_below_device_os_version_not_advertised(self):
-        device_id = self.enrolled_device.device_information["SoftwareUpdateDeviceID"]
+        device_id = self.enrolled_device.software_update_device_id
         su = force_software_update(device_id=device_id,
                                    version="14.1.0",
                                    build="23B74",
@@ -1189,7 +1177,7 @@ class TestMDMArtifacts(TestCase):
         )
 
     def test_device_software_update_enforcement_latest_equal_to_device_os_version_advertised(self):
-        device_id = self.enrolled_device.device_information["SoftwareUpdateDeviceID"]
+        device_id = self.enrolled_device.software_update_device_id
         force_software_update(device_id=device_id,
                               version="14.1.0",
                               build="23B74",
