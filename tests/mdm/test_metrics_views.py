@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from prometheus_client.parser import text_string_to_metric_families
 
+from realms.models import RealmUserGroupMembership
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.artifacts import Target
@@ -12,6 +13,7 @@ from zentral.contrib.mdm.commands import DeviceInformation, InstallProfile
 from zentral.contrib.mdm.models import (
     Channel,
     DeviceArtifact,
+    ReEnrollmentSession,
     TargetArtifact,
     UserArtifact,
 )
@@ -23,6 +25,8 @@ from .utils import (
     force_dep_enrollment_session,
     force_enrolled_user,
     force_ota_enrollment_session,
+    force_realm_group,
+    force_realm_user,
 )
 
 
@@ -153,6 +157,55 @@ class MDMMetricsViewsTestCase(TestCase):
                 ('blocked', 'true', 'blueprint', bpn, 'le', '+Inf', 'platform', 'macOS', 'supervised', 'true'): 1.0,
             }},
             only_family="zentral_mdm_devices",
+        )
+
+    def test_devices_per_realm_group_metrics(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        session, _, _ = force_dep_enrollment_session(mbu, authenticated=True, completed=True, realm_user=True)
+        realm = session.realm_user.realm
+        # the group of the realm user of the first session must not be reported,
+        # only the realm user of the latest session counts
+        old_group = force_realm_group(realm=realm)
+        RealmUserGroupMembership.objects.create(user=session.realm_user, group=old_group)
+        parent_group = force_realm_group(realm=realm)
+        group = force_realm_group(realm=realm, parent=parent_group)
+        other_group = force_realm_group(realm=realm, parent=parent_group)
+        _, realm_user = force_realm_user(realm=realm)
+        RealmUserGroupMembership.objects.create(user=realm_user, group=group)
+        RealmUserGroupMembership.objects.create(user=realm_user, group=other_group)
+        reenrollment_session = ReEnrollmentSession.objects.create_from_enrollment_session(session)
+        reenrollment_session.realm_user = realm_user
+        reenrollment_session.save()
+        enrolled_device = session.enrolled_device
+        enrolled_device.last_seen_at = naive_utcnow() - timedelta(days=28)
+        enrolled_device.blueprint = force_blueprint()
+        enrolled_device.save()
+        bpn = enrolled_device.blueprint.name
+        # a device without realm user is reported without realm group
+        force_dep_enrollment_session(mbu, authenticated=True, completed=True)
+        response = self._make_authenticated_request()
+        expected_samples = {}
+        for le in ("1", "7", "14", "30", "45", "90", "+Inf"):
+            # the two direct groups, and the parent they have in common counted only once
+            for group_name in (group.display_name, other_group.display_name, parent_group.display_name):
+                expected_samples[(
+                    "blueprint", bpn,
+                    "le", le,
+                    "platform", "macOS",
+                    "realm", realm.name,
+                    "realm_group", group_name,
+                )] = 0.0 if le in ("1", "7", "14") else 1.0
+            expected_samples[(
+                "blueprint", "_",
+                "le", le,
+                "platform", "macOS",
+                "realm", "_",
+                "realm_group", "_",
+            )] = 0.0 if le != "+Inf" else 1.0
+        self._assertSamples(
+            text_string_to_metric_families(response.content.decode("utf-8")),
+            {"zentral_mdm_enrolled_device_bucket": expected_samples},
+            only_family="zentral_mdm_enrolled_device_bucket",
         )
 
     def test_target_artifacts_bucket_metrics(self):
