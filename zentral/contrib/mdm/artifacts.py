@@ -1133,9 +1133,15 @@ class Target:
                                  ("os_version_extra", supplemental, "extra-version"),
                                  ("build_version", operating_system, "build-version"),
                                  ("build_version_extra", supplemental, "build-version")):
-            if key in items and getattr(self.target, attr) != items[key]:
+            if key not in items:
+                continue
+            value = items[key]
+            if attr == "build_version_extra" and value == self.target.build_version:
+                # same value as the DeviceInformation command, or each one changes it back
+                value = ""
+            if getattr(self.target, attr) != value:
                 update_fields.append(attr)
-                setattr(self.target, attr, items[key])
+                setattr(self.target, attr, value)
         return update_fields
 
     def update_client_capabilities_with_status_report(self, status_report):

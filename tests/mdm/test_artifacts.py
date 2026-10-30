@@ -2058,13 +2058,13 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(self.enrolled_device.os_version, "13.3.1")
         self.assertEqual(self.enrolled_device.os_version_extra, "")
         self.assertEqual(self.enrolled_device.build_version, "22E261")
-        self.assertEqual(self.enrolled_device.build_version_extra, "22E261")
+        self.assertEqual(self.enrolled_device.build_version_extra, "")
 
     def test_update_os_info_partial_report_without_extra_version(self):
         self.enrolled_device.os_version = "13.2.1"
         self.enrolled_device.os_version_extra = ""
         self.enrolled_device.build_version = "22D261"
-        self.enrolled_device.build_version_extra = "22D261"
+        self.enrolled_device.build_version_extra = ""
         status_report = {
             "StatusItems": {
                 "device": {
@@ -2080,18 +2080,52 @@ class TestMDMArtifacts(TestCase):
         target = Target(self.enrolled_device)
         self.assertEqual(
             target.update_os_info_with_status_report(status_report),
-            ['os_version', 'build_version', 'build_version_extra'],
+            ['os_version', 'build_version'],
         )
         self.assertEqual(self.enrolled_device.os_version, "13.3.1")
         self.assertEqual(self.enrolled_device.os_version_extra, "")
         self.assertEqual(self.enrolled_device.build_version, "22E261")
-        self.assertEqual(self.enrolled_device.build_version_extra, "22E261")
+        self.assertEqual(self.enrolled_device.build_version_extra, "")
+
+    def test_update_os_info_partial_report_without_supplemental_build_version(self):
+        self.enrolled_device.os_version = "13.2.1"
+        self.enrolled_device.os_version_extra = ""
+        self.enrolled_device.build_version = "22D261"
+        self.enrolled_device.build_version_extra = ""
+        status_report = {
+            "StatusItems": {
+                "device": {
+                    "operating-system": {
+                        "build-version": "22E261",
+                        "supplemental": {"extra-version": ""},
+                        "version": "13.3.1",
+                    }
+                }
+            },
+            "Errors": [],
+        }
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.update_os_info_with_status_report(status_report), ['os_version', 'build_version'])
+        self.assertEqual(self.enrolled_device.current_build_version, "22E261")
+
+    def test_update_os_info_partial_report_supplemental_build_version_only(self):
+        self.enrolled_device.os_version = "13.3.1"
+        self.enrolled_device.os_version_extra = ""
+        self.enrolled_device.build_version = "22E261"
+        self.enrolled_device.build_version_extra = ""
+        status_report = {
+            "StatusItems": {"device": {"operating-system": {"supplemental": {"build-version": "22E261"}}}},
+            "Errors": [],
+        }
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.update_os_info_with_status_report(status_report), [])
+        self.assertEqual(self.enrolled_device.build_version_extra, "")
 
     def test_update_os_info_partial_report_supplemental_items_only(self):
         self.enrolled_device.os_version = "13.3.1"
         self.enrolled_device.os_version_extra = ""
         self.enrolled_device.build_version = "22E261"
-        self.enrolled_device.build_version_extra = "22E261"
+        self.enrolled_device.build_version_extra = ""
         status_report = {
             "StatusItems": {
                 "device": {
@@ -2203,6 +2237,29 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(len(callbacks), 0)
         send_enrolled_device_notification.assert_not_called()
         logger_warning.assert_not_called()
+
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_update_device_target_with_full_status_report_after_device_information(
+        self, send_enrolled_device_notification
+    ):
+        target = Target(self.enrolled_device)
+        status_report = build_status_report()
+        status_report["StatusItems"]["device"]["operating-system"]["supplemental"] = {
+            "build-version": "22E261",
+            "extra-version": "",
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            target.update_target_with_status_report(status_report)
+        send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
+        # the DeviceInformation command stores "" when the supplemental build is the build
+        self.enrolled_device.build_version_extra = ""
+        self.enrolled_device.save()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            target.update_target_with_status_report(status_report)
+        self.assertEqual(len(callbacks), 0)
+        send_enrolled_device_notification.assert_called_once_with(self.enrolled_device)
+        self.enrolled_device.refresh_from_db()
+        self.assertEqual(self.enrolled_device.build_version_extra, "")
 
     @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
     def test_update_device_target_with_status_report_software_update_device_id(
