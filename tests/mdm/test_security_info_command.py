@@ -21,7 +21,7 @@ from zentral.contrib.mdm.events import (
     RecoveryPasswordSetEvent,
     RecoveryPasswordUpdatedEvent,
 )
-from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
+from zentral.contrib.mdm.models import Blueprint, Channel, EnrolledDevice, Platform, RequestStatus
 from zentral.utils.time import naive_utcnow
 
 from .utils import force_dep_enrollment_session
@@ -96,6 +96,30 @@ class SecurityInfoCommandTestCase(TestCase):
         self.assertIsNone(self.enrolled_device.security_info)
         self.assertIsNone(self.enrolled_device.security_info_updated_at)
 
+    def test_process_acknowledged_response_without_filevault_status(self):
+        self.enrolled_device.filevault_enabled = False
+        self.enrolled_device.save()
+        security_info = copy.deepcopy(self.security_info)
+        security_info["SecurityInfo"].pop("FDE_Enabled")
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        cmd.process_response(security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertNotIn("FDE_Enabled", self.enrolled_device.security_info)
+        self.assertFalse(self.enrolled_device.filevault_enabled)
+
+    def test_process_acknowledged_response_keeps_the_status_report_columns(self):
+        cmd = SecurityInfo.create_for_device(self.enrolled_device)
+        # a DDM status report saved in the meantime
+        EnrolledDevice.objects.filter(pk=self.enrolled_device.pk).update(
+            os_version="26.7.2",
+            software_update_install_state="installing",
+        )
+        cmd.process_response(self.security_info, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertTrue(self.enrolled_device.filevault_enabled)
+        self.assertEqual(self.enrolled_device.os_version, "26.7.2")
+        self.assertEqual(self.enrolled_device.software_update_install_state, "installing")
+
     def test_process_acknowledged_response(self):
         start = naive_utcnow()
         self.assertIsNone(self.enrolled_device.security_info)
@@ -105,6 +129,7 @@ class SecurityInfoCommandTestCase(TestCase):
         self.enrolled_device.refresh_from_db()
         self.assertTrue(self.enrolled_device.security_info_updated_at > start)
         self.assertTrue(self.enrolled_device.security_info["FDE_Enabled"])
+        self.assertTrue(self.enrolled_device.filevault_enabled)
         self.assertTrue(self.enrolled_device.security_info_updated_at > start)
         self.assertFalse(self.enrolled_device.dep_enrollment)
         self.assertTrue(self.enrolled_device.activation_lock_manageable)

@@ -53,6 +53,8 @@ class SecurityInfo(Command):
                            self.enrolled_device.udid)
             return
 
+        update_fields = []
+
         # FileVault PRK
         if self.enrolled_device.filevault_escrow_key:
             prk_cms = security_info.pop("FDE_PersonalRecoveryKeyCMS", None)
@@ -66,6 +68,7 @@ class SecurityInfo(Command):
                 else:
                     if prk and prk != self.enrolled_device.get_filevault_prk():
                         self.enrolled_device.set_filevault_prk(prk)
+                        update_fields.extend(("filevault_prk", "filevault_prk_updated_at"))
                         transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
 
         # Recovery password
@@ -91,13 +94,14 @@ class SecurityInfo(Command):
                                      self.enrolled_device, self.uuid)
                         # clear the pending firmware password
                         self.enrolled_device.set_pending_firmware_password(None)
-                        self.enrolled_device.save()
+                        update_fields.extend(("pending_firmware_password", "pending_firmware_password_created_at"))
                     else:
                         operation = "clear"
                 if operation:
                     self.enrolled_device.set_pending_firmware_password(None)
                     self.enrolled_device.set_recovery_password(pending_firmware_password)
-                    self.enrolled_device.save()
+                    update_fields.extend(("pending_firmware_password", "pending_firmware_password_created_at",
+                                          "recovery_password", "recovery_password_updated_at"))
                     transaction.on_commit(lambda: post_recovery_password_event(
                         self, password_type="firmware_password", operation=operation
                     ))
@@ -106,7 +110,7 @@ class SecurityInfo(Command):
         has_recovery_lock = security_info.get("IsRecoveryLockEnabled")
         if not has_firmware_password and not has_recovery_lock and self.enrolled_device.recovery_password:
             self.enrolled_device.set_recovery_password(None)
-            self.enrolled_device.save()
+            update_fields.extend(("recovery_password", "recovery_password_updated_at"))
             password_type = "firmware_password" if firmware_password_status else "recovery_lock"
             transaction.on_commit(lambda: post_recovery_password_event(
                 self, password_type=password_type, operation="clear"
@@ -114,6 +118,11 @@ class SecurityInfo(Command):
 
         self.enrolled_device.security_info = prepare_loaded_plist(security_info)
         self.enrolled_device.security_info_updated_at = naive_utcnow()
+        update_fields.extend(("security_info", "security_info_updated_at"))
+        # FileVault, macOS only
+        if "FDE_Enabled" in security_info:
+            self.enrolled_device.filevault_enabled = security_info["FDE_Enabled"]
+            update_fields.append("filevault_enabled")
         # management status
         management_status = security_info.get("ManagementStatus")
         if management_status:
@@ -124,6 +133,7 @@ class SecurityInfo(Command):
                 val = management_status.get(status_attr)
                 if isinstance(val, bool):
                     setattr(self.enrolled_device, attr, val)
+                    update_fields.append(attr)
         # bootstrap token
         for attr, info_attr in (("bootstrap_token_allowed_for_authentication",
                                  "BootstrapTokenAllowedForAuthentication"),
@@ -140,7 +150,9 @@ class SecurityInfo(Command):
             if not isinstance(val, bool):
                 val = None
             setattr(self.enrolled_device, attr, val)
-        self.enrolled_device.save()
+            update_fields.append(attr)
+        # a full save would write back the columns that a DDM status report updated in the meantime
+        self.enrolled_device.save(update_fields=update_fields + ["updated_at"])
 
 
 register_command(SecurityInfo)

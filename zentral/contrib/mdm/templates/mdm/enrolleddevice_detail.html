@@ -158,6 +158,24 @@
           </td>
         </tr>
         <tr>
+          <th>Software update status</th>
+          <td>
+            {% if object.software_update_install_state %}
+              {{ object.software_update_install_state }}
+              {% if object.software_update_pending_os_version %}
+                <br>
+                Pending {{ object.software_update_pending_os_version }}{% if object.software_update_pending_build_version %} ({{ object.software_update_pending_build_version }}){% endif %}
+              {% endif %}
+              {% if object.software_update_failure_count %}
+                <br>
+                {{ object.software_update_failure_count }} failure{{ object.software_update_failure_count|pluralize }}{% if object.software_update_failure_at %}, last on {{ object.software_update_failure_at|date:"SHORT_DATETIME_FORMAT" }}{% endif %}{% if object.software_update_failure_reason %}: {{ object.software_update_failure_reason }}{% endif %}
+              {% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
           <th>DEP device{{ dep_device_count|pluralize }}</th>
           <td>
             {% if dep_device_count %}
@@ -362,12 +380,14 @@
               </tr>
             </tbody>
           </table>
+        {% endif %}
+        {% if security_info or object.filevault_enabled is not None %}
           <h4>FDE</h4>
           <table class="table-object-properties mb-5">
             <tbody>
               <tr>
                 <th width="300px">Enabled?</th>
-                <td>{{ security_info.FDE_Enabled|yesno }}</td>
+                <td>{{ object.filevault_enabled|yesno:"yes,no,-" }}</td>
               </tr>
               <tr>
                 <th>Personal recovery key</th>
@@ -396,14 +416,22 @@
                             data-bs-title="Copy to clipboard"
                             style="cursor:pointer"></span>
                     </div>
-                  {% else %}
+                  {% elif security_info %}
                     {{ security_info.FDE_HasPersonalRecoveryKey|yesno }}
+                  {% else %}
+                    -
                   {% endif %}
                 </td>
               </tr>
               <tr>
                 <th>Institutional recovery key?</th>
-                <td>{{ security_info.FDE_HasInstitutionalRecoveryKey|yesno }}</td>
+                <td>
+                  {% if security_info %}
+                    {{ security_info.FDE_HasInstitutionalRecoveryKey|yesno }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
               </tr>
             </tbody>
           </table>

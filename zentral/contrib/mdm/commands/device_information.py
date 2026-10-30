@@ -124,9 +124,10 @@ class DeviceInformation(Command):
                          self.enrolled_device.serial_number)
             return
         # inventory tree
-        ms_tree = update_inventory_tree(self, commit_enrolled_device=False)
+        ms_tree, update_fields = update_inventory_tree(self, commit_enrolled_device=False)
         # enrolled device
         self.enrolled_device.device_information = prepare_loaded_plist(query_responses)
+        update_fields.append("device_information")
         # platform
         try:
             platform = ms_tree["os_version"]["name"]
@@ -136,55 +137,69 @@ class DeviceInformation(Command):
             if platform and self.enrolled_device.platform != platform:
                 logger.warning("Enrolled device %s: platform change.", self.enrolled_device.serial_number)
                 self.enrolled_device.platform = platform
+                update_fields.append("platform")
         # Awaiting configuration
         self.enrolled_device.awaiting_configuration = query_responses.get("AwaitingConfiguration")
+        update_fields.append("awaiting_configuration")
         # name
         try:
             self.enrolled_device.name = ms_tree["system_info"]["computer_name"]
         except KeyError:
             logger.debug("Enrolled device %s: could not get device name.", self.enrolled_device.serial_number)
+        else:
+            update_fields.append("name")
         # model
         try:
             self.enrolled_device.model = ms_tree["system_info"]["hardware_model"]
         except KeyError:
             logger.debug("Enrolled device %s: could not get model.", self.enrolled_device.serial_number)
+        else:
+            update_fields.append("model")
         # OS version
         os_version = query_responses.get("OSVersion")
         if os_version:
             self.enrolled_device.os_version = os_version
         else:
             self.enrolled_device.os_version = ""
+        update_fields.append("os_version")
         # OS version extra
         os_version_extra = query_responses.get("SupplementalOSVersionExtra")
         if os_version_extra:
             self.enrolled_device.os_version_extra = os_version_extra
         else:
             self.enrolled_device.os_version_extra = ""
+        update_fields.append("os_version_extra")
         # Build version
         build_version = query_responses.get("BuildVersion")
         if build_version:
             self.enrolled_device.build_version = build_version
         else:
             self.enrolled_device.build_version = ""
+        update_fields.append("build_version")
         # Build version extra
-        self.enrolled_device.set_build_version_extra(query_responses.get("SupplementalBuildVersion"))
+        if self.enrolled_device.set_build_version_extra(query_responses.get("SupplementalBuildVersion")):
+            update_fields.append("build_version_extra")
         # Apple silicon
         apple_silicon = query_responses.get("IsAppleSilicon")
         if apple_silicon is not None:
             self.enrolled_device.apple_silicon = apple_silicon
+            update_fields.append("apple_silicon")
         # software update device ID, deprecated in macOS & iOS 26 and absent from the 27 responses
-        self.enrolled_device.set_software_update_device_id(query_responses.get("SoftwareUpdateDeviceID"))
+        if self.enrolled_device.set_software_update_device_id(query_responses.get("SoftwareUpdateDeviceID")):
+            update_fields.append("software_update_device_id")
         # supervised
         supervised = query_responses.get("IsSupervised")
         if supervised is not None:
             self.enrolled_device.supervised = supervised
+            update_fields.append("supervised")
         # Auto admin password
         auto_setup_admin_accounts = query_responses.get("AutoSetupAdminAccounts")
         if not auto_setup_admin_accounts:
             # reset the admin password if not admin accounts are found
             self.enrolled_device.set_admin_password(None)
-        # save enrolled device
-        self.enrolled_device.save()
+            update_fields.extend(("admin_password", "admin_password_updated_at"))
+        # save enrolled device, a full save would write back the columns that a DDM status report updated meanwhile
+        self.enrolled_device.save(update_fields=update_fields + ["updated_at"])
 
 
 register_command(DeviceInformation)

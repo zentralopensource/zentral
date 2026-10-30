@@ -17,7 +17,7 @@ from zentral.contrib.inventory.models import MetaMachine
 from zentral.utils.http import user_agent_and_ip_address_from_request
 from zentral.utils.os_version import comparable_os_version_in_range, make_comparable_os_version
 from zentral.utils.text import shard as compute_shard
-from zentral.utils.time import naive_utcnow
+from zentral.utils.time import naive_utc_fromisoformat, naive_utcnow
 
 from .apns import send_enrolled_device_notification, send_enrolled_user_notification
 from .declarations import (
@@ -1119,22 +1119,30 @@ class Target:
 
     # status report updates
 
-    def update_os_info_with_status_report(self, status_report):
+    def _set_target_values(self, values):
         update_fields = []
+        for attr, value in values.items():
+            if getattr(self.target, attr) != value:
+                update_fields.append(attr)
+                setattr(self.target, attr, value)
+        return update_fields
+
+    def update_os_info_with_status_report(self, status_report):
         if not self.is_device:
-            return update_fields
+            return []
         # each key is a status item of its own, that a partial report carries only when it changes
         try:
             operating_system = status_report["StatusItems"]["device"]["operating-system"]
         except KeyError:
-            return update_fields
+            return []
         supplemental = operating_system.get("supplemental", {})
-        for attr, items, key in (("os_version", operating_system, "version"),
-                                 ("os_version_extra", supplemental, "extra-version"),
-                                 ("build_version", operating_system, "build-version")):
-            if key in items and getattr(self.target, attr) != items[key]:
-                update_fields.append(attr)
-                setattr(self.target, attr, items[key])
+        update_fields = self._set_target_values({
+            attr: items[key]
+            for attr, items, key in (("os_version", operating_system, "version"),
+                                     ("os_version_extra", supplemental, "extra-version"),
+                                     ("build_version", operating_system, "build-version"))
+            if key in items
+        })
         if "build-version" in supplemental and self.target.set_build_version_extra(supplemental["build-version"]):
             update_fields.append("build_version_extra")
         return update_fields
@@ -1162,12 +1170,47 @@ class Target:
             return ["software_update_device_id"]
         return []
 
+    def update_filevault_with_status_report(self, status_report):
+        if not self.is_device:
+            return []
+        try:
+            filevault_enabled = status_report["StatusItems"]["diskmanagement"]["filevault"]["enabled"]
+        except KeyError:
+            # a partial report carries it only when it changes, and SecurityInfo is the other source
+            return []
+        return self._set_target_values({"filevault_enabled": filevault_enabled})
+
+    def update_software_update_status_with_status_report(self, status_report):
+        if not self.is_device:
+            return []
+        # a partial report carries an item only when it changes, a full report replaces the whole status
+        full_report = status_report.get("FullReport") is True
+        software_update = status_report["StatusItems"].get("softwareupdate", {})
+        values = {}
+        if "install-state" in software_update or full_report:
+            values["software_update_install_state"] = software_update.get("install-state")
+        # without a pending update or a failure, the devices send {} and not the documented empty values
+        if "pending-version" in software_update or full_report:
+            pending_version = software_update.get("pending-version", {})
+            values["software_update_pending_os_version"] = pending_version.get("os-version") or None
+            values["software_update_pending_build_version"] = pending_version.get("build-version") or None
+        if "failure-reason" in software_update or full_report:
+            failure_reason = software_update.get("failure-reason", {})
+            failure_at = failure_reason.get("timestamp")
+            values["software_update_failure_count"] = failure_reason.get("count", 0)
+            values["software_update_failure_reason"] = failure_reason.get("reason")
+            values["software_update_failure_at"] = naive_utc_fromisoformat(failure_at) if failure_at else None
+        return self._set_target_values(values)
+
     def update_target_with_status_report(self, status_report):
         update_fields = self.update_os_info_with_status_report(status_report)
         update_fields.extend(self.update_software_update_device_id_with_status_report(status_report))
         update_fields.extend(self.update_client_capabilities_with_status_report(status_report))
-        if update_fields:
-            self.target.save(update_fields=update_fields + ["updated_at"])
+        # these values do not change the declarations of the device, it needs no notification
+        status_update_fields = self.update_filevault_with_status_report(status_report)
+        status_update_fields.extend(self.update_software_update_status_with_status_report(status_report))
+        if update_fields or status_update_fields:
+            self.target.save(update_fields=update_fields + status_update_fields + ["updated_at"])
         target_artifacts_updated = self.update_target_artifacts_with_status_report(status_report)
         if update_fields or target_artifacts_updated:
             func = send_enrolled_device_notification if self.is_device else send_enrolled_user_notification

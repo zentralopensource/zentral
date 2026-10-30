@@ -1,5 +1,6 @@
 import json
 import plistlib
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Group
@@ -323,6 +324,74 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["software_update_enforcement"], sue)
         self.assertContains(response, sue.name)
         self.assertNotContains(response, sue.get_absolute_url())
+
+    def test_enrolled_device_no_security_info_no_filevault_status(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.assertIsNone(session.enrolled_device.security_info)
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "<h4>SIP</h4>")
+        self.assertNotContains(response, "<h4>FDE</h4>")
+
+    def test_enrolled_device_filevault_status_without_security_info(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        self.assertIsNone(enrolled_device.security_info)
+        enrolled_device.filevault_enabled = True
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "<h4>SIP</h4>")
+        self.assertContains(response, "<h4>FDE</h4>")
+        self.assertContains(response, '<tr><th width="300px">Enabled?</th><td>yes</td></tr>', html=True)
+        self.assertContains(response, "<tr><th>Personal recovery key</th><td>-</td></tr>", html=True)
+        self.assertContains(response, "<tr><th>Institutional recovery key?</th><td>-</td></tr>", html=True)
+
+    def test_enrolled_device_filevault_status_with_security_info(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.security_info = {"FDE_Enabled": False,
+                                         "FDE_HasPersonalRecoveryKey": True,
+                                         "FDE_HasInstitutionalRecoveryKey": False,
+                                         "SystemIntegrityProtectionEnabled": True}
+        enrolled_device.filevault_enabled = False
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<h4>SIP</h4>")
+        self.assertContains(response, "<h4>FDE</h4>")
+        self.assertContains(response, '<tr><th width="300px">Enabled?</th><td>no</td></tr>', html=True)
+        self.assertContains(response, "<tr><th>Personal recovery key</th><td>yes</td></tr>", html=True)
+        self.assertContains(response, "<tr><th>Institutional recovery key?</th><td>no</td></tr>", html=True)
+
+    def test_enrolled_device_no_software_update_status(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(session.enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Software update status")
+        self.assertNotContains(response, "Pending ")
+
+    def test_enrolled_device_software_update_status(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        enrolled_device.software_update_install_state = "downloading"
+        enrolled_device.software_update_pending_os_version = "26.7.2"
+        enrolled_device.software_update_pending_build_version = "25G332"
+        enrolled_device.software_update_failure_count = 2
+        enrolled_device.software_update_failure_reason = "Software update failed."
+        enrolled_device.software_update_failure_at = datetime(2026, 10, 19, 19, 23, 45)
+        enrolled_device.save()
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "downloading")
+        self.assertContains(response, "Pending 26.7.2 (25G332)")
+        self.assertContains(response, "2 failures, last on ")
+        self.assertContains(response, ": Software update failed.")
 
     def test_enrolled_device_enrollment_link(self):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)

@@ -10,7 +10,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import DeviceInformation, SecurityInfo
 from zentral.contrib.mdm.commands.scheduling import _update_base_inventory
-from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
+from zentral.contrib.mdm.models import Blueprint, Channel, EnrolledDevice, Platform, RequestStatus
 from zentral.utils.time import naive_utcnow
 
 from .utils import force_dep_enrollment_session
@@ -163,6 +163,26 @@ class DeviceInformationCommandTestCase(TestCase):
             cmd.process_response(response, self.dep_enrollment_session, self.mbu)
             enrolled_device.refresh_from_db()
             self.assertEqual(enrolled_device.software_update_device_id, "J313AP")
+
+    def test_process_acknowledged_response_keeps_the_status_report_columns(self):
+        enrolled_device = self.dep_enrollment_session.enrolled_device
+        cmd = DeviceInformation.create_for_device(enrolled_device)
+        # a DDM status report saved in the meantime
+        EnrolledDevice.objects.filter(pk=enrolled_device.pk).update(
+            filevault_enabled=True,
+            software_update_device_id="J313AP",
+            software_update_install_state="installing",
+        )
+        response = copy.deepcopy(self.device_information)
+        # the macOS & iOS 27 responses
+        response["QueryResponses"].pop("SoftwareUpdateDeviceID")
+        cmd.process_response(response, self.dep_enrollment_session, self.mbu)
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.os_version, "13.0")
+        self.assertIsNotNone(enrolled_device.device_information_updated_at)
+        self.assertTrue(enrolled_device.filevault_enabled)
+        self.assertEqual(enrolled_device.software_update_device_id, "J313AP")
+        self.assertEqual(enrolled_device.software_update_install_state, "installing")
 
     def test_process_acknowledged_response_missing_info(self):
         start = naive_utcnow()

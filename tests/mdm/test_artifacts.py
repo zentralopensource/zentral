@@ -2186,6 +2186,138 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(self.enrolled_device.client_capabilities, {"supported-versions": ["1.0.0"]})
         logger_warning.assert_not_called()
 
+    # test update FileVault
+
+    def test_update_filevault_user_channel(self):
+        status_report = {"StatusItems": {"diskmanagement": {"filevault": {"enabled": True}}}, "Errors": []}
+        target = Target(self.enrolled_device, self.enrolled_user)
+        self.assertEqual(target.update_filevault_with_status_report(status_report), [])
+        self.assertIsNone(self.enrolled_device.filevault_enabled)
+
+    def test_update_filevault_report_without_item(self):
+        self.enrolled_device.filevault_enabled = True
+        target = Target(self.enrolled_device)
+        for full_report in (False, True):
+            status_report = {"StatusItems": {}, "Errors": [], "FullReport": full_report}
+            self.assertEqual(target.update_filevault_with_status_report(status_report), [])
+            self.assertTrue(self.enrolled_device.filevault_enabled)
+
+    def test_update_filevault(self):
+        status_report = {"StatusItems": {"diskmanagement": {"filevault": {"enabled": False}}}, "Errors": []}
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.update_filevault_with_status_report(status_report), ["filevault_enabled"])
+        self.assertFalse(self.enrolled_device.filevault_enabled)
+        self.assertEqual(target.update_filevault_with_status_report(status_report), [])
+
+    # test update software update status
+
+    def _set_software_update_status(self):
+        self.enrolled_device.software_update_install_state = "downloading"
+        self.enrolled_device.software_update_pending_os_version = "26.7.2"
+        self.enrolled_device.software_update_pending_build_version = "25G332"
+        self.enrolled_device.software_update_failure_count = 3
+        self.enrolled_device.software_update_failure_reason = "Software update failed."
+        self.enrolled_device.software_update_failure_at = datetime(2026, 10, 19, 19, 23, 45)
+
+    def _assert_no_software_update_status(self, update_fields, install_state):
+        self.assertEqual(update_fields, ["software_update_install_state",
+                                         "software_update_pending_os_version",
+                                         "software_update_pending_build_version",
+                                         "software_update_failure_count",
+                                         "software_update_failure_reason",
+                                         "software_update_failure_at"])
+        self.assertEqual(self.enrolled_device.software_update_install_state, install_state)
+        self.assertIsNone(self.enrolled_device.software_update_pending_os_version)
+        self.assertIsNone(self.enrolled_device.software_update_pending_build_version)
+        self.assertEqual(self.enrolled_device.software_update_failure_count, 0)
+        self.assertIsNone(self.enrolled_device.software_update_failure_reason)
+        self.assertIsNone(self.enrolled_device.software_update_failure_at)
+
+    def test_update_software_update_status_user_channel(self):
+        status_report = {"StatusItems": {"softwareupdate": {"install-state": "downloading"}}, "Errors": []}
+        target = Target(self.enrolled_device, self.enrolled_user)
+        self.assertEqual(target.update_software_update_status_with_status_report(status_report), [])
+        self.assertIsNone(self.enrolled_device.software_update_install_state)
+
+    def test_update_software_update_status_partial_report(self):
+        self._set_software_update_status()
+        status_report = {"StatusItems": {"softwareupdate": {"install-state": "installing"}}, "Errors": []}
+        target = Target(self.enrolled_device)
+        self.assertEqual(target.update_software_update_status_with_status_report(status_report),
+                         ["software_update_install_state"])
+        self.assertEqual(self.enrolled_device.software_update_install_state, "installing")
+        self.assertEqual(self.enrolled_device.software_update_pending_os_version, "26.7.2")
+        self.assertEqual(self.enrolled_device.software_update_failure_count, 3)
+
+    def test_update_software_update_status_pending_update_and_failure(self):
+        status_report = {
+            "StatusItems": {
+                "softwareupdate": {
+                    "failure-reason": {
+                        "count": 2,
+                        "reason": "Software update failed.",
+                        "timestamp": "2026-10-19T19:23:45Z",
+                    },
+                    "install-state": "prepared",
+                    "pending-version": {
+                        "build-version": "25G332",
+                        "os-version": "26.7.2",
+                        "target-local-date-time": "2026-11-02T09:30:00",
+                    },
+                }
+            },
+            "Errors": [],
+            "FullReport": True,
+        }
+        target = Target(self.enrolled_device)
+        self.assertEqual(
+            target.update_software_update_status_with_status_report(status_report),
+            ["software_update_install_state",
+             "software_update_pending_os_version",
+             "software_update_pending_build_version",
+             "software_update_failure_count",
+             "software_update_failure_reason",
+             "software_update_failure_at"],
+        )
+        self.assertEqual(self.enrolled_device.software_update_install_state, "prepared")
+        self.assertEqual(self.enrolled_device.software_update_pending_os_version, "26.7.2")
+        self.assertEqual(self.enrolled_device.software_update_pending_build_version, "25G332")
+        self.assertEqual(self.enrolled_device.software_update_failure_count, 2)
+        self.assertEqual(self.enrolled_device.software_update_failure_reason, "Software update failed.")
+        self.assertEqual(self.enrolled_device.software_update_failure_at, datetime(2026, 10, 19, 19, 23, 45))
+        self.assertEqual(target.update_software_update_status_with_status_report(status_report), [])
+
+    def test_update_software_update_status_empty_items(self):
+        self._set_software_update_status()
+        status_report = {
+            "StatusItems": {"softwareupdate": {"failure-reason": {}, "install-state": "none", "pending-version": {}}},
+            "Errors": [],
+        }
+        target = Target(self.enrolled_device)
+        update_fields = target.update_software_update_status_with_status_report(status_report)
+        self._assert_no_software_update_status(update_fields, "none")
+
+    def test_update_software_update_status_full_report_without_items(self):
+        self._set_software_update_status()
+        status_report = {"StatusItems": {}, "Errors": [], "FullReport": True}
+        target = Target(self.enrolled_device)
+        update_fields = target.update_software_update_status_with_status_report(status_report)
+        self._assert_no_software_update_status(update_fields, None)
+
+    def test_update_software_update_status_pending_version_without_versions(self):
+        self._set_software_update_status()
+        status_report = {
+            "StatusItems": {"softwareupdate": {"pending-version": {"target-local-date-time": "2026-11-02T09:30:00"}}},
+            "Errors": [],
+        }
+        target = Target(self.enrolled_device)
+        self.assertEqual(
+            target.update_software_update_status_with_status_report(status_report),
+            ["software_update_pending_os_version", "software_update_pending_build_version"],
+        )
+        self.assertIsNone(self.enrolled_device.software_update_pending_os_version)
+        self.assertIsNone(self.enrolled_device.software_update_pending_build_version)
+
     # test update software update device ID
 
     def test_update_software_update_device_id_user_channel(self):
@@ -2226,6 +2358,24 @@ class TestMDMArtifacts(TestCase):
         self.assertEqual(self.enrolled_device.software_update_device_id, "J313AP")
 
     # test update target with status report
+
+    @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")
+    def test_update_device_target_with_status_items_no_notification(self, send_enrolled_device_notification):
+        target = Target(self.enrolled_device)
+        status_report = {
+            "StatusItems": {
+                "diskmanagement": {"filevault": {"enabled": True}},
+                "softwareupdate": {"install-state": "downloading"},
+            },
+            "Errors": [],
+        }
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            target.update_target_with_status_report(status_report)
+        self.assertEqual(len(callbacks), 0)
+        send_enrolled_device_notification.assert_not_called()
+        self.enrolled_device.refresh_from_db()
+        self.assertTrue(self.enrolled_device.filevault_enabled)
+        self.assertEqual(self.enrolled_device.software_update_install_state, "downloading")
 
     @patch("zentral.contrib.mdm.artifacts.logger.warning")
     @patch("zentral.contrib.mdm.artifacts.send_enrolled_device_notification")

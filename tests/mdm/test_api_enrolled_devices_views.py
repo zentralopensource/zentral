@@ -272,7 +272,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
         self.assertEqual(response.json(), {'count': 0, 'next': None, 'previous': None, 'results': []})
 
     def test_enrolled_devices_with_secrets(self):
-        self.enrolled_device.security_info = {"FDE_Enabled": True}
+        self.enrolled_device.filevault_enabled = True
         self.enrolled_device.set_bootstrap_token(b"un")
         self.enrolled_device.set_filevault_prk("deux")
         self.enrolled_device.set_recovery_password("trois")

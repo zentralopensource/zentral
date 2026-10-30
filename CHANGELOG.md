@@ -64,6 +64,8 @@ Two new PBAC actions gate the block and the unblock of a device: `MDM::Action::"
 
 A software update enforcement can be limited to the devices that run an OS version in a range, with the new *Minimum device OS version* and *Maximum device OS version* attributes. One blueprint can keep the macOS 26 devices on the latest macOS 26 update and the macOS 27 devices on the latest macOS 27 update, each with its own enforcement. When several enforcements of a blueprint match a device, the tags rank first, then an enforcement with a range before one without, so a tagged enforcement can upgrade a device to the next major version. An enforcement with no tag in common with the device is never selected. The page of an enrolled device shows the enforcement that Zentral selected for it, with the target of its declaration.
 
+The enrolled device page shows the software update status of a device: the install state, the pending update, and the number, the date and the reason of the software update failures. Zentral reads them in the DDM status reports, so they change when the device reports a change. The FileVault status of an enrolled device is a stored value now, updated by the DDM status reports and by the security information command. The `filevault_enabled` attribute of the enrolled device API uses it.
+
 
 #### Monolith
 

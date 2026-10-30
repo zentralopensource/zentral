@@ -1,5 +1,7 @@
 import uuid
+from importlib import import_module
 
+from django.db import connection
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
@@ -204,6 +206,29 @@ class TestMDMEnrolledDeviceModel(TestCase, SerializeForEventAssertions):
         self.assertTrue(enrolled_device.set_build_version_extra("22E772610a"))
         self.assertEqual(enrolled_device.build_version_extra, "22E772610a")
         self.assertFalse(enrolled_device.set_build_version_extra("22E772610a"))
+
+    def test_enrolled_device_filevault_enabled_migration(self):
+        migration = import_module("zentral.contrib.mdm.migrations."
+                                  "0113_enrolleddevice_filevault_and_software_update_status")
+        enrolled_devices = []
+        for security_info, expected in (({"FDE_Enabled": True}, True),
+                                        ({"FDE_Enabled": False}, False),
+                                        ({"FDE_Enabled": "yes"}, None),
+                                        ({}, None),
+                                        (None, None)):
+            enrolled_device = EnrolledDevice.objects.create(
+                udid=uuid.uuid4(),
+                serial_number=get_random_string(12),
+                push_certificate=force_push_certificate(),
+                security_info=security_info,
+            )
+            self.assertIsNone(enrolled_device.filevault_enabled)
+            enrolled_devices.append((enrolled_device, expected))
+        with connection.cursor() as cursor:
+            cursor.execute(migration.Migration.operations[-1].sql)
+        for enrolled_device, expected in enrolled_devices:
+            enrolled_device.refresh_from_db()
+            self.assertEqual(enrolled_device.filevault_enabled, expected)
 
     def test_enrolled_device_serialize_for_event_keys_only(self):
         enrolled_device = EnrolledDevice.objects.create(

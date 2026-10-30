@@ -9,7 +9,7 @@ from zentral.contrib.inventory.models import MetaBusinessUnit, MetaMachine
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.commands import ProfileList
 from zentral.contrib.mdm.commands.scheduling import _update_extra_inventory
-from zentral.contrib.mdm.models import Blueprint, Channel, Platform, RequestStatus
+from zentral.contrib.mdm.models import Blueprint, Channel, EnrolledDevice, Platform, RequestStatus
 from zentral.utils.time import naive_utcnow
 
 from .utils import force_dep_enrollment_session
@@ -197,6 +197,18 @@ class ProfileListCommandTestCase(TestCase):
             else:
                 raise ValueError
         self.assertEqual(i, 2)
+
+    def test_process_acknowledged_response_keeps_the_status_report_columns(self):
+        cmd = ProfileList.create_for_device(
+            self.dep_enrollment_session.enrolled_device,
+            kwargs={"update_inventory": True},
+        )
+        # a DDM status report saved in the meantime
+        EnrolledDevice.objects.filter(pk=self.enrolled_device.pk).update(software_update_install_state="installing")
+        cmd.process_response(self.profile_list, self.dep_enrollment_session, self.mbu)
+        self.enrolled_device.refresh_from_db()
+        self.assertIsNotNone(self.enrolled_device.profiles_updated_at)
+        self.assertEqual(self.enrolled_device.software_update_install_state, "installing")
 
     def test_process_acknowledged_response_do_not_collect_profiles(self):
         self.blueprint.collect_profiles = Blueprint.InventoryItemCollectionOption.NO

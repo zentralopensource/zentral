@@ -106,6 +106,7 @@ def update_inventory_tree(command, commit_enrolled_device=True):
 
     from zentral.contrib.mdm.commands.base import load_command  # circular dep with cmds that need to update the inv
 
+    update_fields = []
     for bp_attr, cmd_db_name, ts_attr in (
         (None, "DeviceInformation", "device_information_updated_at"),
         ("collect_apps", "InstalledApplicationList", "apps_updated_at"),
@@ -137,13 +138,15 @@ def update_inventory_tree(command, commit_enrolled_device=True):
         if latest_command:
             ms_tree.update(latest_command.get_inventory_partial_tree())
             setattr(enrolled_device, ts_attr, latest_command.result_time)
+            update_fields.append(ts_attr)
 
     commit_machine_snapshot_and_trigger_events(ms_tree)
 
     if commit_enrolled_device:
-        enrolled_device.save()
+        # a full save would write back the columns that a DDM status report updated in the meantime
+        enrolled_device.save(update_fields=update_fields + ["updated_at"])
 
-    return ms_tree
+    return ms_tree, update_fields
 
 
 def update_realm_tags(realm, request):

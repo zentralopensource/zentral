@@ -1079,8 +1079,16 @@ class EnrolledDevice(models.Model):
     bootstrap_token_required_for_kext_approval = models.BooleanField(null=True)
     # activation lock
     activation_lock_manageable = models.BooleanField(null=True)
+    # software update
+    software_update_install_state = models.CharField(max_length=32, null=True)
+    software_update_pending_os_version = models.CharField(max_length=64, null=True)
+    software_update_pending_build_version = models.CharField(max_length=32, null=True)
+    software_update_failure_count = models.IntegerField(null=True)
+    software_update_failure_reason = models.TextField(null=True)
+    software_update_failure_at = models.DateTimeField(null=True)
 
     # FileVault
+    filevault_enabled = models.BooleanField(null=True)
     filevault_config_uuid = models.UUIDField(null=True)
     filevault_escrow_key = models.TextField(null=True)
     filevault_prk = models.TextField(null=True)
@@ -1462,13 +1470,6 @@ class EnrolledDevice(models.Model):
         if self.bootstrap_token:
             return True
         return False
-
-    @property
-    def filevault_enabled(self):
-        try:
-            return self.security_info["FDE_Enabled"]
-        except (KeyError, TypeError):
-            pass
 
     @property
     def filevault_prk_escrowed(self):
