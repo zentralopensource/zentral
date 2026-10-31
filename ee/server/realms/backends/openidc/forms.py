@@ -24,13 +24,13 @@ class OpenIDConnectRealmForm(RealmForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.instance:
-            for attr in ("discovery_url", "client_id", "client_secret", "extra_scopes"):
-                val = self.instance.config.get(attr)
-                if val:
-                    if attr == "extra_scopes":
-                        val = ", ".join(val)
-                    self.fields[attr].initial = val
+        config = self.instance.get_backend_kwargs() if self.instance.backend else {}
+        for attr in ("discovery_url", "client_id", "client_secret", "extra_scopes"):
+            val = config.get(attr)
+            if val:
+                if attr == "extra_scopes":
+                    val = ", ".join(val)
+                self.fields[attr].initial = val
 
     def clean_extra_scopes(self):
         extra_scopes = self.cleaned_data.get("extra_scopes")

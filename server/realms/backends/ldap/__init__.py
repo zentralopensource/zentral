@@ -43,27 +43,35 @@ def get_ldap_connection(host):
 class LDAPRealmBackend(BaseBackend):
     name = "LDAP"
     can_get_password = True
+    kwargs_keys = (
+        "host",
+        "bind_dn",
+        "bind_password",
+        "users_base_dn",
+    )
+    encrypted_kwargs_paths = (
+        ["bind_password"],
+    )
 
-    def __init__(self, instance):
-        super().__init__(instance)
+    def __init__(self, instance, load=True):
+        super().__init__(instance, load)
         self._conn = None
 
     def extra_attributes_for_display(self):
-        config = self.instance.config
         return [
-            ("Host", config.get("host"), False),
-            ("Bind DN", config.get("bind_dn"), False),
-            ("Bind password", config.get("bind_password"), True),
-            ("Users base DN", config.get("users_base_dn"), False),
+            ("Host", self.host, False),
+            ("Bind DN", self.bind_dn, False),
+            ("Bind password", self.bind_password, True),
+            ("Users base DN", self.users_base_dn, False),
         ]
 
     def _get_ldap_conn(self):
         if self._conn is None:
-            self._conn = get_ldap_connection(self.instance.config.get("host"))
+            self._conn = get_ldap_connection(self.host)
         return self._conn
 
     def _get_user_dn(self, username):
-        return "uid={},{}".format(ldap.dn.escape_dn_chars(username), self.instance.config.get("users_base_dn"))
+        return "uid={},{}".format(ldap.dn.escape_dn_chars(username), self.users_base_dn)
 
     def authenticate(self, username, password):
         conn = self._get_ldap_conn()
@@ -77,7 +85,7 @@ class LDAPRealmBackend(BaseBackend):
 
     def get_user_info(self, username):
         conn = self._get_ldap_conn()
-        conn.simple_bind_s(self.instance.config.get("bind_dn"), self.instance.config.get("bind_password"))
+        conn.simple_bind_s(self.bind_dn, self.bind_password)
         user_dn = self._get_user_dn(username)
         results = conn.search_s(user_dn, ldap.SCOPE_BASE, attrlist=["*"])
         return cleanup_value(results[0][1])
