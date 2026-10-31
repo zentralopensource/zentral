@@ -21,6 +21,8 @@ Your IdP provides user information to authenticate and log in to Zentral with SS
 
 ### Realm Setup
 
+Only a superuser logged in without a Realm can create or change a Realm.
+
 It is good practice to separate users that will have access to the Zentral Web Console from users that will only “consume” the services (enrollment in MDM, the User Portal). You would end up with end-users that could log in to Zentral otherwise, whether or not they have permissions to change or view any settings. To do this, you can, and should, configure multiple Realms: One for Zentral Administration, one for MDM Enrollment and the User Portal.
 
 #### SAML Realms 

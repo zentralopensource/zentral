@@ -7,7 +7,8 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import api_base_url
-from zentral.utils.views import LocalUserRequiredMixin, RequestUserFormMixin, UserPaginationListView
+from zentral.utils.views import (LocalSuperuserRequiredMixin, LocalUserRequiredMixin, RequestUserFormMixin,
+                                 UserPaginationListView)
 from .backends.registry import backend_classes
 from .forms import (AddRealmUserToGroupForm, RealmGroupMappingForm, RealmGroupSearchForm, RealmUserSearchForm,
                     RoleMappingForm)
@@ -39,7 +40,7 @@ class RealmListView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["realms_count"] = ctx["object_list"].count()
         create_links = []
-        if not self.request.realm_authentication_session.is_remote and self.request.user.has_perm("realms.add_realm"):
+        if self.request.user.is_superuser and not self.request.realm_authentication_session.is_remote:
             create_links.extend(
                 {"url": reverse("realms:create", args=(slug,)),
                  "anchor_text": backend_class.name}
@@ -49,22 +50,19 @@ class RealmListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView):
-    permission_required = "realms.add_realm"
+class CreateRealmView(LocalSuperuserRequiredMixin, CreateView):
     template_name = "realms/realm_form.html"
 
-    def dispatch(self, request, *args, **kwargs):
-        self.backend = kwargs.pop("backend")
-        if self.backend not in backend_classes:
-            raise Http404
-        return super().dispatch(request, *args, **kwargs)
-
     def get_form_class(self):
-        return backend_classes.get(self.backend).get_form_class()
+        try:
+            backend_class = backend_classes[self.kwargs["backend"]]
+        except KeyError:
+            raise Http404
+        return backend_class.get_form_class()
 
     def form_valid(self, form):
         self.object = form.save(commit=False)
-        self.object.backend = self.backend
+        self.object.backend = self.kwargs["backend"]
         self.object.save()
         return redirect(self.object)
 
@@ -112,8 +110,7 @@ class RealmView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, UpdateView):
-    permission_required = "realms.change_realm"
+class UpdateRealmView(LocalSuperuserRequiredMixin, UpdateView):
     model = Realm
     fields = ("name",)
 

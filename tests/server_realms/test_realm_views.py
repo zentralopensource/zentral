@@ -55,6 +55,14 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def _get_url_namespace(self):
         return "realms"
 
+    def _login_superuser(self):
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+        self.login()
+
+    def _login_admin(self):
+        self.login_with_policy('permit (principal, action in Action::"GlobalAdminActions", resource);')
+
     # index
 
     def test_index_redirect(self):
@@ -66,7 +74,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_index_zero_links(self):
-        self.login("realms.add_realm")
+        self.login("realms.add_realmgroup")
         response = self.client.get(reverse("realms:index"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/index.html")
@@ -109,12 +117,22 @@ class RealmViewsTestCase(TestCase, LoginCase):
         for slug in backend_classes.keys():
             self.assertNotContains(response, reverse("realms:create", args=(slug,)))
 
+    def test_realm_list_admin_no_create_links(self):
+        self._login_admin()
+        realm = force_realm()
+        response = self.client.get(reverse("realms:list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, realm.name)
+        self.assertNotContains(response, reverse("realms:update", args=(realm.pk,)))
+        for slug in backend_classes.keys():
+            self.assertNotContains(response, reverse("realms:create", args=(slug,)))
+
     @patch("realms.middlewares.get_session")
-    def test_realm_list_remote_perms_no_create_links(self, get_session):
+    def test_realm_list_remote_session_superuser_no_create_links(self, get_session):
         realm, realm_user = force_realm_user()
         ras = RealmAuthenticationSession.objects.create(realm=realm, user=realm_user, callback="")
         get_session.return_value = ras
-        self.login("realms.view_realm", "realms.add_realm")
+        self._login_superuser()
         response = self.client.get(reverse("realms:list"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_list.html")
@@ -124,8 +142,8 @@ class RealmViewsTestCase(TestCase, LoginCase):
         for slug in backend_classes.keys():
             self.assertNotContains(response, reverse("realms:create", args=(slug,)))
 
-    def test_realm_list_local_perms_create_links(self):
-        self.login("realms.view_realm", "realms.add_realm")
+    def test_realm_list_local_superuser_create_links(self):
+        self._login_superuser()
         realm = force_realm()
         response = self.client.get(reverse("realms:list"))
         self.assertEqual(response.status_code, 200)
@@ -135,32 +153,49 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(slugs, ['ldap', 'openidc', 'saml'])
         for slug in backend_classes.keys():
             self.assertContains(response, reverse("realms:create", args=(slug,)))
+        self.assertContains(response, reverse("realms:update", args=(realm.pk,)))
 
     # create realm
 
     def test_create_realm_redirect(self):
         self.login_redirect("create", "ldap")
 
+    def test_create_realm_unknown_backend_redirect(self):
+        # the login comes first, and an unknown backend gives the same answer as a known one
+        self.login_redirect("create", "yolo")
+
+    def test_create_realm_unknown_backend_permission_denied(self):
+        self._login_admin()
+        response = self.client.get(reverse("realms:create", args=("yolo",)))
+        self.assertEqual(response.status_code, 403)
+
     def test_create_realm_permission_denied(self):
         self.login()
         response = self.client.get(reverse("realms:create", args=("openidc",)))
         self.assertEqual(response.status_code, 403)
 
-    def test_create_realm_remote_user_permission_denied(self):
-        self.ui_user.is_remote = True
-        self.ui_user.save()
-        self.login("realms.add_realm")
+    def test_create_realm_admin_permission_denied(self):
+        self._login_admin()
+        response = self.client.get(reverse("realms:create", args=("openidc",)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("realms.middlewares.get_session")
+    def test_create_realm_remote_session_superuser_permission_denied(self, get_session):
+        realm, realm_user = force_realm_user()
+        ras = RealmAuthenticationSession.objects.create(realm=realm, user=realm_user, callback="")
+        get_session.return_value = ras
+        self._login_superuser()
         response = self.client.get(reverse("realms:create", args=("saml",)))
         self.assertEqual(response.status_code, 403)
 
     def test_create_realm_get(self):
-        self.login("realms.add_realm")
+        self._login_superuser()
         response = self.client.get(reverse("realms:create", args=("saml",)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_form.html")
 
     def test_create_realm_get_unknown_backend(self):
-        self.login("realms.add_realm")
+        self._login_superuser()
         response = self.client.get(reverse("realms:create", args=("yolo",)))
         self.assertEqual(response.status_code, 404)
 
@@ -168,12 +203,11 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_create_ldap_realm_post(self, get_ldap_connection):
         conn = Mock()
         get_ldap_connection.return_value = conn
-        self.login("realms.change_realm", "realms.view_realm")
         payload = {
             k: get_random_string(12)
             for k in ("name", "username_claim", "host", "bind_dn", "bind_password", "users_base_dn")
         }
-        self.login("realms.add_realm", "realms.view_realm")
+        self._login_superuser()
         response = self.client.post(reverse("realms:create", args=("ldap",)), payload, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_detail.html")
@@ -187,7 +221,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         conn.simple_bind_s.assert_called_once_with(payload["bind_dn"], payload["bind_password"])
 
     def test_create_openidc_realm_post(self):
-        self.login("realms.change_realm", "realms.view_realm")
         payload = {
             "name": get_random_string(12),
             "username_claim": get_random_string(12),
@@ -197,7 +230,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
             "client_secret": "5678",
             "extra_scopes": "un,deux",
         }
-        self.login("realms.add_realm", "realms.view_realm")
+        self._login_superuser()
         response = self.client.post(reverse("realms:create", args=("openidc",)), payload, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_detail.html")
@@ -211,7 +244,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(realm.config["extra_scopes"], ["un", "deux"])
 
     def test_create_saml_realm_post_could_not_read_saml_metadata_file(self):
-        self.login("realms.change_realm", "realms.view_realm")
         metadata_file = BytesIO(b"\xe9")
         metadata_file.name = "yolo.metadata"
         payload = {
@@ -222,7 +254,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
             "enabled_for_login": "on",
             "allow_idp_initiated_login": "on"
         }
-        self.login("realms.add_realm", "realms.view_realm")
+        self._login_superuser()
         response = self.client.post(reverse("realms:create", args=("saml",)), payload, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_form.html")
@@ -231,7 +263,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
     @patch("realms.backends.saml.forms.Saml2Client.prepare_for_authenticate")
     @patch("realms.backends.saml.forms.Saml2Config.load")
     def test_create_saml_realm_post(self, load, prepare_for_authenticate):
-        self.login("realms.change_realm", "realms.view_realm")
         metadata_file = BytesIO(b"yolo")
         metadata_file.name = "yolo.metadata"
         payload = {
@@ -242,7 +273,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
             "enabled_for_login": "on",
             "allow_idp_initiated_login": "on"
         }
-        self.login("realms.add_realm", "realms.view_realm")
+        self._login_superuser()
         response = self.client.post(reverse("realms:create", args=("saml",)), payload, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_detail.html")
@@ -256,7 +287,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
     @patch("realms.backends.saml.forms.Saml2Client.prepare_for_authenticate")
     @patch("realms.backends.saml.forms.Saml2Config.load")
     def test_create_saml_realm_post_with_error(self, load, prepare_for_authenticate):
-        self.login("realms.change_realm", "realms.view_realm")
         metadata_file = BytesIO(b"yolo")
         metadata_file.name = "yolo.metadata"
         payload = {
@@ -265,7 +295,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
             "login_session_expiry": 1200,
             "allow_idp_initiated_login": "on"
         }
-        self.login("realms.add_realm", "realms.view_realm")
+        self._login_superuser()
         response = self.client.post(reverse("realms:create", args=("saml",)), payload, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_form.html")
@@ -315,6 +345,14 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "realms/realm_detail.html")
         self.assertNotContains(response, reverse("realms:create_realm_group_mapping"))
         self.assertNotContains(response, reverse("realms:create_role_mapping"))
+        self.assertNotContains(response, reverse("realms:update", args=(realm.pk,)))
+
+    def test_view_realm_superuser_update_link(self):
+        realm = force_realm()
+        self._login_superuser()
+        response = self.client.get(reverse("realms:view", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("realms:update", args=(realm.pk,)))
 
     def test_view_realm_all_links(self):
         realm = force_realm()
@@ -349,17 +387,24 @@ class RealmViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("realms:update", args=(realm.pk,)))
         self.assertEqual(response.status_code, 403)
 
-    def test_update_realm_remote_user_permission_denied(self):
+    def test_update_realm_admin_permission_denied(self):
         realm = force_realm()
-        self.ui_user.is_remote = True
-        self.ui_user.save()
-        self.login("realms.change_realm")
+        self._login_admin()
+        response = self.client.get(reverse("realms:update", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    @patch("realms.middlewares.get_session")
+    def test_update_realm_remote_session_superuser_permission_denied(self, get_session):
+        realm, realm_user = force_realm_user()
+        ras = RealmAuthenticationSession.objects.create(realm=realm, user=realm_user, callback="")
+        get_session.return_value = ras
+        self._login_superuser()
         response = self.client.get(reverse("realms:update", args=(realm.pk,)))
         self.assertEqual(response.status_code, 403)
 
     def test_update_realm_get(self):
         realm = force_realm()
-        self.login("realms.change_realm")
+        self._login_superuser()
         response = self.client.get(reverse("realms:update", args=(realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realm_form.html")
@@ -369,7 +414,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         conn = Mock()
         get_ldap_connection.return_value = conn
         realm = force_realm()
-        self.login("realms.change_realm", "realms.view_realm")
+        self._login_superuser()
         payload = {
             k: get_random_string(12)
             for k in ("name", "host", "bind_dn", "bind_password", "users_base_dn")
@@ -391,7 +436,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_update_realm_post_connection_ldap_error(self, get_ldap_connection):
         get_ldap_connection.side_effect = LDAPError({"info": "Yolo"})
         realm = force_realm()
-        self.login("realms.change_realm", "realms.view_realm")
+        self._login_superuser()
         payload = {
             k: get_random_string(12)
             for k in ("name", "host", "bind_dn", "bind_password", "users_base_dn")
@@ -406,7 +451,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_update_realm_post_connection_unknown_error(self, get_ldap_connection):
         get_ldap_connection.side_effect = Exception("Fomo")
         realm = force_realm()
-        self.login("realms.change_realm", "realms.view_realm")
+        self._login_superuser()
         payload = {
             k: get_random_string(12)
             for k in ("name", "host", "bind_dn", "bind_password", "users_base_dn")
@@ -423,7 +468,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         conn.simple_bind_s.side_effect = LDAPError({"desc": "Yolo"})
         get_ldap_connection.return_value = conn
         realm = force_realm()
-        self.login("realms.change_realm", "realms.view_realm")
+        self._login_superuser()
         payload = {
             k: get_random_string(12)
             for k in ("name", "host", "bind_dn", "bind_password", "users_base_dn")
@@ -440,7 +485,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         conn.simple_bind_s.side_effect = Exception("Fomo")
         get_ldap_connection.return_value = conn
         realm = force_realm()
-        self.login("realms.change_realm", "realms.view_realm")
+        self._login_superuser()
         payload = {
             k: get_random_string(12)
             for k in ("name", "host", "bind_dn", "bind_password", "users_base_dn")

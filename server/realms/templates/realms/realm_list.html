@@ -51,7 +51,7 @@
             {{ realm.backend }}
         </td>
         <td class="text-end py-0">
-            {% if not request.realm_authentication_session.is_remote and perms.realms.change_realm %}
+            {% if request.user.is_superuser and not request.realm_authentication_session.is_remote %}
                 {% url 'realms:update' realm.uuid as url %}
                 {% button 'UPDATE' url "Edit Realm" %}
             {% endif %}
