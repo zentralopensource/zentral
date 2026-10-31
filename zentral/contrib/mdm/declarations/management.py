@@ -3,15 +3,29 @@ import logging
 from .utils import get_blueprint_declaration_identifier
 
 
-__all__ = ["build_target_management_status_subscriptions"]
+__all__ = ["build_target_management_status_subscriptions", "get_target_status_items"]
 
 
 logger = logging.getLogger("zentral.contrib.mdm.declarations.management")
 
 
-# https://developer.apple.com/documentation/devicemanagement/managementstatussubscriptions
-# https://developer.apple.com/documentation/devicemanagement/status_reports
-def build_target_management_status_subscriptions(target):
+# status items supported by all clients
+DEFAULT_STATUS_ITEMS = (
+    "device.identifier.serial-number",
+    "device.identifier.udid",
+    "device.model.family",
+    "device.model.identifier",
+    "device.model.marketing-name",
+    "device.operating-system.build-version",
+    "device.operating-system.family",
+    "device.operating-system.marketing-name",
+    "device.operating-system.version",
+    "management.client-capabilities",
+    "management.declarations",
+)
+
+
+def get_target_status_items(target):
     status_items = []
     client_capabilities = target.client_capabilities
     # the client capabilities are stored as the device reported them, without any validation, so every
@@ -26,24 +40,16 @@ def build_target_management_status_subscriptions(target):
     elif client_capabilities is not None:
         logger.warning("Target %s: client capabilities are not an object", target)
     if not status_items:
-        # default status items supported by all clients
-        status_items = [
-            "device.identifier.serial-number",
-            "device.identifier.udid",
-            "device.model.family",
-            "device.model.identifier",
-            "device.model.marketing-name",
-            "device.operating-system.build-version",
-            "device.operating-system.family",
-            "device.operating-system.marketing-name",
-            "device.operating-system.version",
-            "management.client-capabilities",
-            "management.declarations",
-        ]
-    status_items.sort()
+        status_items = DEFAULT_STATUS_ITEMS
+    return sorted(status_items)
+
+
+# https://developer.apple.com/documentation/devicemanagement/managementstatussubscriptions
+# https://developer.apple.com/documentation/devicemanagement/status_reports
+def build_target_management_status_subscriptions(target):
     payload = {"StatusItems": []}
     h = hashlib.sha1()
-    for status_item in sorted(status_items):
+    for status_item in get_target_status_items(target):
         h.update(status_item.encode("utf-8"))
         payload["StatusItems"].append({"Name": status_item})
     return {
