@@ -454,6 +454,7 @@ class CheckinView(MDMView):
         endpoint = self.payload.get("Endpoint")
         event_payload = {"endpoint": endpoint}
         data = self.payload.get("Data")
+        json_data = None
         if data:
             json_data = json.loads(data)
             event_payload["data"] = json_data
@@ -467,6 +468,8 @@ class CheckinView(MDMView):
         elif endpoint == "declaration-items":
             response = self.target.declaration_items
         elif endpoint == "status":
+            if json_data is None:
+                self.abort("Missing status report", **event_payload)
             self.target.update_target_with_status_report(json_data)
             self.post_event("success", **event_payload)
             return HttpResponse(status=200)
