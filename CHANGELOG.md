@@ -378,7 +378,18 @@ The "Download Terraform config" buttons are gone from the Inventory, MDM, Monoli
 Use a Terraform `import` block with `terraform plan -generate-config-out=<file>` instead. The [Terraform provider](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs) imports each of its resources, and Terraform writes the configuration from the provider schema.
 
 
+#### 🧨 SCIM does not activate a local user again, and does not deactivate a superuser
+
+A local user that SCIM deactivates stays deactivated. Before, SCIM could activate the user again, and its password worked again. Only an operator activates the user again, in the database.
+
+An IdP deactivation does not reach a superuser. The users list shows the realm users of each user, and "SCIM inactive" next to a realm user that SCIM deactivated. The page of a user shows the SCIM status of its realm users, and the time of the last SCIM update. A superuser offboards another superuser in Zentral, with the steps in the SSO docs.
+
+
 ### Bug fixes
+
+SCIM does not write the username and the email of a local user, and does not update a superuser, now. SCIM updated each Zentral user that had the email or the username of the realm user: the username, the email and the active status, local users and superusers included. The password reset goes to the email, so a principal with the SCIM realm user permissions could take a local account. A SCIM write that gives an active remote user the email or the username of another Zentral user fails with a 409 error now, and not with a 500 error. A SCIM write that deactivates a remote user deactivates it, and does not write the conflicting email or username.
+
+Zentral keeps the time of the last SCIM write of each realm user now, and finds the SCIM realm users with it. The user portal refuses a realm user that SCIM deactivated, also when the IdP sent the user without an external ID. Before, Zentral found the SCIM realm users with the external ID only, and an inactive SCIM user without one could use the user portal. The `scim_managed` label of the `zentral_realm_users` metric uses the same rule. The upgrade sets the time for each realm user with an external ID. The other SCIM realm users get it at their next SCIM write.
 
 A deactivated user has no access now. A realm login refuses the user, an open realm session stops at the next request, and each PBAC decision refuses the user, a superuser included. Before, the realm login of a deactivated user succeeded and applied the role mappings, a realm session stayed open after the deactivation, and the decisions of the typed PBAC actions did not check the status of the user.
 

@@ -1161,6 +1161,23 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "direct")
         self.assertContains(response, "Zentral users (0)")
 
+    def test_realm_user_scim(self):
+        realm = force_realm(enabled_for_login=True)
+        realm.scim_enabled = True
+        realm.save()
+        _, user = force_realm_user(realm=realm)
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:user", args=(user.pk,)))
+        self.assertContains(response, "<td>SCIM active?</td>\n        <td>yes</td>", html=False)
+        self.assertContains(response, "minutes ago</span>")
+
+    def test_realm_user_no_scim(self):
+        _, user = force_realm_user()
+        self.login("realms.view_realmuser")
+        response = self.client.get(reverse("realms:user", args=(user.pk,)))
+        self.assertContains(response, "<td>SCIM active?</td>\n        <td>-</td>", html=False)
+        self.assertNotContains(response, "ago</span>")
+
     def test_realm_user_no_group_realm_links(self):
         group = force_realm_group()
         _, user = force_realm_user(realm=group.realm, group=group)

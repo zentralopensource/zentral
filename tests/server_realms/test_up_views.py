@@ -3,6 +3,7 @@ from django.conf import settings
 from django.http import HttpRequest
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from realms.backends.views import finalize_session
 from realms.models import RealmAuthenticationSession
 from .utils import force_realm, force_realm_user
@@ -74,7 +75,9 @@ class SantaSetupViewsTestCase(TestCase):
 
     def test_realm_user_inactive_redirect(self):
         _, realm_user = force_realm_user(realm=self.realm)
-        realm_user.scim_external_id = "yolo"
+        # SCIM wrote it, without an external ID
+        realm_user.scim_external_id = None
+        realm_user.scim_updated_at = timezone.now()
         realm_user.scim_active = False
         realm_user.save()
         self._login(realm_user)

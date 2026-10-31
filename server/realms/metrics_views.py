@@ -56,7 +56,7 @@ class MetricsView(BasePrometheusMetricsView):
         with connection.cursor() as cursor:
             cursor.execute(
                 "select r.name,"
-                "case when ru.scim_external_id is not null then TRUE else FALSE end,"
+                "ru.scim_updated_at is not null,"
                 "ru.scim_active,"
                 "count(*) "
                 "from realms_realmuser ru "

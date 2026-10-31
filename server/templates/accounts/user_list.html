@@ -28,6 +28,9 @@
         <th>Username</th>
         <th>Email</th>
         <th style="width:10%">Remote?</th>
+        {% if perms.realms.view_realmuser %}
+        <th>Realm users</th>
+        {% endif %}
         {% if perms.accounts.view_apitoken %}
         <th style="width:10%">API token</th>
         {% endif %}
@@ -46,6 +49,16 @@
         </td>
         <td>{{ managed_user.email }}</td>
         <td>{% if managed_user.is_remote %}yes{% endif %}</td>
+        {% if perms.realms.view_realmuser %}
+        <td>
+            {% for realm_user in managed_user.realm_users %}
+            <div>
+                <a href="{{ realm_user.get_absolute_url }}">{{ realm_user.realm }} / {{ realm_user.username }}</a>
+                {% if realm_user.scim_updated_at and not realm_user.scim_active %}SCIM inactive{% endif %}
+            </div>
+            {% endfor %}
+        </td>
+        {% endif %}
         {% if perms.accounts.view_apitoken %}
         <td>{{ managed_user.apitoken_set.exists|yesno }}</td>
         {% endif %}

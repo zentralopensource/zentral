@@ -10,8 +10,11 @@ from accounts.password_validation import PasswordNotAlreadyUsedValidator
 from django.contrib.auth.models import Group
 from django.core import mail
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from realms.models import Realm, RealmUser
@@ -296,7 +299,116 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
             self.assertContains(response, text)
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
 
+    def _force_realm_user(self, realm=None, username=None, email=None, scim_active=None):
+        # scim_active None: a realm user that a login made
+        return RealmUser.objects.create(
+            realm=realm or self.realm,
+            scim_active=bool(scim_active),
+            scim_updated_at=None if scim_active is None else timezone.now(),
+            username=username or get_random_string(12),
+            email=email or "{}@zentral.io".format(get_random_string(12)),
+        )
+
+    def test_user_list_realm_users(self):
+        # the email matches, SCIM inactive
+        superuser_realm_user = self._force_realm_user(email=self.superuser.email, scim_active=False)
+        # the username matches, SCIM active
+        remote_user_realm_user = self._force_realm_user(username=self.remote_user.username, scim_active=True)
+        # the email of one user and the username of another, in another realm: on both rows
+        other_realm = Realm.objects.create(
+            name=get_random_string(12),
+            enabled_for_login=True,
+            backend="ldap",
+            username_claim="username",
+            email_claim="email",
+        )
+        conflict_realm_user = self._force_realm_user(realm=other_realm, email=self.user.email,
+                                                     username=self.remote_user.username)
+        # realm not enabled for login
+        no_login_realm = Realm.objects.create(
+            name=get_random_string(12),
+            enabled_for_login=False,
+            backend="ldap",
+            username_claim="username",
+            email_claim="email",
+        )
+        self._force_realm_user(realm=no_login_realm, email=self.user.email, scim_active=False)
+        # self.ui_user matches self.realm_user, made by a login
+        self.login("accounts.view_user", "realms.view_realmuser")
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("accounts:users"))
+        realm_user_queries = [q["sql"] for q in queries.captured_queries if '"realms_realmuser"' in q["sql"]]
+        self.assertEqual(len(realm_user_queries), 1)
+        self.assertNotIn('"accounts_user"', realm_user_queries[0])
+        self.assertEqual(
+            {u.pk: {ru.pk for ru in u.realm_users} for u in response.context["users"]},
+            {self.ui_user.pk: {self.realm_user.pk},
+             self.superuser.pk: {superuser_realm_user.pk},
+             self.user.pk: {conflict_realm_user.pk},
+             self.remote_user.pk: {remote_user_realm_user.pk, conflict_realm_user.pk}}
+        )
+        self.assertContains(response, "Realm users", count=1)
+        # only the realm user that SCIM deactivated
+        self.assertContains(response, "SCIM inactive", count=1)
+        self.assertNotContains(response, "SCIM active")
+        self.assertContains(response, superuser_realm_user.get_absolute_url(), count=1)
+        self.assertContains(response, conflict_realm_user.get_absolute_url(), count=2)
+
+    def test_user_list_realm_users_without_the_realm_user_permission(self):
+        self._force_realm_user(email=self.superuser.email, scim_active=False)
+        self.login("accounts.view_user")
+        response = self.client.get(reverse("accounts:users"))
+        self.assertFalse(any(hasattr(u, "realm_users") for u in response.context["users"]))
+        self.assertNotContains(response, "Realm users")
+        self.assertNotContains(response, "SCIM inactive")
+
     # user detail — policies that reference the user
+
+    def test_view_user_realm_users(self):
+        scim_realm_user = self._force_realm_user(email=self.user.email, scim_active=False)
+        no_login_realm = Realm.objects.create(
+            name=get_random_string(12),
+            enabled_for_login=False,
+            backend="ldap",
+            username_claim="username",
+            email_claim="email",
+        )
+        self._force_realm_user(realm=no_login_realm, email=self.user.email, scim_active=False)
+        self.login("accounts.view_user", "realms.view_realmuser")
+        response = self.client.get(reverse("accounts:user", args=(self.user.pk,)))
+        self.assertEqual(response.context["realm_users"], [scim_realm_user])
+        self.assertContains(response, "Realm user (1)")
+        self.assertContains(response, "SCIM active?")
+        self.assertContains(response, "Last SCIM update")
+        self.assertContains(response, scim_realm_user.get_absolute_url())
+        self.assertContains(response, "<td>no</td>")
+        self.assertContains(response, "0\xa0minutes ago")
+        self.assertNotContains(response, "<td>-</td>")
+        # a realm user that a login made
+        response = self.client.get(reverse("accounts:user", args=(self.ui_user.pk,)))
+        self.assertEqual(response.context["realm_users"], [self.realm_user])
+        self.assertContains(response, self.realm_user.get_absolute_url())
+        self.assertContains(response, "<td>-</td>", count=2)
+        self.assertNotContains(response, "ago</span>")
+        # no realm user
+        response = self.client.get(reverse("accounts:user", args=(self.superuser.pk,)))
+        self.assertEqual(response.context["realm_users"], [])
+        self.assertContains(response, "Realm users (0)")
+        self.assertNotContains(response, "SCIM active?")
+
+    def test_view_user_realm_users_service_account(self):
+        self.login("accounts.view_user", "realms.view_realmuser")
+        response = self.client.get(reverse("accounts:user", args=(self.service_account.pk,)))
+        self.assertNotIn("realm_users", response.context)
+        self.assertNotContains(response, "Realm user")
+
+    def test_view_user_realm_users_without_the_realm_user_permission(self):
+        scim_realm_user = self._force_realm_user(email=self.user.email, scim_active=False)
+        self.login("accounts.view_user")
+        response = self.client.get(reverse("accounts:user", args=(self.user.pk,)))
+        self.assertNotIn("realm_users", response.context)
+        self.assertNotContains(response, "Realm user")
+        self.assertNotContains(response, scim_realm_user.get_absolute_url())
 
     def test_view_user_lists_policies_referencing_user(self):
         from accounts.models import Policy

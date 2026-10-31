@@ -53,6 +53,38 @@ Realm Groups organize users into groups for managing access and permissions. The
 
 Note: Do not mix Realm Group mappings and SCIM. Use one method based on your IdP's capabilities.
 
+### SCIM and Zentral users
+
+When the Realm is enabled for login, SCIM also updates the Zentral user that has the email or the username of the Realm User. What SCIM writes depends on the Zentral user:
+
+| Zentral user | Username and email | First name and last name | Deactivate | Activate again |
+|---|---|---|---|---|
+| Remote user | Yes | Yes | Yes | Yes |
+| Local user | No | Yes | Yes | No |
+| Superuser | No | No | No | No |
+
+* If another Zentral user has the new username or email of a remote user, SCIM refuses the write with a 409 error. If the write also deactivates the remote user, SCIM deactivates it and keeps the old username or email, on the Zentral user and on the Realm User.
+* SCIM does not write an empty username or email on a remote user.
+* The username and the email of a local user are credentials, and an activation would make the password of the user work again. Only an operator can activate a local user again.
+* A deactivated user cannot log in, and loses all access immediately.
+
+To offboard a superuser:
+
+1. If the user is the last superuser, make a new superuser.
+2. As another superuser, remove the superuser flag of the user.
+3. Delete the user. The IdP does not send the deactivation again after you remove the flag, so do not wait for SCIM.
+
+If you can view the Realm Users, these pages show their SCIM status:
+
+| Page | What it shows |
+|---|---|
+| Users list | For each user, the Realm Users that have its email or its username, on the Realms enabled for login, with "SCIM inactive" next to a Realm User that SCIM deactivated. Use it to find a superuser that the IdP deactivated. |
+| User page | The same Realm Users, with "SCIM active?" and "Last SCIM update". |
+| Realm User page | "SCIM active?" and "Last SCIM update". |
+
+"Last SCIM update" is "-" if SCIM never wrote the Realm User. The IdP does not always send a user again when nothing changes, so an old time does not always mean that SCIM stopped.
+
+
 ### Create a Realm Group
 
 1. Select "Groups" from the platform settings menu in the top right corner.  

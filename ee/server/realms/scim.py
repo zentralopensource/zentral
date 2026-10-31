@@ -1,6 +1,9 @@
 import logging
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
+from accounts.models import User
 from .models import realm_group_members_updated, RealmEmail, RealmGroup, RealmUser, RealmUserGroupMembership
 
 
@@ -226,21 +229,51 @@ class SCIMUser(serializers.Serializer):
                 )
         return value
 
-    def update_user(self, user):
-        # with SCIM, we update all the attributes of the matching user,
-        # even if it is not a remote user.
+    def update_user(self, user, realm_user_values=None):
+        if user.is_superuser:
+            # the IdP would control the account: a superuser stays as it is until a superuser removes the flag
+            logger.warning("Superuser %s not updated with realm user %s", user.pk, self.resource.pk)
+            return
+        attrs = [("first_name", "first_name"),
+                 ("last_name", "last_name")]
+        if user.is_remote:
+            attrs.append(("is_active", "scim_active"))
+            # the username and the email of a local user are credentials: a realm login matches on them,
+            # and the password reset goes to the email
+            for u_attr, scim_attr in (("email", "email"), ("username", "userName")):
+                val = getattr(self.resource, u_attr)
+                if not val:
+                    # a realm login refuses an empty value: the user keeps its own
+                    continue
+                if getattr(user, u_attr) != val and User.objects.exclude(pk=user.pk).filter(**{u_attr: val}).exists():
+                    if self.resource.scim_active:
+                        raise SCIMUniquenessException(detail=f"A Zentral user with this {scim_attr} already exists.")
+                    # a deactivation must reach the user. The realm user keeps its old value too: with the
+                    # conflicting value, it would match two users, and no later write would reach this one
+                    logger.warning("User %s %s not updated with realm user %s: conflict",
+                                   user.pk, u_attr, self.resource.pk)
+                    if realm_user_values is not None:
+                        setattr(self.resource, u_attr, realm_user_values[u_attr])
+                        self.resource.save(update_fields=[u_attr])
+                    continue
+                attrs.append((u_attr, u_attr))
+        elif not self.resource.scim_active:
+            # the IdP can deactivate a local user, not activate it: the password of a local user
+            # is a login outside of the IdP, and only the operator turns it back on
+            attrs.append(("is_active", "scim_active"))
         user_updated = False
-        for u_attr, ru_attr in (("email", "email"),
-                                ("username", "username"),
-                                ("first_name", "first_name"),
-                                ("last_name", "last_name"),
-                                ("is_active", "scim_active")):
+        for u_attr, ru_attr in attrs:
             val = getattr(self.resource, ru_attr)
             if getattr(user, u_attr) != val:
                 setattr(user, u_attr, val)
                 user_updated = True
         if user_updated:
-            user.save()
+            try:
+                with transaction.atomic():
+                    user.save()
+            except IntegrityError:
+                # another write gave the email or the username to a user after the checks above
+                raise SCIMUniquenessException(detail="A Zentral user with this email or userName already exists.")
             logger.info("User %s updated with realm user %s", user.pk, self.resource.pk)
 
     def save(self):
@@ -248,6 +281,7 @@ class SCIMUser(serializers.Serializer):
             realm=self.realm,
             scim_external_id=self.validated_data.get("externalId"),
             scim_active=self.validated_data["active"],
+            scim_updated_at=timezone.now(),
             username=self.validated_data["userName"],
         )
         name = self.validated_data.get("name")
@@ -288,6 +322,7 @@ class SCIMUser(serializers.Serializer):
     def update(self):
         # get the account user to update before updating the realm user
         user = self.resource.get_user_for_update()
+        realm_user_values = {"email": self.resource.email, "username": self.resource.username}
 
         # key attributes
         self.resource.username = self.validated_data["userName"]
@@ -295,6 +330,7 @@ class SCIMUser(serializers.Serializer):
         if external_id:
             self.resource.scim_external_id = external_id
         self.resource.scim_active = self.validated_data["active"]
+        self.resource.scim_updated_at = timezone.now()
 
         # name
         self.resource.full_name = self.validated_data.get("displayName") or ""
@@ -340,5 +376,5 @@ class SCIMUser(serializers.Serializer):
 
         # update matching user
         if user:
-            self.update_user(user)
+            self.update_user(user, realm_user_values)
         return self.resource

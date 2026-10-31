@@ -16,6 +16,7 @@ from accounts.forms import (
 )
 from accounts.models import Policy, User
 from pbac.entities import Principal
+from realms.models import get_matching_realm_users
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import CreateViewWithAudit, UpdateViewWithAudit
 
@@ -28,8 +29,13 @@ class UsersView(PermissionRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["users"] = User.objects.filter(is_service_account=False)
-        ctx["user_count"] = ctx["users"].count()
+        users = list(User.objects.filter(is_service_account=False))
+        if self.request.user.has_perm("realms.view_realmuser"):
+            matching_realm_users = get_matching_realm_users(users)
+            for user in users:
+                user.realm_users = matching_realm_users[user.pk]
+        ctx["users"] = users
+        ctx["user_count"] = len(users)
         ctx["service_accounts"] = User.objects.filter(is_service_account=True)
         ctx["service_account_count"] = ctx["service_accounts"].count()
         return ctx
@@ -104,6 +110,8 @@ class UserView(PermissionRequiredMixin, DetailView):
         policies = Policy.objects.referencing_user(self.object.pk)
         ctx["policies"] = policies
         ctx["policy_count"] = policies.count()
+        if not self.object.is_service_account and self.request.user.has_perm("realms.view_realmuser"):
+            ctx["realm_users"] = get_matching_realm_users([self.object])[self.object.pk]
         return ctx
 
 

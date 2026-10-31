@@ -127,4 +127,31 @@
     </tbody>
     </table>
 </div>
+
+{% if realm_users is not None %}
+<h3>Realm user{{ realm_users|length|pluralize }} ({{ realm_users|length }})</h3>
+{% if realm_users %}
+<table class="table table-striped align-middle table-hover">
+  <thead>
+    <th>Realm user</th>
+    <th>SCIM active?</th>
+    <th>Last SCIM update</th>
+  </thead>
+  <tbody>
+    {% for realm_user in realm_users %}
+    <tr>
+      <td><a href="{{ realm_user.get_absolute_url }}">{{ realm_user.realm }} / {{ realm_user.username }}</a></td>
+      {% if realm_user.scim_updated_at %}
+      <td>{{ realm_user.scim_active|yesno }}</td>
+      <td><span title="{{ realm_user.scim_updated_at|date:'DATETIME_FORMAT' }}">{{ realm_user.scim_updated_at|timesince }} ago</span></td>
+      {% else %}
+      <td>-</td>
+      <td>-</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endif %}
 {% endblock %}

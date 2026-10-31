@@ -61,6 +61,20 @@
         <td>Custom attr. 2</td>
         <td>{{ object.custom_attr_2|default:"-" }}</td>
       </tr>
+      <tr>
+        <td>SCIM active?</td>
+        <td>{% if object.scim_updated_at %}{{ object.scim_active|yesno }}{% else %}-{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Last SCIM update</td>
+        <td>
+          {% if object.scim_updated_at %}
+          <span title="{{ object.scim_updated_at|date:'DATETIME_FORMAT' }}">{{ object.scim_updated_at|timesince }} ago</span>
+          {% else %}
+          -
+          {% endif %}
+        </td>
+      </tr>
       {% with object.groups_with_types as groups_with_types %}
       <tr>
         <td>

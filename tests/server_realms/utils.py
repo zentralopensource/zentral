@@ -2,6 +2,7 @@ import uuid
 
 from accounts.models import User
 from django.contrib.auth.models import Group
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 from realms.models import (
     Realm,
@@ -124,6 +125,7 @@ def force_realm_user(
         email=email,
         scim_external_id=str(uuid.uuid4()).replace("-", "")[:10] if realm.scim_enabled else None,
         scim_active=realm.scim_enabled,
+        scim_updated_at=timezone.now() if realm.scim_enabled else None,
     )
     for idx in range(email_count):
         RealmEmail.objects.create(user=realm_user,
@@ -173,7 +175,7 @@ def force_role_mapping(realm=None, group=None):
     )
 
 
-def force_user(username=None, email=None, active=True, remote=False, service_account=False):
+def force_user(username=None, email=None, active=True, remote=False, service_account=False, superuser=False):
     if not username:
         username = get_random_string(12)
     if not email:
@@ -186,6 +188,7 @@ def force_user(username=None, email=None, active=True, remote=False, service_acc
         is_active=active,
         is_remote=remote,
         is_service_account=service_account,
+        is_superuser=superuser,
     )
     user.set_password(get_random_string(12))
     user.save()

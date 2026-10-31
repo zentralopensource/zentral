@@ -45,7 +45,7 @@ class UPLoginRequiredMixin:
         if realm_user.realm != self.realm:
             logger.debug("Existing realm authentication session on wrong realm")
             return
-        if realm_user.scim_external_id and not realm_user.scim_active:
+        if realm_user.scim_updated_at and not realm_user.scim_active:
             logger.error("Inactive realm user %s", realm_user)
             return
         self.realm_user = realm_user

@@ -166,6 +166,8 @@ class RealmUser(models.Model):
 
     scim_external_id = models.CharField(max_length=255, null=True)
     scim_active = models.BooleanField(default=False)
+    # the last SCIM create or update, also without a change. None: SCIM never wrote this realm user
+    scim_updated_at = models.DateTimeField(null=True)
 
     groups = models.ManyToManyField(RealmGroup, through='RealmUserGroupMembership')
 
@@ -279,6 +281,24 @@ class RealmUser(models.Model):
             if val:
                 d[attr] = val
         return d
+
+
+def get_matching_realm_users(users):
+    """The realm users that match each user, by user pk, with the rule of RealmUser.get_users."""
+    users_by_email = {}
+    users_by_username = {}
+    for user in users:
+        users_by_email.setdefault(user.email, []).append(user)
+        users_by_username.setdefault(user.username, []).append(user)
+    matching_realm_users = {user.pk: [] for user in users}
+    for realm_user in (RealmUser.objects.select_related("realm")
+                                        .filter(Q(email__in=users_by_email) | Q(username__in=users_by_username),
+                                                realm__enabled_for_login=True)
+                                        .order_by("realm__name", "username")):
+        matching_users = users_by_email.get(realm_user.email, []) + users_by_username.get(realm_user.username, [])
+        for user_pk in dict.fromkeys(user.pk for user in matching_users):
+            matching_realm_users[user_pk].append(realm_user)
+    return matching_realm_users
 
 
 class RealmUserGroupMembership(models.Model):
