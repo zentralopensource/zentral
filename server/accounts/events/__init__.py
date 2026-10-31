@@ -75,6 +75,20 @@ class RemoveUserFromGroupEvent(BaseZentralEvent):
 register_event_type(RemoveUserFromGroupEvent)
 
 
+class PasswordResetRequestEvent(BaseZentralEvent):
+    event_type = "zentral_password_reset_request"
+
+
+register_event_type(PasswordResetRequestEvent)
+
+
+class PasswordChangeEvent(BaseZentralEvent):
+    event_type = "zentral_password_change"
+
+
+register_event_type(PasswordChangeEvent)
+
+
 # signals callbacks
 
 
@@ -132,6 +146,16 @@ def post_verification_device_event(request, user, action, verification_device=No
     else:
         payload = {"verification_device": verification_device.serialize_for_event()}
     post_event(event_class, request, user, payload)
+
+
+def post_password_reset_request_event(request, email, users):
+    post_event(PasswordResetRequestEvent, request, None,
+               {"email": email,
+                "users": [{"pk": user.pk, "username": user.username} for user in users]})
+
+
+def post_password_change_event(request, user, password_reset):
+    post_event(PasswordChangeEvent, request, user, {"password_reset": password_reset})
 
 
 def post_group_membership_updates(request, added_groups, removed_groups, user=None):

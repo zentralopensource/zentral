@@ -16,6 +16,8 @@ A read-only HTTP API is available for the compliance checks. `/api/compliance_ch
 
 Zentral emits a `zentral_audit` event for each change in the console of a realm group, of the members of a realm group, of a realm group mapping and of a role mapping. Before, these changes left no trace, and a role mapping gives roles to each member of the realm group.
 
+Zentral emits a `zentral_password_reset_request` event for each password reset request, and a `zentral_password_change` event for each password change, with the old password or with a reset link. Before, only the logins left a trace, and a password reset link opens a local account.
+
 
 #### Documentation
 

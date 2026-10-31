@@ -5,10 +5,12 @@ import time
 from unittest.mock import patch
 
 import pyotp
+from accounts.events import PasswordChangeEvent, PasswordResetRequestEvent
 from accounts.forms import UpdateUserForm
 from accounts.models import User, UserTOTP, UserWebAuthn
 from accounts.password_validation import PasswordNotAlreadyUsedValidator
 from django.contrib.auth.models import Group
+from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import connection
@@ -17,6 +19,8 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from realms.models import Realm, RealmUser
 from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
@@ -1686,7 +1690,8 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         response = self.client.get(reverse("password_reset"))
         self.assertTemplateUsed(response, "registration/password_reset_form.html")
 
-    def test_password_reset_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_password_reset_post(self, post_event):
         self.assertEqual(len(mail.outbox), 0)
         response = self.client.post(reverse("password_reset"), {"email": self.ui_user.email}, follow=True)
         self.assertEqual(response.status_code, 200)
@@ -1695,6 +1700,47 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         email = mail.outbox[0]
         self.assertEqual(email.subject, "Password reset for Zentral")
         self.assertIn(f"Your username, just in case: {self.ui_user.username}", email.body)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, PasswordResetRequestEvent)
+        self.assertEqual(
+            event.payload,
+            {"email": self.ui_user.email,
+             "users": [{"pk": self.ui_user.pk, "username": self.ui_user.username}]}
+        )
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_password_reset_post_unknown_email(self, post_event):
+        email = "{}@zentral.io".format(get_random_string(12))
+        response = self.client.post(reverse("password_reset"), {"email": email}, follow=True)
+        self.assertTemplateUsed(response, "registration/password_reset_done.html")
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, PasswordResetRequestEvent)
+        self.assertEqual(event.payload, {"email": email, "users": []})
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_password_reset_confirm_post(self, post_event):
+        uid = urlsafe_base64_encode(force_bytes(self.ui_user.pk))
+        token = default_token_generator.make_token(self.ui_user)
+        response = self.client.get(reverse("password_reset_confirm", args=(uid, token)), follow=True)
+        self.assertTemplateUsed(response, "registration/password_reset_confirm.html")
+        response = self.client.post(response.redirect_chain[-1][0],
+                                    {"new_password1": "lskdjlkd1",
+                                     "new_password2": "lskdjlkd1"},
+                                    follow=True)
+        self.assertTemplateUsed(response, "registration/password_reset_complete.html")
+        self.ui_user.refresh_from_db()
+        self.assertTrue(self.ui_user.check_password("lskdjlkd1"))
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, PasswordChangeEvent)
+        self.assertEqual(
+            event.payload,
+            {"password_reset": True,
+             "user": {"pk": self.ui_user.pk, "username": self.ui_user.username}}
+        )
 
     # password change
 
@@ -1759,7 +1805,8 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertFormError(response.context["form"], "new_password2",
                              ["You have already used that password, try another."])
 
-    def test_password_change_post(self):
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_password_change_post(self, post_event):
         self.login()
         response = self.client.post(reverse("password_change"),
                                     {"old_password": self.ui_user_pwd,
@@ -1768,6 +1815,22 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
                                     follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "registration/password_change_done.html")
+        self.assertEqual(len(post_event.call_args_list), 1)
+        event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(event, PasswordChangeEvent)
+        self.assertEqual(event.payload, {"password_reset": False})
+        self.assertEqual(event.metadata.request.user.id, self.ui_user.pk)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_password_change_post_error_no_event(self, post_event):
+        self.login()
+        response = self.client.post(reverse("password_change"),
+                                    {"old_password": get_random_string(12),
+                                     "new_password1": "lskdjlkd1",
+                                     "new_password2": "lskdjlkd1"},
+                                    follow=True)
+        self.assertTemplateUsed(response, "registration/password_change_form.html")
+        post_event.assert_not_called()
 
     # PasswordNotAlreadyUsedValidator
 

@@ -491,7 +491,8 @@ class RegisterWebAuthnDeviceForm(forms.Form):
 class PasswordResetForm(DjangoPasswordResetForm):
     def save(self, *args, **kwargs):
         email = self.cleaned_data["email"]
-        for user in self.get_users(email):
+        self.users = list(self.get_users(email))
+        for user in self.users:
             password_reset_handler.send_password_reset(user, invitation=False)
 
 

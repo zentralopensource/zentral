@@ -109,6 +109,12 @@ Once the issuer exists, the workload exchanges its identity token at [`/api/acco
 
 Issuers can also be managed over the API, at `/api/accounts/token_issuers/oidc/`.
 
+## Password events
+
+Zentral emits a `zentral_password_reset_request` event for each password reset request. The event has the email of the request, and the users that get a reset link. The list is empty when no active local user with a password has this email.
+
+Zentral emits a `zentral_password_change` event for each password change. `password_reset` is `true` when the user sets the password with a reset link or with the link of an invitation, and `false` when the user changes it with the old password.
+
 ## HTTP API
 
 ### `/api/task_result/<uuid:task_id>/`
