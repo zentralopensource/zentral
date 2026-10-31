@@ -74,6 +74,7 @@ from zentral.contrib.mdm.models import (
 )
 from zentral.contrib.mdm.payloads import substitute_variables
 from zentral.utils.certificates import parse_dn
+from zentral.utils.json import remove_null_character
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 
 from .base import PostEventMixin
@@ -456,7 +457,8 @@ class CheckinView(MDMView):
         data = self.payload.get("Data")
         json_data = None
         if data:
-            json_data = json.loads(data)
+            # Postgres rejects the NUL characters in the text and jsonb values
+            json_data = remove_null_character(json.loads(data))
             event_payload["data"] = json_data
         blueprint = self.enrolled_device.blueprint
         if not blueprint:

@@ -1407,6 +1407,24 @@ class MDMViewsTestCase(TestCase):
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
 
+    def test_declarative_management_status_report_null_character(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        self._add_blueprint(session)
+        status_report = build_status_report()
+        status_report["StatusItems"]["device"]["operating-system"]["build-version"] = "22E\u0000261"
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps(status_report),
+            "Endpoint": "status",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        session.enrolled_device.refresh_from_db()
+        self.assertEqual(session.enrolled_device.build_version, "22E261")
+
     def test_declarative_management_status_report_missing_data(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
