@@ -54,3 +54,11 @@ class CheckRequestTestCase(TestCase):
         self.assertEqual(len(cm.records), 1)
         self.assertEqual(cm.records[0].getMessage(), f"Permission denied {pbac_request!r}")
         self.assertIs(cm.records[0].request, self.request)
+
+    def test_check_request_inactive_user_refused(self):
+        self.user.is_active = False
+        pbac_request = self._pbac_request("accounts.view_user")
+        with self.assertLogs("zentral.pbac.utils", level="ERROR") as cm, self.assertRaises(PermissionDenied):
+            check_request(self.request, pbac_request)
+        self.assertFalse(pbac_request.is_authorized)
+        self.assertEqual(len(cm.records), 1)

@@ -259,6 +259,14 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
     def test_user_list_login_redirect(self):
         self.login_redirect("users")
 
+    def test_user_list_realm_session_of_an_inactive_user(self):
+        self.login("accounts.view_user", realm_user=True)
+        response = self.client.get(reverse("accounts:users"))
+        self.assertEqual(response.status_code, 200)
+        self.ui_user.is_active = False
+        self.ui_user.save()
+        self.login_redirect("users")
+
     def test_user_list_permission_denied(self):
         self.login()
         self.permission_denied("users")

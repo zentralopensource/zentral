@@ -37,6 +37,8 @@ class RealmBackend(ZentralBaseBackend):
         with transaction.atomic():
             user = realm_user.get_user_for_update(raise_on_multiple=True)
             if user:
+                if not self.user_can_authenticate(user):
+                    return None
                 self.update_user(user, realm_user)
                 return user
             else:
@@ -64,12 +66,6 @@ class RealmBackend(ZentralBaseBackend):
                     else:
                         if user.is_service_account:
                             logger.error("Realm user %s match with service account %s", realm_user.pk, user.pk)
-                        else:
+                        elif self.user_can_authenticate(user):
                             self.update_user(user, realm_user)
                             return user
-
-    def get_user(self, user_id):
-        try:
-            return User.objects.get(pk=user_id)
-        except User.DoesNotExist:
-            return None

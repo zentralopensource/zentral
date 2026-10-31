@@ -434,6 +434,27 @@ class PBACGateTestCase(TestCase):
         with self.assertRaises(PermissionDenied):
             View().dispatch(request)
 
+    def test_drf_permission_refuses_an_inactive_user(self):
+        Policy.objects.create(name="Tests", source=format_policies(
+            f'permit (principal == User::"{self.user.pk}", action == Santa::Action::"forceCleanSync", resource);'
+        ))
+        policies_cache.clear()
+        test_case = self
+
+        class View:
+            def get_pbac_request(self, request):
+                return Request(Principal.from_user(request.user), test_case.action,
+                               Resource("Machine", "0123456789", INVENTORY),
+                               {"syncType": "CLEAN_ALL", "configurationName": "D",
+                                "configurationID": 1})
+
+        for is_active, is_authorized in ((True, True), (False, False)):
+            user = User.objects.get(pk=self.user.pk)
+            user.is_active = is_active
+            request = RequestFactory().get("/")
+            request.user = user
+            self.assertIs(PBACPermission().has_permission(request, View()), is_authorized)
+
     def test_drf_permission_refuses_a_preview(self):
         test_case = self
 

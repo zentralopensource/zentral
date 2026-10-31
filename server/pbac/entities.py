@@ -47,6 +47,19 @@ class Resource(Entity):
 
 
 class Principal(Entity):
+    def __init__(
+        self,
+        type: str,
+        id: str,
+        *,
+        is_active: bool,
+        parents: Optional[list[Entity]] = None,
+        attrs: Optional[dict] = None,
+    ) -> None:
+        super().__init__(type, id, parents=parents, attrs=attrs)
+        # not sent to Cedar: no policy can allow an inactive principal
+        self.is_active = is_active
+
     @classmethod
     def from_user(cls, user_obj) -> Self:
         # Cached in the user object.
@@ -65,6 +78,7 @@ class Principal(Entity):
             principal = cls(
                 entity_type,
                 str(user_obj.pk),
+                is_active=user_obj.is_active,
                 parents=[
                     Entity("Role", str(g.pk))
                     for g in user_obj.groups.all()
@@ -121,7 +135,9 @@ class Request:
         self.resource = resource
         self.context = context or {}
         self.unknown_context = unknown_context
-        if self.principal.is_superuser:
+        if not self.principal.is_active:
+            self.is_authorized = False
+        elif self.principal.is_superuser:
             self.is_authorized = True
         else:
             self.is_authorized = None

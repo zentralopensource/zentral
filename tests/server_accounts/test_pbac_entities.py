@@ -22,6 +22,12 @@ class PBACEntitiesTestCase(TestCase):
             email="{}@zentral.com".format(get_random_string(12)),
             is_service_account=True,
         )
+        cls.inactive_superuser = User.objects.create_user(
+            get_random_string(12),
+            "{}@zentral.com".format(get_random_string(12)),
+            is_superuser=True,
+            is_active=False,
+        )
 
     # Principal.from_user
 
@@ -44,6 +50,17 @@ class PBACEntitiesTestCase(TestCase):
         # schema declaration too (ServiceAccount has no attrs declared).
         p = Principal.from_user(self.service_account)
         self.assertEqual(p.type, "ServiceAccount")
+        self.assertEqual(p.attrs, {})
+
+    def test_principal_is_active_is_not_an_attribute(self):
+        p = Principal.from_user(self.inactive_superuser)
+        self.assertFalse(p.is_active)
+        self.assertEqual(p.attrs, {"is_superuser": True})
+
+    def test_inactive_service_account_principal(self):
+        self.service_account.is_active = False
+        p = Principal.from_user(self.service_account)
+        self.assertFalse(p.is_active)
         self.assertEqual(p.attrs, {})
 
     # entities
@@ -81,3 +98,13 @@ class PBACEntitiesTestCase(TestCase):
         self.assertTrue(r.is_authorized is True)
         self.assertTrue(r.is_pending is False)
         self.assertEqual(r.get_authorized_display(), "Authorized")
+
+    def test_inactive_superuser_request_is_refused(self):
+        p = Principal.from_user(self.inactive_superuser)
+        n = Namespace("Inventory")
+        a = Action("createMachineTag", namespace=n)
+        e = Entity("Machine", "12345678910", n)
+        r = Request(p, a, e)
+        self.assertTrue(r.is_authorized is False)
+        self.assertTrue(r.is_pending is False)
+        self.assertEqual(r.get_authorized_display(), "Denied")

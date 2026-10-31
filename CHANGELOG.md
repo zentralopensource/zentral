@@ -380,6 +380,8 @@ Use a Terraform `import` block with `terraform plan -generate-config-out=<file>`
 
 ### Bug fixes
 
+A deactivated user has no access now. A realm login refuses the user, an open realm session stops at the next request, and each PBAC decision refuses the user, a superuser included. Before, the realm login of a deactivated user succeeded and applied the role mappings, a realm session stayed open after the deactivation, and the decisions of the typed PBAC actions did not check the status of the user.
+
 The OpenSearch event store signs its requests with the access key and secret configured in aws_auth now. It read them under the wrong names and used them in the wrong branch, so it always fell back to the default AWS credential chain, and a store configured with an access key gave no sign that the key was unused.
 
 The task that pushes an updated DEP profile to Apple Business Manager belongs to the user who saved the enrollment now. It was the only task that a user launched with no record of the user, so it was not in the task list of that user, and only a superuser saw its result.

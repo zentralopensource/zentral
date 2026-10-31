@@ -544,6 +544,14 @@ class ScopeQuerysetTestCase(TestCase):
                                              is_superuser=True)
         self.assertIs(self._scope(superuser), self.queryset)
 
+    def test_an_inactive_user(self):
+        self._policy()
+        for is_superuser in (False, True):
+            user = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.com",
+                                            is_superuser=is_superuser, is_active=False)
+            user.groups.add(self.group)
+            self.assertTrue(self._scope(user).query.is_empty())
+
     def test_no_policy(self):
         queryset = self._scope()
         self.assertTrue(queryset.query.is_empty())
@@ -626,6 +634,18 @@ class ScopeQuerysetTestCase(TestCase):
         superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.com",
                                              is_superuser=True)
         self.assertEqual(set(visible_rows(superuser, ViewRowWithContextRequest, self.queryset)), set(self.rows))
+
+    def test_visible_rows_with_an_inactive_user(self):
+        Policy.objects.filter(name="Tests").delete()
+        Policy.objects.create(name="Tests", source=format_policies(
+            f'permit (principal in Role::"{self.group.pk}", action == {ViewRowWithContextRequest.pbac_action}, '
+            'resource);'
+        ))
+        policies_cache.clear()
+        self.assertEqual(set(visible_rows(self.user, ViewRowWithContextRequest, self.queryset)), set(self.rows))
+        user = User.objects.get(pk=self.user.pk)
+        user.is_active = False
+        self.assertEqual(list(visible_rows(user, ViewRowWithContextRequest, self.queryset)), [])
 
     # visible_row_counts
 

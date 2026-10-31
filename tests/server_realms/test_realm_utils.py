@@ -1,12 +1,16 @@
-from django.contrib.auth.models import Group
+from unittest.mock import patch
+from django.contrib.auth.models import AnonymousUser, Group
 from django.http import HttpRequest
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.utils.crypto import get_random_string
+from accounts.events import FailedLoginEvent
 from accounts.models import User
-from realms.models import RealmGroupMapping, RoleMapping
+from realms.middlewares import SESSION_KEY
+from realms.models import RealmAuthenticationSession, RealmGroupMapping, RoleMapping
 from realms.utils import (apply_realm_group_mappings, apply_role_mappings,
-                          get_realm_user_mapped_groups, get_realm_user_mapped_realm_groups)
-from .utils import force_realm_user, force_realm_group
+                          get_realm_user_mapped_groups, get_realm_user_mapped_realm_groups,
+                          login_callback)
+from .utils import force_realm, force_realm_user, force_realm_group, force_user
 
 
 class RealmUtilsTestCase(TestCase):
@@ -46,6 +50,30 @@ class RealmUtilsTestCase(TestCase):
         apply_role_mappings(request, realm_user)
         self.assertEqual(user.groups.count(), 1)
         self.assertEqual(user.groups.first(), group)
+
+    # login_callback
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_login_callback_inactive_user(self, post_event):
+        realm = force_realm(enabled_for_login=True)
+        _, realm_user = force_realm_user(realm=realm)
+        user = force_user(email=realm_user.email, active=False)
+        ras = RealmAuthenticationSession.objects.create(
+            realm=realm,
+            user=realm_user,
+            callback="realms.utils.login_callback",
+        )
+        request = RequestFactory().get("/")
+        request.session = self.client.session
+        request.user = AnonymousUser()
+        with self.assertRaises(ValueError) as cm:
+            login_callback(request, ras)
+        self.assertEqual(cm.exception.args, ("Could not authenticate realm user",))
+        self.assertNotIn(SESSION_KEY, request.session)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        self.assertIsInstance(post_event.call_args_list[0].args[0], FailedLoginEvent)
+        user.refresh_from_db()
+        self.assertIsNone(user.last_login)
 
     # get_realm_user_mapped_groups
 
