@@ -1,9 +1,19 @@
+import json
 import uuid
+from contextlib import contextmanager
+from datetime import timedelta
+from io import StringIO
+from unittest.mock import patch
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+from zentral.conf import ConfigDict
 from zentral.contrib.mdm.artifacts import Target
+from zentral.contrib.mdm.events import MDMStatusReportCleanupFinished, MDMStatusReportCleanupStarted
 from zentral.contrib.mdm.models import DeviceStatusReport, EnrolledDevice, EnrolledUser, Platform, UserStatusReport
-from zentral.contrib.mdm.status_reports import apply_status_report, get_target_status, split_status_items
+from zentral.contrib.mdm.status_reports import (apply_status_report, cleanup_status_reports,
+                                                get_default_status_report_retention_days, get_target_status,
+                                                split_status_items)
 from zentral.utils.time import naive_utcnow
 from .utils import force_push_certificate
 
@@ -199,3 +209,160 @@ class MDMStatusReportsTestCase(TestCase):
             set(STATUS_ITEMS),
         )
         self.assertEqual(status, {"items": {"unknown.list": [3]}, "errors": {}})
+
+    # cleanup
+
+    def _force_status_report(self, enrolled_device=None, enrolled_user=None, *,
+                             days, full_report=False, latest_full_report=False):
+        kwargs = {"received_at": naive_utcnow() - timedelta(days=days),
+                  "full_report": full_report,
+                  "latest_full_report": latest_full_report,
+                  "data": self._status_report(full_report=full_report)}
+        if enrolled_user:
+            return UserStatusReport.objects.create(enrolled_user=enrolled_user, **kwargs)
+        return DeviceStatusReport.objects.create(enrolled_device=enrolled_device, **kwargs)
+
+    def _force_cleanup_data(self):
+        push_certificate = force_push_certificate()
+        # a full report each day, from 35 days ago, and a partial report one hour after each one
+        daily_device = self._force_enrolled_device(push_certificate)
+        for days in range(35, 0, -1):
+            self._force_status_report(daily_device, days=days, full_report=True, latest_full_report=days == 1)
+            self._force_status_report(daily_device, days=days - 1 / 24)
+        # the last full report 45 days ago
+        old_full_device = self._force_enrolled_device(push_certificate)
+        self._force_status_report(old_full_device, days=45, full_report=True, latest_full_report=True)
+        self._force_status_report(old_full_device, days=40)
+        self._force_status_report(old_full_device, days=2)
+        # never a full report
+        no_full_device = self._force_enrolled_device(push_certificate)
+        self._force_status_report(no_full_device, days=80)
+        self._force_status_report(no_full_device, days=10)
+        # a user with two full reports before the cutoff
+        self._force_status_report(enrolled_user=self.enrolled_user, days=40, full_report=True)
+        self._force_status_report(enrolled_user=self.enrolled_user, days=35, full_report=True,
+                                  latest_full_report=True)
+        self._force_status_report(enrolled_user=self.enrolled_user, days=33)
+        return daily_device, old_full_device, no_full_device
+
+    def test_cleanup_status_reports(self):
+        daily_device, old_full_device, no_full_device = self._force_cleanup_data()
+        results = {}
+
+        def result_callback(table, result):
+            results[table] = result
+
+        max_date = naive_utcnow() - timedelta(days=30)
+        duration = cleanup_status_reports(max_date, result_callback, batch_size=3)
+        self.assertTrue(duration > 0)
+        self.assertEqual(results["mdm_devicestatusreport"]["rowcount"], 10)
+        self.assertEqual(results["mdm_devicestatusreport"]["max_rows_per_target"], 60)
+        self.assertEqual(results["mdm_userstatusreport"]["rowcount"], 1)
+        self.assertEqual(results["mdm_userstatusreport"]["max_rows_per_target"], 2)
+        # the base of the daily device is its newest full report before the cutoff
+        daily_reports = DeviceStatusReport.objects.filter(enrolled_device=daily_device).order_by("pk")
+        self.assertEqual(daily_reports.count(), 60)
+        base = daily_reports.first()
+        self.assertTrue(base.full_report)
+        self.assertTrue(base.received_at < max_date)
+        self.assertTrue(daily_reports.filter(latest_full_report=True).exists())
+        # the old full report is the base, and nothing is deleted without a base
+        self.assertEqual(DeviceStatusReport.objects.filter(enrolled_device=old_full_device).count(), 3)
+        self.assertEqual(DeviceStatusReport.objects.filter(enrolled_device=no_full_device).count(), 2)
+        self.assertEqual(
+            list(UserStatusReport.objects.filter(enrolled_user=self.enrolled_user)
+                                         .order_by("pk")
+                                         .values_list("full_report", "latest_full_report")),
+            [(True, True), (False, False)],
+        )
+        # a second run has nothing to delete
+        cleanup_status_reports(max_date, result_callback, batch_size=3)
+        self.assertEqual(results["mdm_devicestatusreport"]["rowcount"], 0)
+        self.assertEqual(results["mdm_userstatusreport"]["rowcount"], 0)
+
+    def test_cleanup_status_reports_no_reports(self):
+        results = {}
+
+        def result_callback(table, result):
+            results[table] = result
+
+        cleanup_status_reports(naive_utcnow() - timedelta(days=30), result_callback)
+        for table in ("mdm_devicestatusreport", "mdm_userstatusreport"):
+            self.assertEqual(results[table]["rowcount"], 0)
+            self.assertEqual(results[table]["max_rows_per_target"], 0)
+
+    # retention
+
+    @contextmanager
+    def mdm_conf(self, **conf):
+        # the retention is read from the zentral configuration, not from the django settings
+        with patch("zentral.conf.settings") as settings:
+            settings.__getitem__.return_value = ConfigDict({"zentral.contrib.mdm": conf})
+            yield
+
+    def test_default_status_report_retention_days(self):
+        with self.mdm_conf(status_report_retention_days=7):
+            self.assertEqual(get_default_status_report_retention_days(), 7)
+
+    def test_default_status_report_retention_days_absent(self):
+        with self.mdm_conf():
+            self.assertEqual(get_default_status_report_retention_days(), 30)
+
+    def test_default_status_report_retention_days_minimum(self):
+        with self.mdm_conf(status_report_retention_days=0):
+            self.assertEqual(get_default_status_report_retention_days(), 1)
+
+    def test_default_status_report_retention_days_bad_value(self):
+        with self.mdm_conf(status_report_retention_days="yolo"):
+            with self.assertLogs("zentral.conf", level="ERROR") as cm:
+                self.assertEqual(get_default_status_report_retention_days(), 30)
+        self.assertEqual(cm.records[0].getMessage(),
+                         "Wrong value set status_report_retention_days, default of 30 used")
+
+    def test_default_status_report_retention_days_boolean(self):
+        with self.mdm_conf(status_report_retention_days=True):
+            with self.assertLogs("zentral.conf", level="ERROR") as cm:
+                self.assertEqual(get_default_status_report_retention_days(), 30)
+        self.assertEqual(cm.records[0].getMessage(),
+                         "Wrong value set status_report_retention_days, default of 30 used")
+
+    # command
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_cleanup_mdm_status_reports_command(self, post_event):
+        self._force_cleanup_data()
+        out = StringIO()
+        call_command("cleanup_mdm_status_reports", "--days", "30", stdout=out)
+        lines = out.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("mdm_devicestatusreport: 10 deleted, max 60 per target - "))
+        self.assertTrue(lines[1].startswith("mdm_userstatusreport: 1 deleted, max 2 per target - "))
+        self.assertEqual(len(post_event.call_args_list), 2)
+        started_event = post_event.call_args_list[0].args[0]
+        self.assertIsInstance(started_event, MDMStatusReportCleanupStarted)
+        self.assertEqual(started_event.payload["cleanup"]["days"], 30)
+        self.assertNotIn("tables", started_event.payload["cleanup"])
+        finished_event = post_event.call_args_list[1].args[0]
+        self.assertIsInstance(finished_event, MDMStatusReportCleanupFinished)
+        cleanup = finished_event.payload["cleanup"]
+        self.assertEqual(cleanup["days"], 30)
+        self.assertEqual(cleanup["max_date"], started_event.payload["cleanup"]["max_date"])
+        self.assertEqual(cleanup["tables"]["mdm_devicestatusreport"]["rowcount"], 10)
+        self.assertEqual(cleanup["tables"]["mdm_userstatusreport"]["rowcount"], 1)
+        self.assertTrue(cleanup["duration"] > 0)
+        # the payloads must not rely on the last-resort datetime encoder of the event pipeline
+        for event in (started_event, finished_event):
+            json.dumps(event.payload)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_cleanup_mdm_status_reports_command_quiet(self, post_event):
+        for args in (("--quiet",), ("-v", "0")):
+            out = StringIO()
+            call_command("cleanup_mdm_status_reports", *args, stdout=out)
+            self.assertEqual(out.getvalue(), "")
+        self.assertEqual(len(post_event.call_args_list), 4)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_cleanup_mdm_status_reports_command_minimum_days(self, post_event):
+        call_command("cleanup_mdm_status_reports", "--days", "0", "--quiet")
+        self.assertEqual(post_event.call_args_list[0].args[0].payload["cleanup"]["days"], 1)

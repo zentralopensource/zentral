@@ -66,6 +66,8 @@ A software update enforcement can be limited to the devices that run an OS versi
 
 The enrolled device page shows the software update status of a device: the install state, the pending update, and the number, the date and the reason of the software update failures. Zentral reads them in the DDM status reports, so they change when the device reports a change. The FileVault status of an enrolled device is a stored value now, updated by the DDM status reports and by the security information command. The `filevault_enabled` attribute of the enrolled device API uses it.
 
+Zentral keeps the DDM status reports of the enrolled devices and users on iOS, iPadOS and tvOS 17 or later, and on macOS 14 or later. The older versions do not mark their full reports, so their reports are not kept. The new `cleanup_mdm_status_reports` command deletes the reports older than 30 days, or than the `status_report_retention_days` of the MDM configuration. For each device and user, it keeps the newest full report received before that date and every report after it, because the status is rebuilt from them. Run the command once a day: without it, Zentral does not delete the reports. Two runs at the same time give the same result as one run. The command posts an `mdm_status_report_cleanup_started` and an `mdm_status_report_cleanup_finished` event.
+
 
 #### Monolith
 

@@ -19,6 +19,12 @@ To authenticate the OTA enrollments, Zentral needs the SCEP CA issuer certificat
 
 Zentral is expecting the client certificate in PEM form in the `X-SSL-Client-Cert` header, and the client certificate subject DN in the `X-SSL-Client-S-DN` header. If this is not possible, you can set `mtls_proxy` to `false` in the `zentral.contrib.mdm` section. In that case, the Apple devices will be configured to add a header containing the payload signature in each HTTP request. See the [Apple documentation](https://developer.apple.com/documentation/devicemanagement/implementing_device_management/managing_certificates_for_mdm_servers_and_devices#3677960). This adds approximately 2KB of data to each message.
 
+### `status_report_retention_days`
+
+**OPTIONAL**
+
+Number of days (integer) of [DDM status reports](#ddm-status-reports) to keep. Defaults to `30`.
+
 ## Variable substitution
 
 It is possible to use variable substitution to customize [configuration profiles](https://developer.apple.com/documentation/devicemanagement/configuring_multiple_devices_using_profiles) and application configurations (see [InstallApplication](https://developer.apple.com/documentation/devicemanagement/installapplicationcommand/command/configuration) and [InstallEnterpriseApplication](https://developer.apple.com/documentation/devicemanagement/installenterpriseapplicationcommand/command/configuration) MDM commands) with device or user attributes. The following variables are available:
@@ -598,6 +604,29 @@ A Recovery Password Configuration can only be deleted if it is not linked to any
 2. Review the configuration by clicking its name.
 3. Use the *Delete* button in the list view or on the configuration details page.
 4. Confirm the deletion when prompted.
+
+## DDM status reports
+
+Zentral keeps the declarative management status reports that the devices send, on the device channel and on the user channels. A full report carries every status item of the device or the user. A partial report carries the items that changed. Zentral rebuilds the current status from the latest full report and the reports after it.
+
+Zentral keeps the reports of the devices on iOS, iPadOS and tvOS 17 or later, and on macOS 14 or later. The older versions do not mark their full reports, so Zentral could never delete their reports. For these devices, Zentral still updates the device values from the reports, for example the FileVault status, but it does not keep the reports.
+
+### Cleanup
+
+The `cleanup_mdm_status_reports` management command deletes the old reports:
+
+```
+python server/manage.py cleanup_mdm_status_reports [--days N] [--quiet]
+```
+
+* `--days`: the number of days of reports to keep. Defaults to `30`, or to the value of [`status_report_retention_days`](#status_report_retention_days).
+* `--quiet`: no output.
+
+For each device and user, the command keeps the newest full report received before that period, and every report after it, because Zentral rebuilds the status from them. A device or a user without a full report before that period keeps all its reports.
+
+Zentral does not run the command. Run it once a day. Two runs at the same time give the same result as one run.
+
+The command posts an `mdm_status_report_cleanup_started` event, and an `mdm_status_report_cleanup_finished` event. For each table, the second event gives the number of deleted reports, the duration, and the largest number of reports that one device or user keeps.
 
 ## Audit trail
 
