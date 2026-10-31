@@ -1320,6 +1320,7 @@ class EnrolledDevice(models.Model):
         self.save()
         self.commands.all().delete()
         self.target_artifacts.all().delete()
+        self.status_reports.all().delete()
         self.users.all().delete()
         # TODO purge tokens?
         # TODO revoke assets?
@@ -3562,6 +3563,56 @@ class UserArtifact(TargetArtifact):
 
     class Meta:
         unique_together = ("enrolled_user", "artifact_version")
+
+
+# DDM status reports
+
+
+class TargetStatusReport(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    received_at = models.DateTimeField()
+    full_report = models.BooleanField()
+    latest_full_report = models.BooleanField(default=False)
+    data = models.JSONField()
+
+    class Meta:
+        abstract = True
+
+
+class DeviceStatusReport(TargetStatusReport):
+    # the (enrolled_device, id) index serves the lookups by device
+    enrolled_device = models.ForeignKey(EnrolledDevice, on_delete=models.CASCADE, related_name="status_reports",
+                                        db_index=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["enrolled_device", "id"], name="mdm_devicestatusreport_tgt"),
+            # with received_at, the cleanup finds the bases in this index only, without reading the reports
+            models.Index(fields=["enrolled_device", "id"], condition=Q(full_report=True), include=["received_at"],
+                         name="mdm_devicestatusreport_full"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["enrolled_device"], condition=Q(latest_full_report=True),
+                                    name="mdm_devicestatusreport_latest_full_report"),
+        ]
+
+
+class UserStatusReport(TargetStatusReport):
+    # the (enrolled_user, id) index serves the lookups by user
+    enrolled_user = models.ForeignKey(EnrolledUser, on_delete=models.CASCADE, related_name="status_reports",
+                                      db_index=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["enrolled_user", "id"], name="mdm_userstatusreport_tgt"),
+            # with received_at, the cleanup finds the bases in this index only, without reading the reports
+            models.Index(fields=["enrolled_user", "id"], condition=Q(full_report=True), include=["received_at"],
+                         name="mdm_userstatusreport_full"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["enrolled_user"], condition=Q(latest_full_report=True),
+                                    name="mdm_userstatusreport_latest_full_report"),
+        ]
 
 
 # Commands

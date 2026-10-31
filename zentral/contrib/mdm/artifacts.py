@@ -40,9 +40,12 @@ from .models import (
     DeviceArtifact,
     DeviceAssignment,
     DeviceCommand,
+    DeviceStatusReport,
+    Platform,
     TargetArtifact,
     UserArtifact,
     UserCommand,
+    UserStatusReport,
 )
 
 logger = logging.getLogger("zentral.contrib.mdm.artifacts")
@@ -176,6 +179,16 @@ def update_blueprint_serialized_artifacts(blueprint, commit=True):
 
 
 # Target
+
+
+# The DDM status reports have a FullReport key since these OS versions. Before them, a target never has a full
+# report, and the cleanup could never delete its reports.
+FULL_STATUS_REPORT_MIN_OS_VERSIONS = {
+    Platform.IOS: (17,),
+    Platform.IPADOS: (17,),
+    Platform.MACOS: (14,),
+    Platform.TVOS: (17,),
+}
 
 
 class Target:
@@ -1116,6 +1129,33 @@ class Target:
             self.target.declaration_items_snapshot = self.declaration_items_snapshot
         if update_fields:
             self.target.save(update_fields=update_fields + ["updated_at"])
+
+    # status reports
+
+    def get_status_report_model_and_kwargs(self):
+        if self.is_device:
+            return DeviceStatusReport, {"enrolled_device": self.target}
+        else:
+            return UserStatusReport, {"enrolled_user": self.target}
+
+    def add_status_report(self, status_report):
+        min_os_version = FULL_STATUS_REPORT_MIN_OS_VERSIONS.get(self.platform)
+        # not the cached comparable_os_version, which can be older than the OS version that this report set
+        if min_os_version is None or _prepare_os_version(self.os_version, (0, 0, 0)) < min_os_version:
+            return
+        model, kwargs = self.get_status_report_model_and_kwargs()
+        full_report = status_report.get("FullReport") is True
+        if full_report:
+            # one latest full report per target, so the full reports of a target must wait for each other
+            type(self.target).objects.select_for_update().only("pk").get(pk=self.target.pk)
+            model.objects.filter(latest_full_report=True, **kwargs).update(latest_full_report=False)
+        model.objects.create(
+            received_at=naive_utcnow(),
+            full_report=full_report,
+            latest_full_report=full_report,
+            data=status_report,
+            **kwargs
+        )
 
     # status report updates
 

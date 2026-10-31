@@ -54,6 +54,7 @@ from zentral.contrib.mdm.models import (
     DEPEnrollmentSession,
     DeviceAssignment,
     DeviceCommand,
+    DeviceStatusReport,
     EnrolledDevice,
     OTAEnrollmentSession,
     Platform,
@@ -1393,26 +1394,102 @@ class MDMViewsTestCase(TestCase):
 
     # status
 
+    @staticmethod
+    def _build_status_report_with_os_version(os_version):
+        # the view applies a report before it keeps it, and the status_report.json report is from macOS 13
+        status_report = build_status_report()
+        status_report["StatusItems"]["device"]["operating-system"]["version"] = os_version
+        return status_report
+
     def test_declarative_management_status_report(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
         )
         self._add_blueprint(session)
+        status_report = self._build_status_report_with_os_version("26.1")
         payload = {
             "UDID": udid,
             "MessageType": "DeclarativeManagement",
-            "Data": json.dumps(build_status_report()),
+            "Data": json.dumps(status_report),
             "Endpoint": "status",
         }
         response = self._put(reverse("mdm_public:checkin"), payload, session)
         self.assertEqual(response.status_code, 200)
+        status_report_db = DeviceStatusReport.objects.get(enrolled_device=session.enrolled_device)
+        self.assertEqual(status_report_db.data, status_report)
+        self.assertFalse(status_report_db.full_report)
+        self.assertFalse(status_report_db.latest_full_report)
+
+    def test_declarative_management_full_status_report(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        self._add_blueprint(session)
+        status_report = self._build_status_report_with_os_version("26.1")
+        status_report["FullReport"] = True
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps(status_report),
+            "Endpoint": "status",
+        }
+        for _ in range(2):
+            response = self._put(reverse("mdm_public:checkin"), payload, session)
+            self.assertEqual(response.status_code, 200)
+        first_report, second_report = DeviceStatusReport.objects.filter(
+            enrolled_device=session.enrolled_device
+        ).order_by("pk")
+        self.assertTrue(first_report.full_report)
+        self.assertFalse(first_report.latest_full_report)
+        self.assertTrue(second_report.full_report)
+        self.assertTrue(second_report.latest_full_report)
+
+    def test_declarative_management_full_status_report_after_os_update(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        session.enrolled_device.os_version = "13.7"
+        self._add_blueprint(session)
+        status_report = self._build_status_report_with_os_version("14.0")
+        status_report["FullReport"] = True
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps(status_report),
+            "Endpoint": "status",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        status_report_db = DeviceStatusReport.objects.get(enrolled_device=session.enrolled_device)
+        self.assertTrue(status_report_db.latest_full_report)
+        session.enrolled_device.refresh_from_db()
+        self.assertEqual(session.enrolled_device.os_version, "14.0")
+
+    def test_declarative_management_status_report_os_version_without_full_reports(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        self._add_blueprint(session)
+        status_report = self._build_status_report_with_os_version("13.7")
+        status_report["StatusItems"]["diskmanagement"] = {"filevault": {"enabled": True}}
+        payload = {
+            "UDID": udid,
+            "MessageType": "DeclarativeManagement",
+            "Data": json.dumps(status_report),
+            "Endpoint": "status",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(DeviceStatusReport.objects.filter(enrolled_device=session.enrolled_device).exists())
+        session.enrolled_device.refresh_from_db()
+        self.assertTrue(session.enrolled_device.filevault_enabled)
 
     def test_declarative_management_status_report_null_character(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(
             self.mbu, authenticated=True, completed=True
         )
         self._add_blueprint(session)
-        status_report = build_status_report()
+        status_report = self._build_status_report_with_os_version("26.1")
         status_report["StatusItems"]["device"]["operating-system"]["build-version"] = "22E\u0000261"
         payload = {
             "UDID": udid,
@@ -1424,6 +1501,9 @@ class MDMViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.build_version, "22E261")
+        status_report_db = DeviceStatusReport.objects.get(enrolled_device=session.enrolled_device)
+        self.assertEqual(status_report_db.data["StatusItems"]["device"]["operating-system"]["build-version"],
+                         "22E261")
 
     def test_declarative_management_status_report_missing_data(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(

@@ -472,7 +472,9 @@ class CheckinView(MDMView):
         elif endpoint == "status":
             if json_data is None:
                 self.abort("Missing status report", **event_payload)
+            # the full report after an OS update carries the new OS version, and the version decides if it is kept
             self.target.update_target_with_status_report(json_data)
+            self.target.add_status_report(json_data)
             self.post_event("success", **event_payload)
             return HttpResponse(status=200)
         elif endpoint.startswith("declaration/"):
