@@ -229,13 +229,20 @@ class UpdateUserForm(RoleMembershipGrantMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.request_session_is_remote = kwargs.pop("request_session_is_remote", True)
         super().__init__(*args, **kwargs)
-        if not self.instance.username_and_email_editable():
+        if not self.instance.username_and_email_editable() or not self._request_user_can_change_credentials():
             del self.fields["username"]
             del self.fields["email"]
         if not self.instance.is_superuser_editable() or not self._request_user_can_grant_superuser():
             del self.fields["is_superuser"]
         if self.instance.is_remote:
             del self.fields["groups"]
+
+    def _request_user_can_change_credentials(self):
+        # The username and the email of a local user are credentials: a realm login matches on them,
+        # and the password reset goes to the email.
+        return self._request_user_can_grant_superuser() or (
+            self.request_user == self.instance and not self.request_session_is_remote
+        )
 
     def _request_user_can_grant_superuser(self):
         # Only superusers logged in with a local (non-realm) session can grant

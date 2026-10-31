@@ -753,6 +753,73 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotIn("description", form.fields)
         self.assertIn("is_superuser", form.fields)  # not unique superuser → editable
 
+    def test_non_superuser_requester_cannot_see_username_and_email(self):
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        form = response.context["form"]
+        self.assertNotIn("username", form.fields)
+        self.assertNotIn("email", form.fields)
+        self.assertIn("groups", form.fields)
+
+    def test_remote_session_superuser_requester_cannot_see_username_and_email(self):
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.change_user", realm_user=True)
+        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
+        form = response.context["form"]
+        self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
+        self.assertNotIn("username", form.fields)
+        self.assertNotIn("email", form.fields)
+
+    def test_user_update_own_username_and_email_get(self):
+        self.login("accounts.change_user")
+        response = self.client.get(reverse("accounts:update_user", args=(self.ui_user.id,)))
+        form = response.context["form"]
+        self.assertIn("username", form.fields)
+        self.assertIn("email", form.fields)
+
+    def test_user_update_own_username_and_email_remote_session_get(self):
+        self.login("accounts.change_user", realm_user=True)
+        response = self.client.get(reverse("accounts:update_user", args=(self.ui_user.id,)))
+        form = response.context["form"]
+        self.assertNotIn("username", form.fields)
+        self.assertNotIn("email", form.fields)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_non_superuser_requester_cannot_change_username_and_email(self, post_event):
+        # smuggling a username and an email through a POST must be ignored
+        self.login("accounts.change_user", "accounts.view_user")
+        username = self.user.username
+        email = self.user.email
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": "toto",
+                 "email": "tata@example.com",
+                 "items_per_page": 10},
+                follow=True,
+            )
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, username)
+        self.assertEqual(self.user.email, email)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_user_update_own_username_and_email(self, post_event):
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.ui_user.id,)),
+                {"username": "toto",
+                 "email": "tata@example.com",
+                 "groups": [self.ui_group.pk],
+                 "items_per_page": 10},
+                follow=True,
+            )
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        self.ui_user.refresh_from_db()
+        self.assertEqual(self.ui_user.username, "toto")
+        self.assertEqual(self.ui_user.email, "tata@example.com")
+
     def test_non_superuser_requester_cannot_see_is_superuser(self):
         # ui_user has change_user perm but is not a superuser
         self.login("accounts.change_user")
@@ -846,6 +913,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_update_username_error(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
@@ -858,6 +926,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_update_email_error(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:update_user", args=(self.user.id,)),
@@ -870,6 +939,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_update_ok(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user", "accounts.view_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
