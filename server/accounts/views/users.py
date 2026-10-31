@@ -3,7 +3,6 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -18,9 +17,8 @@ from accounts.forms import (
 from accounts.models import Policy, User
 from pbac.entities import Principal
 from realms.models import get_matching_realm_users
-from zentral.core.events.base import AuditEvent
 from zentral.utils.views import (CreateViewWithAudit, LocalUserRequiredMixin, RequestUserFormMixin,
-                                 UpdateViewWithAudit, has_local_login)
+                                 UpdateViewWithAudit, has_local_login, post_delete_audit_event)
 
 logger = logging.getLogger("zentral.accounts.views.users")
 
@@ -205,17 +203,7 @@ class DeleteUserView(LocalUserRequiredMixin, PermissionRequiredMixin, TemplateVi
             msg = "Service account {} deleted".format(self.user)
         else:
             msg = "User {} deleted".format(self.user)
-        event = AuditEvent.build_from_request_and_instance(
-                request, self.user,
-                action=AuditEvent.Action.DELETED,
-                prev_value=self.user.serialize_for_event()
-            )
+        post_delete_audit_event(request, self.user)
         self.user.delete()
-
-        def on_commit_callback():
-            event.post()
-
-        transaction.on_commit(on_commit_callback)
-
         messages.info(request, msg)
         return redirect("accounts:users")

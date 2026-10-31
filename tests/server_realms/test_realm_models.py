@@ -1,7 +1,8 @@
 from django.test import TestCase
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
-from realms.models import RoleMapping
-from .utils import force_group, force_realm, force_realm_group, force_realm_user
+from realms.models import RealmUserGroupMembership, RoleMapping
+from .utils import (force_group, force_realm, force_realm_group, force_realm_group_mapping, force_realm_user,
+                    force_role_mapping)
 
 
 class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
@@ -9,7 +10,12 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
 
     def test_serialize_for_event_is_json_native(self):
         realm = force_realm()
-        for obj in (realm, force_realm_group(realm=realm)):
+        realm_group = force_realm_group(realm=realm)
+        _, realm_user = force_realm_user(realm=realm, group=realm_group)
+        for obj in (realm, realm_group,
+                    RealmUserGroupMembership.objects.get(user=realm_user, group=realm_group),
+                    force_realm_group_mapping(realm_group=realm_group),
+                    force_role_mapping(realm=realm)):
             with self.subTest(obj._meta.model_name):
                 self.assert_serialize_for_event_is_json_native(obj)
 
@@ -110,4 +116,35 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
              'email': realm_user.email,
              'first_name': realm_user.first_name,
              'last_name': realm_user.last_name}
+        )
+
+    def test_realm_user_group_membership_serialize_for_event_keys_only(self):
+        realm_group = force_realm_group()
+        _, realm_user = force_realm_user(realm=realm_group.realm, group=realm_group)
+        membership = RealmUserGroupMembership.objects.get(user=realm_user, group=realm_group)
+        self.assertEqual(
+            membership.serialize_for_event(keys_only=True),
+            {"pk": membership.pk,
+             "realm_user": realm_user.serialize_for_event(keys_only=True),
+             "realm_group": realm_group.serialize_for_event(keys_only=True)}
+        )
+
+    def test_realm_group_mapping_serialize_for_event_keys_only(self):
+        rgm = force_realm_group_mapping()
+        self.assertEqual(
+            rgm.serialize_for_event(keys_only=True),
+            {"pk": str(rgm.pk),
+             "claim": rgm.claim,
+             "separator": rgm.separator,
+             "value": rgm.value,
+             "realm_group": rgm.realm_group.serialize_for_event(keys_only=True)}
+        )
+
+    def test_role_mapping_serialize_for_event_keys_only(self):
+        rm = force_role_mapping()
+        self.assertEqual(
+            rm.serialize_for_event(keys_only=True),
+            {"pk": str(rm.pk),
+             "realm_group": rm.realm_group.serialize_for_event(keys_only=True),
+             "role": {"pk": rm.group.pk, "name": rm.group.name}}
         )

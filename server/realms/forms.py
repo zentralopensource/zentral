@@ -1,7 +1,8 @@
 from django import forms
+from django.db import transaction
 from django.db.models import Q
 from accounts.forms import role_grant_error
-from .models import Realm, RealmGroup, RealmGroupMapping, RealmUser, RoleMapping
+from .models import Realm, RealmGroup, RealmGroupMapping, RealmUser, RealmUserGroupMembership, RoleMapping
 
 
 class RealmForm(forms.ModelForm):
@@ -100,7 +101,15 @@ class AddRealmUserToGroupForm(RoleGrantMixin, forms.Form):
         self.check_realm_group()
 
     def save(self):
-        self.realm_user.groups.add(self.cleaned_data["realm_group"])
+        """The new membership, or None if the realm user is already a member of the group."""
+        realm_group = self.cleaned_data["realm_group"]
+        with transaction.atomic():
+            # no unique constraint on the memberships: two console requests for the same user wait on this lock.
+            # The SCIM member writes do not take it.
+            RealmUser.objects.select_for_update().get(pk=self.realm_user.pk)
+            if RealmUserGroupMembership.objects.filter(user=self.realm_user, group=realm_group).exists():
+                return None
+            return RealmUserGroupMembership.objects.create(user=self.realm_user, group=realm_group)
 
 
 class RealmGroupMappingForm(RoleGrantMixin, forms.ModelForm):

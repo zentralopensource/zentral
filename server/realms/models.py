@@ -319,10 +319,28 @@ def get_matching_realm_users(users):
     return matching_realm_users
 
 
+def linked_objects_keys_of(*instances):
+    # zentral.core.events.base imports the inventory models
+    from zentral.core.events.base import linked_objects_key
+    return {linked_objects_key(instance): [(str(instance.pk),)] for instance in instances}
+
+
 class RealmUserGroupMembership(models.Model):
     user = models.ForeignKey(RealmUser, on_delete=models.CASCADE)
     group = models.ForeignKey(RealmGroup, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": self.pk,
+             "realm_user": self.user.serialize_for_event(keys_only=True),
+             "realm_group": self.group.serialize_for_event(keys_only=True)}
+        if keys_only:
+            return d
+        d["created_at"] = self.created_at.isoformat()
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return linked_objects_keys_of(self.group, self.user)
 
 
 realm_group_members_updated = django.dispatch.Signal()
@@ -435,6 +453,23 @@ class RealmGroupMapping(models.Model):
     def get_absolute_url(self):
         return reverse("realms:realm_group_mappings") + f"#{str(self.pk)}"
 
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": str(self.pk),
+             "claim": self.claim,
+             "separator": self.separator,
+             "value": self.value,
+             "realm_group": self.realm_group.serialize_for_event(keys_only=True)}
+        if keys_only:
+            return d
+        d.update({
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        })
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return linked_objects_keys_of(self.realm_group)
+
 
 class RoleMapping(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -450,3 +485,15 @@ class RoleMapping(models.Model):
 
     def get_absolute_url(self):
         return reverse("realms:role_mappings") + f"#{str(self.pk)}"
+
+    def serialize_for_event(self, keys_only=False):
+        d = {"pk": str(self.pk),
+             "realm_group": self.realm_group.serialize_for_event(keys_only=True),
+             "role": {"pk": self.group.pk, "name": self.group.name}}
+        if keys_only:
+            return d
+        d["created_at"] = self.created_at.isoformat()
+        return d
+
+    def linked_objects_keys_for_event(self):
+        return linked_objects_keys_of(self.realm_group, self.group)

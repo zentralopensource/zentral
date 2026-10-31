@@ -50,6 +50,26 @@ def post_audit_event(request, instance, action, prev_value=None, machine_serial_
     transaction.on_commit(on_commit_callback)
 
 
+def post_delete_audit_event(request, instance, machine_serial_number=None, on_commit_extra=None):
+    """Post the audit event of an instance deleted in the surrounding transaction.
+
+    Call it before the delete: the event reads the instance, and the delete clears its pk.
+    """
+    event = AuditEvent.build_from_request_and_instance(
+        request, instance,
+        action=AuditEvent.Action.DELETED,
+        prev_value=instance.serialize_for_event(),
+        machine_serial_number=machine_serial_number,
+    )
+
+    def on_commit_callback():
+        event.post()
+        if on_commit_extra:
+            on_commit_extra()
+
+    transaction.on_commit(on_commit_callback)
+
+
 class AuditViewMixin:
     """Default for the audit views below and their DRF counterparts in zentral.utils.drf.
 
@@ -102,19 +122,8 @@ class UpdateViewWithAudit(AuditViewMixin, UpdateView):
 
 class DeleteViewWithAudit(AuditViewMixin, DeleteView):
     def form_valid(self, form):
-        # build the event before the object is deleted
-        event = AuditEvent.build_from_request_and_instance(
-            self.request, self.object,
-            action=AuditEvent.Action.DELETED,
-            prev_value=self.object.serialize_for_event(),
-            machine_serial_number=self.get_audit_machine_serial_number(),
-        )
-
-        def on_commit_callback():
-            event.post()
-            self.on_commit_callback_extra()
-
-        transaction.on_commit(on_commit_callback)
+        post_delete_audit_event(self.request, self.object, self.get_audit_machine_serial_number(),
+                                self.on_commit_callback_extra)
         return super().form_valid(form)
 
 

@@ -105,6 +105,8 @@ If you can view the Realm Users, these pages show their SCIM status:
 
 In the console, if you are not a superuser, the Realm Group and its parents must map only Roles that you have. The same rule applies when you add a Realm User to a Realm Group in the console.
 
+Each change in the console of a Realm Group, of its members, of a Realm Group mapping or of a Role mapping emits a `zentral_audit` event. The event of a Role mapping links to the Realm Group and to the Role.
+
 ## Roles
 
 Roles are named labels that group users and service accounts. A Role on its own grants no access — you authorize it by writing a [PBAC policy](pbac.md) that references it.

@@ -10,14 +10,18 @@ from ldap import LDAPError
 
 from accounts.models import User
 from realms.backends.registry import backend_classes
+from realms.forms import AddRealmUserToGroupForm
 from realms.models import (
     Realm,
     RealmAuthenticationSession,
+    RealmGroup,
     RealmGroupMapping,
+    RealmUserGroupMembership,
     RoleMapping,
 )
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.conf import settings
+from zentral.core.events.base import AuditEvent
 from .utils import (
     force_group,
     force_realm,
@@ -1465,6 +1469,183 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "realms/realmuser_detail.html")
         self.assertNotContains(response, group.display_name)
         send_robust.assert_called_once()
+
+    @patch("realms.views.realm_group_members_updated.send_robust")
+    def test_remove_realm_user_from_group_post_not_a_member(self, send_robust):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm)
+        self.login("realms.change_realmgroup", "realms.view_realmuser")
+        events = self._post_audit_events(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
+        self.assertEqual(events, [])
+        send_robust.assert_not_called()
+
+    # audit events
+
+    def _post_audit_events(self, url, data=None):
+        with patch("zentral.core.queues.backends.kombu.EventQueues.post_event") as post_event, \
+             self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(url, data or {}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        return [c.args[0] for c in post_event.call_args_list if isinstance(c.args[0], AuditEvent)]
+
+    def _assert_audit_event(self, events, action, instance, objects, prev_value=None):
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        expected_object = {"model": instance._meta.label_lower, "pk": str(instance.pk)}
+        if prev_value:
+            expected_object["prev_value"] = prev_value
+        if action != "deleted":
+            expected_object["new_value"] = instance.serialize_for_event()
+        self.assertEqual(event.payload, {"action": action, "object": expected_object})
+        metadata = event.metadata.serialize()
+        self.assertEqual(metadata["objects"], objects)
+        self.assertEqual(sorted(metadata["tags"]), ["realms", "zentral"])
+
+    def test_create_realm_group_audit_event(self):
+        realm = force_realm()
+        self.login("realms.add_realmgroup", "realms.view_realmgroup")
+        events = self._post_audit_events(reverse("realms:create_group"),
+                                         {"realm": realm.pk, "display_name": get_random_string(12)})
+        realm_group = RealmGroup.objects.get(realm=realm)
+        self._assert_audit_event(events, "created", realm_group, {"realms_realm_group": [str(realm_group.pk)]})
+
+    def test_update_realm_group_audit_event(self):
+        realm_group = force_realm_group()
+        prev_value = realm_group.serialize_for_event()
+        self.login("realms.change_realmgroup", "realms.view_realmgroup")
+        events = self._post_audit_events(reverse("realms:update_group", args=(realm_group.pk,)),
+                                         {"display_name": get_random_string(12)})
+        realm_group.refresh_from_db()
+        self._assert_audit_event(events, "updated", realm_group, {"realms_realm_group": [str(realm_group.pk)]},
+                                 prev_value)
+
+    @patch("realms.views.realm_group_members_updated.send_robust")
+    def test_delete_realm_group_audit_event(self, send_robust):
+        realm_group = force_realm_group()
+        prev_value = realm_group.serialize_for_event()
+        self.login("realms.delete_realmgroup", "realms.view_realmgroup")
+        events = self._post_audit_events(reverse("realms:delete_group", args=(realm_group.pk,)))
+        self.assertFalse(RealmGroup.objects.filter(pk=realm_group.pk).exists())
+        self._assert_audit_event(events, "deleted", realm_group, {"realms_realm_group": [str(realm_group.pk)]},
+                                 prev_value)
+        send_robust.assert_called_once()
+
+    @patch("realms.views.realm_group_members_updated.send_robust")
+    def test_add_realm_user_to_group_audit_event(self, send_robust):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm)
+        self.login("realms.change_realmgroup", "realms.view_realmuser")
+        events = self._post_audit_events(reverse("realms:add_user_to_group", args=(user.pk,)),
+                                         {"realm_group": str(group.pk)})
+        membership = RealmUserGroupMembership.objects.get(user=user, group=group)
+        self._assert_audit_event(events, "created", membership,
+                                 {"realms_realm_group": [str(group.pk)],
+                                  "realms_realm_user": [str(user.pk)],
+                                  "realms_realm_user_group_membership": [str(membership.pk)]})
+        self.assertEqual(events[0].payload["object"]["new_value"]["realm_user"]["username"], user.username)
+
+    def test_add_realm_user_to_group_form_no_duplicate(self):
+        # two requests that both validate before either saves, a double submit for example
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm)
+        forms = [AddRealmUserToGroupForm({"realm_group": str(group.pk)}, realm_user=user, request_user=self.ui_user)
+                 for _ in range(2)]
+        for form in forms:
+            self.assertTrue(form.is_valid())
+        membership = forms[0].save()
+        self.assertEqual(membership.user, user)
+        self.assertEqual(membership.group, group)
+        self.assertIsNone(forms[1].save())
+        self.assertEqual(RealmUserGroupMembership.objects.filter(user=user, group=group).count(), 1)
+
+    @patch("realms.views.realm_group_members_updated.send_robust")
+    def test_remove_realm_user_from_group_audit_event(self, send_robust):
+        group = force_realm_group()
+        _, user = force_realm_user(realm=group.realm, group=group)
+        membership = RealmUserGroupMembership.objects.get(user=user, group=group)
+        prev_value = membership.serialize_for_event()
+        self.login("realms.change_realmgroup", "realms.view_realmuser")
+        events = self._post_audit_events(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
+        self.assertFalse(user.groups.exists())
+        self._assert_audit_event(events, "deleted", membership,
+                                 {"realms_realm_group": [str(group.pk)],
+                                  "realms_realm_user": [str(user.pk)],
+                                  "realms_realm_user_group_membership": [str(membership.pk)]},
+                                 prev_value)
+
+    def test_create_realm_group_mapping_audit_event(self):
+        realm_group = force_realm_group()
+        self.login("realms.add_realmgroupmapping", "realms.view_realmgroupmapping")
+        events = self._post_audit_events(reverse("realms:create_realm_group_mapping"),
+                                         {"claim": "Yolo", "value": "Fomo", "realm_group": realm_group.pk})
+        rgm = RealmGroupMapping.objects.get(realm_group=realm_group)
+        self._assert_audit_event(events, "created", rgm,
+                                 {"realms_realm_group": [str(realm_group.pk)],
+                                  "realms_realm_group_mapping": [str(rgm.pk)]})
+
+    def test_update_realm_group_mapping_audit_event(self):
+        rgm = force_realm_group_mapping()
+        prev_value = rgm.serialize_for_event()
+        realm_group = force_realm_group()
+        self.login("realms.change_realmgroupmapping", "realms.view_realmgroupmapping")
+        events = self._post_audit_events(reverse("realms:update_realm_group_mapping", args=(rgm.pk,)),
+                                         {"claim": "Yolo", "value": "Fomo", "realm_group": realm_group.pk})
+        rgm.refresh_from_db()
+        self.assertEqual(rgm.realm_group, realm_group)
+        self._assert_audit_event(events, "updated", rgm,
+                                 {"realms_realm_group": [str(realm_group.pk)],
+                                  "realms_realm_group_mapping": [str(rgm.pk)]},
+                                 prev_value)
+
+    def test_delete_realm_group_mapping_audit_event(self):
+        rgm = force_realm_group_mapping()
+        prev_value = rgm.serialize_for_event()
+        self.login("realms.delete_realmgroupmapping", "realms.view_realmgroupmapping")
+        events = self._post_audit_events(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
+        self.assertFalse(RealmGroupMapping.objects.filter(pk=rgm.pk).exists())
+        self._assert_audit_event(events, "deleted", rgm,
+                                 {"realms_realm_group": [str(rgm.realm_group.pk)],
+                                  "realms_realm_group_mapping": [str(rgm.pk)]},
+                                 prev_value)
+
+    def test_create_role_mapping_audit_event(self):
+        realm_group = force_realm_group()
+        self.login("realms.add_rolemapping", "realms.view_rolemapping")
+        events = self._post_audit_events(reverse("realms:create_role_mapping"),
+                                         {"realm_group": realm_group.pk, "group": self.ui_group.pk})
+        rm = RoleMapping.objects.get(realm_group=realm_group)
+        self._assert_audit_event(events, "created", rm,
+                                 {"auth_group": [str(self.ui_group.pk)],
+                                  "realms_realm_group": [str(realm_group.pk)],
+                                  "realms_role_mapping": [str(rm.pk)]})
+        self.assertEqual(events[0].payload["object"]["new_value"]["role"],
+                         {"pk": self.ui_group.pk, "name": self.ui_group.name})
+
+    def test_update_role_mapping_audit_event(self):
+        rm = force_role_mapping()
+        prev_value = rm.serialize_for_event()
+        realm_group = force_realm_group()
+        self.login("realms.change_rolemapping", "realms.view_rolemapping")
+        events = self._post_audit_events(reverse("realms:update_role_mapping", args=(rm.pk,)),
+                                         {"realm_group": realm_group.pk, "group": self.ui_group.pk})
+        rm.refresh_from_db()
+        self._assert_audit_event(events, "updated", rm,
+                                 {"auth_group": [str(self.ui_group.pk)],
+                                  "realms_realm_group": [str(realm_group.pk)],
+                                  "realms_role_mapping": [str(rm.pk)]},
+                                 prev_value)
+
+    def test_delete_role_mapping_audit_event(self):
+        rm = force_role_mapping()
+        prev_value = rm.serialize_for_event()
+        self.login("realms.delete_rolemapping", "realms.view_rolemapping")
+        events = self._post_audit_events(reverse("realms:delete_role_mapping", args=(rm.pk,)))
+        self.assertFalse(RoleMapping.objects.filter(pk=rm.pk).exists())
+        self._assert_audit_event(events, "deleted", rm,
+                                 {"auth_group": [str(rm.group.pk)],
+                                  "realms_realm_group": [str(rm.realm_group.pk)],
+                                  "realms_role_mapping": [str(rm.pk)]},
+                                 prev_value)
 
     # test realm
 

@@ -5,10 +5,12 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, FormView, ListView, TemplateView, UpdateView, View
+from django.views.generic import CreateView, DetailView, FormView, ListView, TemplateView, UpdateView, View
 from zentral.conf import api_base_url
-from zentral.utils.views import (LocalSuperuserRequiredMixin, LocalUserRequiredMixin, RequestUserFormMixin,
-                                 UserPaginationListView)
+from zentral.core.events.base import AuditEvent
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, LocalSuperuserRequiredMixin,
+                                 LocalUserRequiredMixin, RequestUserFormMixin, UpdateViewWithAudit,
+                                 UserPaginationListView, post_audit_event, post_delete_audit_event)
 from .backends.registry import backend_classes
 from .forms import (AddRealmUserToGroupForm, RealmGroupMappingForm, RealmGroupSearchForm, RealmUserSearchForm,
                     RoleMappingForm)
@@ -177,13 +179,13 @@ class RealmGroupView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class CreateRealmGroupView(PermissionRequiredMixin, CreateView):
+class CreateRealmGroupView(PermissionRequiredMixin, CreateViewWithAudit):
     permission_required = "realms.add_realmgroup"
     model = RealmGroup
     fields = ("realm", "display_name",)
 
 
-class UpdateRealmGroupView(PermissionRequiredMixin, UpdateView):
+class UpdateRealmGroupView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "realms.change_realmgroup"
     model = RealmGroup
     fields = ("display_name",)
@@ -192,7 +194,7 @@ class UpdateRealmGroupView(PermissionRequiredMixin, UpdateView):
         return RealmGroup.objects.for_update()
 
 
-class DeleteRealmGroupView(PermissionRequiredMixin, DeleteView):
+class DeleteRealmGroupView(PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "realms.delete_realmgroup"
     success_url = reverse_lazy("realms:groups")
 
@@ -274,8 +276,10 @@ class AddRealmUserToGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, R
         return kwargs
 
     def form_valid(self, form):
-        form.save()
-        realm_group_members_updated.send_robust(self.__class__, realm=self.realm_user.realm, request=self.request)
+        membership = form.save()
+        if membership:
+            post_audit_event(self.request, membership, AuditEvent.Action.CREATED)
+            realm_group_members_updated.send_robust(self.__class__, realm=self.realm_user.realm, request=self.request)
         return redirect(self.realm_user)
 
 
@@ -301,8 +305,13 @@ class RemoveRealmUserFromGroupView(LocalUserRequiredMixin, PermissionRequiredMix
 
     def post(self, request, *args, **kwargs):
         self.get_objects()
-        self.realm_user.groups.remove(self.realm_group)
-        realm_group_members_updated.send_robust(self.__class__, realm=self.realm_user.realm, request=self.request)
+        deleted = False
+        for membership in RealmUserGroupMembership.objects.filter(user=self.realm_user, group=self.realm_group):
+            post_delete_audit_event(request, membership)
+            membership.delete()
+            deleted = True
+        if deleted:
+            realm_group_members_updated.send_robust(self.__class__, realm=self.realm_user.realm, request=self.request)
         return redirect(self.realm_user)
 
 
@@ -322,21 +331,23 @@ class RealmGroupMappingListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, CreateView):
+class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
+                                  CreateViewWithAudit):
     permission_required = "realms.add_realmgroupmapping"
     model = RealmGroupMapping
     form_class = RealmGroupMappingForm
     success_url = reverse_lazy("realms:realm_group_mappings")
 
 
-class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, UpdateView):
+class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
+                                  UpdateViewWithAudit):
     permission_required = "realms.change_realmgroupmapping"
     model = RealmGroupMapping
     form_class = RealmGroupMappingForm
     success_url = reverse_lazy("realms:realm_group_mappings")
 
 
-class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
+class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "realms.delete_realmgroupmapping"
     model = RealmGroupMapping
     success_url = reverse_lazy("realms:realm_group_mappings")
@@ -358,19 +369,21 @@ class RoleMappingListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
-class CreateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, CreateView):
+class CreateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
+                            CreateViewWithAudit):
     permission_required = "realms.add_rolemapping"
     model = RoleMapping
     form_class = RoleMappingForm
 
 
-class UpdateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, UpdateView):
+class UpdateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
+                            UpdateViewWithAudit):
     permission_required = "realms.change_rolemapping"
     model = RoleMapping
     form_class = RoleMappingForm
 
 
-class DeleteRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteView):
+class DeleteRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteViewWithAudit):
     permission_required = "realms.delete_rolemapping"
     model = RoleMapping
     success_url = reverse_lazy("realms:role_mappings")

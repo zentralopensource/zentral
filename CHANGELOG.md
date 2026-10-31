@@ -14,6 +14,8 @@ A task that produces several files has a manifest in its result. The download en
 
 A read-only HTTP API is available for the compliance checks. `/api/compliance_checks/compliance_checks/` lists the compliance checks, with the number of machines for each status, and the number of machines with a status from a previous version of the check. `/api/compliance_checks/machine_statuses/` lists the status of each machine for each check, and you can filter it on the serial number of the machine and on the compliance check.
 
+Zentral emits a `zentral_audit` event for each change in the console of a realm group, of the members of a realm group, of a realm group mapping and of a role mapping. Before, these changes left no trace, and a role mapping gives roles to each member of the realm group.
+
 
 #### Documentation
 
