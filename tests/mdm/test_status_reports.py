@@ -3,8 +3,20 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.models import DeviceStatusReport, EnrolledDevice, EnrolledUser, Platform, UserStatusReport
+from zentral.contrib.mdm.status_reports import apply_status_report, get_target_status, split_status_items
 from zentral.utils.time import naive_utcnow
 from .utils import force_push_certificate
+
+
+STATUS_ITEMS = [
+    "device.operating-system.supplemental.extra-version",
+    "device.operating-system.version",
+    "diskmanagement.filevault.enabled",
+    "management.client-capabilities",
+    "services.background-task",
+    "softwareupdate.install-state",
+    "softwareupdate.pending-version",
+]
 
 
 class MDMStatusReportsTestCase(TestCase):
@@ -13,6 +25,7 @@ class MDMStatusReportsTestCase(TestCase):
         push_certificate = force_push_certificate()
         cls.enrolled_device = cls._force_enrolled_device(push_certificate)
         cls.enrolled_device.os_version = "26.1"
+        cls.enrolled_device.client_capabilities = {"supported-payloads": {"status-items": STATUS_ITEMS}}
         cls.enrolled_device.save()
         cls.enrolled_user = cls._force_enrolled_user(cls.enrolled_device)
 
@@ -100,3 +113,89 @@ class MDMStatusReportsTestCase(TestCase):
         self.enrolled_device.purge_state()
         self.assertFalse(DeviceStatusReport.objects.filter(enrolled_device=self.enrolled_device).exists())
         self.assertFalse(UserStatusReport.objects.exists())
+
+    # split status items
+
+    def test_split_status_items(self):
+        self.assertEqual(
+            split_status_items(
+                {"device": {"operating-system": {"supplemental": {"extra-version": "(a)"}, "version": "26.7.2"}},
+                 "management": {"client-capabilities": {"supported-versions": ["1.0.0"]}},
+                 "unknown": {"empty": {}, "tree": {"leaf": 1}}},
+                set(STATUS_ITEMS),
+            ),
+            {"device.operating-system.supplemental.extra-version": "(a)",
+             "device.operating-system.version": "26.7.2",
+             "management.client-capabilities": {"supported-versions": ["1.0.0"]},
+             "unknown.empty": {},
+             "unknown.tree.leaf": 1},
+        )
+
+    # rebuild
+
+    def test_get_target_status_no_status_reports(self):
+        self.assertIsNone(get_target_status(Target(self.enrolled_device)))
+
+    def test_get_target_status_without_full_report(self):
+        target = Target(self.enrolled_device)
+        target.add_status_report(self._status_report({"softwareupdate": {"install-state": "downloading"}}))
+        target.add_status_report(self._status_report({"diskmanagement": {"filevault": {"enabled": True}}}))
+        self.assertEqual(
+            get_target_status(target),
+            {"items": {"diskmanagement.filevault.enabled": True,
+                       "softwareupdate.install-state": "downloading"},
+             "errors": {}},
+        )
+
+    def test_get_target_status(self):
+        target = Target(self.enrolled_device)
+        # an older full report, replaced by the next one
+        target.add_status_report(self._status_report({"softwareupdate": {"install-state": "failed"}},
+                                                     full_report=True))
+        target.add_status_report(self._status_report(
+            {"device": {"operating-system": {"version": "26.7.1"}},
+             "diskmanagement": {"filevault": {"enabled": True}},
+             "services": {"background-task": [{"identifier": "A", "path": "/a"},
+                                              {"identifier": "B", "path": "/b"}]},
+             "softwareupdate": {"install-state": "prepared",
+                                "pending-version": {"build-version": "25G332", "os-version": "26.7.2"}}},
+            full_report=True,
+        ))
+        target.add_status_report(self._status_report(
+            {"device": {"operating-system": {"version": "26.7.2"}},
+             "services": {"background-task": [{"identifier": "C", "path": "/a"},
+                                              {"identifier": "A", "_removed": True}]},
+             "softwareupdate": {"install-state": "none", "pending-version": {}}},
+        ))
+        target.add_status_report(self._status_report(
+            errors=[{"StatusItem": "diskmanagement.filevault.enabled",
+                     "Reasons": [{"Code": "Error.MissingStatusValue"}]}],
+        ))
+        self.assertEqual(
+            get_target_status(target),
+            {"items": {"device.operating-system.version": "26.7.2",
+                       "services.background-task": [{"identifier": "B", "path": "/b"},
+                                                    {"identifier": "C", "path": "/a"}],
+                       "softwareupdate.install-state": "none"},
+             "errors": {"diskmanagement.filevault.enabled": [{"Code": "Error.MissingStatusValue"}]}},
+        )
+        target.add_status_report(self._status_report({"diskmanagement": {"filevault": {"enabled": False}}}))
+        status = get_target_status(target)
+        self.assertFalse(status["items"]["diskmanagement.filevault.enabled"])
+        self.assertEqual(status["errors"], {})
+
+    def test_apply_status_report_error_without_reasons(self):
+        status = apply_status_report(
+            {"items": {"softwareupdate.install-state": "none"}, "errors": {}},
+            self._status_report(errors=[{"StatusItem": "softwareupdate.install-state"}]),
+            set(STATUS_ITEMS),
+        )
+        self.assertEqual(status, {"items": {}, "errors": {"softwareupdate.install-state": []}})
+
+    def test_apply_status_report_unknown_list(self):
+        status = apply_status_report(
+            {"items": {"unknown.list": [1, 2]}, "errors": {}},
+            self._status_report({"unknown": {"list": [3]}, "softwareupdate": {"install-state": None}}),
+            set(STATUS_ITEMS),
+        )
+        self.assertEqual(status, {"items": {"unknown.list": [3]}, "errors": {}})
