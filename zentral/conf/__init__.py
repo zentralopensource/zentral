@@ -9,7 +9,7 @@ from zentral.core.exceptions import ImproperlyConfigured
 from .config import ConfigDict, ResolverMethodProxy
 
 
-__all__ = ['api_base_url', 'settings', 'user_templates_dir']
+__all__ = ['api_base_url', 'get_retention_days', 'settings', 'user_templates_dir']
 
 
 logger = logging.getLogger("zentral.conf")
@@ -156,6 +156,27 @@ settings = ZentralSettings(get_configuration())
 def api_base_url(for_client_cert_auth=False):
     fqdn = settings["api"]["fqdn_mtls" if for_client_cert_auth else "fqdn"]
     return f"https://{fqdn}"
+
+
+#
+# Retention days
+#
+
+
+def get_retention_days(app, key):
+    default = 30
+    try:
+        value = settings["apps"][app][key]
+    except KeyError:
+        return default
+    # int(True) is 1, so a boolean would give a retention of one day
+    if not isinstance(value, bool):
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            pass
+    logger.error("Wrong value set %s, default of %s used", key, default)
+    return default
 
 
 #

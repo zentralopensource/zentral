@@ -3,7 +3,7 @@ import logging
 import time
 from django.db import IntegrityError
 from django.utils import timezone
-from zentral.conf import settings
+from zentral.conf import get_retention_days
 
 
 __all__ = [
@@ -142,17 +142,7 @@ ORPHANS = (
 
 
 def get_default_snapshot_retention_days():
-    default_snapshot_retention_days = 30  # 30 days if absent
-    try:
-        default_snapshot_retention_days = int(
-            settings['apps']['zentral.contrib.inventory']['snapshot_retention_days']
-        )
-    except KeyError:
-        pass
-    except (TypeError, ValueError):
-        logger.error("Wrong value set snapshot_retention_days, default of %s used",
-                     default_snapshot_retention_days)
-    return max(1, default_snapshot_retention_days)  # minimum 1 day
+    return get_retention_days("zentral.contrib.inventory", "snapshot_retention_days")
 
 
 def get_cleanup_max_date(days=None):

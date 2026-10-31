@@ -88,7 +88,7 @@ class InventoryCleanupTest(TestCase):
     @contextmanager
     def inventory_conf(self, **conf):
         # the retention is read from the zentral configuration, not from the django settings
-        with patch("zentral.contrib.inventory.utils.cleanup.settings") as settings:
+        with patch("zentral.conf.settings") as settings:
             settings.__getitem__.return_value = ConfigDict({"zentral.contrib.inventory": conf})
             yield
 
@@ -107,7 +107,7 @@ class InventoryCleanupTest(TestCase):
 
     def test_default_snapshot_retention_days_bad_value(self):
         with self.inventory_conf(snapshot_retention_days="yolo"):
-            with self.assertLogs("zentral.contrib.inventory.utils.cleanup", level="ERROR") as cm:
+            with self.assertLogs("zentral.conf", level="ERROR") as cm:
                 self.assertEqual(get_default_snapshot_retention_days(), 30)
         self.assertEqual(cm.records[0].getMessage(),
                          "Wrong value set snapshot_retention_days, default of 30 used")
