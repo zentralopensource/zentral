@@ -120,7 +120,7 @@ psycopg2-binary==2.9.11
 ptyprocess==0.7.0
 pure_eval==0.2.3
 pyarrow==24.0.0
-pyasn1==0.6.4
+pyasn1==0.6.5
 pyasn1_modules==0.4.2
 pycparser==3.0
 pycurl==7.46.0
