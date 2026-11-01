@@ -1134,25 +1134,23 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_user_superuser_not_updated(self):
         _, realm_user = force_realm_user(realm=self.realm)
-        for remote in (False, True):
-            user_to_update = force_user(username=realm_user.username, active=True, remote=remote, superuser=True)
-            username = user_to_update.username
-            email = user_to_update.email
-            first_name = user_to_update.first_name
-            last_name = user_to_update.last_name
-            with self.assertLogs("zentral.realms.scim", level="WARNING") as cm:
-                response = self._put_update_user(realm_user, username, f"{get_random_string(12)}@zentral.com", False)
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(cm.output, [f"WARNING:zentral.realms.scim:Superuser {user_to_update.pk} "
-                                         f"not updated with realm user {realm_user.pk}"])
-            user_to_update.refresh_from_db()
-            self.assertTrue(user_to_update.is_superuser)
-            self.assertTrue(user_to_update.is_active)
-            self.assertEqual(user_to_update.username, username)
-            self.assertEqual(user_to_update.email, email)
-            self.assertEqual(user_to_update.first_name, first_name)
-            self.assertEqual(user_to_update.last_name, last_name)
-            user_to_update.delete()
+        user_to_update = force_user(username=realm_user.username, active=True, superuser=True)
+        username = user_to_update.username
+        email = user_to_update.email
+        first_name = user_to_update.first_name
+        last_name = user_to_update.last_name
+        with self.assertLogs("zentral.realms.scim", level="WARNING") as cm:
+            response = self._put_update_user(realm_user, username, f"{get_random_string(12)}@zentral.com", False)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(cm.output, [f"WARNING:zentral.realms.scim:Superuser {user_to_update.pk} "
+                                     f"not updated with realm user {realm_user.pk}"])
+        user_to_update.refresh_from_db()
+        self.assertTrue(user_to_update.is_superuser)
+        self.assertTrue(user_to_update.is_active)
+        self.assertEqual(user_to_update.username, username)
+        self.assertEqual(user_to_update.email, email)
+        self.assertEqual(user_to_update.first_name, first_name)
+        self.assertEqual(user_to_update.last_name, last_name)
 
     def test_update_user_put_no_external_id(self):
         _, user = force_realm_user(realm=self.realm)

@@ -3,6 +3,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login
 from django.urls import reverse
 from accounts.events import post_group_membership_updates
+from .exceptions import RealmLoginRefused
 from .middlewares import SESSION_KEY
 from .models import RealmGroupMapping
 
@@ -77,7 +78,9 @@ def login_callback(request, realm_authentication_session, next_url=None):
     realm_user = realm_authentication_session.user
     user = authenticate(request=request, realm_user=realm_user)
     if not user:
-        raise ValueError("Could not authenticate realm user")
+        # the same message for each reason: the realm login does not tell that the account is a superuser
+        raise RealmLoginRefused("This Zentral account cannot log in with a realm. "
+                                "Log in with a password, or ask an administrator.")
 
     # update session
     # need to update the session before the login to be able to get the information from the auth signal

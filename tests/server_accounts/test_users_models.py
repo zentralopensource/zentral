@@ -1,6 +1,8 @@
 from datetime import date, timedelta
+from importlib import import_module
 
 from accounts.models import APIToken, OIDCAPITokenIssuer, Policy, User
+from django.apps import apps
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils.crypto import get_random_string
@@ -165,3 +167,35 @@ class UsersModelsTestCase(TestCase, SerializeForEventAssertions):
             source=f'permit (principal == User::"{self.service_account.pk}", action, resource);',
         )
         self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
+
+    # superusers
+
+    def test_remote_user_is_not_a_superuser(self):
+        user = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                        is_remote=True, is_superuser=True)
+        user.refresh_from_db()
+        self.assertFalse(user.is_superuser)
+        user.is_superuser = True
+        user.save()
+        user.refresh_from_db()
+        self.assertFalse(user.is_superuser)
+
+    def test_service_account_is_not_a_superuser(self):
+        self.service_account.is_superuser = True
+        self.service_account.save()
+        self.service_account.refresh_from_db()
+        self.assertFalse(self.service_account.is_superuser)
+
+    def test_migration_removes_the_superuser_flag_of_the_remote_users(self):
+        local_superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                                   is_superuser=True)
+        remote_user = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                               is_remote=True)
+        # a remote superuser of before the upgrade, that User.save cannot write anymore
+        User.objects.filter(pk=remote_user.pk).update(is_superuser=True)
+        migration = import_module("accounts.migrations.0025_remote_users_are_not_superusers")
+        migration.remove_the_superuser_flag_of_the_remote_users(apps, None)
+        remote_user.refresh_from_db()
+        self.assertFalse(remote_user.is_superuser)
+        local_superuser.refresh_from_db()
+        self.assertTrue(local_superuser.is_superuser)

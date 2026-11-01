@@ -117,6 +117,9 @@ class Command(BaseCommand):
                     f"user with email {self.email} exists with a different username: {user.username}",
                     14
                 )
+        if user and user.is_remote and self.superuser:
+            # a remote user only logs in through a realm, and a superuser logs in with a password only
+            self.exit_with_error(f"remote user {self.username} cannot be a super user", 16)
         self.user = user
 
     def add_roles(self):

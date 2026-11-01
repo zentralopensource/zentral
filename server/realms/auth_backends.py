@@ -10,6 +10,11 @@ logger = logging.getLogger("server.accounts.auth_backends")
 
 
 class RealmBackend(ZentralBaseBackend):
+    def user_can_authenticate(self, user):
+        # a superuser logs in with a password only: through a realm, the IdP would be root.
+        # it also ends the open realm sessions of a user who becomes a superuser.
+        return not user.is_superuser and super().user_can_authenticate(user)
+
     @staticmethod
     def update_user(user, realm_user):
         # Update user if necessary
@@ -38,6 +43,7 @@ class RealmBackend(ZentralBaseBackend):
             user = realm_user.get_user_for_update(raise_on_multiple=True)
             if user:
                 if not self.user_can_authenticate(user):
+                    logger.warning("Realm user %s cannot log in as user %s", realm_user.pk, user.pk)
                     return None
                 self.update_user(user, realm_user)
                 return user
@@ -66,6 +72,8 @@ class RealmBackend(ZentralBaseBackend):
                     else:
                         if user.is_service_account:
                             logger.error("Realm user %s match with service account %s", realm_user.pk, user.pk)
-                        elif self.user_can_authenticate(user):
+                        elif not self.user_can_authenticate(user):
+                            logger.warning("Realm user %s cannot log in as user %s", realm_user.pk, user.pk)
+                        else:
                             self.update_user(user, realm_user)
                             return user

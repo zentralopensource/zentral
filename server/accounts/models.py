@@ -65,10 +65,10 @@ class User(AbstractUser):
             self.set_unusable_password()
 
     def save(self, *args, **kwargs):
-        if self.is_service_account:
-            # service accounts cannot be superusers
-            self.is_superuser = False
         if self.is_service_account or self.is_remote:
+            # a superuser logs in with a password only: a service account cannot log in,
+            # and a remote user only logs in through a realm, where the IdP would be root
+            self.is_superuser = False
             # service accounts or remote users cannot have a valid password
             self.set_unusable_password()
         else:

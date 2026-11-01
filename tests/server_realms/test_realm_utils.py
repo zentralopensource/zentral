@@ -5,6 +5,8 @@ from django.test import RequestFactory, TestCase
 from django.utils.crypto import get_random_string
 from accounts.events import FailedLoginEvent
 from accounts.models import User
+from realms.backends.views import finalize_session
+from realms.exceptions import RealmLoginRefused
 from realms.middlewares import SESSION_KEY
 from realms.models import RealmAuthenticationSession, RealmGroupMapping, RoleMapping
 from realms.utils import (apply_realm_group_mappings, apply_role_mappings,
@@ -66,14 +68,58 @@ class RealmUtilsTestCase(TestCase):
         request = RequestFactory().get("/")
         request.session = self.client.session
         request.user = AnonymousUser()
-        with self.assertRaises(ValueError) as cm:
+        with self.assertRaises(RealmLoginRefused) as cm:
             login_callback(request, ras)
-        self.assertEqual(cm.exception.args, ("Could not authenticate realm user",))
+        self.assertEqual(cm.exception.args, ("This Zentral account cannot log in with a realm. "
+                                             "Log in with a password, or ask an administrator.",))
         self.assertNotIn(SESSION_KEY, request.session)
         self.assertEqual(len(post_event.call_args_list), 1)
         self.assertIsInstance(post_event.call_args_list[0].args[0], FailedLoginEvent)
         user.refresh_from_db()
         self.assertIsNone(user.last_login)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_login_callback_superuser(self, post_event):
+        realm = force_realm(enabled_for_login=True)
+        _, realm_user = force_realm_user(realm=realm)
+        user = force_user(email=realm_user.email, superuser=True)
+        ras = RealmAuthenticationSession.objects.create(
+            realm=realm,
+            user=realm_user,
+            callback="realms.utils.login_callback",
+        )
+        request = RequestFactory().get("/")
+        request.session = self.client.session
+        request.user = AnonymousUser()
+        with self.assertRaises(RealmLoginRefused) as cm, \
+             self.assertLogs("server.accounts.auth_backends", level="WARNING"):
+            login_callback(request, ras)
+        self.assertEqual(cm.exception.args, ("This Zentral account cannot log in with a realm. "
+                                             "Log in with a password, or ask an administrator.",))
+        self.assertNotIn(SESSION_KEY, request.session)
+        self.assertEqual(len(post_event.call_args_list), 1)
+        self.assertIsInstance(post_event.call_args_list[0].args[0], FailedLoginEvent)
+        user.refresh_from_db()
+        self.assertIsNone(user.last_login)
+        self.assertTrue(user.is_superuser)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_finalize_session_refused_login(self, post_event):
+        realm = force_realm(enabled_for_login=True)
+        _, realm_user = force_realm_user(realm=realm)
+        force_user(email=realm_user.email, superuser=True)
+        ras = RealmAuthenticationSession.objects.create(
+            realm=realm,
+            callback="realms.utils.login_callback",
+        )
+        request = RequestFactory().get("/")
+        request.session = self.client.session
+        request.user = AnonymousUser()
+        with self.assertLogs("server.accounts.auth_backends", level="WARNING"), \
+             self.assertNoLogs("zentral.realms.backends.views"):
+            response = finalize_session(ras, request, realm_user)
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, "This Zentral account cannot log in with a realm.", status_code=403)
 
     # get_realm_user_mapped_groups
 

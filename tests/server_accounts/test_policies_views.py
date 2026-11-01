@@ -251,7 +251,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         get_paginate_by.return_value = 1
         p = force_policy()
         self._promote_user_to_superuser()
-        self.login("accounts.view_policy", realm_user=True)
+        self.login_with_forced_realm_session("accounts.view_policy")
         response = self.client.get(self.build_url("policies"))
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["request"].realm_authentication_session.is_remote)
@@ -273,7 +273,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
     def test_create_policy_remote_session_superuser_forbidden(self):
         # Even a superuser logged in through a realm cannot author policies.
         self._promote_user_to_superuser()
-        self.login(realm_user=True)
+        self.login_with_forced_realm_session()
         response = self.client.get(self.build_url("create_policy"))
         self.assertEqual(response.status_code, 403)
 
@@ -531,7 +531,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
     def test_update_policy_remote_session_superuser_forbidden(self):
         p = force_policy()
         self._promote_user_to_superuser()
-        self.login(realm_user=True)
+        self.login_with_forced_realm_session()
         response = self.client.get(self.build_url("update_policy", p.pk))
         self.assertEqual(response.status_code, 403)
 
@@ -604,7 +604,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
     def test_delete_policy_remote_session_superuser_forbidden(self):
         p = force_policy()
         self._promote_user_to_superuser()
-        self.login(realm_user=True)
+        self.login_with_forced_realm_session()
         response = self.client.get(self.build_url("delete_policy", p.pk))
         self.assertEqual(response.status_code, 403)
 

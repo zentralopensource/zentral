@@ -23,6 +23,8 @@ Your IdP provides user information to authenticate and log in to Zentral with SS
 
 Only a superuser logged in without a Realm can create or change a Realm.
 
+A superuser cannot log in with a Realm: through a Realm, the IdP would control the superuser account. A superuser logs in with a password. A Realm login that finds a superuser fails, and a Realm session stops when its user becomes a superuser. A user that a Realm login made has no password, so it cannot be a superuser.
+
 It is good practice to separate users that will have access to the Zentral Web Console from users that will only “consume” the services (enrollment in MDM, the User Portal). You would end up with end-users that could log in to Zentral otherwise, whether or not they have permissions to change or view any settings. To do this, you can, and should, configure multiple Realms: One for Zentral Administration, one for MDM Enrollment and the User Portal.
 
 #### SAML Realms 
@@ -86,7 +88,6 @@ If you can view the Realm Users, these pages show their SCIM status:
 
 "Last SCIM update" is "-" if SCIM never wrote the Realm User. The IdP does not always send a user again when nothing changes, so an old time does not always mean that SCIM stopped.
 
-
 ### Create a Realm Group
 
 1. Select "Groups" from the platform settings menu in the top right corner.  
@@ -102,8 +103,6 @@ If you can view the Realm Users, these pages show their SCIM status:
 4. Fill in the fields with a Claim and Value that match with the configuration of your IdP. Note: the Separator can usually be left blank  
 5. Select the target Realm Group from the drop-down  
 6. Click Save
-
-In the console, if you are not a superuser, the Realm Group and its parents must map only Roles that you have. The same rule applies when you add a Realm User to a Realm Group in the console.
 
 Each change in the console of a Realm Group, of its members, of a Realm Group mapping or of a Role mapping emits a `zentral_audit` event. The event of a Role mapping links to the Realm Group and to the Role.
 
@@ -134,7 +133,18 @@ The Role is now an empty label. To grant it access, see [Writing a policy](pbac.
 4. Select the Realm Group and select the Role.
 5. Click Save.
 
-If you are not a superuser, you can map only a Role that you have.
+### Who can give a Role
+
+In the console, the Roles that you can give depend on how you are logged in:
+
+| Where | Superuser | Other user, logged in without a Realm | User logged in with a Realm |
+|---|---|---|---|
+| User or Service Account form | All Roles | The Roles that you have | None |
+| Role mapping | All Roles | The Roles that you have | None |
+| Realm Group mapping | All Realm Groups | A Realm Group that, with its parents, maps only Roles that you have | None |
+| Add a Realm User to a Realm Group | All Realm Groups | A Realm Group that, with its parents, maps only Roles that you have | None |
+
+Each operation also needs its permission. A superuser cannot log in with a Realm. The IdP controls the memberships that SCIM and the Realm Group mappings write, so this rule does not apply to them.
 
 ## SSO Setup Guides
 

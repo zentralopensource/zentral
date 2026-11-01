@@ -114,6 +114,17 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         self.assert_no_event_published(callbacks, post_event)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_promote_remote_user_to_superuser(self, post_event):
+        user = User.objects.create_user("yolo", "fomo@example.com", is_remote=True)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            with self.assertRaises(SystemExit) as cm:
+                self.call_command("yolo", "fomo@example.com", "--superuser")
+        self.assertEqual(cm.exception.code, 16)
+        user.refresh_from_db()
+        self.assertFalse(user.is_superuser)
+        self.assert_no_event_published(callbacks, post_event)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_user_invalid_username(self, post_event):
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             with self.assertRaises(SystemExit) as cm:

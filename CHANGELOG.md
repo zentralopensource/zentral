@@ -205,6 +205,21 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 ### Backward incompatibilities
 
 
+#### 🧨 A superuser cannot log in with a realm
+
+A realm login that finds a superuser fails now, and the realm session of a user stops when the user becomes a superuser. A superuser logs in with a password. Through a realm, the IdP would control each superuser account. A user that a realm login made has no password, so it cannot be a superuser: the update page of such a user does not show the superuser status, and `create_zentral_user --superuser` refuses such a user and exits with the code 16. The upgrade removes the superuser status from each remote user, without a check.
+
+Before the upgrade, make sure that the deployment has a superuser that logs in with a password. This query lists the active superusers. The upgrade removes the status of the rows with `is_remote` true:
+
+```sql
+SELECT username, email, is_remote, password NOT LIKE '!%' AS has_password
+FROM accounts_user
+WHERE is_superuser AND NOT is_service_account AND is_active;
+```
+
+If no row has `is_remote` false and `has_password` true, make a local superuser before the upgrade, with `python server/manage.py create_zentral_user --superuser --send-reset <username> <email>`. The new superuser sets a password with the link of the email.
+
+
 #### 🧨 A superuser gets no API token and no role from `create_zentral_user`
 
 `create_zentral_user --superuser` refuses `--with-api-token` and exits with the code 8, and refuses `--role` and exits with the code 9. A superuser skips PBAC: its API token is a credential that no policy bounds, and a role grants it nothing it cannot already do. Use a service account for an automation, with the roles that its work needs — `--service-account --role "Editor"` makes the account, adds the role and prints its first API token. A superuser that already has an API token keeps it: delete it from the web console or with the API.

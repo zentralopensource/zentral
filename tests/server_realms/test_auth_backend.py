@@ -122,8 +122,22 @@ class RealmBackendTestCase(TestCase):
         get_user_for_update.return_value = None
         request = self.factory.get("/")
         _, realm_user = force_realm_user(realm=self.realm)
-        force_user(email=realm_user.email, active=False, remote=True)
-        self.assertIsNone(self.backend.authenticate(request, realm_user))
+        user = force_user(email=realm_user.email, active=False, remote=True)
+        with self.assertLogs("server.accounts.auth_backends", level="WARNING") as cm:
+            self.assertIsNone(self.backend.authenticate(request, realm_user))
+        self.assertEqual(cm.output, [f"WARNING:server.accounts.auth_backends:Realm user {realm_user.pk} "
+                                     f"cannot log in as user {user.pk}"])
+
+    @patch("realms.models.RealmUser.get_user_for_update")
+    def test_concurrent_superuser_refused(self, get_user_for_update):
+        get_user_for_update.return_value = None
+        request = self.factory.get("/")
+        _, realm_user = force_realm_user(realm=self.realm)
+        user = force_user(email=realm_user.email, superuser=True)
+        with self.assertLogs("server.accounts.auth_backends", level="WARNING") as cm:
+            self.assertIsNone(self.backend.authenticate(request, realm_user))
+        self.assertEqual(cm.output, [f"WARNING:server.accounts.auth_backends:Realm user {realm_user.pk} "
+                                     f"cannot log in as user {user.pk}"])
 
     @patch("realms.models.RealmUser.get_user_for_update")
     def test_concurrent_service_account_refused(self, get_user_for_update):
@@ -165,6 +179,20 @@ class RealmBackendTestCase(TestCase):
     def test_get_user_inactive(self):
         user = force_user(active=False)
         self.assertIsNone(self.backend.get_user(user.pk))
+
+    def test_get_user_superuser(self):
+        # a realm session ends when its user becomes a superuser
+        user = force_user(superuser=True)
+        self.assertIsNone(self.backend.get_user(user.pk))
+
+    def test_local_superuser_refused(self):
+        request = self.factory.get("/")
+        _, realm_user = force_realm_user(realm=self.realm)
+        user = force_user(username=realm_user.username, superuser=True)
+        with self.assertLogs("server.accounts.auth_backends", level="WARNING") as cm:
+            self.assertIsNone(self.backend.authenticate(request, realm_user))
+        self.assertEqual(cm.output, [f"WARNING:server.accounts.auth_backends:Realm user {realm_user.pk} "
+                                     f"cannot log in as user {user.pk}"])
 
     def test_get_user_service_account(self):
         user = force_user(service_account=True)

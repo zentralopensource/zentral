@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from importlib import import_module
 from typing import Optional
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth.models import Group
@@ -103,6 +104,20 @@ class LoginCase(ABC):
                 "expires": None,
             }
             self.client.cookies[session_cookie].update(cookie_data)
+
+    def login_with_forced_realm_session(self, *permissions):
+        """Log in with a realm session that the realm login refuses to make, for a superuser for example.
+
+        The views that refuse a realm session must refuse it too.
+        """
+        self.set_permissions(*permissions)
+        ras = RealmAuthenticationSession.objects.create(
+            realm=self._get_realm(),
+            user=self._get_realm_user(),
+            callback="realms.utils.login_callback",
+        )
+        self.enterContext(patch("realms.middlewares.get_session", return_value=ras))
+        self.client.force_login(self._get_user())
 
     def login_with_policy(self, policy):
         self.set_policy(policy)

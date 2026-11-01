@@ -850,7 +850,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotIn("username", form.fields)
         self.assertNotIn("email", form.fields)
         self.assertNotIn("description", form.fields)
-        self.assertIn("is_superuser", form.fields)  # local superuser requester → can grant
+        self.assertNotIn("is_superuser", form.fields)  # a remote user is never a superuser
 
     def test_unique_superuser_update_get(self):
         # ui_user is the only superuser and edits itself: it must not be able
@@ -979,7 +979,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     def test_user_update_remote_session_superuser_permission_denied(self):
         self._promote_ui_user_to_superuser()
-        self.login(realm_user=True)
+        self.login_with_forced_realm_session()
         self.permission_denied("update_user", self.user.id)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -1020,6 +1020,20 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotEqual(self.user.email, email)
         self.assertEqual(len(callbacks), 0)
         post_event.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_local_superuser_requester_cannot_grant_superuser_to_remote_user(self, post_event):
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.remote_user.id,)),
+                {"items_per_page": 10, "is_superuser": "on"},
+                follow=True,
+            )
+        self.assertTemplateUsed(response, "accounts/user_detail.html")
+        self.remote_user.refresh_from_db()
+        self.assertFalse(self.remote_user.is_superuser)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_local_superuser_requester_can_grant_superuser(self, post_event):

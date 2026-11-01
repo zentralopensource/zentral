@@ -57,7 +57,16 @@ Authorization is granted by writing Cedar policies that reference a Role (or a s
 
 Federated users are not authorized to modify the users and the user federation settings, regardless of which policies target them.
 
-Only a superuser logged in without a realm can write the policies and the realms, and give the superuser status. Only a superuser can change a superuser. A user who is not a superuser can give only the roles that they have: on a user, on a service account, and through the realm groups in the console.
+A superuser cannot log in with a realm, and a user that a realm login made is never a superuser. The other operations on the users, the roles and the realms depend on the login:
+
+| Operation | Superuser | Other user, local login | Realm login |
+|---|---|---|---|
+| Write a policy or a realm | Yes | No | No |
+| Give or remove the superuser status | Yes | No | No |
+| Change or delete a superuser | Yes | No | No |
+| Invite, change or delete a user or a service account | Yes | With the permission | No |
+| Change the username or the email of a local user | Yes | Their own, with the permission | No |
+| Give a role, on a user, a service account or through a realm group | All roles | The roles that they have | No |
 
 Each view and each endpoint that a typed PBAC action protects follows the [PBAC rules for views and endpoints](pbac-rules.md). These rules also give the leak classes that rate a finding.
 

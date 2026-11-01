@@ -229,7 +229,11 @@ class UpdateUserForm(RoleMembershipGrantMixin, forms.ModelForm):
         if not self.instance.username_and_email_editable() or not self._request_user_can_change_credentials():
             del self.fields["username"]
             del self.fields["email"]
-        if not self.instance.is_superuser_editable() or not self._request_user_can_grant_superuser():
+        if (
+            self.instance.is_remote
+            or not self.instance.is_superuser_editable()
+            or not self._request_user_can_grant_superuser()
+        ):
             del self.fields["is_superuser"]
         if self.instance.is_remote:
             del self.fields["groups"]

@@ -2,7 +2,7 @@ import logging
 
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
-from realms.exceptions import RealmUserError
+from realms.exceptions import RealmLoginRefused, RealmUserError
 from realms.models import RealmUser
 from realms.utils import apply_realm_group_mappings
 
@@ -25,6 +25,9 @@ def finalize_session(session, request, realm_user, expires_at=None):
             response = callback_function(request=request,
                                          realm_authentication_session=session,
                                          **session.callback_kwargs)
+        except RealmLoginRefused as e:
+            # the auth backend already logged the reason, and the realm works
+            return ras_finalization_error(request, session, realm_user=realm_user, exception=e, status=403)
         except Exception as e:
             logger.exception("Could not finalize the authentication session")
             return ras_finalization_error(request, session, realm_user=realm_user, exception=e)
@@ -37,7 +40,7 @@ def finalize_session(session, request, realm_user, expires_at=None):
                 raise ValueError("Wrong callback response")
 
 
-def ras_finalization_error(request, ras, realm_user=None, exception=None):
+def ras_finalization_error(request, ras, realm_user=None, exception=None, status=503):
     ctx = {"realm": ras.realm,
            "message": str(exception)}
     if isinstance(exception, RealmUserError):
@@ -53,4 +56,4 @@ def ras_finalization_error(request, ras, realm_user=None, exception=None):
                          for a in ("username", "email", "first_name", "last_name", "full_name"))
             if v
         }
-    return render(request, "realms/ras_finalization_error.html", ctx, status=503)
+    return render(request, "realms/ras_finalization_error.html", ctx, status=status)
