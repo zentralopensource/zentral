@@ -23,6 +23,8 @@
       {% if perms.realms.delete_realmgroup and object.can_be_deleted %}
         {% url 'realms:delete_group' object.pk as url %}
         {% button 'DELETE' url "Delete group" %}
+      {% elif perms.realms.delete_realmgroup and not object.scim_managed %}
+        <span class="text-secondary small">To delete this group, remove its mappings and its child groups first.</span>
       {% endif %}
     </div>
   </div>

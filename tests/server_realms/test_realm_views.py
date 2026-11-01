@@ -1225,6 +1225,53 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "realms/realmgroup_list.html")
         self.assertNotContains(response, realm_group.display_name)
 
+    def _assert_realm_group_not_deletable(self, realm_group):
+        self.login("realms.delete_realmgroup", "realms.view_realmgroup")
+        for method in (self.client.get, self.client.post):
+            response = method(reverse("realms:delete_group", args=(realm_group.pk,)))
+            self.assertEqual(response.status_code, 404)
+        self.assertTrue(RealmGroup.objects.filter(pk=realm_group.pk).exists())
+        self.assertFalse(realm_group.can_be_deleted())
+        response = self.client.get(reverse("realms:group", args=(realm_group.pk,)))
+        self.assertNotContains(response, reverse("realms:delete_group", args=(realm_group.pk,)))
+        self.assertContains(response, "To delete this group, remove its mappings and its child groups first.")
+        response = self.client.get(reverse("realms:groups"))
+        self.assertNotContains(response, reverse("realms:delete_group", args=(realm_group.pk,)))
+
+    def test_delete_realm_group_with_realm_group_mapping_not_found(self):
+        self._assert_realm_group_not_deletable(force_realm_group_mapping().realm_group)
+
+    def test_delete_realm_group_with_role_mapping_not_found(self):
+        self._assert_realm_group_not_deletable(force_role_mapping().realm_group)
+
+    def test_delete_realm_group_with_child_group_not_found(self):
+        realm_group = force_realm_group()
+        force_realm_group(realm=realm_group.realm, parent=realm_group)
+        self._assert_realm_group_not_deletable(realm_group)
+
+    def test_realm_group_delete_note(self):
+        realm_group = force_role_mapping().realm_group
+        # without the delete permission
+        self.login("realms.view_realmgroup")
+        response = self.client.get(reverse("realms:group", args=(realm_group.pk,)))
+        self.assertNotContains(response, "To delete this group")
+        # a SCIM group is never deleted in the console
+        realm_group.scim_managed = True
+        realm_group.save()
+        self.login("realms.view_realmgroup", "realms.delete_realmgroup")
+        response = self.client.get(reverse("realms:group", args=(realm_group.pk,)))
+        self.assertNotContains(response, "To delete this group")
+        # a deletable group
+        realm_group = force_realm_group()
+        response = self.client.get(reverse("realms:group", args=(realm_group.pk,)))
+        self.assertContains(response, reverse("realms:delete_group", args=(realm_group.pk,)))
+        self.assertNotContains(response, "To delete this group")
+
+    def test_delete_realm_group_child_group(self):
+        parent = force_realm_group()
+        realm_group = force_realm_group(realm=parent.realm, parent=parent)
+        self.assertTrue(realm_group.can_be_deleted())
+
     # realm users
 
     def test_realm_users_redirect(self):

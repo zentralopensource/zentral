@@ -7,7 +7,7 @@ import django.dispatch
 from accounts.models import User
 from django.contrib.auth.models import Group
 from django.db import connection, models
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.urls import reverse
 from django.utils.functional import cached_property
 
@@ -136,7 +136,13 @@ def iter_realm_group_chain(*, realm_group_pk=None, realm_user_pk=None):
 
 class RealmGroupManager(models.Manager):
     def for_deletion(self):
-        return self.filter(scim_managed=False)
+        # the mappings and the parent of the child groups give roles. A mapping is deleted on its own page,
+        # with an audit event, and only SCIM sets the parent of a group
+        return self.filter(scim_managed=False).filter(
+            ~Exists(RealmGroupMapping.objects.filter(realm_group=OuterRef("pk"))),
+            ~Exists(RoleMapping.objects.filter(realm_group=OuterRef("pk"))),
+            ~Exists(RealmGroup.objects.filter(parent=OuterRef("pk"))),
+        )
 
     def for_update(self):
         return self.filter(scim_managed=False)

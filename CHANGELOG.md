@@ -227,6 +227,8 @@ Only a user logged in without a realm can invite a user, create a service accoun
 
 In the console, a user who is not a superuser can create or change a role mapping only for a role that they have. A realm group mapping, and a user added to a realm group, follow the same rule: the realm group and its parents must map only roles that the user has. The user and service account forms already applied this rule.
 
+A realm group that has a realm group mapping, a role mapping or a child group cannot be deleted in the console now. Delete its mappings first: each deletion emits its own audit event. A child group gets its parent from SCIM, so change it in the IdP. Before, the deletion of the group removed its mappings with no event, and its child groups lost the roles of the group and of its parents with no event.
+
 
 #### 🧨 The block and the unblock of an MDM device have their own PBAC actions
 

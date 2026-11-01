@@ -107,6 +107,8 @@ In the console, if you are not a superuser, the Realm Group and its parents must
 
 Each change in the console of a Realm Group, of its members, of a Realm Group mapping or of a Role mapping emits a `zentral_audit` event. The event of a Role mapping links to the Realm Group and to the Role.
 
+You can delete a Realm Group in the console only when it has no Realm Group mapping, no Role mapping and no child group. Delete the mappings first, on their own pages: each deletion emits its own event. A child group gets its parent from SCIM, so change it in the IdP. The deletion of a Realm Group does not emit an event for each of its members.
+
 ## Roles
 
 Roles are named labels that group users and service accounts. A Role on its own grants no access — you authorize it by writing a [PBAC policy](pbac.md) that references it.
