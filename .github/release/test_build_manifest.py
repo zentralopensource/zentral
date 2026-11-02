@@ -21,9 +21,9 @@ SPEC = importlib.util.spec_from_file_location("build_manifest", SCRIPT)
 build_manifest = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(build_manifest)
 
-COMMIT = "3750ccd7c0c8a4c15683aaca0ccd3d8dabbf33e9"
-URL = "s3://zentral-pro-services-artifacts-eu-central-1/zentral/zentral/zentral-v2026.5.21.tar.gz"
-OTHER_URL = "s3://zentral-pro-services-artifacts-us-east-1/zentral/zentral/zentral-v2026.5.21.tar.gz"
+COMMIT = "0123456789abcdef0123456789abcdef01234567"
+URL = "s3://bucket-a/zentral/zentral/zentral-v2026.5.21.tar.gz"
+OTHER_URL = "s3://bucket-b/zentral/zentral/zentral-v2026.5.21.tar.gz"
 
 
 class VersionTestCase(unittest.TestCase):
@@ -122,11 +122,11 @@ class BuildTestCase(unittest.TestCase):
         with patch.object(pathlib.Path, "read_bytes", autospec=True, side_effect=pathlib.Path.read_bytes) as read:
             documents = self.build(urls=(URL, OTHER_URL))
         self.assertEqual(read.call_count, 1)
-        self.assertEqual(sorted(documents), ["zentral-pro-services-artifacts-eu-central-1",
-                                             "zentral-pro-services-artifacts-us-east-1"])
-        self.assertEqual(documents["zentral-pro-services-artifacts-us-east-1"]["archive"]["url"], OTHER_URL)
-        self.assertEqual(documents["zentral-pro-services-artifacts-eu-central-1"]["archive"]["sha256"],
-                         documents["zentral-pro-services-artifacts-us-east-1"]["archive"]["sha256"])
+        self.assertEqual(sorted(documents), ["bucket-a",
+                                             "bucket-b"])
+        self.assertEqual(documents["bucket-b"]["archive"]["url"], OTHER_URL)
+        self.assertEqual(documents["bucket-a"]["archive"]["sha256"],
+                         documents["bucket-b"]["archive"]["sha256"])
 
     def test_a_url_that_names_another_file_stops(self):
         with self.assertRaises(SystemExit):

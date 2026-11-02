@@ -36,10 +36,6 @@ permissions:
   id-token: write  # to assume the AWS roles
   contents: read
 
-env:
-  # The regions of the artifacts buckets, as for the other artifacts.
-  S3_REGIONS: eu-central-1 eu-west-2 us-east-1 us-east-2
-
 jobs:
   # The manifest writer and com.zentral.manifest.json, checked with
   # zentral-manifest, which is not on PyPI: on each change, not only when a
@@ -60,7 +56,7 @@ jobs:
       - name: Install zentral-manifest
         uses: ./.github/actions/install-zentral-manifest
         with:
-          bucket: ${{ vars.AWS_BUCKET_PREFIX }}-eu-central-1
+          bucket: ${{ vars.AWS_BUCKET_PREFIX }}-${{ vars.AWS_REGION }}
 
       - name: Test the manifest writer
         run: python3 -m unittest discover -s .github/release -v
@@ -119,7 +115,7 @@ jobs:
       - name: Install zentral-manifest
         uses: ./.github/actions/install-zentral-manifest
         with:
-          bucket: ${{ vars.AWS_BUCKET_PREFIX }}-eu-central-1
+          bucket: ${{ vars.AWS_BUCKET_PREFIX }}-${{ vars.AWS_REGION }}
 
       # Each copy of the archive gets its own manifest, naming that copy under
       # archive: sidecars/<bucket>/<archive>.json, written before anything is
@@ -127,13 +123,19 @@ jobs:
       - name: Build the manifests, one per bucket
         env:
           AWS_BUCKET_PREFIX: ${{ vars.AWS_BUCKET_PREFIX }}
+          # the regions of the artifacts buckets, separated by spaces
+          AWS_BUCKET_REGIONS: ${{ vars.AWS_BUCKET_REGIONS }}
           ARCHIVE: ${{ steps.release.outputs.archive }}
           COMMIT: ${{ steps.release.outputs.commit }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
+          if [ -z "$AWS_BUCKET_REGIONS" ]; then
+            echo "::error::AWS_BUCKET_REGIONS is not set"
+            exit 1
+          fi
           urls=()
-          for region in $S3_REGIONS; do
+          for region in $AWS_BUCKET_REGIONS; do
             urls+=(--url "s3://$AWS_BUCKET_PREFIX-$region/zentral/zentral/$ARCHIVE")
           done
           python3 .github/release/build_manifest.py manifests "dist/$ARCHIVE" \
@@ -147,6 +149,7 @@ jobs:
         if: github.event_name == 'push' || !inputs.dry_run
         env:
           AWS_BUCKET_PREFIX: ${{ vars.AWS_BUCKET_PREFIX }}
+          AWS_BUCKET_REGIONS: ${{ vars.AWS_BUCKET_REGIONS }}
           ARCHIVE: ${{ steps.release.outputs.archive }}
         run: |
           set -euo pipefail
@@ -170,7 +173,7 @@ jobs:
               exit 1
             fi
           }
-          for region in $S3_REGIONS; do
+          for region in $AWS_BUCKET_REGIONS; do
             bucket="$AWS_BUCKET_PREFIX-$region"
             put_once "$bucket" "zentral/zentral/$ARCHIVE" "dist/$ARCHIVE" application/gzip
             put_once "$bucket" "zentral/zentral/$ARCHIVE.json" "sidecars/$bucket/$ARCHIVE.json" application/json

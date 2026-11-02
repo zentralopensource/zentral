@@ -3,11 +3,11 @@
 
     build_manifest.py version HEAD
     build_manifest.py manifests dist/zentral-v2026.5.21.tar.gz --commit <sha> --version v2026.5.21 --out sidecars \
-        --url s3://zentral-pro-services-artifacts-eu-central-1/zentral/zentral/zentral-v2026.5.21.tar.gz \
-        --url s3://zentral-pro-services-artifacts-us-east-1/zentral/zentral/zentral-v2026.5.21.tar.gz
+        --url s3://<bucket>/zentral/zentral/zentral-v2026.5.21.tar.gz \
+        --url s3://<other bucket>/zentral/zentral/zentral-v2026.5.21.tar.gz
 
 The version is what git describe names the commit, past the newest release tag
-it contains: the bare tag at a release, v2026.5.20-12-g3750ccd7c past one. The
+it contains: the bare tag at a release, v2026.5.20-12-gabc1234 past one. The
 beta and rc tags are skipped, so that every version orders by its release.
 ztl_admin computes the version of a release cloned from git with the same
 flags, and the two sources have to agree.
