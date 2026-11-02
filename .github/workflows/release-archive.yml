@@ -70,17 +70,15 @@ jobs:
 
   release_archive:
     needs: check
-    # Only zentralpro/zentral publishes, and the AWS role trusts only its
-    # zentral-release environment. The condition is checked before the job
-    # enters the environment, so another copy of the repository never creates
-    # one. A release candidate tag is not a release.
+    # Only zentralpro/zentral publishes. The AWS role trusts only its release
+    # tags and its security/ branches, which only its admins can create or
+    # move. A release candidate tag is not a release.
     if: >-
       github.repository == 'zentralpro/zentral'
       && (github.event_name == 'workflow_dispatch'
           || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
               && !contains(github.ref_name, '-')))
     runs-on: ubuntu-latest
-    environment: zentral-release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
