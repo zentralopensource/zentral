@@ -296,15 +296,15 @@ def macos_version_from_build(build):
                          "22A400", "22D68", "22E261", "22E772610a", "22F82", "22F770820b", "22F770820d",
                          "22G90", "22G313", "22H221",
                          "23B81", "23B2082", "23C71", "23D60", "23G93", "23H222", "23J30",
-                         "24A348", "24B91", "24D70", "24E263", "24G90", "24G231",
+                         "24A348", "24B91", "24D70", "24E263", "24G90", "24G231", "24H32",
                          "25A362", "25D2128", "25D771280a", "25E253", "25F80", "25G76", "25G241",
                          "26A434"):
                 patch = 1
             elif build in ("21G309", "21G320", "21G1974",
                            "22G91", "22G320", "22H313",
                            "23B2091", "23B92", "23H311", "23J126",
-                           "24D81", "24G325",
-                           "25D2140", "25F84", "25G83"):
+                           "24D81", "24G325", "24H232",
+                           "25D2140", "25F84", "25G83", "25G332"):
                 patch = 2
             elif build in ("21G417", "21G419", "21H1015",
                            "22G436", "22H417",
@@ -322,14 +322,19 @@ def macos_version_from_build(build):
                 patch = 6
             elif build in ("21G651", "22G720", "22H722", "23H723", "23J520", "24G720"):
                 patch = 7
-            elif build in ("21G725", "22G820", "22H730", "23H730"):
+            elif build in ("21G725", "22G820", "22H730", "23H730", "23J620", "24G824"):
                 patch = 8
-            elif build in ("21G726", "22G830"):
+            elif build in ("21G726", "22G830", "23J631", "24G830"):
                 patch = 9
             else:
                 patch = 0
-            if patch_letter >= "G" and major == 26 and patch_number >= 229:
+            if patch_letter >= "B" and major == 27:
+                # there was no macOS 27.1
+                minor += 1
+            elif patch_letter >= "G" and major == 26 and patch_number >= 229:
                 minor = 7
+            elif patch_letter >= "H" and major == 15:
+                minor = 8
             elif patch_letter >= "G" and major == 15 and patch_number >= 222:
                 minor = 7
             elif patch_letter >= "G" and major == 12 and patch_number >= 816:
