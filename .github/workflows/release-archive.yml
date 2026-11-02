@@ -9,8 +9,22 @@ name: Release archive
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
+    # Not applied to the tags: each release tag runs.
+    paths:
+      - com.zentral.manifest.json
+      - .github/release/**
+      - .github/actions/install-zentral-manifest/**
+      - .github/workflows/release-archive.yml
+  pull_request:
+    paths:
+      - com.zentral.manifest.json
+      - .github/release/**
+      - .github/actions/install-zentral-manifest/**
+      - .github/workflows/release-archive.yml
   workflow_dispatch:
     inputs:
       dry_run:
@@ -19,7 +33,7 @@ on:
         default: true
 
 permissions:
-  id-token: write  # to assume the AWS role
+  id-token: write  # to assume the AWS roles
   contents: read
 
 env:
@@ -27,14 +41,44 @@ env:
   S3_REGIONS: eu-central-1 eu-west-2 us-east-1 us-east-2
 
 jobs:
+  # The manifest writer and com.zentral.manifest.json, checked with
+  # zentral-manifest, which is not on PyPI: on each change, not only when a
+  # tag is pushed. Only zentralpro/zentral can read the wheel.
+  check:
+    if: github.repository == 'zentralpro/zentral'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ZENTRAL_MANIFEST_INSTALL_ROLE_ARN }}
+          role-session-name: zentral_release_archive_check
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install zentral-manifest
+        uses: ./.github/actions/install-zentral-manifest
+        with:
+          bucket: ${{ vars.AWS_BUCKET_PREFIX }}-eu-central-1
+
+      - name: Test the manifest writer
+        run: python3 -m unittest discover -s .github/release -v
+
+      - name: Check com.zentral.manifest.json
+        run: python3 .github/release/build_manifest.py check
+
   release_archive:
+    needs: check
     # Only zentralpro/zentral publishes, and the AWS role trusts only its
     # zentral-release environment. The condition is checked before the job
     # enters the environment, so another copy of the repository never creates
     # one. A release candidate tag is not a release.
     if: >-
       github.repository == 'zentralpro/zentral'
-      && (github.event_name == 'workflow_dispatch' || !contains(github.ref_name, '-'))
+      && (github.event_name == 'workflow_dispatch'
+          || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+              && !contains(github.ref_name, '-')))
     runs-on: ubuntu-latest
     environment: zentral-release
     steps:
@@ -79,11 +123,9 @@ jobs:
         with:
           bucket: ${{ vars.AWS_BUCKET_PREFIX }}-eu-central-1
 
-      - name: Test the manifest writer
-        run: python3 -m unittest discover -s .github/release -v
-
       # Each copy of the archive gets its own manifest, naming that copy under
-      # archive: one per bucket, written before anything is uploaded.
+      # archive: sidecars/<bucket>/<archive>.json, written before anything is
+      # uploaded.
       - name: Build the manifests, one per bucket
         env:
           AWS_BUCKET_PREFIX: ${{ vars.AWS_BUCKET_PREFIX }}
@@ -92,18 +134,17 @@ jobs:
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
+          urls=()
           for region in $S3_REGIONS; do
-            mkdir -p "sidecars/$region"
-            python3 .github/release/build_manifest.py manifest "dist/$ARCHIVE" \
-              --url "s3://$AWS_BUCKET_PREFIX-$region/zentral/zentral/$ARCHIVE" \
-              --commit "$COMMIT" --version "$VERSION" > "sidecars/$region/$ARCHIVE.json"
+            urls+=(--url "s3://$AWS_BUCKET_PREFIX-$region/zentral/zentral/$ARCHIVE")
           done
+          python3 .github/release/build_manifest.py manifests "dist/$ARCHIVE" \
+            --commit "$COMMIT" --version "$VERSION" --out sidecars "${urls[@]}"
 
       # Written once: an instance checks the archive against the manifest
-      # beside it. An object already there is compared, never replaced, so a
-      # run can be re-run. The archive goes first, so that a manifest never
-      # names a missing archive. The buckets encrypt with SSE-S3, so the ETag
-      # of an object put in one part is the MD5 of its bytes.
+      # beside it. An object already there is compared by the SHA-256
+      # checksum S3 keeps, never replaced, so a run can be re-run. The archive
+      # goes first, so that a manifest never names a missing archive.
       - name: Publish the archive and its manifests
         if: github.event_name == 'push' || !inputs.dry_run
         env:
@@ -112,15 +153,17 @@ jobs:
         run: |
           set -euo pipefail
           put_once() {
-            local bucket="$1" key="$2" file="$3" content_type="$4" err etag
+            local bucket="$1" key="$2" file="$3" content_type="$4" err checksum
             err="$(mktemp)"
             if aws s3api put-object --bucket "$bucket" --key "$key" --body "$file" \
-                 --content-type "$content_type" --if-none-match '*' > /dev/null 2> "$err"; then
+                 --content-type "$content_type" --checksum-algorithm SHA256 \
+                 --if-none-match '*' > /dev/null 2> "$err"; then
               echo "s3://$bucket/$key: written"
             elif grep -q PreconditionFailed "$err"; then
-              etag="$(aws s3api head-object --bucket "$bucket" --key "$key" --query ETag --output text | tr -d '"')"
-              if [ "$etag" != "$(md5sum "$file" | cut -d' ' -f1)" ]; then
-                echo "::error::s3://$bucket/$key is already there, with other bytes"
+              checksum="$(aws s3api head-object --bucket "$bucket" --key "$key" --checksum-mode ENABLED \
+                            --query ChecksumSHA256 --output text)"
+              if [ "$checksum" != "$(openssl dgst -sha256 -binary "$file" | base64)" ]; then
+                echo "::error::s3://$bucket/$key is already there, with other bytes or no SHA-256 checksum"
                 exit 1
               fi
               echo "s3://$bucket/$key: already there, same bytes"
@@ -132,7 +175,7 @@ jobs:
           for region in $S3_REGIONS; do
             bucket="$AWS_BUCKET_PREFIX-$region"
             put_once "$bucket" "zentral/zentral/$ARCHIVE" "dist/$ARCHIVE" application/gzip
-            put_once "$bucket" "zentral/zentral/$ARCHIVE.json" "sidecars/$region/$ARCHIVE.json" application/json
+            put_once "$bucket" "zentral/zentral/$ARCHIVE.json" "sidecars/$bucket/$ARCHIVE.json" application/json
           done
 
       - name: Summary

@@ -101,11 +101,11 @@ The release archive is a `git archive` of a commit, with one manifest per artifa
 - The workflow publishes only from `zentralpro/zentral`, in the `zentral-release` environment. The condition on the repository is checked before the job enters the environment, so the public repository never creates one. Keep the workflow here, not in the private copy alone: its `main` has to stay a fast-forward of this one.
 - The version is `git describe --tags --long --match 'v[0-9]*' --exclude '*-*'`, the bare tag at a release. ztl_admin computes the version of a release from git with the same flags. Change both, or neither.
 - The identity names this repository, also for a private build, so a private commit has to reach `main` here with its SHA unchanged: no squash or rebase merge of it.
-- An object is written once. A run that finds an object with other bytes stops, and a broken archive is fixed by a new version.
+- An object is written once. A run that finds an object with another SHA-256 checksum stops, and a broken archive is fixed by a new version.
 
-[.github/release/build_manifest.py](.github/release/build_manifest.py) writes the manifests with zentral-manifest, which is not on PyPI: the workflow installs it from the artifacts bucket and runs the tests beside the script. The Django suite does not run them.
+[.github/release/build_manifest.py](.github/release/build_manifest.py) writes the manifests with zentral-manifest, which is not on PyPI: the workflow installs it from the artifacts bucket. Its `check` job runs the tests beside the script and validates `com.zentral.manifest.json`, in `zentralpro/zentral`, on each change to them and before each release. The Django suite does not run them.
 
-One requirement is recorded today: the Zentral Terraform provider, `0.1.83` or later. Upgrading a deployment means bumping it in `required_providers` wherever the Zentral configuration is kept — until now that had to be remembered and written by hand into each upgrade note.
+Read the file for the requirements recorded today. Upgrading a deployment means meeting each of them, for example a provider version in `required_providers` wherever the Zentral configuration is kept.
 
 When you add or change an entry:
 
@@ -115,7 +115,7 @@ When you add or change an entry:
 - Add a `note` saying why the bound is there. It reaches customer upgrade notes, so write it for someone outside the team.
 - Do not add an `identity` key. The reader supplies it.
 
-The release workflow validates the file each time it writes a manifest. The readers validate it too.
+The `check` job of the release workflow validates the file. The readers validate it too.
 
 ## Style & linting
 

@@ -12,8 +12,9 @@ import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from unittest.mock import patch
 
-from zentral_manifest import validate
+from zentral_manifest import InvalidManifest, validate
 
 SCRIPT = pathlib.Path(__file__).resolve().with_name("build_manifest.py")
 SPEC = importlib.util.spec_from_file_location("build_manifest", SCRIPT)
@@ -22,6 +23,7 @@ SPEC.loader.exec_module(build_manifest)
 
 COMMIT = "3750ccd7c0c8a4c15683aaca0ccd3d8dabbf33e9"
 URL = "s3://zentral-pro-services-artifacts-eu-central-1/zentral/zentral/zentral-v2026.5.21.tar.gz"
+OTHER_URL = "s3://zentral-pro-services-artifacts-us-east-1/zentral/zentral/zentral-v2026.5.21.tar.gz"
 
 
 class VersionTestCase(unittest.TestCase):
@@ -65,10 +67,12 @@ class VersionTestCase(unittest.TestCase):
         head = self.commit()
         self.assertEqual(self.version(), f"v2026.4.8-2-g{head[:7]}")
 
-    def test_a_commit_past_no_release_stops(self):
+    def test_a_commit_past_no_release_stops_with_the_git_error(self):
         self.commit()
-        with self.assertRaises(subprocess.CalledProcessError):
+        with self.assertRaises(SystemExit) as caught:
             self.version()
+        self.assertIn("git describe", str(caught.exception))
+        self.assertIn("No names found", str(caught.exception))
 
 
 class BuildTestCase(unittest.TestCase):
@@ -78,17 +82,25 @@ class BuildTestCase(unittest.TestCase):
         self.archive = pathlib.Path(self.tmp.name) / "zentral-v2026.5.21.tar.gz"
         self.archive.write_bytes(b"not really a tarball")
 
-    def build(self, url=URL, commit=COMMIT, release_version="v2026.5.21"):
-        out = io.StringIO()
-        with redirect_stdout(out):
-            build_manifest.main(["manifest", str(self.archive), "--url", url,
-                                 "--commit", commit, "--version", release_version])
-        document = json.loads(out.getvalue())
-        self.assertEqual(validate(document), [])
+    def build(self, urls=(URL,), commit=COMMIT, release_version="v2026.5.21"):
+        out = pathlib.Path(self.tmp.name) / "sidecars"
+        argv = ["manifests", str(self.archive), "--commit", commit, "--version", release_version, "--out", str(out)]
+        for url in urls:
+            argv += ["--url", url]
+        build_manifest.main(argv)
+        documents = {}
+        for path in out.glob("*/*.json"):
+            self.assertEqual(path.name, f"{self.archive.name}.json")
+            documents[path.parent.name] = json.loads(path.read_text())
+            self.assertEqual(validate(documents[path.parent.name]), [])
+        return documents
+
+    def document(self, **kwargs):
+        (document,) = self.build(**kwargs).values()
         return document
 
     def test_the_manifest(self):
-        document = self.build()
+        document = self.document()
         self.assertEqual(document["identity"], {
             "kind": "git",
             "repository": "https://github.com/zentralopensource/zentral",
@@ -104,11 +116,21 @@ class BuildTestCase(unittest.TestCase):
 
     def test_the_requirements_come_from_the_declaration(self):
         declared = json.loads(build_manifest.SOURCE.read_text())["requires"]
-        self.assertEqual(self.build()["requires"], declared)
+        self.assertEqual(self.document()["requires"], declared)
+
+    def test_one_manifest_per_bucket_from_one_read_of_the_archive(self):
+        with patch.object(pathlib.Path, "read_bytes", autospec=True, side_effect=pathlib.Path.read_bytes) as read:
+            documents = self.build(urls=(URL, OTHER_URL))
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(sorted(documents), ["zentral-pro-services-artifacts-eu-central-1",
+                                             "zentral-pro-services-artifacts-us-east-1"])
+        self.assertEqual(documents["zentral-pro-services-artifacts-us-east-1"]["archive"]["url"], OTHER_URL)
+        self.assertEqual(documents["zentral-pro-services-artifacts-eu-central-1"]["archive"]["sha256"],
+                         documents["zentral-pro-services-artifacts-us-east-1"]["archive"]["sha256"])
 
     def test_a_url_that_names_another_file_stops(self):
         with self.assertRaises(SystemExit):
-            self.build(url=URL.replace("v2026.5.21", "v2026.5.20"))
+            self.build(urls=(URL, OTHER_URL.replace("v2026.5.21", "v2026.5.20")))
 
     def test_an_archive_of_another_version_stops(self):
         with self.assertRaises(SystemExit):
@@ -117,6 +139,23 @@ class BuildTestCase(unittest.TestCase):
     def test_a_short_commit_stops(self):
         with self.assertRaises(SystemExit):
             self.build(commit=COMMIT[:12])
+
+
+class CheckTestCase(unittest.TestCase):
+    def test_the_declaration_is_valid(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            build_manifest.main(["check"])
+        self.assertEqual(out.getvalue(), "com.zentral.manifest.json: valid\n")
+
+    def test_two_requirements_on_one_target_are_refused(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        source = pathlib.Path(tmp.name) / "com.zentral.manifest.json"
+        requirement = {"kind": "terraform-provider", "name": "zentralopensource/zentral", "min_version": "0.1.85"}
+        source.write_text(json.dumps({"schema": "com.zentral.manifest/v1", "requires": [requirement, requirement]}))
+        with patch.object(build_manifest, "SOURCE", source), self.assertRaises(InvalidManifest):
+            build_manifest.check()
 
 
 if __name__ == "__main__":

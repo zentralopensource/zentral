@@ -2,8 +2,8 @@
 name: Install zentral-manifest
 description: >-
   Copy the pinned zentral-manifest wheel from an artifacts bucket, check it
-  against the pinned sha256, install the file, and import it. Needs AWS
-  credentials that read zentral-manifest/ in that bucket.
+  against the pinned sha256, and install it. Needs AWS credentials that read
+  zentral-manifest/ in that bucket.
 
 inputs:
   bucket:
@@ -13,7 +13,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Copy, check, install and import the pinned wheel
+    - name: Copy, check and install the pinned wheel
       shell: bash
       env:
         # The pin. A new version is a new pair, written by hand: the version,
@@ -24,25 +24,10 @@ runs:
         BUCKET: ${{ inputs.bucket }}
       run: |
         set -euo pipefail
-        if ! [[ "$SHA256" =~ ^[0-9a-f]{64}$ ]]; then
-          echo "::error::the zentral-manifest pin has no sha256"
-          exit 1
-        fi
         WHEEL="zentral_manifest-$VERSION-py3-none-any.whl"
         DEST="$RUNNER_TEMP/zentral-manifest"
         mkdir -p "$DEST"
         aws s3 cp "s3://$BUCKET/zentral-manifest/$WHEEL" "$DEST/$WHEEL" --no-progress
+        # The file name gives the version, and the sha256 the bytes.
         echo "$SHA256  $DEST/$WHEEL" | sha256sum -c -
         pip3 install "$DEST/$WHEEL"
-        # In the same step, so the version it is checked against is the pin above.
-        python3 - <<'PY'
-        import os, sys
-        from importlib.metadata import version
-
-        import zentral_manifest
-
-        installed = version("zentral-manifest")
-        print(f"zentral_manifest {installed} from {zentral_manifest.__file__}")
-        if installed != os.environ["VERSION"]:
-            sys.exit(f"installed {installed}, pinned {os.environ['VERSION']}")
-        PY
