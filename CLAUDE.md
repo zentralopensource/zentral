@@ -99,7 +99,7 @@ Because the website supplies the configuration for the published build, the Hugo
 The release archive is a `git archive` of a commit, with one manifest per artifacts bucket, under `zentral/zentral/` in the buckets. ztl_admin installs it with `make_new_release --archive`, at image build and in place. [.github/workflows/release-archive.yml](.github/workflows/release-archive.yml) publishes it, for a release tag or for a build of a `security/` branch, so that a fix can be deployed before it is public. Keep these properties:
 
 - The workflow publishes only from `zentralpro/zentral`: its jobs are skipped in any other copy of the repository. The AWS role trusts only the release tags and the `security/` branches of `zentralpro/zentral`, and only its admins can create or move these refs. Keep the workflow here, not in the private copy alone: its `main` has to stay a fast-forward of this one.
-- The version is `git describe --tags --long --match 'v[0-9]*' --exclude '*-*'`, the bare tag at a release. ztl_admin computes the version of a release from git with the same flags. Change both, or neither.
+- The version is `git describe --tags --long --abbrev=12 --match 'v[0-9]*' --exclude '*-*'`, the bare tag at a release. ztl_admin, and the zentral-images build, compute the version of a commit with the same flags. Change them all, or none. Without `--abbrev`, git picks the length of the commit from the size of each clone, and one commit gets several names.
 - The identity names this repository, also for a private build, so a private commit has to reach `main` here with its SHA unchanged: no squash or rebase merge of it.
 - An object is written once. A run that finds an object with another SHA-256 checksum stops, and a broken archive is fixed by a new version.
 

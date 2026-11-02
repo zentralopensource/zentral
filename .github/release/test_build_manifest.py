@@ -57,7 +57,7 @@ class VersionTestCase(unittest.TestCase):
         self.git("tag", "-a", "v2026.5.20", "-m", "v2026.5.20")
         self.commit()
         head = self.commit()
-        self.assertEqual(self.version(), f"v2026.5.20-2-g{head[:7]}")
+        self.assertEqual(self.version(), f"v2026.5.20-2-g{head[:12]}")
 
     def test_the_release_candidates_are_skipped(self):
         self.commit()
@@ -65,7 +65,7 @@ class VersionTestCase(unittest.TestCase):
         self.commit()
         self.git("tag", "-a", "v2026.5-rc.4", "-m", "v2026.5-rc.4")
         head = self.commit()
-        self.assertEqual(self.version(), f"v2026.4.8-2-g{head[:7]}")
+        self.assertEqual(self.version(), f"v2026.4.8-2-g{head[:12]}")
 
     def test_a_commit_past_no_release_stops_with_the_git_error(self):
         self.commit()

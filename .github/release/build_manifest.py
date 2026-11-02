@@ -7,10 +7,11 @@
         --url s3://<other bucket>/zentral/zentral/zentral-v2026.5.21.tar.gz
 
 The version is what git describe names the commit, past the newest release tag
-it contains: the bare tag at a release, v2026.5.20-12-gabc1234 past one. The
+it contains: the bare tag at a release, v2026.5.20-12-gabc123456789 past one. The
 beta and rc tags are skipped, so that every version orders by its release.
-ztl_admin computes the version of a release cloned from git with the same
-flags, and the two sources have to agree.
+The commit is shortened to 12 characters: without --abbrev, git picks the
+length from the size of the clone. ztl_admin computes the version of a release
+cloned from git with the same flags, and the two sources have to agree.
 
 The identity names the public repository, also for a build of a private
 commit: it names the component, and the floors on Zentral select it by that
@@ -44,7 +45,8 @@ def git(*args, cwd=None):
 
 
 def version(commit, cwd=None):
-    described = git("describe", "--tags", "--long", "--match", "v[0-9]*", "--exclude", "*-*", commit, cwd=cwd)
+    described = git("describe", "--tags", "--long", "--abbrev=12", "--match", "v[0-9]*", "--exclude", "*-*", commit,
+                    cwd=cwd)
     m = DESCRIBED_RE.match(described)
     if m is None:
         raise SystemExit(f"{commit} describes as {described}, which is not past a release tag")
