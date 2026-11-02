@@ -60,11 +60,12 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             response.json(),
             [{'uuid': str(realm.pk),
               'name': realm.name,
+              'description': '',
               'backend': 'ldap',
               'ldap_config': {
+                  # no bind_password, it is write only
                   "host": "ldap.example.com",
                   "bind_dn": "uid=zentral,ou=Users,o=yolo,dc=example,dc=com",
-                  "bind_password": "yolo",
                   "users_base_dn": 'ou=Users,o=yolo,dc=example,dc=com',
               },
               'openidc_config': None,
@@ -94,6 +95,7 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             response.json(),
             [{'uuid': str(realm.pk),
               'name': realm.name,
+              'description': '',
               'backend': 'saml',
               'ldap_config': None,
               'openidc_config': None,
@@ -137,11 +139,12 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             response.json(),
             {'uuid': str(realm.pk),
              'name': realm.name,
+             'description': '',
              'backend': 'openidc',
              'ldap_config': None,
              'openidc_config': {
+                 # no client_secret, it is write only
                  "client_id": "yolo",
-                 "client_secret": "fomo",
                  "discovery_url": "https://zentral.example.com/.well-known/openid-configuration",
                  "extra_scopes": ["profile"],
              },

@@ -94,15 +94,17 @@ def force_realm(backend="ldap", enabled_for_login=False, user_portal=False):
         }
     else:
         raise ValueError("Unknown backend")
-    return Realm.objects.create(
+    realm = Realm(
         name=get_random_string(12),
         backend=backend,
-        config=config,
         username_claim="username",
         email_claim="email",
         enabled_for_login=enabled_for_login,
         user_portal=user_portal,
     )
+    realm.set_backend_kwargs(config)
+    realm.save()
+    return realm
 
 
 def force_realm_user(

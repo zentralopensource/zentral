@@ -17,18 +17,23 @@ logger = logging.getLogger("zentral.realms.backends.saml")
 
 class SAMLRealmBackend(BaseBackend):
     name = "SAML"
+    # allow_idp_initiated_login and default_relay_state are read via the properties below,
+    # not loaded as attributes, because their values also depend on the realm login flags.
+    kwargs_keys = (
+        "idp_metadata",
+    )
 
     @property
     def allow_idp_initiated_login(self):
         return (self.instance.enabled_for_login or self.instance.user_portal) and (
-            self.instance.config.get("allow_idp_initiated_login") or False
+            self.instance.backend_kwargs.get("allow_idp_initiated_login") or False
         )
 
     @property
     def default_relay_state(self):
         return (
             self.instance.enabled_for_login or self.instance.user_portal
-        ) and self.instance.config.get("default_relay_state")
+        ) and self.instance.backend_kwargs.get("default_relay_state")
 
     def acs_url(self):
         "Assertion Consumer Service URL"
@@ -71,13 +76,10 @@ class SAMLRealmBackend(BaseBackend):
                 },
             },
         }
-        try:
-            settings["metadata"] = {"inline": [self.instance.config["idp_metadata"]]}
-        except KeyError:
-            if missing_idp_metadata_ok:
-                pass
-            else:
-                raise
+        if self.idp_metadata:
+            settings["metadata"] = {"inline": [self.idp_metadata]}
+        elif not missing_idp_metadata_ok:
+            raise KeyError("idp_metadata")
         sp_config = Saml2Config()
         sp_config.allow_unknown_attributes = True
         sp_config.load(settings)

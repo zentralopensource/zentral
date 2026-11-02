@@ -19,8 +19,9 @@ class LDAPRealmForm(RealmForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        config = self.instance.get_backend_kwargs() if self.instance.backend else {}
         for attr in ("host", "bind_dn", "bind_password", "users_base_dn"):
-            self.fields[attr].initial = self.instance.config.get(attr)
+            self.fields[attr].initial = config.get(attr)
 
     def clean(self):
         super().clean()

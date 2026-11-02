@@ -80,9 +80,9 @@ class CreateRealmView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateVie
         return backend_classes.get(self.backend).get_form_class()
 
     def form_valid(self, form):
-        self.object = form.save(commit=False)
-        self.object.backend = self.backend
-        self.object.save()
+        # the backend is required to encrypt the backend kwargs secrets during form save
+        form.instance.backend = self.backend
+        self.object = form.save()
         return redirect(self.object)
 
 

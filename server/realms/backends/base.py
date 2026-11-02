@@ -1,11 +1,12 @@
 from zentral.conf import settings
+from zentral.utils.backend_model import Backend
 
 
-class BaseBackend:
+class BaseBackend(Backend):
     can_get_password = False
 
-    def __init__(self, instance):
-        self.instance = instance
+    def __init__(self, instance, load=True):
+        super().__init__(instance, load)
         self.legacy_public_endpoints_mounted = settings["apps"]["realms"].get("mount_legacy_public_endpoints", False)
 
     @property
