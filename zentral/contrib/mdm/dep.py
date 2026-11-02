@@ -149,7 +149,6 @@ def dep_device_update_dict(device, known_enrollments=None):
     if known_enrollments is None:
         known_enrollments = {}
     update_d = {"enrollment": None,
-                "mdm_migration_deadline": None,
                 "profile_uuid": None,
                 "profile_assign_time": None,
                 "profile_push_time": None,
@@ -174,6 +173,14 @@ def dep_device_update_dict(device, known_enrollments=None):
         update_d[attr] = [str(val) for val in device.get(attr) or []]
 
     update_d["is_replacement_device"] = bool(device.get("is_replacement_device"))
+
+    # Apple leaves the migration deadline out of the device details even when there is one, and keeps
+    # reporting it in the device lists after it is removed in Apple Business Manager. Only a change of
+    # MDM server clears it, so an absent key leaves it alone, and a deleted operation clears it.
+    if "mdm_migration_deadline" in device:
+        update_d["mdm_migration_deadline"] = parser.parse(device["mdm_migration_deadline"])
+    elif device.get("op_type") == DEPDevice.OP_TYPE_DELETED:
+        update_d["mdm_migration_deadline"] = None
 
     # Apple reports this one only with a deleted operation, so an absent key must leave it alone
     # rather than clear it. Left out of the update dict, it is left out of the update statement.
@@ -205,7 +212,6 @@ def dep_device_update_dict(device, known_enrollments=None):
 
     # datetime nullable attributes
     for attr in ("device_assigned_date",
-                 "mdm_migration_deadline",
                  "profile_assign_time",
                  "profile_push_time"):
         try:
