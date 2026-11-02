@@ -248,6 +248,42 @@ class CreateZentralUserTestCase(TestCase, EventAssertions):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_promote_existing_user_deletes_its_api_tokens(self, post_event):
+        self.call_command("yolo", "fomo@example.com", "--with-api-token")
+        user = User.objects.get(email="fomo@example.com")
+        token = user.apitoken_set.get()
+        prev_token_value = token.serialize_for_event()
+        prev_token_value["user"]["is_superuser"] = True
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            result = self.call_command("yolo", "fomo@example.com", "--superuser")
+
+        self.assertIn("API tokens deleted: 1", result)
+        self.assertFalse(APIToken.objects.filter(user=user).exists())
+        self.assert_events_published(2, callbacks, post_event)
+        token_event = post_event.call_args_list[0].args[0]
+        self.assertEqual(
+            token_event.payload,
+            {"action": "deleted",
+             "object": {"model": "accounts.apitoken", "pk": str(token.pk), "prev_value": prev_token_value}},
+        )
+        self.assertEqual(post_event.call_args_list[1].args[0].payload["action"], "updated")
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_promote_existing_service_account(self, post_event):
+        self.call_command("ci-bot", "ci-bot@example.com", "--service-account")
+        service_account = User.objects.get(email="ci-bot@example.com")
+        token = service_account.apitoken_set.get()
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            with self.assertRaises(SystemExit) as cm:
+                self.call_command("ci-bot", "ci-bot@example.com", "--superuser")
+        self.assertEqual(cm.exception.code, 5)
+        self.assertTrue(APIToken.objects.filter(pk=token.pk).exists())
+        service_account.refresh_from_db()
+        self.assertFalse(service_account.is_superuser)
+        self.assert_no_event_published(callbacks, post_event)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_demote_existing_superuser(self, post_event):
         self.call_command("yolo", "fomo@example.com", "--superuser")
         super_user = User.objects.get(email="fomo@example.com")

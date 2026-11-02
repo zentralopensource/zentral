@@ -259,6 +259,29 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'jwt': ["CEL condition evaluation didn't produce a boolean"]})
 
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("accounts.serializers.verify_jws_with_discovery")
+    def test_auth_issuer_of_a_superuser(self, verify_jws_with_discovery, post_event):
+        user = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io")
+        issuer = self._create_token_issuer(user)
+        # old data: the console gives an issuer to a service account only
+        User.objects.filter(pk=user.pk).update(is_superuser=True)
+        verify_jws_with_discovery.return_value = {"sub": "abc", "iss": issuer.issuer_uri, "aud": issuer.audience}
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            with self.assertLogs("server.accounts.serializer", level="ERROR") as cm:
+                response = self.post(
+                    url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(issuer.pk,)),
+                    data={"jwt": "header.payload.sig"},
+                    include_token=False,
+                )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(response.json(), {"jwt": ["The user of the issuer cannot have an API token"]})
+        self.assertEqual(cm.output, [f"ERROR:server.accounts.serializer:"
+                                     f"The user of the issuer cannot have an API token {issuer.pk}"])
+        self.assertFalse(APIToken.objects.filter(user=user).exists())
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
+
     # mandatory CEL condition
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

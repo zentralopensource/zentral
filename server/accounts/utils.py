@@ -2,7 +2,9 @@ import functools
 import operator
 from django.apps import apps
 from django.contrib.auth.models import Permission
+from django.db import transaction
 from django.db.models import Q
+from zentral.core.events.base import AuditEvent, EventRequest
 
 
 def all_permissions_queryset():
@@ -39,3 +41,19 @@ def all_permissions():
         custom = permission.codename in [codename for codename, _ in model_class._meta.permissions]
         read_only = not custom and permission.codename.startswith("view_")
         yield permission, read_only, custom
+
+
+def delete_api_token(token, request=None):
+    event = AuditEvent.build(
+        token,
+        action=AuditEvent.Action.DELETED,
+        prev_value=token.serialize_for_event(),
+        event_request=EventRequest.build_from_request(request) if request else None,
+    )
+    deleted_count, _ = token.delete()
+    transaction.on_commit(event.post)
+    return deleted_count
+
+
+def delete_api_tokens(user, request=None):
+    return sum(delete_api_token(token, request) for token in user.apitoken_set.all())

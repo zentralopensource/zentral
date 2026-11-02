@@ -15,6 +15,7 @@ from accounts.forms import (
     UpdateUserForm,
 )
 from accounts.models import Policy, User
+from accounts.utils import delete_api_tokens
 from pbac.entities import Principal
 from realms.models import get_matching_realm_users
 from zentral.utils.views import (CreateViewWithAudit, LocalUserRequiredMixin, RequestUserFormMixin,
@@ -122,11 +123,11 @@ class UserView(PermissionRequiredMixin, DetailView):
         ctx["can_delete_token"] = (
             self.object == self.request.user or self.request.user.has_perm("accounts.delete_apitoken")
         )
-        ctx["can_change_token"] = (
+        ctx["can_change_token"] = self.object.can_have_api_tokens and (
             self.object == self.request.user
             or (can_issue_credentials and self.request.user.has_perm("accounts.change_apitoken"))
         )
-        ctx["can_add_token"] = (
+        ctx["can_add_token"] = self.object.can_have_api_tokens and (
             self.object == self.request.user
             or (can_issue_credentials and self.request.user.has_perm("accounts.add_apitoken"))
         )
@@ -166,6 +167,12 @@ class UpdateUserView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUse
     def form_valid(self, form):
         current_groups = set(self.object.groups.all())
         response = super().form_valid(form)
+        if (
+            "is_superuser" in form.changed_data
+            and not self.object.can_have_api_tokens
+            and delete_api_tokens(self.object, self.request)
+        ):
+            messages.info(self.request, "API tokens of the superuser deleted")
         new_groups = set(self.object.groups.all())
         if new_groups != current_groups:
             self.object.refresh_from_db()

@@ -111,6 +111,12 @@ class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):
             exception_class=serializers.ValidationError,
         )
 
+        if not self.issuer.user.can_have_api_tokens:
+            # only old data can land here: the console gives an issuer to a service account only
+            msg = "The user of the issuer cannot have an API token"
+            logger.error("%s %s", msg, self.issuer.pk)
+            raise serializers.ValidationError(msg)
+
         if not self.issuer.cel_condition:
             # only an issuer written before the field became required can land here, it used
             # to mean "accept every token this provider signs for this audience"

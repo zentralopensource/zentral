@@ -220,9 +220,20 @@ WHERE is_superuser AND NOT is_service_account AND is_active;
 If no row has `is_remote` false and `has_password` true, make a local superuser before the upgrade, with `python server/manage.py create_zentral_user --superuser --send-reset <username> <email>`. The new superuser sets a password with the link of the email.
 
 
-#### 🧨 A superuser gets no API token and no role from `create_zentral_user`
+#### 🧨 A superuser has no API token
 
-`create_zentral_user --superuser` refuses `--with-api-token` and exits with the code 8, and refuses `--role` and exits with the code 9. A superuser skips PBAC: its API token is a credential that no policy bounds, and a role grants it nothing it cannot already do. Use a service account for an automation, with the roles that its work needs — `--service-account --role "Editor"` makes the account, adds the role and prints its first API token. A superuser that already has an API token keeps it: delete it from the web console or with the API.
+A superuser skips PBAC: its API token is a credential that no policy bounds, and that needs no second factor. The API refuses the token of a superuser with a 401 error now, and Zentral logs the refusal. A superuser cannot create or update an API token: the pages answer 403, and the profile does not show the buttons. When a user becomes a superuser, in the web console or with `create_zentral_user --superuser`, Zentral deletes the API tokens of the user, with an audit event for each token. `create_zentral_user --superuser` refuses `--with-api-token` and exits with the code 8, and refuses `--role` and exits with the code 9: a role grants a superuser nothing it cannot already do. It also refuses an existing service account, and exits with the code 5.
+
+Use a service account for an automation, with the roles that its work needs — `create_zentral_user --service-account --role "Editor"` makes the account, adds the role and prints its first API token.
+
+The upgrade deletes the API tokens of the superusers, without a check and without an audit event. It removes the superuser status of the remote users first (see above), so the tokens of these users stay. This query lists the tokens that the upgrade deletes:
+
+```sql
+SELECT u.username, u.email, t.name, t.created_at, t.expiry
+FROM accounts_apitoken t
+JOIN accounts_user u ON u.id = t.user_id
+WHERE u.is_superuser AND NOT u.is_service_account AND NOT u.is_remote;
+```
 
 
 #### 🧨 Privilege escalation hardening — superusers

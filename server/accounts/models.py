@@ -128,6 +128,12 @@ class User(AbstractUser):
         """A set with all the group PKs. Used for authz."""
         return set(self.groups.values_list("pk", flat=True))
 
+    @property
+    def can_have_api_tokens(self):
+        # a superuser skips PBAC: its API token would be a credential that no policy bounds.
+        # a service account never gets the superuser bypass, see ZentralBackend.has_perm
+        return not self.is_superuser or self.is_service_account
+
     def can_issue_credentials_for(self, service_account):
         """The requester must hold each of the target's roles. An account named directly by a
         policy is superuser only: its privileges no longer follow from its roles. Policies
@@ -260,6 +266,8 @@ class APITokenManager(models.Manager):
         return h.hexdigest()
 
     def create_for_user(self, user, expiry=None, name=None):
+        if not user.can_have_api_tokens:
+            raise ValueError("A superuser has no API token")
         token_prefix = SERVICE_ACCOUNT_API_TOKEN if user.is_service_account else USER_API_TOKEN
         key = generate_ztl_token(token_prefix)
         hashed_key = self._hash_key(key)

@@ -57,7 +57,20 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     def test_create_api_token_login_redirect(self):
         """User is not logged in."""
-        self.permission_denied("create_user_api_token", self.user.id)
+        self.login_redirect("create_user_api_token", self.user.id)
+
+    def test_create_api_token_login_redirect_unknown_user(self):
+        self.login_redirect("create_user_api_token", 123456789)
+
+    def test_create_api_token_login_redirect_superuser(self):
+        superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                             is_superuser=True)
+        self.login_redirect("create_user_api_token", superuser.id)
+
+    def test_create_api_token_unknown_user_404(self):
+        self.login()
+        response = self.client.get(reverse("accounts:create_user_api_token", args=(123456789,)))
+        self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_api_token_not_self(self, post_event):
@@ -199,7 +212,15 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
     def test_update_apitoken_redirect(self):
         """User can not call the route without login."""
         user, token = force_user_token()
-        self.permission_denied("update_user_api_token", user.id, token.id)
+        self.login_redirect("update_user_api_token", user.id, token.id)
+
+    def test_update_api_token_login_redirect_unknown_user(self):
+        self.login_redirect("update_user_api_token", 123456789, uuid.uuid4())
+
+    def test_update_api_token_unknown_user_404(self):
+        self.login()
+        response = self.client.get(reverse("accounts:update_user_api_token", args=(123456789, uuid.uuid4())))
+        self.assertEqual(response.status_code, 404)
 
     def test_update_apitoken_permission_denied(self):
         """User can not update token from other users (ui_user != user)."""
@@ -313,7 +334,7 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
     def test_delete_apitoken_redirect(self):
         """User can not call the route without login."""
         user, token = force_user_token()
-        self.permission_denied("delete_user_api_token", user.id, token.id)
+        self.login_redirect("delete_user_api_token", user.id, token.id)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_api_token_not_self(self, post_event):
@@ -526,3 +547,55 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(
             response,
             reverse("accounts:delete_user_api_token", args=(self.service_account.pk, token.pk)))
+
+    # superuser
+
+    def _promote_ui_user_to_superuser(self):
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+
+    def test_create_api_token_superuser_self_permission_denied(self):
+        self._promote_ui_user_to_superuser()
+        self.login()
+        response = self.client.get(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)))
+        self.assertEqual(response.status_code, 403)
+        response = self.client.post(reverse("accounts:create_user_api_token", args=(self.ui_user.id,)),
+                                    {"name": get_random_string(12)})
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(APIToken.objects.filter(user=self.ui_user).exists())
+
+    def test_update_api_token_superuser_self_permission_denied(self):
+        _, token = force_user_token(self.ui_user)
+        # a token of before the upgrade, that create_for_user cannot write anymore
+        User.objects.filter(pk=self.ui_user.pk).update(is_superuser=True)
+        self.login()
+        response = self.client.get(
+            reverse("accounts:update_user_api_token", args=(self.ui_user.id, token.id)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_superuser_profile_no_token_write_links(self):
+        self._promote_ui_user_to_superuser()
+        self.login()
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_add_token"])
+        self.assertFalse(response.context["can_change_token"])
+        self.assertNotContains(response, reverse("accounts:create_user_api_token", args=(self.ui_user.pk,)))
+
+    def test_superuser_detail_no_token_write_links(self):
+        self._promote_ui_user_to_superuser()
+        self.login()
+        response = self.client.get(self.ui_user.get_absolute_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_add_token"])
+        self.assertFalse(response.context["can_change_token"])
+        self.assertTrue(response.context["can_delete_token"])
+        self.assertNotContains(response, reverse("accounts:create_user_api_token", args=(self.ui_user.pk,)))
+
+    def test_create_api_token_service_account_with_superuser_flag(self):
+        # a service account never gets the superuser bypass, so the flag does not refuse its tokens
+        User.objects.filter(pk=self.service_account.pk).update(is_superuser=True)
+        self.service_account.groups.add(self.ui_group)
+        self.login("accounts.view_user", "accounts.add_apitoken")
+        response = self.client.get(reverse("accounts:create_user_api_token", args=(self.service_account.id,)))
+        self.assertEqual(response.status_code, 200)

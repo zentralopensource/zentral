@@ -1,8 +1,12 @@
+import logging
 from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions
 from rest_framework.authentication import TokenAuthentication
 from .models import APIToken
 from zentral.utils.token import verify_ztl_token, USER_API_TOKEN, SERVICE_ACCOUNT_API_TOKEN
+
+
+logger = logging.getLogger("zentral.accounts.api_authentication")
 
 
 class APITokenAuthentication(TokenAuthentication):
@@ -17,5 +21,9 @@ class APITokenAuthentication(TokenAuthentication):
 
         if not token.user.is_active:
             raise exceptions.AuthenticationFailed(_('User inactive or deleted.'))
+
+        if not token.user.can_have_api_tokens:
+            logger.error("API token %s of superuser %s refused", token.pk, token.user.pk)
+            raise exceptions.AuthenticationFailed(_('A superuser has no API token.'))
 
         return (token.user, token)

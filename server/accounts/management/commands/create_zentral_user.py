@@ -7,6 +7,7 @@ from django.core.validators import EmailValidator, ValidationError
 from django.db import transaction
 from accounts.models import APIToken, Group, User
 from accounts.password_reset import handler as password_reset_handler
+from accounts.utils import delete_api_tokens
 from zentral.core.events.base import AuditEvent
 from zentral.core.queues import queues
 
@@ -120,6 +121,8 @@ class Command(BaseCommand):
         if user and user.is_remote and self.superuser:
             # a remote user only logs in through a realm, and a superuser logs in with a password only
             self.exit_with_error(f"remote user {self.username} cannot be a super user", 16)
+        if user and user.is_service_account and self.superuser:
+            self.exit_with_error(f"service account {self.username} cannot be a super user", 5)
         self.user = user
 
     def add_roles(self):
@@ -165,6 +168,9 @@ class Command(BaseCommand):
                 self.user.save()
                 if self.superuser:
                     self.print("Existing user", self.username, self.email, "promoted to superuser")
+                    deleted_token_count = 0 if self.user.can_have_api_tokens else delete_api_tokens(self.user)
+                    if deleted_token_count:
+                        self.print("API tokens deleted:", deleted_token_count)
                 else:
                     self.print("Existing superuser", self.username, self.email, "demoted")
             else:

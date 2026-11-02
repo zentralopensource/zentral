@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pyotp
 from accounts.events import PasswordChangeEvent, PasswordResetRequestEvent
 from accounts.forms import UpdateUserForm
-from accounts.models import User, UserTOTP, UserWebAuthn
+from accounts.models import APIToken, User, UserTOTP, UserWebAuthn
 from accounts.password_validation import PasswordNotAlreadyUsedValidator
 from django.contrib.auth.models import Group
 from django.contrib.auth.tokens import default_token_generator
@@ -1054,6 +1054,58 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(len(callbacks), 1)
         event = post_event.call_args_list[0].args[0]
         self.assertTrue(event.payload["object"]["new_value"]["is_superuser"])
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_local_superuser_requester_grant_superuser_deletes_api_tokens(self, post_event):
+        token, _ = APIToken.objects.create_for_user(self.user, name=get_random_string(12))
+        prev_token_value = token.serialize_for_event()
+        prev_token_value["user"]["is_superuser"] = True
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:update_user", args=(self.user.id,)),
+                {"username": self.user.username,
+                 "email": self.user.email,
+                 "items_per_page": 10,
+                 "is_superuser": "on"},
+                follow=True,
+            )
+        self.assertContains(response, "API tokens of the superuser deleted")
+        self.assertFalse(APIToken.objects.filter(user=self.user).exists())
+        self.assertEqual(len(callbacks), 2)
+        self.assertEqual(post_event.call_args_list[0].args[0].payload["action"], "updated")
+        token_event = post_event.call_args_list[1].args[0]
+        self.assertIsInstance(token_event, AuditEvent)
+        self.assertEqual(
+            token_event.payload,
+            {"action": "deleted",
+             "object": {"model": "accounts.apitoken", "pk": str(token.pk), "prev_value": prev_token_value}},
+        )
+        self.assertEqual(token_event.metadata.request.user.id, self.ui_user.pk)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_superuser_keeps_api_tokens(self, post_event):
+        # the tokens go only when the user becomes a superuser
+        user = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io")
+        token, _ = APIToken.objects.create_for_user(user)
+        # a token of before the upgrade, that create_for_user cannot write anymore
+        User.objects.filter(pk=user.pk).update(is_superuser=True)
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.change_user", "accounts.view_user")
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse("accounts:update_user", args=(user.id,)),
+                {"username": user.username,
+                 "email": user.email,
+                 "items_per_page": 20,
+                 "is_superuser": "on"},
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "API tokens of the superuser deleted")
+        self.assertTrue(APIToken.objects.filter(pk=token.pk).exists())
+        self.assertEqual(len(callbacks), 1)
 
     def test_service_account_update_get(self):
         self.login("accounts.change_user")

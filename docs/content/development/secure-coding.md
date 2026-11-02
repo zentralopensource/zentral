@@ -57,7 +57,7 @@ Authorization is granted by writing Cedar policies that reference a Role (or a s
 
 Federated users are not authorized to modify the users and the user federation settings, regardless of which policies target them.
 
-A superuser cannot log in with a realm, and a user that a realm login made is never a superuser. The other operations on the users, the roles and the realms depend on the login:
+A superuser cannot log in with a realm, and has no API token: the API refuses it. A user that a realm login made is never a superuser. The other operations on the users, the roles and the realms depend on the login:
 
 | Operation | Superuser | Other user, local login | Realm login |
 |---|---|---|---|

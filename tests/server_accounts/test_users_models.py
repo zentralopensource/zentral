@@ -199,3 +199,26 @@ class UsersModelsTestCase(TestCase, SerializeForEventAssertions):
         self.assertFalse(remote_user.is_superuser)
         local_superuser.refresh_from_db()
         self.assertTrue(local_superuser.is_superuser)
+
+    def test_create_api_token_for_superuser_refused(self):
+        superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                             is_superuser=True)
+        with self.assertRaises(ValueError) as cm:
+            APIToken.objects.create_for_user(superuser)
+        self.assertEqual(cm.exception.args, ("A superuser has no API token",))
+        self.assertFalse(APIToken.objects.filter(user=superuser).exists())
+
+    def test_migration_deletes_the_api_tokens_of_the_superusers(self):
+        superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io")
+        APIToken.objects.create_for_user(superuser)
+        # a token of before the upgrade, that create_for_user cannot write anymore
+        User.objects.filter(pk=superuser.pk).update(is_superuser=True)
+        user_token, _ = APIToken.objects.create_for_user(self.user)
+        service_account_token, _ = APIToken.objects.create_for_user(self.service_account)
+        migration = import_module("accounts.migrations.0026_superusers_have_no_api_token")
+        migration.delete_the_api_tokens_of_the_superusers(apps, None)
+        self.assertFalse(APIToken.objects.filter(user=superuser).exists())
+        self.assertEqual(
+            set(APIToken.objects.filter(user__in=(self.user, self.service_account))),
+            {user_token, service_account_token},
+        )

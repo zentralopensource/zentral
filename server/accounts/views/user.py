@@ -36,8 +36,7 @@ class ProfileView(LoginRequiredMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         ctx["tokens"] = self.request.user.apitoken_set.all()
         ctx["can_delete_token"] = True
-        ctx["can_change_token"] = True
-        ctx["can_add_token"] = True
+        ctx["can_change_token"] = ctx["can_add_token"] = self.request.user.can_have_api_tokens
         return ctx
 
 

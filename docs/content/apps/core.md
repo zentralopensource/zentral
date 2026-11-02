@@ -55,7 +55,8 @@ Each row in the token list carries a pencil (*Update API Token*) button, which c
 
 Issuing a token means handing out a credential, so Zentral is deliberately restrictive:
 
-* anyone can create a token for **themselves**, from their own profile page;
+* anyone can create a token for **themselves**, from their own profile page, except a superuser;
+* **a superuser has no API token.** A superuser skips PBAC, so its token would be a credential that no policy bounds. The API refuses the token of a superuser with a `401`, and Zentral deletes the tokens of a user who becomes a superuser, with an audit event for each token. Use a [service account](#service-accounts) for an automation;
 * **nobody can create a token for another user** — not even a superuser. A user who needs a token creates their own;
 * creating a token for a **service account** additionally requires the `Accounts::Action::"createAPIToken"` action *and* holding every role that service account holds. This stops an operator from minting a credential more privileged than themselves. A service account named directly by a PBAC policy can only be issued tokens by a superuser, since its privileges no longer follow from its roles.
 
