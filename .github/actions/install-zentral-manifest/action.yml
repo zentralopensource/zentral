@@ -1,0 +1,33 @@
+---
+name: Install zentral-manifest
+description: >-
+  Copy the pinned zentral-manifest wheel from an artifacts bucket, check it
+  against the pinned sha256, and install it. Needs AWS credentials that read
+  zentral-manifest/ in that bucket.
+
+inputs:
+  bucket:
+    description: The artifacts bucket to copy the wheel from
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Copy, check and install the pinned wheel
+      shell: bash
+      env:
+        # The pin. A new version is a new pair, written by hand: the version,
+        # and the sha256 its sidecar gives under archive. See Installing in
+        # the zentral-manifest README.
+        VERSION: "2026.6"
+        SHA256: "49d8a76e726e34dc086a86e7d5a3864ae076dfa955a715fb13941e3c421058f3"
+        BUCKET: ${{ inputs.bucket }}
+      run: |
+        set -euo pipefail
+        WHEEL="zentral_manifest-$VERSION-py3-none-any.whl"
+        DEST="$RUNNER_TEMP/zentral-manifest"
+        mkdir -p "$DEST"
+        aws s3 cp "s3://$BUCKET/zentral-manifest/$WHEEL" "$DEST/$WHEEL" --no-progress
+        # The file name gives the version, and the sha256 the bytes.
+        echo "$SHA256  $DEST/$WHEEL" | sha256sum -c -
+        pip3 install "$DEST/$WHEEL"

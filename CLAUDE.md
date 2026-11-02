@@ -94,9 +94,18 @@ Because the website supplies the configuration for the published build, the Hugo
 
 ## Manifest
 
-[com.zentral.manifest.json](com.zentral.manifest.json) records what a deployment of this Zentral needs alongside it. Unlike the other repositories that publish one, Zentral ships no artifact of its own, so there is no generator here and nothing to upload: [zentral-images](https://github.com/zentralpro/zentral-images) reads the file at the commit it checks out and supplies the identity, because a file kept in a repository cannot say which commit it is stored at.
+[com.zentral.manifest.json](com.zentral.manifest.json) records what a deployment of this Zentral needs alongside it. A file kept in a repository cannot say which commit it is stored at, so the reader supplies the identity: [zentral-images](https://github.com/zentralpro/zentral-images) when it builds from a git checkout, and the release archive when it builds from one.
 
-One requirement is recorded today: the Zentral Terraform provider, `0.1.83` or later. Upgrading a deployment means bumping it in `required_providers` wherever the Zentral configuration is kept — until now that had to be remembered and written by hand into each upgrade note.
+The release archive is a `git archive` of a commit, with one manifest per artifacts bucket, under `zentral/zentral/` in the buckets. ztl_admin installs it with `make_new_release --archive`, at image build and in place. [.github/workflows/release-archive.yml](.github/workflows/release-archive.yml) publishes it, for a release tag or for a build of a `security/` branch, so that a fix can be deployed before it is public. Keep these properties:
+
+- The workflow publishes only from `zentralpro/zentral`: its jobs are skipped in any other copy of the repository. The AWS role trusts only the release tags and the `security/` branches of `zentralpro/zentral`, and only its admins can create or move these refs. Keep the workflow here, not in the private copy alone: its `main` has to stay a fast-forward of this one.
+- The version is `git describe --tags --long --match 'v[0-9]*' --exclude '*-*'`, the bare tag at a release. ztl_admin computes the version of a release from git with the same flags. Change both, or neither.
+- The identity names this repository, also for a private build, so a private commit has to reach `main` here with its SHA unchanged: no squash or rebase merge of it.
+- An object is written once. A run that finds an object with another SHA-256 checksum stops, and a broken archive is fixed by a new version.
+
+[.github/release/build_manifest.py](.github/release/build_manifest.py) writes the manifests with zentral-manifest, which is not on PyPI: the workflow installs it from the artifacts bucket. Its `check` job runs the tests beside the script and validates `com.zentral.manifest.json`, in `zentralpro/zentral`, on each change to them and before each release. The Django suite does not run them.
+
+Read the file for the requirements recorded today. Upgrading a deployment means meeting each of them, for example a provider version in `required_providers` wherever the Zentral configuration is kept.
 
 When you add or change an entry:
 
@@ -106,7 +115,7 @@ When you add or change an entry:
 - Add a `note` saying why the bound is there. It reaches customer upgrade notes, so write it for someone outside the team.
 - Do not add an `identity` key. The reader supplies it.
 
-Nothing here checks the file: the suite is Django and runs in the full stack, which a static JSON file does not need. The readers validate it.
+The `check` job of the release workflow validates the file. The readers validate it too.
 
 ## Style & linting
 

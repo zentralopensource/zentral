@@ -1,0 +1,188 @@
+---
+name: Release archive
+
+# Publishes a Zentral release as an archive, with one manifest per artifacts
+# bucket: a release tag, or a build of a private commit from a security/
+# branch, so that it can be deployed before the fix is public. ztl_admin
+# installs an archive with make_new_release --archive, at image build and in
+# place.
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+    # Not applied to the tags: each release tag runs.
+    paths:
+      - com.zentral.manifest.json
+      - .github/release/**
+      - .github/actions/install-zentral-manifest/**
+      - .github/workflows/release-archive.yml
+  pull_request:
+    paths:
+      - com.zentral.manifest.json
+      - .github/release/**
+      - .github/actions/install-zentral-manifest/**
+      - .github/workflows/release-archive.yml
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and check the archive and its manifests, and upload nothing"
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write  # to assume the AWS roles
+  contents: read
+
+jobs:
+  # The manifest writer and com.zentral.manifest.json, checked with
+  # zentral-manifest, which is not on PyPI: on each change, not only when a
+  # tag is pushed. Only zentralpro/zentral can read the wheel.
+  check:
+    if: github.repository == 'zentralpro/zentral'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ZENTRAL_MANIFEST_INSTALL_ROLE_ARN }}
+          role-session-name: zentral_release_archive_check
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install zentral-manifest
+        uses: ./.github/actions/install-zentral-manifest
+        with:
+          bucket: ${{ vars.AWS_BUCKET_PREFIX }}-${{ vars.AWS_REGION }}
+
+      - name: Test the manifest writer
+        run: python3 -m unittest discover -s .github/release -v
+
+      - name: Check com.zentral.manifest.json
+        run: python3 .github/release/build_manifest.py check
+
+  release_archive:
+    needs: check
+    # Only zentralpro/zentral publishes. The AWS role trusts only its release
+    # tags and its security/ branches, which only its admins can create or
+    # move. A release candidate tag is not a release.
+    if: >-
+      github.repository == 'zentralpro/zentral'
+      && (github.event_name == 'workflow_dispatch'
+          || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+              && !contains(github.ref_name, '-')))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Name the release
+        id: release
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 .github/release/build_manifest.py version HEAD)"
+          # A tag that is not where git describe puts the release would publish
+          # under a name that is not the tag.
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::$GITHUB_REF_NAME describes as $VERSION"
+            exit 1
+          fi
+          {
+            echo "version=$VERSION"
+            echo "archive=zentral-$VERSION.tar.gz"
+            echo "commit=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      # No prefix: ztl_admin wants server/base at the root of the archive.
+      - name: Build the archive
+        env:
+          ARCHIVE: ${{ steps.release.outputs.archive }}
+        run: |
+          mkdir dist
+          git archive --format=tar.gz -o "dist/$ARCHIVE" HEAD
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: zentral_release_archive
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install zentral-manifest
+        uses: ./.github/actions/install-zentral-manifest
+        with:
+          bucket: ${{ vars.AWS_BUCKET_PREFIX }}-${{ vars.AWS_REGION }}
+
+      # Each copy of the archive gets its own manifest, naming that copy under
+      # archive: sidecars/<bucket>/<archive>.json, written before anything is
+      # uploaded.
+      - name: Build the manifests, one per bucket
+        env:
+          AWS_BUCKET_PREFIX: ${{ vars.AWS_BUCKET_PREFIX }}
+          # the regions of the artifacts buckets, separated by spaces
+          AWS_BUCKET_REGIONS: ${{ vars.AWS_BUCKET_REGIONS }}
+          ARCHIVE: ${{ steps.release.outputs.archive }}
+          COMMIT: ${{ steps.release.outputs.commit }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AWS_BUCKET_REGIONS" ]; then
+            echo "::error::AWS_BUCKET_REGIONS is not set"
+            exit 1
+          fi
+          urls=()
+          for region in $AWS_BUCKET_REGIONS; do
+            urls+=(--url "s3://$AWS_BUCKET_PREFIX-$region/zentral/zentral/$ARCHIVE")
+          done
+          python3 .github/release/build_manifest.py manifests "dist/$ARCHIVE" \
+            --commit "$COMMIT" --version "$VERSION" --out sidecars "${urls[@]}"
+
+      # Written once: an instance checks the archive against the manifest
+      # beside it. An object already there is compared by the SHA-256
+      # checksum S3 keeps, never replaced, so a run can be re-run. The archive
+      # goes first, so that a manifest never names a missing archive.
+      - name: Publish the archive and its manifests
+        if: github.event_name == 'push' || !inputs.dry_run
+        env:
+          AWS_BUCKET_PREFIX: ${{ vars.AWS_BUCKET_PREFIX }}
+          AWS_BUCKET_REGIONS: ${{ vars.AWS_BUCKET_REGIONS }}
+          ARCHIVE: ${{ steps.release.outputs.archive }}
+        run: |
+          set -euo pipefail
+          put_once() {
+            local bucket="$1" key="$2" file="$3" content_type="$4" err checksum
+            err="$(mktemp)"
+            if aws s3api put-object --bucket "$bucket" --key "$key" --body "$file" \
+                 --content-type "$content_type" --checksum-algorithm SHA256 \
+                 --if-none-match '*' > /dev/null 2> "$err"; then
+              echo "s3://$bucket/$key: written"
+            elif grep -q PreconditionFailed "$err"; then
+              checksum="$(aws s3api head-object --bucket "$bucket" --key "$key" --checksum-mode ENABLED \
+                            --query ChecksumSHA256 --output text)"
+              if [ "$checksum" != "$(openssl dgst -sha256 -binary "$file" | base64)" ]; then
+                echo "::error::s3://$bucket/$key is already there, with other bytes or no SHA-256 checksum"
+                exit 1
+              fi
+              echo "s3://$bucket/$key: already there, same bytes"
+            else
+              cat "$err" >&2
+              exit 1
+            fi
+          }
+          for region in $AWS_BUCKET_REGIONS; do
+            bucket="$AWS_BUCKET_PREFIX-$region"
+            put_once "$bucket" "zentral/zentral/$ARCHIVE" "dist/$ARCHIVE" application/gzip
+            put_once "$bucket" "zentral/zentral/$ARCHIVE.json" "sidecars/$bucket/$ARCHIVE.json" application/json
+          done
+
+      - name: Summary
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          COMMIT: ${{ steps.release.outputs.commit }}
+          PUBLISHED: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: |
+          echo "Zentral $VERSION ($COMMIT), published: $PUBLISHED" >> "$GITHUB_STEP_SUMMARY"
