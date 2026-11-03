@@ -2,7 +2,7 @@ import logging
 
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -14,11 +14,7 @@ from accounts.serializers import (
     OIDCAPITokenIssuerAuthSerializer,
     OIDCAPITokenIssuerSerializer,
 )
-from zentral.utils.drf import (
-    ListCreateAPIViewWithAudit,
-    MaxLimitOffsetPagination,
-    RetrieveUpdateDestroyAPIViewWithAudit,
-)
+from zentral.utils.drf import DefaultDjangoModelPermissions, MaxLimitOffsetPagination
 
 logger = logging.getLogger("server.accounts.api_views")
 
@@ -41,7 +37,9 @@ class OIDCAPITokenIssuerAuth(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class OIDCAPITokenIssuerViewList(ListCreateAPIViewWithAudit):
+# read only: a credential is written from a local session, and the console writes the issuers within the ceiling
+class OIDCAPITokenIssuerViewList(generics.ListAPIView):
+    permission_classes = [DefaultDjangoModelPermissions]
     queryset = OIDCAPITokenIssuer.objects.all()
     serializer_class = OIDCAPITokenIssuerSerializer
     ordering_fields = ('created_at',)
@@ -51,6 +49,7 @@ class OIDCAPITokenIssuerViewList(ListCreateAPIViewWithAudit):
     pagination_class = MaxLimitOffsetPagination
 
 
-class OIDCAPITokenIssuerViewDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class OIDCAPITokenIssuerViewDetail(generics.RetrieveAPIView):
+    permission_classes = [DefaultDjangoModelPermissions]
     queryset = OIDCAPITokenIssuer.objects.all()
     serializer_class = OIDCAPITokenIssuerSerializer

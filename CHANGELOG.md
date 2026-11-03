@@ -236,6 +236,11 @@ WHERE u.is_superuser AND NOT u.is_service_account AND NOT u.is_remote;
 ```
 
 
+#### 🧨 The OIDC token issuer API does not write the issuers
+
+`/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/` answer `GET` only now. A `POST`, a `PUT` or a `DELETE` gives a 405 error, or a 403 error when the token does not have the write permission of the method. An issuer makes API tokens for its service account, and a credential comes from a local session. Before, each API token with the issuer permissions wrote the issuers, and the token of a service account could make an issuer for its own account. Create, update and delete the issuers in the web console, with the same role check as before. The token exchange at `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/` does not change.
+
+
 #### 🧨 Privilege escalation hardening — superusers
 
 Only a superuser can change a superuser. For a user who is not a superuser, the update and delete pages of a superuser answer 403, also with the `Accounts::Action::"updateUser"` and `Accounts::Action::"deleteUser"` actions, and Zentral logs the refusal. The user pages do not show the button. Only a superuser logged in without a realm can give or remove the superuser status, as before.

@@ -11,11 +11,6 @@ from rest_framework import serializers
 from zentral.core.events.base import AuditEvent
 from zentral.utils.oidc import verify_jws_with_discovery
 
-from .forms import (
-    make_oidc_api_token_issuer_cel_condition_validator,
-    make_oidc_api_token_issuer_issuer_uri_validator,
-    make_oidc_api_token_issuer_user_validator,
-)
 from .models import APIToken, Group, OIDCAPITokenIssuer, Policy, ProvisionedRole, User
 
 logger = logging.getLogger("server.accounts.serializer")
@@ -77,21 +72,6 @@ class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):
     class Meta:
         model = OIDCAPITokenIssuer
         fields = "__all__"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        for attr, validator_constructor in (
-            ("cel_condition", make_oidc_api_token_issuer_cel_condition_validator),
-            ("issuer_uri", make_oidc_api_token_issuer_issuer_uri_validator),
-            ("user", make_oidc_api_token_issuer_user_validator),
-        ):
-            self.fields[attr].validators.append(validator_constructor(serializers.ValidationError))
-
-    def validate_user(self, value):
-        # PUT always carries the user, so this covers the updates too
-        if not self.context["request"].user.can_issue_credentials_for(value):
-            raise serializers.ValidationError("You cannot issue API tokens for this service account.")
-        return value
 
 
 class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):

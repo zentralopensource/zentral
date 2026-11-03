@@ -108,7 +108,7 @@ An issuer that does not accept a token — bad signature, wrong audience, or a c
 
 Once the issuer exists, the workload exchanges its identity token at [`/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/`](#apiaccountstoken_issuersoidcuuidissuer_idauth). The tokens it mints are ordinary API tokens with an expiry, and appear in the service account's token list like any other.
 
-Issuers can also be managed over the API, at `/api/accounts/token_issuers/oidc/`.
+The API reads the issuers, at `/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/`, but does not write them: an issuer makes credentials, and a credential comes from a local session. Create, update and delete the issuers in the web console. A `POST`, a `PUT` or a `DELETE` on these endpoints gives a `405`, or a `403` when the token does not have the write permission of the method.
 
 ## Password events
 

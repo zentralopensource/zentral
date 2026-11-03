@@ -530,14 +530,6 @@ def make_oidc_api_token_issuer_issuer_uri_validator(exception_class):
     return validate_issuer_uri
 
 
-def make_oidc_api_token_issuer_user_validator(exception_class):
-    def validate_user(user):
-        if user and not user.is_service_account:
-            raise exception_class("User must be a service account.")
-        return user
-    return validate_user
-
-
 class OIDCAPITokenIssuerForm(forms.ModelForm):
     class Meta:
         model = OIDCAPITokenIssuer

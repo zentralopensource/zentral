@@ -2,12 +2,9 @@ from datetime import datetime
 from unittest.mock import patch
 from uuid import uuid4
 
-from accounts.models import APIToken, OIDCAPITokenIssuer, Policy, User
-from django.contrib.auth.models import Group
+from accounts.models import APIToken, OIDCAPITokenIssuer, User
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from pbac.engine import engine
-from pbac.entities import Entity
 from rest_framework import serializers
 
 from tests.server_accounts.utils import GOOGLE_OPENID_CONFIGURATION
@@ -308,38 +305,6 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(len(callbacks), 0)
         self.assertEqual(len(post_event.call_args_list), 0)
 
-    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
-    def test_create_token_issuer_without_cel_condition(self, get_openid_configuration_from_issuer_uri):
-        self.set_permissions("accounts.add_oidcapitokenissuer")
-        payload = self._issuer_payload(self.service_account)
-        payload.pop("cel_condition")
-        response = self.post(url=reverse("accounts_api:oidc_api_token_issuers"), data=payload)
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(response.json(), {"cel_condition": ["This field is required."]})
-
-    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
-    def test_create_token_issuer_blank_cel_condition(self, get_openid_configuration_from_issuer_uri):
-        self.set_permissions("accounts.add_oidcapitokenissuer")
-        response = self.post(
-            url=reverse("accounts_api:oidc_api_token_issuers"),
-            data=self._issuer_payload(self.service_account, cel_condition=""),
-        )
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(response.json(), {"cel_condition": ["This field may not be blank."]})
-
-    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
-    def test_update_token_issuer_blank_cel_condition(self, get_openid_configuration_from_issuer_uri):
-        """The condition cannot be dropped from an existing issuer."""
-        self.set_permissions("accounts.change_oidcapitokenissuer")
-        response = self.put(
-            reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)),
-            self._issuer_payload(self.service_account, cel_condition=""),
-        )
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(response.json(), {"cel_condition": ["This field may not be blank."]})
-        self.issuer.refresh_from_db()
-        self.assertEqual(self.issuer.cel_condition, "claims.sub == 'abc'")
-
     # list OIDC API token issuers
 
     def test_list_token_issuers_unauthorized(self):
@@ -371,80 +336,28 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
 
     # create OIDC API token issuer
 
-    def test_create_token_issuer_validation_errors(self):
-        self.set_permissions("accounts.add_oidcapitokenissuer")
-        payload = {
-            "user": self.user.pk,
-            "name": get_random_string(12),
-            "description": "",
-            "issuer_uri": "http://issuer.example.com",
-            "audience": f"aud-{get_random_string(10)}",
-            "cel_condition": "claims.sub ==",
-            "max_validity": 60,
-        }
-
-        response = self.post(
-            url=reverse("accounts_api:oidc_api_token_issuers"),
-            data=payload,
-        )
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(
-            response.json(),
-            {'cel_condition': ['Invalid CEL expression.'],
-             'issuer_uri': ['Must have https as scheme.'],
-             'user': ['User must be a service account.']}
-        )
+    def test_create_token_issuer_forbidden(self):
+        # the permission check comes before the method check
+        response = self.post(url=reverse("accounts_api:oidc_api_token_issuers"), data={})
+        self.assertEqual(response.status_code, 403, response.data)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.utils.oidc.requests.get")
-    def test_create_token_issuer(self, requests_get, post_event):
-        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+    def test_create_token_issuer_method_not_allowed(self, post_event):
         self.set_permissions("accounts.add_oidcapitokenissuer")
-        name = get_random_string(12)
         payload = {
             "user": self.service_account.pk,
-            "name": name,
-            "description": "description",
+            "name": get_random_string(12),
             "issuer_uri": "https://accounts.google.com",
-            "audience": "audience",
+            "audience": f"aud-{get_random_string(10)}",
             "cel_condition": "claims.sub == 'abc'",
             "max_validity": 60,
         }
-
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.post(
-                url=reverse("accounts_api:oidc_api_token_issuers"),
-                data=payload,
-            )
-        self.assertEqual(response.status_code, 201)
-        issuer = OIDCAPITokenIssuer.objects.get(name=name)
-        self.assertEqual(
-            response.json(),
-            {'audience': 'audience',
-             'cel_condition': "claims.sub == 'abc'",
-             'created_at': issuer.created_at.isoformat(),
-             'description': 'description',
-             'id': str(issuer.pk),
-             'issuer_uri': 'https://accounts.google.com',
-             'max_validity': 60,
-             'name': name,
-             'updated_at': issuer.updated_at.isoformat(),
-             'user': self.service_account.pk}
-        )
-        # AuditEvent
-        self.assertEqual(len(callbacks), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, AuditEvent)
-        self.assertEqual(
-            event.payload,
-            {'action': 'created',
-             'object': {'model': 'accounts.oidcapitokenissuer',
-                        'pk': str(issuer.pk),
-                        'new_value': issuer.serialize_for_event()}}
-        )
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+            response = self.post(url=reverse("accounts_api:oidc_api_token_issuers"), data=payload)
+        self.assertEqual(response.status_code, 405, response.data)
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(name=payload["name"]).exists())
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
     # get OIDC API token issuer
 
@@ -475,11 +388,8 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(response.status_code, 403, response.data)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.utils.oidc.requests.get")
-    def test_update_token_issuer(self, requests_get, post_event):
-        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+    def test_update_token_issuer_method_not_allowed(self, post_event):
         self.set_permissions("accounts.change_oidcapitokenissuer")
-        prev_value = self.issuer.serialize_for_event()
         payload = {
             "user": self.service_account.pk,
             "name": self.issuer.name,
@@ -490,24 +400,11 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         }
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)), payload)
-        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.status_code, 405, response.data)
         self.issuer.refresh_from_db()
-        self.assertEqual(self.issuer.description, "updated desc")
-        # AuditEvent
-        self.assertEqual(len(callbacks), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, AuditEvent)
-        self.assertEqual(
-            event.payload,
-            {'action': 'updated',
-             'object': {'model': 'accounts.oidcapitokenissuer',
-                        'pk': str(self.issuer.pk),
-                        'prev_value': prev_value,
-                        'new_value': self.issuer.serialize_for_event()}}
-        )
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(self.issuer.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
+        self.assertEqual(self.issuer.description, "")
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
 
     # delete OIDC API token issuer
 
@@ -520,147 +417,11 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(response.status_code, 403, response.data)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_delete_issuer(self, post_event):
+    def test_delete_token_issuer_method_not_allowed(self, post_event):
         self.set_permissions("accounts.delete_oidcapitokenissuer")
-        issuer = self._create_token_issuer(
-            self.service_account,
-            cel_condition="claims.sub == 'abc'",
-            description="description",
-        )
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.delete(reverse("accounts_api:oidc_api_token_issuer", args=(issuer.pk,)))
-        self.assertEqual(response.status_code, 204, response.data)
-        self.assertFalse(OIDCAPITokenIssuer.objects.filter(pk=issuer.pk).exists())
-        # AuditEvent
-        self.assertEqual(len(callbacks), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertIsInstance(event, AuditEvent)
-        self.assertEqual(
-            event.payload,
-            {'action': 'deleted',
-             'object': {'model': 'accounts.oidcapitokenissuer',
-                        'pk': str(issuer.pk),
-                        'prev_value': {'audience': issuer.audience,
-                                       'cel_condition': "claims.sub == 'abc'",
-                                       'created_at': issuer.created_at.isoformat(),
-                                       'description': 'description',
-                                       'issuer_uri': 'https://accounts.google.com',
-                                       'max_validity': 60,
-                                       'name': issuer.name,
-                                       'pk': str(issuer.pk),
-                                       'updated_at': issuer.updated_at.isoformat(),
-                                       'user': {'email': self.service_account.email,
-                                                'pk': self.service_account.pk,
-                                                'username': self.service_account.username}}}}
-        )
-        metadata = event.metadata.serialize()
-        self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
-        self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
-
-    # role boundary
-    #
-    # The requester here is self.service_account.
-
-    def _create_out_of_reach_service_account(self):
-        service_account = User.objects.create(
-            username=get_random_string(12),
-            email="{}@zentral.io".format(get_random_string(12)),
-            is_service_account=True,
-        )
-        service_account.groups.set([Group.objects.create(name=get_random_string(12))])
-        return service_account
-
-    def _issuer_payload(self, user, **kwargs):
-        payload = {
-            "user": user.pk,
-            "name": get_random_string(12),
-            "issuer_uri": "https://accounts.google.com",
-            "audience": f"aud-{get_random_string(10)}",
-            "cel_condition": "claims.sub == 'abc'",
-            "max_validity": 60,
-        }
-        payload.update(kwargs)
-        return payload
-
-    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
-    def test_create_token_issuer_ungrantable_role(self, get_openid_configuration_from_issuer_uri):
-        service_account = self._create_out_of_reach_service_account()
-        self.set_permissions("accounts.add_oidcapitokenissuer")
-        response = self.post(
-            url=reverse("accounts_api:oidc_api_token_issuers"),
-            data=self._issuer_payload(service_account),
-        )
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(
-            response.json(),
-            {"user": ["You cannot issue API tokens for this service account."]},
-        )
-        self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=service_account).exists())
-
-    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
-    def test_create_token_issuer_service_account_named_by_policy(self, get_openid_configuration_from_issuer_uri):
-        # separate policy: set_permissions() overwrites the one carrying the perms
-        Policy.objects.create(
-            name=get_random_string(12),
-            source=(
-                'permit (\n'
-                f'  principal == {Entity("ServiceAccount", str(self.service_account.pk))},\n'
-                f'  action in [{engine.legacy_perm_actions["accounts.view_user"]}],\n'
-                '  resource\n'
-                ');'
-            ),
-        )
-        self.set_permissions("accounts.add_oidcapitokenissuer")
-        response = self.post(
-            url=reverse("accounts_api:oidc_api_token_issuers"),
-            data=self._issuer_payload(self.service_account),
-        )
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(
-            response.json(),
-            {"user": ["You cannot issue API tokens for this service account."]},
-        )
-
-    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
-    def test_update_token_issuer_ungrantable_role(self, get_openid_configuration_from_issuer_uri):
-        # repointing an out-of-reach issuer is the escalation
-        service_account = self._create_out_of_reach_service_account()
-        issuer = self._create_token_issuer(user=service_account)
-        self.set_permissions("accounts.change_oidcapitokenissuer")
-        response = self.put(
-            reverse("accounts_api:oidc_api_token_issuer", args=(issuer.pk,)),
-            self._issuer_payload(service_account, issuer_uri="https://issuer.example.com"),
-        )
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(
-            response.json(),
-            {"user": ["You cannot issue API tokens for this service account."]},
-        )
-        issuer.refresh_from_db()
-        self.assertEqual(issuer.issuer_uri, "https://accounts.google.com")
-
-    @patch("accounts.forms.get_openid_configuration_from_issuer_uri")
-    def test_update_token_issuer_to_ungrantable_role(self, get_openid_configuration_from_issuer_uri):
-        service_account = self._create_out_of_reach_service_account()
-        self.set_permissions("accounts.change_oidcapitokenissuer")
-        response = self.put(
-            reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)),
-            self._issuer_payload(service_account),
-        )
-        self.assertEqual(response.status_code, 400, response.data)
-        self.assertEqual(
-            response.json(),
-            {"user": ["You cannot issue API tokens for this service account."]},
-        )
-        self.issuer.refresh_from_db()
-        self.assertEqual(self.issuer.user, self.service_account)
-
-    def test_delete_token_issuer_ungrantable_role(self):
-        # revoking is not escalating
-        service_account = self._create_out_of_reach_service_account()
-        issuer = self._create_token_issuer(user=service_account)
-        self.set_permissions("accounts.delete_oidcapitokenissuer")
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.delete(reverse("accounts_api:oidc_api_token_issuer", args=(issuer.pk,)))
-        self.assertEqual(response.status_code, 204, response.data)
-        self.assertFalse(OIDCAPITokenIssuer.objects.filter(pk=issuer.pk).exists())
+            response = self.delete(reverse("accounts_api:oidc_api_token_issuer", args=(self.issuer.pk,)))
+        self.assertEqual(response.status_code, 405, response.data)
+        self.assertTrue(OIDCAPITokenIssuer.objects.filter(pk=self.issuer.pk).exists())
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(post_event.call_args_list), 0)
