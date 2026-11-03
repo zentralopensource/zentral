@@ -4,9 +4,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
-from accounts.models import OIDCAPITokenIssuer, Policy, User
-from pbac.engine import engine
-from pbac.entities import Entity
+from accounts.models import OIDCAPITokenIssuer, User
 from tests.server_accounts.utils import GOOGLE_OPENID_CONFIGURATION
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
@@ -52,12 +50,6 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
             user=self.service_account,
         )
 
-    def _put_service_account_out_of_reach(self):
-        """Give the service account a role the UI user doesn't have."""
-        group = Group.objects.create(name=get_random_string(12))
-        self.service_account.groups.add(group)
-        return group
-
     def _promote_ui_user_to_superuser(self):
         self.ui_user.is_superuser = True
         self.ui_user.save()
@@ -68,20 +60,6 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
                 "issuer_uri": "https://accounts.google.com",
                 "max_validity": 600,
                 "name": get_random_string(12)}
-
-    def _force_policy_naming_service_account(self, is_active=True):
-        # separate policy: set_policy() overwrites the one carrying the perms
-        return Policy.objects.create(
-            name=get_random_string(12),
-            is_active=is_active,
-            source=(
-                'permit (\n'
-                f'  principal == {Entity("ServiceAccount", str(self.service_account.pk))},\n'
-                f'  action in [{engine.legacy_perm_actions["accounts.view_user"]}],\n'
-                '  resource\n'
-                ');'
-            ),
-        )
 
     # user detail
 
@@ -126,6 +104,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     def test_service_account_detail_view_issuers_all_links(self):
         issuer = self._force_issuer()
+        self._promote_ui_user_to_superuser()
         self.login(
             "accounts.add_oidcapitokenissuer",
             "accounts.change_oidcapitokenissuer",
@@ -158,9 +137,25 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     # create OIDC API token issuer
 
     def test_create_user_issuer_404(self):
-        self.login("accounts.add_oidcapitokenissuer")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.ui_user.pk))
         self.assertEqual(response.status_code, 404)
+
+    def test_issuer_pages_refuse_before_the_account_lookup(self):
+        # a refused request cannot tell which ids are service accounts
+        issuer = self._force_issuer()
+        user_ids = (self.service_account.pk, self.ui_user.pk, 123456789)
+        for user_id in user_ids:
+            self.login_redirect("create_oidc_api_token_issuer", user_id)
+            self.login_redirect("oidc_api_token_issuer", user_id, issuer.pk)
+        self.login("accounts.view_user")
+        for user_id in user_ids:
+            for url in (self.build_url("create_oidc_api_token_issuer", user_id),
+                        self.build_url("oidc_api_token_issuer", user_id, issuer.pk),
+                        self.build_url("update_oidc_api_token_issuer", user_id, issuer.pk),
+                        self.build_url("delete_oidc_api_token_issuer", user_id, issuer.pk)):
+                self.assertEqual(self.client.get(url).status_code, 403)
 
     def test_create_issuer_login_redirect(self):
         self.login_redirect("create_oidc_api_token_issuer", self.service_account.pk)
@@ -171,6 +166,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_create_issuer_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_oidcapitokenissuer")
         response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
         self.assertEqual(response.status_code, 200)
@@ -178,6 +174,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Create OIDC API token issuer")
 
     def test_create_issuer_required_fields(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_oidcapitokenissuer")
         response = self.client.post(
             self.build_url("create_oidc_api_token_issuer", self.service_account.pk),
@@ -196,6 +193,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     def test_create_issuer_errors(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_oidcapitokenissuer")
         response = self.client.post(
             self.build_url("create_oidc_api_token_issuer", self.service_account.pk),
@@ -219,6 +217,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     @patch("zentral.utils.oidc.requests.get")
     def test_create_issuer(self, requests_get, post_event):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+        self._promote_ui_user_to_superuser()
         self.login(
             "accounts.add_oidcapitokenissuer",
             "accounts.view_oidcapitokenissuer",
@@ -277,6 +276,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     @patch("zentral.utils.oidc.requests.get")
     def test_create_issuer_blank_cel_condition(self, requests_get):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_oidcapitokenissuer")
         payload = self._issuer_form_payload()
         payload["cel_condition"] = ""
@@ -298,6 +298,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         """The condition cannot be dropped from an existing issuer."""
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         issuer = self._force_issuer()
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_oidcapitokenissuer")
         payload = self._issuer_form_payload()
         payload["cel_condition"] = ""
@@ -344,6 +345,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     def test_view_issuer_get_all_links(self):
         issuer = self._force_issuer()
+        self._promote_ui_user_to_superuser()
         self.login(
             "accounts.change_oidcapitokenissuer",
             "accounts.delete_oidcapitokenissuer",
@@ -376,6 +378,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     def test_update_issuer_permission_get(self):
         issuer = self._force_issuer()
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_oidcapitokenissuer")
         response = self.client.get(self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk))
         self.assertEqual(response.status_code, 200)
@@ -386,6 +389,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     def test_update_issuer_issuer_oid_config_error(self, get_openid_configuration_from_issuer_uri):
         get_openid_configuration_from_issuer_uri.side_effect = Exception("Boom!")
         issuer = self._force_issuer()
+        self._promote_ui_user_to_superuser()
         self.login(
             "accounts.change_oidcapitokenissuer",
             "accounts.view_oidcapitokenissuer",
@@ -414,6 +418,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         issuer = self._force_issuer()
         prev_value = issuer.serialize_for_event()
+        self._promote_ui_user_to_superuser()
         self.login(
             "accounts.change_oidcapitokenissuer",
             "accounts.view_oidcapitokenissuer",
@@ -470,102 +475,53 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
-    # role boundary
+    # until the delegated administration, a superuser makes the token issuers of a service account
 
-    def test_create_issuer_service_account_with_ungrantable_role_permission_denied(self):
-        self._put_service_account_out_of_reach()
-        self.login("accounts.add_oidcapitokenissuer")
-        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
-        self.assertEqual(response.status_code, 403)
-
-    def test_create_issuer_service_account_with_ungrantable_role_post_permission_denied(self):
-        self._put_service_account_out_of_reach()
-        self.login("accounts.add_oidcapitokenissuer")
-        response = self.client.post(
-            self.build_url("create_oidc_api_token_issuer", self.service_account.pk),
-            self._issuer_form_payload(),
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
-
-    def test_create_issuer_service_account_with_shared_role(self):
+    def test_create_issuer_needs_a_superuser(self):
+        # even with every role of the service account
         self.service_account.groups.add(self.ui_group)
         self.login("accounts.add_oidcapitokenissuer")
-        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
-        self.assertEqual(response.status_code, 200)
+        url = self.build_url("create_oidc_api_token_issuer", self.service_account.pk)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url, self._issuer_form_payload()).status_code, 403)
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
 
-    def test_create_issuer_service_account_with_ungrantable_role_superuser(self):
-        self._put_service_account_out_of_reach()
+    def test_create_issuer_superuser(self):
+        self.service_account.groups.add(Group.objects.create(name=get_random_string(12)))
         self._promote_ui_user_to_superuser()
-        self.login("accounts.add_oidcapitokenissuer")
+        self.login()
         response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
         self.assertEqual(response.status_code, 200)
 
-    def test_create_issuer_service_account_named_by_policy_permission_denied(self):
-        # its privileges no longer follow from its roles
-        self._force_policy_naming_service_account()
-        self.login("accounts.add_oidcapitokenissuer")
-        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
-        self.assertEqual(response.status_code, 403)
-
-    def test_create_issuer_service_account_named_by_inactive_policy_permission_denied(self):
-        # a disabled grant is one superuser away from being live
-        self._force_policy_naming_service_account(is_active=False)
-        self.login("accounts.add_oidcapitokenissuer")
-        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
-        self.assertEqual(response.status_code, 403)
-
-    def test_create_issuer_service_account_named_by_policy_superuser(self):
-        self._force_policy_naming_service_account()
-        self._promote_ui_user_to_superuser()
-        self.login("accounts.add_oidcapitokenissuer")
-        response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
-        self.assertEqual(response.status_code, 200)
-
-    def test_update_issuer_service_account_with_ungrantable_role_permission_denied(self):
-        issuer = self._force_issuer()
-        self._put_service_account_out_of_reach()
-        self.login("accounts.change_oidcapitokenissuer")
-        response = self.client.get(self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk))
-        self.assertEqual(response.status_code, 403)
-
-    def test_update_issuer_service_account_with_ungrantable_role_post_permission_denied(self):
+    def test_update_issuer_needs_a_superuser(self):
         # repointing at a provider the requester controls is the escalation
         issuer = self._force_issuer()
-        self._put_service_account_out_of_reach()
+        self.service_account.groups.add(self.ui_group)
         self.login("accounts.change_oidcapitokenissuer")
-        response = self.client.post(
-            self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
-            self._issuer_form_payload(),
-        )
-        self.assertEqual(response.status_code, 403)
+        url = self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url, self._issuer_form_payload()).status_code, 403)
         issuer.refresh_from_db()
         self.assertEqual(issuer.issuer_uri, "https://issuer.zentral.com")
 
-    def test_view_issuer_service_account_with_ungrantable_role_allowed(self):
+    def test_view_issuer_without_superuser_allowed(self):
         # reading an issuer grants nothing
         issuer = self._force_issuer()
-        self._put_service_account_out_of_reach()
         self.login("accounts.view_oidcapitokenissuer")
         response = self.client.get(self.build_url("oidc_api_token_issuer", self.service_account.pk, issuer.pk))
         self.assertEqual(response.status_code, 200)
 
-    def test_delete_issuer_service_account_with_ungrantable_role_allowed(self):
-        # revoking is not escalating
+    def test_delete_issuer_needs_a_superuser(self):
+        # until the delegated administration, the delete action is deprecated
         issuer = self._force_issuer()
-        self._put_service_account_out_of_reach()
         self.login("accounts.delete_oidcapitokenissuer", "accounts.view_user")
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
-                follow=True,
-            )
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(OIDCAPITokenIssuer.objects.filter(pk=issuer.pk).exists())
+        url = self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url).status_code, 403)
+        self.assertTrue(OIDCAPITokenIssuer.objects.filter(pk=issuer.pk).exists())
 
-    def test_service_account_detail_hides_write_links_when_out_of_reach(self):
+    def test_service_account_detail_hides_write_links_without_superuser(self):
         issuer = self._force_issuer()
-        self._put_service_account_out_of_reach()
         self.login(
             "accounts.add_oidcapitokenissuer",
             "accounts.change_oidcapitokenissuer",
@@ -587,14 +543,13 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
             response,
             self.build_url("oidc_api_token_issuer", self.service_account.pk, issuer.pk),
         )
-        self.assertContains(
+        self.assertNotContains(
             response,
             self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
         )
 
-    def test_view_issuer_hides_update_link_when_out_of_reach(self):
+    def test_view_issuer_hides_update_link_without_superuser(self):
         issuer = self._force_issuer()
-        self._put_service_account_out_of_reach()
         self.login(
             "accounts.change_oidcapitokenissuer",
             "accounts.delete_oidcapitokenissuer",
@@ -606,7 +561,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
             response,
             self.build_url("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
         )
-        self.assertContains(
+        self.assertNotContains(
             response,
             self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk),
         )
@@ -625,7 +580,8 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     def test_delete_issuer_permission_get(self):
         issuer = self._force_issuer()
-        self.login("accounts.delete_oidcapitokenissuer")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.get(self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/oidcapitokenissuer_confirm_delete.html")
@@ -635,10 +591,8 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     def test_delete_issuer(self, post_event):
         issuer = self._force_issuer()
         prev_value = issuer.serialize_for_event()
-        self.login(
-            "accounts.delete_oidcapitokenissuer",
-            "accounts.view_user",
-        )
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.view_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 self.build_url("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk),

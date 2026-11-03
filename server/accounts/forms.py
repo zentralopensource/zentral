@@ -22,7 +22,6 @@ from webauthn.helpers.structs import PublicKeyCredentialDescriptor
 from zentral.conf import api_base_url, settings as zentral_settings
 from zentral.conf.config import ConfigList
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
-from zentral.utils.forms import SelectMultipleWithDisabledOptions
 from zentral.utils.oidc import get_openid_configuration_from_issuer_uri
 
 from .models import APIToken, OIDCAPITokenIssuer, Policy, User, UserTOTP, UserWebAuthn
@@ -101,34 +100,13 @@ class ServiceAccountNameValidator(validators.RegexValidator):
     flags = 0
 
 
-def role_grant_error(request_user, roles):
-    """The error for the roles that request_user does not have, and so cannot give. None for a superuser."""
-    if request_user.is_superuser:
-        return None
-    disallowed = sorted(r.name for r in roles if r.pk not in request_user.group_pk_set)
-    if disallowed:
-        return "You cannot grant role membership you don't have: " + ", ".join(disallowed) + "."
-
-
-class RoleMembershipGrantMixin:
-    """Form mixin for ModelForms that expose a ``groups`` field on the User
-    model. Captures the requesting user from form kwargs, relabels the field
-    to match Zentral's "Roles" terminology, hides rule-violating choices in
-    the rendered widget, and provides a validation hook that rejects
-    role-membership grants the requester isn't entitled to make.
-
-    Place it before the ``forms.ModelForm`` (or any other form base) in the
-    MRO so its ``__init__`` runs first and pops ``request_user`` before the
-    underlying form sees the kwargs.
-    """
+class RolesFieldMixin:
+    """Form mixin for the ModelForms with the ``groups`` field of the User model: the "Roles" label of the field."""
 
     GROUPS_WIDGET_SIZE = 10
 
     def __init__(self, *args, **kwargs):
-        # required: a form without the requester would give any role
-        self.request_user = kwargs.pop("request_user")
         super().__init__(*args, **kwargs)
-        self._disable_ungrantable_group_options()
         self._prepare_groups_field()
 
     def _prepare_groups_field(self, field_name="groups"):
@@ -139,54 +117,8 @@ class RoleMembershipGrantMixin:
         field.help_text = "The roles this user belongs to."
         field.widget.attrs["size"] = self.GROUPS_WIDGET_SIZE
 
-    def _disable_ungrantable_group_options(self, field_name="groups"):
-        """Mark groups the requester can't grant as ``disabled`` in the
-        rendered widget. The set we *can't* disable is groups the target user
-        already belongs to — those must stay selectable so the actor can
-        leave them on (or remove them; removals are unrestricted). Superusers
-        are exempt — the full choice set renders normally.
-        """
-        if self.request_user.is_superuser:
-            return
-        if field_name not in self.fields:
-            return
-        field = self.fields[field_name]
-        all_pks = set(field.queryset.values_list("pk", flat=True))
-        current_pks = (
-            set(self.instance.groups.values_list("pk", flat=True))
-            if self.instance.pk else set()
-        )
-        disabled = all_pks - current_pks - self.request_user.group_pk_set
-        if not disabled:
-            return
-        field.widget = SelectMultipleWithDisabledOptions(disabled_values=disabled)
-        # Reassigning the widget `choices`
-        field.widget.choices = field.choices
 
-    def _validate_group_additions(self, field_name="groups"):
-        """Reject group additions the requester isn't entitled to make.
-
-        A non-superuser editing another user's group set may only add groups
-        they themselves belong to — the in-code expression of escalation
-        prevention: you can't grant memberships you don't have. Superusers
-        are exempt.
-
-        Removals are intentionally unrestricted — escalation risk is granting,
-        not revoking.
-        """
-        new_groups = self.cleaned_data.get(field_name)
-        if not new_groups:
-            return
-        current_pks = (
-            set(self.instance.groups.values_list("pk", flat=True))
-            if self.instance.pk else set()
-        )
-        error = role_grant_error(self.request_user, [g for g in new_groups if g.pk not in current_pks])
-        if error:
-            self.add_error(field_name, error)
-
-
-class ServiceAccountForm(RoleMembershipGrantMixin, forms.ModelForm):
+class ServiceAccountForm(RolesFieldMixin, forms.ModelForm):
     name_validator = ServiceAccountNameValidator()
     username = forms.CharField(
         label="Name",
@@ -215,10 +147,9 @@ class ServiceAccountForm(RoleMembershipGrantMixin, forms.ModelForm):
                     self.add_error("username", "A user with this name already exists.")
             self.instance.email = email
         self.instance.is_service_account = True
-        self._validate_group_additions()
 
 
-class UpdateUserForm(RoleMembershipGrantMixin, forms.ModelForm):
+class UpdateUserForm(RolesFieldMixin, forms.ModelForm):
     class Meta:
         model = User
         fields = ("username", "email", "is_superuser", "groups", "items_per_page")
@@ -226,31 +157,13 @@ class UpdateUserForm(RoleMembershipGrantMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self.instance.username_and_email_editable() or not self._request_user_can_change_credentials():
+        if not self.instance.username_and_email_editable():
             del self.fields["username"]
             del self.fields["email"]
-        if (
-            self.instance.is_remote
-            or not self.instance.is_superuser_editable()
-            or not self._request_user_can_grant_superuser()
-        ):
+        if self.instance.is_remote or not self.instance.is_superuser_editable():
             del self.fields["is_superuser"]
         if self.instance.is_remote:
             del self.fields["groups"]
-
-    def _request_user_can_change_credentials(self):
-        # The username and the email of a local user are credentials: a realm login matches on them,
-        # and the password reset goes to the email.
-        return self._request_user_can_grant_superuser() or self.request_user == self.instance
-
-    def _request_user_can_grant_superuser(self):
-        # the update view refuses a realm login, so this superuser has a local login
-        return self.request_user.is_superuser
-
-    def clean(self):
-        cleaned = super().clean()
-        self._validate_group_additions()
-        return cleaned
 
 
 class UpdateProfileForm(forms.Form):

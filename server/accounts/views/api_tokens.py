@@ -1,7 +1,7 @@
 import logging
 
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import AccessMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render, reverse
@@ -11,24 +11,32 @@ from accounts.forms import APITokenForm
 from accounts.models import APIToken, User
 from accounts.utils import delete_api_token
 from zentral.core.events.base import AuditEvent
-from zentral.utils.views import UpdateViewWithAudit
+from zentral.utils.views import UpdateViewWithAudit, is_local_superuser
 
 logger = logging.getLogger("zentral.accounts.views.api_tokens")
 
 
-def refuse_superuser_token(user):
-    if not user.can_have_api_tokens:
-        raise PermissionDenied("A superuser has no API token")
-
-
-class UserAPITokenMixin(LoginRequiredMixin):
+class UserAPITokenMixin(AccessMixin):
     def dispatch(self, request, *args, **kwargs):
-        # the login check before the user lookup: a request without a login cannot tell the user ids
         if not request.user.is_authenticated:
             return self.handle_no_permission()
+        # the checks that need no account before the lookup: a refused request cannot tell which ids exist.
+        # Until the delegated administration, a superuser makes the tokens of a service account,
+        # and deletes the tokens of another account.
+        if kwargs["user_pk"] != request.user.pk and not is_local_superuser(request):
+            raise PermissionDenied("Not allowed")
         self.user = get_object_or_404(User, pk=kwargs["user_pk"])
         self.check_access()
         return super().dispatch(request, *args, **kwargs)
+
+    def check_token_writer(self):
+        # check_access runs in dispatch, after its check: only a local superuser reaches another account here
+        if self.user != self.request.user:
+            # nobody makes or updates the tokens of another user
+            if not self.user.is_service_account:
+                raise PermissionDenied("Not allowed")
+        elif not self.user.can_have_api_tokens:
+            raise PermissionDenied("A superuser has no API token")
 
 
 class CreateUserAPITokenView(UserAPITokenMixin, CreateView):
@@ -36,17 +44,7 @@ class CreateUserAPITokenView(UserAPITokenMixin, CreateView):
     form_class = APITokenForm
 
     def check_access(self):
-        refuse_superuser_token(self.user)
-        if (
-            self.user != self.request.user
-            and (
-                not self.user.is_service_account
-                or not self.request.user.has_perms(("accounts.add_apitoken",))
-                # the response shows the secret
-                or not self.request.user.can_issue_credentials_for(self.user)
-            )
-        ):
-            raise PermissionDenied("Not allowed")
+        self.check_token_writer()
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -89,17 +87,7 @@ class UpdateUserAPITokenView(UserAPITokenMixin, UpdateViewWithAudit):
     form_class = APITokenForm
 
     def check_access(self):
-        refuse_superuser_token(self.user)
-        if (
-            self.user != self.request.user
-            and (
-                not self.user.is_service_account
-                or not self.request.user.has_perms(("accounts.change_apitoken",))
-                # no secret here, but pushing the expiry out keeps the credential alive
-                or not self.request.user.can_issue_credentials_for(self.user)
-            )
-        ):
-            raise PermissionDenied("Not allowed")
+        self.check_token_writer()
         self.token = get_object_or_404(APIToken, user=self.user, id=self.kwargs["pk"])
 
     def get_context_data(self, **kwargs):
@@ -119,10 +107,7 @@ class DeleteUserAPITokenView(UserAPITokenMixin, TemplateView):
     template_name = "accounts/api_token_confirm_delete.html"
 
     def check_access(self):
-        if (
-            self.user != self.request.user and not self.request.user.has_perms(("accounts.delete_apitoken",))
-        ):
-            raise PermissionDenied("Not allowed")
+        # the owner, or a superuser, checked by the mixin
         self.token = get_object_or_404(APIToken, user=self.user, id=self.kwargs["pk"])
 
     def get_context_data(self, **kwargs):

@@ -47,6 +47,14 @@ class ActionGroupBasename(Enum):
         return None
 
 
+# Until the delegated administration, a superuser makes the writes of the identity objects. Their legacy actions
+# are deprecated: they stay in the schema, so that the stored policies that name them still save, they give
+# nothing, and a later version removes them. The delegated administration brings typed actions of its own.
+# Not "a superuser does it": the IdP writes the realm users, and each owner deletes their own API tokens.
+DEPRECATED_HELP_TEXT = ("Deprecated, gives nothing: no policy decides this operation. "
+                        "A later version removes this action.")
+
+
 class ActionRegistrationConflict(ValueError):
     pass
 
@@ -251,7 +259,9 @@ class Engine:
                        "objects of the module."),
         )
 
-    def _register_model_default_legacy_perm_actions(self, app_config: AppConfig, model: ModelBase) -> None:
+    def _register_model_default_legacy_perm_actions(
+        self, app_config: AppConfig, model: ModelBase, deprecated_writes: bool = False
+    ) -> None:
         namespace = self._get_app_config_namespace(app_config)
         object_name = model._meta.object_name
         opts = model._meta
@@ -279,9 +289,10 @@ class Engine:
                 action_id, namespace, group_basenames,
                 LEGACY_PERM_APPLIES_TO,
                 legacy_perm=f"{app_config.label}.{codename}",
+                help_text=DEPRECATED_HELP_TEXT if deprecated_writes and operation != "view" else "",
             )
 
-    def register_app_legacy_perms(self, app_config: AppConfig) -> None:
+    def register_app_legacy_perms(self, app_config: AppConfig, deprecated_write_models=()) -> None:
         permission_models = getattr(app_config, "permission_models", [])
         perm_registered = False
         for model in app_config.get_models():
@@ -293,7 +304,7 @@ class Engine:
                 and (app_config.label != "auth" or model._meta.model_name != "group")
             ):
                 continue
-            self._register_model_default_legacy_perm_actions(app_config, model)
+            self._register_model_default_legacy_perm_actions(app_config, model, model_name in deprecated_write_models)
             perm_registered = True
         if perm_registered:
             self._register_module_legacy_perm_action(app_config)

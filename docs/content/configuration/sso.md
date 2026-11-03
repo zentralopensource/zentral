@@ -135,16 +135,9 @@ The Role is now an empty label. To grant it access, see [Writing a policy](pbac.
 
 ### Who can give a Role
 
-In the console, the Roles that you can give depend on how you are logged in:
+In the console, only a superuser, logged in without a Realm, gives or removes a Role: on the form of a User or a Service Account, with a Role mapping, with a Realm Group mapping, or with the members of a Realm Group. A superuser also creates, changes and deletes the Realm Groups, the mappings and the Roles.
 
-| Where | Superuser | Other user, logged in without a Realm | User logged in with a Realm |
-|---|---|---|---|
-| User or Service Account form | All Roles | The Roles that you have | None |
-| Role mapping | All Roles | The Roles that you have | None |
-| Realm Group mapping | All Realm Groups | A Realm Group that, with its parents, maps only Roles that you have | None |
-| Add a Realm User to a Realm Group | All Realm Groups | A Realm Group that, with its parents, maps only Roles that you have | None |
-
-Each operation also needs its permission. A superuser cannot log in with a Realm. The IdP controls the memberships that SCIM and the Realm Group mappings write, so this rule does not apply to them.
+Holding a Role is not holding its access. A `forbid` on a Role, a policy that names an account, or a policy on the type of the account all change what a Role gives, so a comparison of the Roles of two users does not bound what one can give to the other. Until Zentral has a delegated administration, a superuser makes these changes. A superuser cannot log in with a Realm. The IdP controls the memberships that SCIM and the Realm Group mappings write.
 
 ## SSO Setup Guides
 

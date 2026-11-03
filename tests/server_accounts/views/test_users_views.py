@@ -1,12 +1,10 @@
 import base64
 import json
-import re
 import time
 from unittest.mock import patch
 
 import pyotp
 from accounts.events import PasswordChangeEvent, PasswordResetRequestEvent
-from accounts.forms import UpdateUserForm
 from accounts.models import APIToken, User, UserTOTP, UserWebAuthn
 from accounts.password_validation import PasswordNotAlreadyUsedValidator
 from django.contrib.auth.models import Group
@@ -296,17 +294,27 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
         self.login("accounts.view_user", "accounts.change_user", "accounts.delete_user")
         response = self.client.get(reverse("accounts:users"))
+        # until the delegated administration, only a superuser writes a user: the write actions are deprecated
         for text in (reverse("accounts:delete_user", args=(self.user.pk,)),
-                     reverse("accounts:update_user", args=(self.user.pk,)),
                      reverse("accounts:delete_user", args=(self.remote_user.pk,)),
-                     reverse("accounts:update_user", args=(self.remote_user.pk,))):
-            self.assertContains(response, text)
-        # only a superuser can change a superuser
-        self.assertNotContains(response, reverse("accounts:update_user", args=(self.superuser.pk,)))
+                     reverse("accounts:update_user", args=(self.user.pk,)),
+                     reverse("accounts:update_user", args=(self.remote_user.pk,)),
+                     reverse("accounts:update_user", args=(self.superuser.pk,)),
+                     reverse("accounts:invite_user"),
+                     reverse("accounts:create_service_account")):
+            self.assertNotContains(response, text)
+        # only a superuser can delete a superuser
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
         self._promote_ui_user_to_superuser()
         response = self.client.get(reverse("accounts:users"))
-        self.assertContains(response, reverse("accounts:update_user", args=(self.superuser.pk,)))
+        for text in (reverse("accounts:delete_user", args=(self.user.pk,)),
+                     reverse("accounts:delete_user", args=(self.remote_user.pk,)),
+                     reverse("accounts:update_user", args=(self.user.pk,)),
+                     reverse("accounts:update_user", args=(self.remote_user.pk,)),
+                     reverse("accounts:update_user", args=(self.superuser.pk,)),
+                     reverse("accounts:invite_user"),
+                     reverse("accounts:create_service_account")):
+            self.assertContains(response, text)
         self.assertNotContains(response, reverse("accounts:delete_user", args=(self.superuser.pk,)))
 
     def test_user_list_superuser_column(self):
@@ -583,12 +591,14 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.permission_denied("invite_user")
 
     def test_user_invite_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user")
         response = self.client.get(reverse("accounts:invite_user"))
         self.assertContains(response, "Send an email invitation")
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_invite_username_error(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:invite_user"),
@@ -601,6 +611,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_invite_email_error(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:invite_user"),
@@ -613,6 +624,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_invite_email_not_allowed(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user", "accounts.view_user")
         settings._collection["users"] = ConfigDict({"allowed_invitation_domains": ["allowed.example.com"]})
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -627,6 +639,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_invite_any_ok(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user", "accounts.view_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:invite_user"),
@@ -656,6 +669,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_invite_allowed_ok(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user", "accounts.view_user")
         settings._collection["users"] = ConfigDict({"allowed_invitation_domains": ["example.com", "example2.com"]})
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -696,6 +710,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.permission_denied("create_service_account")
 
     def test_create_service_account_form(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user", "accounts.view_user")
         response = self.client.get(reverse("accounts:create_service_account"), follow=True)
         self.assertTemplateUsed(response, "accounts/user_form.html")
@@ -703,6 +718,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_service_account(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user", "accounts.view_user")
         username = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -729,6 +745,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
     def test_create_service_account_username_exists(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user", "accounts.view_user")
         existing_username = 'yoloservice'
         User.objects.create_user(existing_username, is_service_account=True)
@@ -738,6 +755,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, 'A service account with this name already exists.')
 
     def test_create_user_username_exists(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user", "accounts.view_user")
         existing_username = 'yoloaccount'
         User.objects.create_user(existing_username, "{}@zentral.io".format(get_random_string(12)),
@@ -747,70 +765,22 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertTemplateUsed(response, "accounts/user_form.html")
         self.assertContains(response, 'A user with this name already exists.')
 
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_non_superuser_service_account_flow_with_own_role(self, post_event):
-        # a role administrator who is not a superuser: create a service account in a role they have,
-        # give it a token, change it
-        other_group = Group.objects.create(name=get_random_string(12))
-        self.login("accounts.add_user", "accounts.change_user", "accounts.view_user",
-                   "accounts.add_apitoken", "accounts.view_apitoken")
-        self.assertFalse(self.ui_user.is_superuser)
-        response = self.client.get(reverse("accounts:create_service_account"))
-        self.assertEqual(response.status_code, 200)
-        widget = response.context["form"].fields["groups"].widget
-        self.assertEqual(widget.disabled_values, {other_group.pk})
-        username = "ci-bot-" + get_random_string(6)
-        response = self.client.post(reverse("accounts:create_service_account"),
-                                    {"username": username,
-                                     "description": "",
-                                     "groups": [self.ui_group.pk]},
-                                    follow=True)
-        self.assertTemplateUsed(response, "accounts/user_detail.html")
-        service_account = User.objects.get(username=username)
-        self.assertTrue(service_account.is_service_account)
-        self.assertFalse(service_account.is_superuser)
+    def test_account_writes_need_a_superuser(self):
+        # each action, the account and the token actions included
+        service_account = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                                   is_service_account=True)
+        service_account.groups.set([self.ui_group])
+        self.login_with_policy('permit (principal, action in Action::"GlobalAdminActions", resource);')
+        for url_name, args in (("invite_user", ()),
+                               ("create_service_account", ()),
+                               ("update_user", (self.user.pk,)),
+                               ("update_user", (self.ui_user.pk,)),
+                               ("update_user", (service_account.pk,))):
+            url = reverse(f"accounts:{url_name}", args=args)
+            for method in (self.client.get, self.client.post):
+                with self.subTest(url_name=url_name, args=args, method=method.__name__):
+                    self.assertEqual(method(url).status_code, 403)
         self.assertEqual(list(service_account.groups.all()), [self.ui_group])
-        self.assertTrue(response.context["can_add_token"])
-        self.assertContains(response, reverse("accounts:create_user_api_token", args=(service_account.pk,)))
-        self.assertContains(response, reverse("accounts:update_user", args=(service_account.pk,)))
-        # token
-        response = self.client.post(reverse("accounts:create_user_api_token", args=(service_account.pk,)),
-                                    {"name": "ci"})
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "accounts/user_api_token.html")
-        self.assertEqual(service_account.apitoken_set.count(), 1)
-        # change
-        response = self.client.post(reverse("accounts:update_user", args=(service_account.pk,)),
-                                    {"username": username,
-                                     "description": "CI",
-                                     "groups": [self.ui_group.pk]},
-                                    follow=True)
-        self.assertTemplateUsed(response, "accounts/user_detail.html")
-        service_account.refresh_from_db()
-        self.assertEqual(service_account.description, "CI")
-        self.assertEqual(list(service_account.groups.all()), [self.ui_group])
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_non_superuser_user_flow_with_own_role(self, post_event):
-        self.login("accounts.add_user", "accounts.change_user", "accounts.view_user")
-        self.assertFalse(self.ui_user.is_superuser)
-        self.client.post(reverse("accounts:invite_user"),
-                         {"username": "test",
-                          "email": "test@example.com"},
-                         follow=True)
-        user = User.objects.get(email="test@example.com")
-        self.assertFalse(user.is_superuser)
-        self.assertEqual(len(mail.outbox), 1)
-        response = self.client.post(reverse("accounts:update_user", args=(user.pk,)),
-                                    {"username": "test",
-                                     "email": "test@example.com",
-                                     "items_per_page": 10,
-                                     "groups": [self.ui_group.pk]},
-                                    follow=True)
-        self.assertTemplateUsed(response, "accounts/user_detail.html")
-        user.refresh_from_db()
-        self.assertEqual(list(user.groups.all()), [self.ui_group])
-        self.assertFalse(user.is_superuser)
 
     # update
 
@@ -822,6 +792,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.permission_denied("update_user", self.superuser.id)
 
     def test_user_update_404(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         response = self.client.get(reverse("accounts:update_user", args=(0,)))
         self.assertEqual(response.status_code, 404)
@@ -884,79 +855,22 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotIn("description", form.fields)
         self.assertIn("is_superuser", form.fields)  # not unique superuser → editable
 
-    def test_non_superuser_requester_cannot_see_username_and_email(self):
-        self.login("accounts.change_user")
-        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
-        form = response.context["form"]
-        self.assertNotIn("username", form.fields)
-        self.assertNotIn("email", form.fields)
-        self.assertIn("groups", form.fields)
-
-    def test_user_update_own_username_and_email_get(self):
-        self.login("accounts.change_user")
-        response = self.client.get(reverse("accounts:update_user", args=(self.ui_user.id,)))
-        form = response.context["form"]
-        self.assertIn("username", form.fields)
-        self.assertIn("email", form.fields)
-
     def test_user_update_own_remote_session_permission_denied(self):
         self.login("accounts.change_user", realm_user=True)
         self.permission_denied("update_user", self.ui_user.id)
 
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_non_superuser_requester_cannot_change_username_and_email(self, post_event):
-        # smuggling a username and an email through a POST must be ignored
-        self.login("accounts.change_user", "accounts.view_user")
-        username = self.user.username
-        email = self.user.email
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                reverse("accounts:update_user", args=(self.user.id,)),
-                {"username": "toto",
-                 "email": "tata@example.com",
-                 "items_per_page": 10},
-                follow=True,
-            )
-        self.assertTemplateUsed(response, "accounts/user_detail.html")
-        self.user.refresh_from_db()
-        self.assertEqual(self.user.username, username)
-        self.assertEqual(self.user.email, email)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_user_update_own_username_and_email(self, post_event):
-        self.login("accounts.change_user", "accounts.view_user")
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                reverse("accounts:update_user", args=(self.ui_user.id,)),
-                {"username": "toto",
-                 "email": "tata@example.com",
-                 "groups": [self.ui_group.pk],
-                 "items_per_page": 10},
-                follow=True,
-            )
-        self.assertTemplateUsed(response, "accounts/user_detail.html")
-        self.ui_user.refresh_from_db()
-        self.assertEqual(self.ui_user.username, "toto")
-        self.assertEqual(self.ui_user.email, "tata@example.com")
-
     def test_superuser_update_non_superuser_requester_403(self):
-        # a write action includes the read of its resource: the refusal hides nothing, and is logged
+        # until the delegated administration, the update needs a superuser: the same answer for each id
         self.login("accounts.change_user")
-        with self.assertLogs("zentral.accounts.views.users", level="ERROR") as cm:
-            response = self.client.get(reverse("accounts:update_user", args=(self.superuser.id,)))
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(cm.output, [f"ERROR:zentral.accounts.views.users:Permission denied on superuser "
-                                     f"{self.superuser.pk}"])
-        with self.assertNoLogs("zentral.accounts.views.users", level="ERROR"):
-            response = self.client.get(reverse("accounts:update_user", args=(0,)))
-        self.assertEqual(response.status_code, 404)
+        for pk in (self.superuser.id, self.user.id, 0):
+            response = self.client.get(reverse("accounts:update_user", args=(pk,)))
+            self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_superuser_update_post_non_superuser_requester_403(self, post_event):
         self.login("accounts.change_user", "accounts.view_user")
         email = "{}@zentral.io".format(get_random_string(12))
-        with self.captureOnCommitCallbacks(execute=True) as callbacks, \
-             self.assertLogs("zentral.accounts.views.users", level="ERROR"):
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
                 reverse("accounts:update_user", args=(self.superuser.id,)),
                 {"username": self.superuser.username,
@@ -970,37 +884,10 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(len(callbacks), 0)
         post_event.assert_not_called()
 
-    def test_non_superuser_requester_cannot_see_is_superuser(self):
-        # ui_user has change_user perm but is not a superuser
-        self.login("accounts.change_user")
-        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
-        form = response.context["form"]
-        self.assertNotIn("is_superuser", form.fields)
-
     def test_user_update_remote_session_superuser_permission_denied(self):
         self._promote_ui_user_to_superuser()
         self.login_with_forced_realm_session()
         self.permission_denied("update_user", self.user.id)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_non_superuser_requester_cannot_grant_superuser(self, post_event):
-        # smuggling is_superuser=True through a POST must be ignored
-        self.login("accounts.change_user", "accounts.view_user")
-        self.assertFalse(self.user.is_superuser)
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            self.client.post(
-                reverse("accounts:update_user", args=(self.user.id,)),
-                {"username": self.user.username,
-                 "email": self.user.email,
-                 "items_per_page": 10,
-                 "is_superuser": "on"},
-                follow=True,
-            )
-        self.user.refresh_from_db()
-        self.assertFalse(self.user.is_superuser)
-        self.assertEqual(len(callbacks), 1)
-        event = post_event.call_args_list[0].args[0]
-        self.assertFalse(event.payload["object"]["new_value"]["is_superuser"])
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_update_remote_session_post_permission_denied(self, post_event):
@@ -1108,6 +995,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(len(callbacks), 1)
 
     def test_service_account_update_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         response = self.client.get(reverse("accounts:update_user", args=(self.service_account.id,)))
         self.assertContains(response, "Update service account {}".format(self.service_account))
@@ -1176,6 +1064,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_service_account_update_ok(self, post_event):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user", "accounts.view_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:update_user", args=(self.service_account.id,)),
@@ -1205,6 +1094,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     def test_user_update_groups_field_labeled_as_roles(self):
         # Zentral UI uses "Roles", not Django's auto-generated "Groups".
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user")
         response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
         field = response.context["form"].fields["groups"]
@@ -1213,6 +1103,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(field.widget.attrs.get("size"), 10)
 
     def test_service_account_create_groups_field_labeled_as_roles(self):
+        self._promote_ui_user_to_superuser()
         self.login("accounts.add_user")
         response = self.client.get(reverse("accounts:create_service_account"))
         field = response.context["form"].fields["groups"]
@@ -1221,140 +1112,20 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(field.widget.attrs.get("size"), 10)
 
     def test_mixin_methods_noop_when_groups_field_is_absent(self):
-        # Defensive guards: if a form using the mixin doesn't expose a "groups"
-        # field, _prepare_groups_field and _disable_ungrantable_group_options
-        # must early-return cleanly instead of raising KeyError. Triggered by
-        # calling them with a field_name that isn't present on the form.
+        # Defensive guard: if a form using the mixin doesn't expose a "groups"
+        # field, _prepare_groups_field must early-return cleanly instead of
+        # raising KeyError.
         from accounts.forms import ServiceAccountForm
-        form = ServiceAccountForm(request_user=self.ui_user)
+        form = ServiceAccountForm()
         form._prepare_groups_field(field_name="not_a_field")
-        form._disable_ungrantable_group_options(field_name="not_a_field")
         # If we got here without raising, the guards did their job.
         self.assertNotIn("not_a_field", form.fields)
 
-    def test_role_grant_forms_need_the_request_user(self):
-        from accounts.forms import ServiceAccountForm
-        for form_class in (ServiceAccountForm, UpdateUserForm):
-            with self.assertRaises(KeyError):
-                form_class(instance=self.user)
-
-    def _role_option_tag(self, html, pk):
-        """Return the rendered ``<option>`` tag for a role/group pk in the
-        roles ``<select>``, or None if it isn't rendered at all. Asserting on
-        the real HTML — not just ``widget.disabled_values`` — is what catches
-        the choices-not-wired-up regression: the widget can carry the correct
-        disabled_values yet render zero options (so nothing is disabled because
-        nothing is rendered).
-        """
-        match = re.search(r'<option value="{}"[^>]*>'.format(pk), html)
-        return match.group(0) if match else None
-
-    def test_user_update_widget_disables_ungrantable_groups(self):
-        # The widget mirrors the validation rule so operators see upfront
-        # which groups they can't grant. Groups the target already belongs to
-        # stay selectable (so the actor can remove or keep them).
-        ungrantable = Group.objects.create(name=get_random_string(12))
-        already_assigned = Group.objects.create(name=get_random_string(12))
-        self.user.groups.add(already_assigned)
-        self.login("accounts.change_user")
-        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
-        widget = response.context["form"].fields["groups"].widget
-        self.assertIn(ungrantable.pk, widget.disabled_values)
-        self.assertNotIn(self.ui_group.pk, widget.disabled_values)  # actor's own group
-        self.assertNotIn(already_assigned.pk, widget.disabled_values)  # already on target
-        # the disabled_values attribute must actually reach the rendered HTML
-        html = response.content.decode()
-        ungrantable_option = self._role_option_tag(html, ungrantable.pk)
-        self.assertIsNotNone(ungrantable_option)
-        self.assertIn("disabled", ungrantable_option)
-        own_option = self._role_option_tag(html, self.ui_group.pk)
-        self.assertIsNotNone(own_option)
-        self.assertNotIn("disabled", own_option)
-        assigned_option = self._role_option_tag(html, already_assigned.pk)
-        self.assertIsNotNone(assigned_option)
-        self.assertNotIn("disabled", assigned_option)
-
-    def test_user_update_widget_not_filtered_for_superuser(self):
-        # Superusers see the unmodified default widget — no disabled options.
-        self.ui_user.is_superuser = True
-        self.ui_user.save()
-        group = Group.objects.create(name=get_random_string(12))
-        self.login("accounts.change_user")
-        response = self.client.get(reverse("accounts:update_user", args=(self.user.id,)))
-        widget = response.context["form"].fields["groups"].widget
-        self.assertFalse(hasattr(widget, "disabled_values"))
-        # the option still renders, just without the disabled attribute
-        html = response.content.decode()
-        option = self._role_option_tag(html, group.pk)
-        self.assertIsNotNone(option)
-        self.assertNotIn("disabled", option)
-
-    def test_service_account_create_widget_disables_ungrantable_groups(self):
-        # Same rule applies on the creation path — without it, "create a SA
-        # in role X" is the escalation vector.
-        ungrantable = Group.objects.create(name=get_random_string(12))
-        self.login("accounts.add_user")
-        response = self.client.get(reverse("accounts:create_service_account"))
-        widget = response.context["form"].fields["groups"].widget
-        self.assertIn(ungrantable.pk, widget.disabled_values)
-        self.assertNotIn(self.ui_group.pk, widget.disabled_values)
-        # the disabled_values attribute must actually reach the rendered HTML
-        html = response.content.decode()
-        ungrantable_option = self._role_option_tag(html, ungrantable.pk)
-        self.assertIsNotNone(ungrantable_option)
-        self.assertIn("disabled", ungrantable_option)
-        own_option = self._role_option_tag(html, self.ui_group.pk)
-        self.assertIsNotNone(own_option)
-        self.assertNotIn("disabled", own_option)
-
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_user_update_cannot_add_group_actor_is_not_member_of(self, post_event):
-        # Non-superuser must not grant memberships they don't have themselves.
-        other_group = Group.objects.create(name=get_random_string(12))
-        self.login("accounts.change_user", "accounts.view_user")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:update_user", args=(self.user.id,)),
-                {"username": self.user.username,
-                 "email": self.user.email,
-                 "items_per_page": 10,
-                 "groups": [other_group.pk]},
-            )
-        self.assertFormError(
-            response.context["form"], "groups",
-            f"You cannot grant role membership you don't have: {other_group.name}.",
-        )
-        self.user.refresh_from_db()
-        self.assertNotIn(other_group, self.user.groups.all())
-        self.assertEqual(len(callbacks), 0)
-        self.assertEqual(len(post_event.call_args_list), 0)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_user_update_can_add_group_actor_is_member_of(self, post_event):
-        # Granting a group the actor already belongs to is fine.
-        self.login("accounts.change_user", "accounts.view_user")
-        self.assertNotIn(self.ui_group, self.user.groups.all())
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:update_user", args=(self.user.id,)),
-                {"username": self.user.username,
-                 "email": self.user.email,
-                 "items_per_page": 10,
-                 "groups": [self.ui_group.pk]},
-                follow=True,
-            )
-        self.assertEqual(response.status_code, 200)
-        self.user.refresh_from_db()
-        self.assertIn(self.ui_group, self.user.groups.all())
-        self.assertEqual(len(callbacks), 1)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_user_update_can_remove_group_actor_is_not_member_of(self, post_event):
-        # Removal is intentionally not restricted by the rule — escalation risk
-        # is granting, not revoking. The actor here is not in other_group, but
-        # the target user is, and the actor is allowed to take them out.
+    def test_superuser_update_can_remove_any_group(self, post_event):
         other_group = Group.objects.create(name=get_random_string(12))
         self.user.groups.add(other_group)
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_user", "accounts.view_user")
         with self.captureOnCommitCallbacks(execute=True):
             self.client.post(
@@ -1388,47 +1159,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.user.refresh_from_db()
         self.assertIn(other_group, self.user.groups.all())
 
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_service_account_update_cannot_add_group_actor_is_not_member_of(self, post_event):
-        # Same rule for the service-account form.
-        other_group = Group.objects.create(name=get_random_string(12))
-        self.login("accounts.change_user", "accounts.view_user")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:update_user", args=(self.service_account.id,)),
-                {"username": self.service_account.username,
-                 "description": "",
-                 "groups": [other_group.pk]},
-            )
-        self.assertFormError(
-            response.context["form"], "groups",
-            f"You cannot grant role membership you don't have: {other_group.name}.",
-        )
-        self.service_account.refresh_from_db()
-        self.assertNotIn(other_group, self.service_account.groups.all())
-        self.assertEqual(len(callbacks), 0)
-        self.assertEqual(len(post_event.call_args_list), 0)
-
-    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_service_account_create_cannot_assign_group_actor_is_not_member_of(self, post_event):
-        # Creation path — the rule must apply at creation time too, otherwise
-        # "create a service account in role X" becomes the escalation vector.
-        other_group = Group.objects.create(name=get_random_string(12))
-        self.login("accounts.add_user")
-        with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.client.post(
-                reverse("accounts:create_service_account"),
-                {"username": "ci-bot-" + get_random_string(6),
-                 "description": "",
-                 "groups": [other_group.pk]},
-            )
-        self.assertFormError(
-            response.context["form"], "groups",
-            f"You cannot grant role membership you don't have: {other_group.name}.",
-        )
-        self.assertEqual(len(callbacks), 0)
-        self.assertEqual(len(post_event.call_args_list), 0)
-
     # delete
 
     def test_user_delete_login_redirect(self):
@@ -1441,17 +1171,16 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
             self.login_redirect("delete_user", pk, data={"yolo": "fomo"})
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_superuser_delete_non_superuser_requester_403(self, post_event):
+    def test_user_delete_needs_a_superuser(self, post_event):
+        # until the delegated administration, the delete action is deprecated
         self.login("accounts.delete_user", "accounts.view_user")
-        for method in ("get", "post"):
-            with self.assertLogs("zentral.accounts.views.users", level="ERROR") as cm, \
-                 self.captureOnCommitCallbacks(execute=True) as callbacks:
-                response = getattr(self.client, method)(reverse("accounts:delete_user", args=(self.superuser.id,)))
-            self.assertEqual(response.status_code, 403)
-            self.assertEqual(cm.output, [f"ERROR:zentral.accounts.views.users:Permission denied on superuser "
-                                         f"{self.superuser.pk}"])
-            self.assertEqual(len(callbacks), 0)
-        self.assertTrue(User.objects.filter(pk=self.superuser.pk).exists())
+        for user in (self.user, self.superuser):
+            for method in ("get", "post"):
+                with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                    response = getattr(self.client, method)(reverse("accounts:delete_user", args=(user.id,)))
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(len(callbacks), 0)
+            self.assertTrue(User.objects.filter(pk=user.pk).exists())
         post_event.assert_not_called()
 
     def test_user_delete_permission_denied(self):
@@ -1465,7 +1194,8 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
 
     def test_user_delete_form(self):
-        self.login("accounts.delete_user", "accounts.view_user")
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.view_user")
         response = self.client.get(reverse("accounts:delete_user", args=(self.user.id,)), follow=True)
         self.assertTemplateUsed(response, "accounts/delete_user.html")
         self.assertEqual(response.context['user_to_delete'], self.user)
@@ -1473,7 +1203,8 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_delete_404(self, post_event):
-        self.login("accounts.delete_user")
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.view_user")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("accounts:delete_user", args=(0,)))
         self.assertEqual(response.status_code, 404)
@@ -1495,7 +1226,8 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_user_delete_ok(self, post_event):
-        self.login("accounts.delete_user", "accounts.view_user")
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.view_user")
         user_str = str(self.user)
         expected_event_payload = {"action": "deleted",
                                   "object": {
@@ -1537,7 +1269,8 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
                                                    "{}@zentral.io".format(get_random_string(12)),
                                                    get_random_string(12),
                                                    is_service_account=True)
-        self.login("accounts.delete_user", "accounts.view_user")
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.view_user")
         response = self.client.post(reverse("accounts:delete_user", args=(service_account.id,)), follow=True)
 
         self.assertContains(response, "Service account {} deleted".format(service_account))

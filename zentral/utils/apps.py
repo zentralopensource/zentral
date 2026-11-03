@@ -13,6 +13,9 @@ logger = logging.getLogger('zentral.utils.apps')
 
 class ZentralAppConfig(AppConfig):
     permission_models = None
+    # the models whose write actions are deprecated, see pbac.engine.DEPRECATED_HELP_TEXT.
+    # The models themselves and their view action are not.
+    pbac_deprecated_write_models = ()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,4 +74,4 @@ class ZentralAppConfig(AppConfig):
         return "".join(w.title() for w in re.split(r"[ _]", self.name.split(".")[-1]))
 
     def register_legacy_perms(self):
-        engine.register_app_legacy_perms(self)
+        engine.register_app_legacy_perms(self, self.pbac_deprecated_write_models)

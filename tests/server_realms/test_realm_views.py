@@ -59,9 +59,12 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def _get_url_namespace(self):
         return "realms"
 
-    def _login_superuser(self):
+    def _promote_ui_user_to_superuser(self):
         self.ui_user.is_superuser = True
         self.ui_user.save()
+
+    def _login_superuser(self):
+        self._promote_ui_user_to_superuser()
         self.login()
 
     def _login_admin(self):
@@ -362,6 +365,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         realm = force_realm()
         rmg = force_realm_group_mapping(realm=realm)
         rm = force_role_mapping(realm=realm)
+        self._promote_ui_user_to_superuser()
         self.login(
             "realms.view_realm",
             "realms.add_realmgroupmapping",
@@ -526,6 +530,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_realm_group_mappings_all_perms(self):
         rgm = force_realm_group_mapping()
+        self._promote_ui_user_to_superuser()
         self.login(
             "realms.view_realmgroupmapping",
             "realms.add_realmgroupmapping",
@@ -565,13 +570,15 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_create_realm_group_mapping_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_realmgroupmapping")
         response = self.client.get(reverse("realms:create_realm_group_mapping"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/realmgroupmapping_form.html")
 
-    def test_create_realm_group_mapping_post_no_separator_no_view_perm(self):
+    def test_create_realm_group_mapping_post_no_separator(self):
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_realmgroupmapping", "realms.view_realmgroupmapping")
         response = self.client.post(
             reverse("realms:create_realm_group_mapping"),
@@ -589,11 +596,13 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(rgm.separator, "")
         self.assertContains(response, realm_group.realm.name)
         self.assertContains(response, realm_group.display_name)
-        self.assertNotContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
-        self.assertNotContains(response, realm_group.realm.get_absolute_url())
-        self.assertNotContains(response, realm_group.get_absolute_url())
+        # a superuser has each permission
+        self.assertContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
+        self.assertContains(response, realm_group.realm.get_absolute_url())
+        self.assertContains(response, realm_group.get_absolute_url())
 
     def test_create_realm_group_mapping_post_separator_view_perm(self):
+        self._promote_ui_user_to_superuser()
         self.login(
             "realms.add_realmgroupmapping",
             "realms.change_realmgroupmapping",
@@ -624,26 +633,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
         self.assertContains(response, realm_group.realm.get_absolute_url())
         self.assertContains(response, realm_group.get_absolute_url())
-
-    def test_create_realm_group_mapping_post_role_not_held(self):
-        parent_role_mapping = force_role_mapping()
-        realm_group = force_realm_group(realm=parent_role_mapping.realm_group.realm,
-                                        parent=parent_role_mapping.realm_group)
-        RoleMapping.objects.create(realm_group=realm_group, group=self.ui_group)
-        self.login("realms.add_realmgroupmapping")
-        response = self.client.post(
-            reverse("realms:create_realm_group_mapping"),
-            {"claim": "Yolo",
-             "value": "Fomo",
-             "realm_group": realm_group.pk},
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realmgroupmapping_form.html")
-        self.assertFormError(
-            response.context["form"], "realm_group",
-            f"You cannot grant role membership you don't have: {parent_role_mapping.group.name}."
-        )
-        self.assertFalse(RealmGroupMapping.objects.exists())
 
     def test_create_realm_group_mapping_post_superuser_role_not_held(self):
         self.ui_user.is_superuser = True
@@ -683,6 +672,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_realm_group_mapping_get(self):
         rgm = force_realm_group_mapping()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroupmapping")
         response = self.client.get(reverse("realms:update_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -690,6 +680,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_realm_group_mapping_post(self):
         rgm = force_realm_group_mapping()
+        self._promote_ui_user_to_superuser()
         self.login(
             "realms.change_realmgroupmapping",
             "realms.view_realmgroupmapping"
@@ -713,25 +704,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(rgm.realm_group, realm_group)
         self.assertEqual(rgm.separator, separator)
 
-    def test_update_realm_group_mapping_post_role_not_held(self):
-        rgm = force_realm_group_mapping()
-        role_mapping = force_role_mapping()
-        self.login("realms.change_realmgroupmapping")
-        response = self.client.post(
-            reverse("realms:update_realm_group_mapping", args=(rgm.pk,)),
-            {"claim": rgm.claim,
-             "value": rgm.value,
-             "realm_group": role_mapping.realm_group.pk},
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realmgroupmapping_form.html")
-        self.assertFormError(
-            response.context["form"], "realm_group",
-            f"You cannot grant role membership you don't have: {role_mapping.group.name}."
-        )
-        rgm.refresh_from_db()
-        self.assertNotEqual(rgm.realm_group, role_mapping.realm_group)
-
     # delete realm group mapping
 
     def test_delete_realm_group_mapping_redirect(self):
@@ -754,6 +726,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_delete_realm_group_mapping_get(self):
         rgm = force_realm_group_mapping()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_realmgroupmapping")
         response = self.client.get(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -761,6 +734,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_delete_realm_group_mapping_post(self):
         rgm = force_realm_group_mapping()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_realmgroupmapping", "realms.view_realmgroupmapping")
         response = self.client.post(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -796,6 +770,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_role_mappings_all_perms(self):
         rm = force_role_mapping()
+        self._promote_ui_user_to_superuser()
         self.login(
             "auth.view_group",
             "realms.view_rolemapping",
@@ -838,14 +813,16 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_create_role_mapping_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_rolemapping")
         response = self.client.get(reverse("realms:create_role_mapping"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "realms/rolemapping_form.html")
 
-    def test_create_role_mapping_no_view_perm(self):
+    def test_create_role_mapping_post(self):
         group = self.ui_group
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_rolemapping", "realms.view_rolemapping")
         response = self.client.post(
             reverse("realms:create_role_mapping"),
@@ -863,27 +840,11 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, realm_group.realm.name)
         self.assertContains(response, realm_group.display_name)
         self.assertContains(response, group.name)
-        self.assertNotContains(response, reverse("realms:update_role_mapping", args=(rm.pk,)))
-        self.assertNotContains(response, realm_group.realm.get_absolute_url())
-        self.assertNotContains(response, realm_group.get_absolute_url())
-        self.assertNotContains(response, reverse("accounts:group", args=(group.pk,)))
-
-    def test_create_role_mapping_role_not_held(self):
-        group = force_group()
-        realm_group = force_realm_group()
-        self.login("realms.add_rolemapping")
-        response = self.client.post(
-            reverse("realms:create_role_mapping"),
-            {"group": group.pk,
-             "realm_group": realm_group.pk},
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/rolemapping_form.html")
-        self.assertFormError(
-            response.context["form"], "group",
-            f"You cannot grant role membership you don't have: {group.name}."
-        )
-        self.assertFalse(RoleMapping.objects.exists())
+        # a superuser has each permission
+        self.assertContains(response, reverse("realms:update_role_mapping", args=(rm.pk,)))
+        self.assertContains(response, realm_group.realm.get_absolute_url())
+        self.assertContains(response, realm_group.get_absolute_url())
+        self.assertContains(response, reverse("accounts:group", args=(group.pk,)))
 
     def test_create_role_mapping_superuser_role_not_held(self):
         self.ui_user.is_superuser = True
@@ -925,6 +886,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_role_mapping_get(self):
         rm = force_role_mapping()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_rolemapping")
         response = self.client.get(reverse("realms:update_role_mapping", args=(rm.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -932,6 +894,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_role_mapping_post(self):
         rm = force_role_mapping()
+        self._promote_ui_user_to_superuser()
         self.login(
             "realms.change_rolemapping",
             "realms.view_rolemapping"
@@ -952,24 +915,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         rm.refresh_from_db()
         self.assertEqual(rm.group, group)
         self.assertEqual(rm.realm_group, realm_group)
-
-    def test_update_role_mapping_post_role_not_held(self):
-        rm = force_role_mapping()
-        realm_group = force_realm_group()
-        self.login("realms.change_rolemapping")
-        response = self.client.post(
-            reverse("realms:update_role_mapping", args=(rm.pk,)),
-            {"group": rm.group.pk,
-             "realm_group": realm_group.pk},
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/rolemapping_form.html")
-        self.assertFormError(
-            response.context["form"], "group",
-            f"You cannot grant role membership you don't have: {rm.group.name}."
-        )
-        rm.refresh_from_db()
-        self.assertNotEqual(rm.realm_group, realm_group)
 
     # delete role mapping
 
@@ -993,6 +938,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_delete_role_mapping_get(self):
         rm = force_role_mapping()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_rolemapping")
         response = self.client.get(reverse("realms:delete_role_mapping", args=(rm.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1000,6 +946,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_delete_role_mapping_post(self):
         rm = force_role_mapping()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_rolemapping", "realms.view_rolemapping")
         response = self.client.post(reverse("realms:delete_role_mapping", args=(rm.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -1070,6 +1017,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, "We didn't find any item related to your search")
 
     def test_realm_groups_update_delete_links(self):
+        self._promote_ui_user_to_superuser()
         self.login("realms.view_realmgroup", "realms.change_realmgroup", "realms.delete_realmgroup")
         group = force_realm_group()
         response = self.client.get(reverse("realms:groups"))
@@ -1142,6 +1090,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_create_realm_group_get(self):
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_realmgroup")
         response = self.client.get(reverse("realms:create_group"))
         self.assertEqual(response.status_code, 200)
@@ -1151,6 +1100,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_create_realm_group_post(self):
         realm = force_realm()
         display_name = get_random_string(12)
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_realmgroup", "realms.view_realmgroup")
         response = self.client.post(
             reverse("realms:create_group"),
@@ -1176,6 +1126,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_realm_group_get(self):
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup")
         response = self.client.get(reverse("realms:update_group", args=(realm_group.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1185,6 +1136,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_update_realm_group_post(self):
         realm_group = force_realm_group()
         new_display_name = get_random_string(12)
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup", "realms.view_realmgroup")
         response = self.client.post(
             reverse("realms:update_group", args=(realm_group.pk,)),
@@ -1211,6 +1163,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_delete_realm_group_get(self):
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_realmgroup")
         response = self.client.get(reverse("realms:delete_group", args=(realm_group.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1219,6 +1172,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_delete_realm_group_post(self):
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_realmgroup", "realms.view_realmgroup")
         response = self.client.post(reverse("realms:delete_group", args=(realm_group.pk,)), follow=True)
         self.assertEqual(response.status_code, 200)
@@ -1226,6 +1180,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, realm_group.display_name)
 
     def _assert_realm_group_not_deletable(self, realm_group):
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_realmgroup", "realms.view_realmgroup")
         for method in (self.client.get, self.client.post):
             response = method(reverse("realms:delete_group", args=(realm_group.pk,)))
@@ -1251,13 +1206,14 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_realm_group_delete_note(self):
         realm_group = force_role_mapping().realm_group
-        # without the delete permission
-        self.login("realms.view_realmgroup")
+        # without the superuser status
+        self.login("realms.view_realmgroup", "realms.delete_realmgroup")
         response = self.client.get(reverse("realms:group", args=(realm_group.pk,)))
         self.assertNotContains(response, "To delete this group")
         # a SCIM group is never deleted in the console
         realm_group.scim_managed = True
         realm_group.save()
+        self._promote_ui_user_to_superuser()
         self.login("realms.view_realmgroup", "realms.delete_realmgroup")
         response = self.client.get(reverse("realms:group", args=(realm_group.pk,)))
         self.assertNotContains(response, "To delete this group")
@@ -1271,6 +1227,46 @@ class RealmViewsTestCase(TestCase, LoginCase):
         parent = force_realm_group()
         realm_group = force_realm_group(realm=parent.realm, parent=parent)
         self.assertTrue(realm_group.can_be_deleted())
+
+    # until the delegated administration, only a superuser writes the realm groups, their members and the mappings
+
+    def test_realm_writes_need_a_superuser(self):
+        realm_group = force_realm_group()
+        _, realm_user = force_realm_user(realm=realm_group.realm)
+        RealmUserGroupMembership.objects.create(user=realm_user, group=realm_group)
+        realm_group_mapping = force_realm_group_mapping()
+        role_mapping = force_role_mapping()
+        # each action, the write actions of the realm groups and of the mappings included
+        self._login_admin()
+        for url_name, args in (("create_group", ()),
+                               ("update_group", (realm_group.pk,)),
+                               ("delete_group", (realm_group.pk,)),
+                               ("add_user_to_group", (realm_user.pk,)),
+                               ("remove_user_from_group", (realm_user.pk, realm_group.pk))):
+            url = reverse(f"realms:{url_name}", args=args)
+            for method in (self.client.get, self.client.post):
+                with self.subTest(url_name=url_name, method=method.__name__):
+                    self.assertEqual(method(url).status_code, 403)
+        for url_name, args in (("create_realm_group_mapping", ()),
+                               ("update_realm_group_mapping", (realm_group_mapping.pk,)),
+                               ("delete_realm_group_mapping", (realm_group_mapping.pk,)),
+                               ("create_role_mapping", ()),
+                               ("update_role_mapping", (role_mapping.pk,)),
+                               ("delete_role_mapping", (role_mapping.pk,))):
+            url = reverse(f"realms:{url_name}", args=args)
+            for method in (self.client.get, self.client.post):
+                with self.subTest(url_name=url_name, method=method.__name__):
+                    self.assertEqual(method(url).status_code, 403)
+        self.assertTrue(RealmUserGroupMembership.objects.filter(user=realm_user, group=realm_group).exists())
+        self.assertTrue(RealmGroupMapping.objects.filter(pk=realm_group_mapping.pk).exists())
+        self.assertTrue(RoleMapping.objects.filter(pk=role_mapping.pk).exists())
+        # no link to a page that would refuse the request
+        response = self.client.get(reverse("realms:group", args=(realm_group.pk,)))
+        self.assertNotContains(response, reverse("realms:update_group", args=(realm_group.pk,)))
+        self.assertNotContains(response, reverse("realms:create_realm_group_mapping"))
+        self.assertNotContains(response, reverse("realms:create_role_mapping"))
+        response = self.client.get(reverse("realms:user", args=(realm_user.pk,)))
+        self.assertNotContains(response, reverse("realms:add_user_to_group", args=(realm_user.pk,)))
 
     # realm users
 
@@ -1441,6 +1437,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         scim_group.scim_managed = True
         scim_group.save()
         other_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup")
         response = self.client.get(reverse("realms:add_user_to_group", args=(user.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1457,6 +1454,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         scim_group.save()
         realm, user = force_realm_user(realm=scim_group.realm, group=scim_group)
         group = force_realm_group(realm=realm)
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup", "realms.view_realmuser")
         response = self.client.post(reverse("realms:add_user_to_group", args=(user.pk,)),
                                     {"realm_group": str(group.pk)},
@@ -1466,22 +1464,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("realms:remove_user_from_group", args=(user.pk, scim_group.pk)))
         self.assertContains(response, reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
         send_robust.assert_called_once()
-
-    @patch("realms.views.realm_group_members_updated.send_robust")
-    def test_add_realm_user_to_group_post_role_not_held(self, send_robust):
-        role_mapping = force_role_mapping()
-        _, user = force_realm_user(realm=role_mapping.realm_group.realm)
-        self.login("realms.change_realmgroup")
-        response = self.client.post(reverse("realms:add_user_to_group", args=(user.pk,)),
-                                    {"realm_group": str(role_mapping.realm_group.pk)})
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "realms/realmuser_add_to_group.html")
-        self.assertFormError(
-            response.context["form"], "realm_group",
-            f"You cannot grant role membership you don't have: {role_mapping.group.name}."
-        )
-        self.assertFalse(user.groups.exists())
-        send_robust.assert_not_called()
 
     # remove realm user from group
 
@@ -1500,6 +1482,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_remove_realm_user_from_group_get(self):
         group = force_realm_group()
         _, user = force_realm_user(realm=group.realm, group=group)
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup")
         response = self.client.get(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
         self.assertEqual(response.status_code, 200)
@@ -1509,6 +1492,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_remove_realm_user_from_group_post(self, send_robust):
         group = force_realm_group()
         _, user = force_realm_user(realm=group.realm, group=group)
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup", "realms.view_realmuser")
         response = self.client.post(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)),
                                     follow=True)
@@ -1521,6 +1505,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_remove_realm_user_from_group_post_not_a_member(self, send_robust):
         group = force_realm_group()
         _, user = force_realm_user(realm=group.realm)
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup", "realms.view_realmuser")
         events = self._post_audit_events(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
         self.assertEqual(events, [])
@@ -1550,6 +1535,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_create_realm_group_audit_event(self):
         realm = force_realm()
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_realmgroup", "realms.view_realmgroup")
         events = self._post_audit_events(reverse("realms:create_group"),
                                          {"realm": realm.pk, "display_name": get_random_string(12)})
@@ -1559,6 +1545,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_update_realm_group_audit_event(self):
         realm_group = force_realm_group()
         prev_value = realm_group.serialize_for_event()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup", "realms.view_realmgroup")
         events = self._post_audit_events(reverse("realms:update_group", args=(realm_group.pk,)),
                                          {"display_name": get_random_string(12)})
@@ -1570,6 +1557,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_delete_realm_group_audit_event(self, send_robust):
         realm_group = force_realm_group()
         prev_value = realm_group.serialize_for_event()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_realmgroup", "realms.view_realmgroup")
         events = self._post_audit_events(reverse("realms:delete_group", args=(realm_group.pk,)))
         self.assertFalse(RealmGroup.objects.filter(pk=realm_group.pk).exists())
@@ -1581,6 +1569,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_add_realm_user_to_group_audit_event(self, send_robust):
         group = force_realm_group()
         _, user = force_realm_user(realm=group.realm)
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup", "realms.view_realmuser")
         events = self._post_audit_events(reverse("realms:add_user_to_group", args=(user.pk,)),
                                          {"realm_group": str(group.pk)})
@@ -1595,7 +1584,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         # two requests that both validate before either saves, a double submit for example
         group = force_realm_group()
         _, user = force_realm_user(realm=group.realm)
-        forms = [AddRealmUserToGroupForm({"realm_group": str(group.pk)}, realm_user=user, request_user=self.ui_user)
+        forms = [AddRealmUserToGroupForm({"realm_group": str(group.pk)}, realm_user=user)
                  for _ in range(2)]
         for form in forms:
             self.assertTrue(form.is_valid())
@@ -1611,6 +1600,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         _, user = force_realm_user(realm=group.realm, group=group)
         membership = RealmUserGroupMembership.objects.get(user=user, group=group)
         prev_value = membership.serialize_for_event()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroup", "realms.view_realmuser")
         events = self._post_audit_events(reverse("realms:remove_user_from_group", args=(user.pk, group.pk)))
         self.assertFalse(user.groups.exists())
@@ -1622,6 +1612,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_create_realm_group_mapping_audit_event(self):
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_realmgroupmapping", "realms.view_realmgroupmapping")
         events = self._post_audit_events(reverse("realms:create_realm_group_mapping"),
                                          {"claim": "Yolo", "value": "Fomo", "realm_group": realm_group.pk})
@@ -1634,6 +1625,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         rgm = force_realm_group_mapping()
         prev_value = rgm.serialize_for_event()
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_realmgroupmapping", "realms.view_realmgroupmapping")
         events = self._post_audit_events(reverse("realms:update_realm_group_mapping", args=(rgm.pk,)),
                                          {"claim": "Yolo", "value": "Fomo", "realm_group": realm_group.pk})
@@ -1647,6 +1639,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_delete_realm_group_mapping_audit_event(self):
         rgm = force_realm_group_mapping()
         prev_value = rgm.serialize_for_event()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_realmgroupmapping", "realms.view_realmgroupmapping")
         events = self._post_audit_events(reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
         self.assertFalse(RealmGroupMapping.objects.filter(pk=rgm.pk).exists())
@@ -1657,6 +1650,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_create_role_mapping_audit_event(self):
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.add_rolemapping", "realms.view_rolemapping")
         events = self._post_audit_events(reverse("realms:create_role_mapping"),
                                          {"realm_group": realm_group.pk, "group": self.ui_group.pk})
@@ -1672,6 +1666,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         rm = force_role_mapping()
         prev_value = rm.serialize_for_event()
         realm_group = force_realm_group()
+        self._promote_ui_user_to_superuser()
         self.login("realms.change_rolemapping", "realms.view_rolemapping")
         events = self._post_audit_events(reverse("realms:update_role_mapping", args=(rm.pk,)),
                                          {"realm_group": realm_group.pk, "group": self.ui_group.pk})
@@ -1685,6 +1680,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_delete_role_mapping_audit_event(self):
         rm = force_role_mapping()
         prev_value = rm.serialize_for_event()
+        self._promote_ui_user_to_superuser()
         self.login("realms.delete_rolemapping", "realms.view_rolemapping")
         events = self._post_audit_events(reverse("realms:delete_role_mapping", args=(rm.pk,)))
         self.assertFalse(RoleMapping.objects.filter(pk=rm.pk).exists())

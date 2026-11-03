@@ -2,14 +2,12 @@ import uuid
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from accounts.models import APIToken, Policy, User
+from accounts.models import APIToken, User
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
-from pbac.engine import engine
-from pbac.entities import Entity
 
 from tests.server_accounts.utils import force_user_token
 from tests.zentral_test_utils.assertions.event_assertions import EventAssertions
@@ -68,9 +66,17 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.login_redirect("create_user_api_token", superuser.id)
 
     def test_create_api_token_unknown_user_404(self):
+        self._promote_ui_user_to_superuser()
         self.login()
         response = self.client.get(reverse("accounts:create_user_api_token", args=(123456789,)))
         self.assertEqual(response.status_code, 404)
+
+    def test_create_api_token_other_ids_not_told(self):
+        # a refused request cannot tell which ids exist
+        self.login()
+        for user_pk in (123456789, self.user.pk, self.service_account.pk):
+            response = self.client.get(reverse("accounts:create_user_api_token", args=(user_pk,)))
+            self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_api_token_not_self(self, post_event):
@@ -116,6 +122,7 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     def test_create_api_token_form(self):
         """User can create token for a service account with the required permissions."""
+        self._promote_ui_user_to_superuser()
         self.login("accounts.view_user", "accounts.add_apitoken")
 
         response = self.client.get(
@@ -174,6 +181,7 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_service_account_create_api_token(self, post_event):
         """Users can create token for a service account with the required permissions."""
+        self._promote_ui_user_to_superuser()
         self.login("accounts.view_user", "accounts.add_apitoken")
 
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -218,9 +226,17 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.login_redirect("update_user_api_token", 123456789, uuid.uuid4())
 
     def test_update_api_token_unknown_user_404(self):
+        self._promote_ui_user_to_superuser()
         self.login()
         response = self.client.get(reverse("accounts:update_user_api_token", args=(123456789, uuid.uuid4())))
         self.assertEqual(response.status_code, 404)
+
+    def test_update_api_token_other_ids_not_told(self):
+        # a refused request cannot tell which ids exist
+        self.login()
+        for user_pk in (123456789, self.user.pk, self.service_account.pk):
+            response = self.client.get(reverse("accounts:update_user_api_token", args=(user_pk, uuid.uuid4())))
+            self.assertEqual(response.status_code, 403)
 
     def test_update_apitoken_permission_denied(self):
         """User can not update token from other users (ui_user != user)."""
@@ -250,6 +266,7 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_apitoken_serviceaccount_ok(self, post_event):
         """Update service account token with required permissions set."""
+        self._promote_ui_user_to_superuser()
         self.login("accounts.change_apitoken", "accounts.view_user",)
         expiry_date = datetime.today() + timedelta(days=1)
         expiry_date_new = datetime.today() + timedelta(days=2)
@@ -375,9 +392,17 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(response.context['token_user'], self.ui_user)
 
     def test_delete_api_token_get_404(self):
-        """User with required permissions will see 404 errors for no existing users/tokens."""
-        self.login("accounts.view_user", "accounts.delete_apitoken")
+        """The owner sees a 404 for an unknown token, and a superuser for an unknown user."""
+        self.login()
         token, _ = APIToken.objects.create_for_user(self.ui_user)
+        # a refused request cannot tell which ids exist
+        response = self.client.get(
+            reverse("accounts:delete_user_api_token", args=(0, token.id)), follow=True)
+        self.assertEqual(response.status_code, 403)
+        response = self.client.get(
+            reverse("accounts:delete_user_api_token", args=(self.user.id, token.id)), follow=True)
+        self.assertEqual(response.status_code, 403)
+        self._promote_ui_user_to_superuser()
         response = self.client.get(
             reverse("accounts:delete_user_api_token", args=(0, token.id)), follow=True)
         self.assertEqual(response.status_code, 404)
@@ -413,8 +438,9 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_service_account_api_token(self, post_event):
-        """User can delete service account tokens with the required permissions."""
-        self.login("accounts.view_user", "accounts.delete_apitoken")
+        """A superuser deletes the tokens of a service account."""
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.view_user")
         token, _ = APIToken.objects.create_for_user(self.service_account)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
@@ -438,18 +464,12 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(metadata["objects"], {"accounts_api_token": [str(token.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
-    # role boundary
-
-    def _put_service_account_out_of_reach(self):
-        """Give the service account a role the UI user doesn't have."""
-        group = Group.objects.create(name=get_random_string(12))
-        self.service_account.groups.add(group)
-        return group
+    # until the delegated administration, a superuser makes the tokens of a service account
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_create_api_token_service_account_with_ungrantable_role(self, post_event):
-        """Refused when the service account holds a role the user does not have."""
-        self._put_service_account_out_of_reach()
+    def test_create_api_token_service_account_needs_a_superuser(self, post_event):
+        """Refused, even when the user holds every role of the service account."""
+        self.service_account.groups.add(self.ui_group)
         self.login("accounts.view_user", "accounts.add_apitoken")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(
@@ -459,41 +479,23 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(len(callbacks), 0)
         self.assertEqual(len(post_event.call_args_list), 0)
 
-    def test_create_api_token_service_account_with_shared_role(self):
-        """The requester holds every role of the service account."""
-        self.service_account.groups.add(self.ui_group)
-        self.login("accounts.view_user", "accounts.add_apitoken")
+    def test_create_api_token_service_account_superuser(self):
+        self.service_account.groups.add(Group.objects.create(name=get_random_string(12)))
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.get(
             reverse("accounts:create_user_api_token", args=(self.service_account.id,)), follow=True)
         self.assertEqual(response.status_code, 200)
 
-    def test_create_api_token_service_account_with_ungrantable_role_superuser(self):
-        """Superusers are unrestricted."""
-        self._put_service_account_out_of_reach()
-        self.ui_user.is_superuser = True
-        self.ui_user.save()
-        self.login("accounts.view_user", "accounts.add_apitoken")
-        response = self.client.get(
-            reverse("accounts:create_user_api_token", args=(self.service_account.id,)), follow=True)
-        self.assertEqual(response.status_code, 200)
-
-    def test_create_api_token_service_account_named_by_policy(self):
-        """Its privileges no longer follow from its roles."""
-        # separate policy: set_permissions() overwrites the one carrying the perms
-        Policy.objects.create(
-            name=get_random_string(12),
-            source=(
-                'permit (\n'
-                f'  principal == {Entity("ServiceAccount", str(self.service_account.pk))},\n'
-                f'  action in [{engine.legacy_perm_actions["accounts.view_user"]}],\n'
-                '  resource\n'
-                ');'
-            ),
-        )
-        self.login("accounts.view_user", "accounts.add_apitoken")
-        response = self.client.post(
-            reverse("accounts:create_user_api_token", args=(self.service_account.id,)), follow=True)
-        self.assertEqual(response.status_code, 403)
+    def test_create_api_token_superuser_status_not_told(self):
+        """The refusal on the id of a superuser is the refusal on the id of another user."""
+        superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                             is_superuser=True)
+        self.login()
+        for user in (superuser, self.user):
+            response = self.client.get(reverse("accounts:create_user_api_token", args=(user.id,)))
+            self.assertContains(response, "Not allowed", status_code=403)
+            self.assertNotContains(response, "A superuser has no API token", status_code=403)
 
     def test_create_api_token_self_with_ungrantable_role(self):
         """Own tokens are never gated."""
@@ -503,30 +505,28 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
             reverse("accounts:create_user_api_token", args=(self.ui_user.id,)), follow=True)
         self.assertEqual(response.status_code, 200)
 
-    def test_update_api_token_service_account_with_ungrantable_role(self):
+    def test_update_api_token_service_account_needs_a_superuser(self):
         """Pushing the expiry out keeps a credential alive, so it is gated the same way."""
         _, token = force_user_token(self.service_account)
-        self._put_service_account_out_of_reach()
+        self.service_account.groups.add(self.ui_group)
         self.login("accounts.view_user", "accounts.change_apitoken")
         response = self.client.post(
             reverse("accounts:update_user_api_token", args=(self.service_account.id, token.id)), follow=True)
         self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    def test_delete_api_token_service_account_with_ungrantable_role(self, post_event):
-        """Revoking is not escalating — same asymmetry as the role-grant rule."""
+    def test_delete_api_token_service_account_without_superuser(self, post_event):
+        """Until the delegated administration, the delete action is deprecated."""
         token, _ = APIToken.objects.create_for_user(self.service_account)
-        self._put_service_account_out_of_reach()
         self.login("accounts.view_user", "accounts.delete_apitoken")
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                reverse("accounts:delete_user_api_token", args=(self.service_account.id, token.id)), follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(APIToken.objects.filter(user=self.service_account).count(), 0)
+        url = reverse("accounts:delete_user_api_token", args=(self.service_account.id, token.id))
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url).status_code, 403)
+        self.assertEqual(APIToken.objects.filter(user=self.service_account).count(), 1)
+        post_event.assert_not_called()
 
-    def test_service_account_detail_hides_token_write_links_when_out_of_reach(self):
+    def test_service_account_detail_hides_token_write_links_without_superuser(self):
         _, token = force_user_token(self.service_account)
-        self._put_service_account_out_of_reach()
         self.login(
             "accounts.add_apitoken",
             "accounts.change_apitoken",
@@ -538,13 +538,13 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context["can_add_token"])
         self.assertFalse(response.context["can_change_token"])
-        self.assertTrue(response.context["can_delete_token"])
+        self.assertFalse(response.context["can_delete_token"])
         self.assertNotContains(
             response, reverse("accounts:create_user_api_token", args=(self.service_account.pk,)))
         self.assertNotContains(
             response,
             reverse("accounts:update_user_api_token", args=(self.service_account.pk, token.pk)))
-        self.assertContains(
+        self.assertNotContains(
             response,
             reverse("accounts:delete_user_api_token", args=(self.service_account.pk, token.pk)))
 
@@ -596,6 +596,7 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
         # a service account never gets the superuser bypass, so the flag does not refuse its tokens
         User.objects.filter(pk=self.service_account.pk).update(is_superuser=True)
         self.service_account.groups.add(self.ui_group)
+        self._promote_ui_user_to_superuser()
         self.login("accounts.view_user", "accounts.add_apitoken")
         response = self.client.get(reverse("accounts:create_user_api_token", args=(self.service_account.id,)))
         self.assertEqual(response.status_code, 200)

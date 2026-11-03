@@ -151,15 +151,12 @@ def server_error(request, *args, **kwargs):
     return django_server_error(request)
 
 
-class RequestUserFormMixin:
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["request_user"] = self.request.user
-        return kwargs
-
-
 def has_local_login(request):
     return not request.user.is_remote and not request.realm_authentication_session.is_remote
+
+
+def is_local_superuser(request):
+    return request.user.is_superuser and has_local_login(request)
 
 
 class LocalUserRequiredMixin(AccessMixin):
@@ -184,7 +181,7 @@ class LocalSuperuserRequiredMixin(AccessMixin):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        if not request.user.is_superuser or not has_local_login(request):
+        if not is_local_superuser(request):
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 

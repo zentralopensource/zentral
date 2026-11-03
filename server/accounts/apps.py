@@ -9,7 +9,8 @@ class ZentralAccountsAppConfig(ZentralAppConfig):
     default = True
     verbose_name = "Zentral accounts app"
     permission_models = ("apitoken", "oidcapitokenissuer", "policy", "user")
+    pbac_deprecated_write_models = ("apitoken", "oidcapitokenissuer", "user")
 
     def register_legacy_perms(self):
         super().register_legacy_perms()
-        engine.register_app_legacy_perms(apps.get_app_config("auth"))
+        engine.register_app_legacy_perms(apps.get_app_config("auth"), deprecated_write_models=("group",))

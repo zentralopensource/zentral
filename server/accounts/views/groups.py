@@ -11,6 +11,7 @@ from django.views.generic import CreateView, DeleteView, DetailView, ListView, U
 from accounts.forms import GroupForm
 from accounts.models import Policy, ProvisionedRole
 from pbac.entities import Entity
+from zentral.utils.views import LocalSuperuserRequiredMixin
 
 logger = logging.getLogger("zentral.accounts.views.groups")
 
@@ -35,8 +36,11 @@ class GroupsView(PermissionRequiredMixin, ListView):
         )
 
 
-class CreateGroupView(PermissionRequiredMixin, CreateView):
-    permission_required = 'auth.add_group'
+# Until the delegated administration, a superuser writes the roles: a policy names a role by its id,
+# but a forbid on a role turns its removal into a grant
+
+
+class CreateGroupView(LocalSuperuserRequiredMixin, CreateView):
     model = Group
     form_class = GroupForm
     template_name = "accounts/group_form.html"
@@ -81,8 +85,7 @@ class GroupView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateGroupView(PermissionRequiredMixin, UpdateView):
-    permission_required = 'auth.change_group'
+class UpdateGroupView(LocalSuperuserRequiredMixin, UpdateView):
     queryset = Group.objects.filter(~Exists(ProvisionedRole.objects.filter(group=OuterRef('pk'))))
     form_class = GroupForm
     template_name = "accounts/group_form.html"
@@ -91,8 +94,7 @@ class UpdateGroupView(PermissionRequiredMixin, UpdateView):
         return reverse("accounts:group", args=(self.object.pk,))
 
 
-class DeleteGroupView(PermissionRequiredMixin, DeleteView):
-    permission_required = 'auth.delete_group'
+class DeleteGroupView(LocalSuperuserRequiredMixin, DeleteView):
     queryset = Group.objects.filter(~Exists(ProvisionedRole.objects.filter(group=OuterRef('pk'))))
     template_name = "accounts/group_confirm_delete.html"
     success_url = reverse_lazy("accounts:groups")

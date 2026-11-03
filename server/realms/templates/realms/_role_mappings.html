@@ -62,15 +62,11 @@
         {% endwith %}
         {% endif %}
         <td class="text-end py-0">
-          {% if not request.realm_authentication_session.is_remote %}
-            {% if perms.realms.change_rolemapping %}
-              {% url 'realms:update_role_mapping' role_mapping.pk as url %}
-              {% button 'UPDATE' url "Edit role mapping" %}
-            {% endif %}
-            {% if perms.realms.delete_rolemapping %}
-              {% url 'realms:delete_role_mapping' role_mapping.pk as url %}
-              {% button 'DELETE' url "Delete role mapping" %}
-            {% endif %}
+          {% if request|local_superuser %}
+            {% url 'realms:update_role_mapping' role_mapping.pk as url %}
+            {% button 'UPDATE' url "Edit role mapping" %}
+            {% url 'realms:delete_role_mapping' role_mapping.pk as url %}
+            {% button 'DELETE' url "Delete role mapping" %}
           {% endif %}
         </td>
       </tr>

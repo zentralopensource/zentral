@@ -134,23 +134,6 @@ class User(AbstractUser):
         # a service account never gets the superuser bypass, see ZentralBackend.has_perm
         return not self.is_superuser or self.is_service_account
 
-    def can_issue_credentials_for(self, service_account):
-        """The requester must hold each of the target's roles. An account named directly by a
-        policy is superuser only: its privileges no longer follow from its roles. Policies
-        granting service accounts as a class are out of scope, every account has them.
-        A SCIM account is superuser only too: its token gives the roles of the realm groups.
-        """
-        # service accounts never get the superuser bypass, see ZentralBackend.has_perm
-        if self.is_superuser and not self.is_service_account:
-            return True
-        if not service_account.group_pk_set <= self.group_pk_set:
-            return False
-        if Policy.objects.referencing_service_account(service_account.pk).exists():
-            return False
-        # imported here: realms.models imports this module
-        from realms.pbac import is_scim_account
-        return not is_scim_account(service_account)
-
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "username": self.username, "email": self.email}
         if keys_only:
@@ -413,9 +396,6 @@ class PolicyManager(models.Manager):
 
     def referencing_role(self, pk):
         return self.filter(source__contains=f'Role::"{pk}"').order_by("name")
-
-    def referencing_service_account(self, pk):
-        return self.filter(source__contains=f'ServiceAccount::"{pk}"').order_by("name")
 
     def referencing_user(self, pk):
         return self.filter(

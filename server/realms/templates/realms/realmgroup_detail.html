@@ -16,14 +16,14 @@
   <div class="d-flex align-items-center mb-3">
     <h3 class="m-0 fs-5 text-secondary">Group</h3>
     <div class="ms-auto">
-      {% if perms.realms.change_realmgroup and object.can_be_updated %}
+      {% if request|local_superuser and object.can_be_updated %}
         {% url 'realms:update_group' object.pk as url %}
         {% button 'UPDATE' url "Edit group" %}
       {% endif %}
-      {% if perms.realms.delete_realmgroup and object.can_be_deleted %}
+      {% if request|local_superuser and object.can_be_deleted %}
         {% url 'realms:delete_group' object.pk as url %}
         {% button 'DELETE' url "Delete group" %}
-      {% elif perms.realms.delete_realmgroup and not object.scim_managed %}
+      {% elif request|local_superuser and not object.scim_managed %}
         <span class="text-secondary small">To delete this group, remove its mappings and its child groups first.</span>
       {% endif %}
     </div>

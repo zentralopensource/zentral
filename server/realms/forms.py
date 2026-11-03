@@ -1,7 +1,6 @@
 from django import forms
 from django.db import transaction
 from django.db.models import Q
-from accounts.forms import role_grant_error
 from .models import Realm, RealmGroup, RealmGroupMapping, RealmUser, RealmUserGroupMembership, RoleMapping
 
 
@@ -66,25 +65,7 @@ class RealmUserSearchForm(forms.Form):
         return qs
 
 
-class RoleGrantMixin:
-    """A non-superuser cannot give a role they do not have, as with accounts.forms.RoleMembershipGrantMixin."""
-
-    def __init__(self, *args, **kwargs):
-        self.request_user = kwargs.pop("request_user")
-        super().__init__(*args, **kwargs)
-
-    def check_role_grant(self, field_name, roles):
-        error = role_grant_error(self.request_user, roles)
-        if error:
-            self.add_error(field_name, error)
-
-    def check_realm_group(self):
-        realm_group = self.cleaned_data.get("realm_group")
-        if realm_group:
-            self.check_role_grant("realm_group", realm_group.mapped_roles())
-
-
-class AddRealmUserToGroupForm(RoleGrantMixin, forms.Form):
+class AddRealmUserToGroupForm(forms.Form):
     realm_group = forms.ModelChoiceField(label="Realm Group", queryset=RealmGroup.objects.for_update(), required=True)
 
     def __init__(self, *args, **kwargs):
@@ -95,10 +76,6 @@ class AddRealmUserToGroupForm(RoleGrantMixin, forms.Form):
         ).exclude(
           pk__in=[g.pk for g in self.realm_user.groups.all()]
         ).order_by("display_name")
-
-    def clean(self):
-        super().clean()
-        self.check_realm_group()
 
     def save(self):
         """The new membership, or None if the realm user is already a member of the group."""
@@ -112,23 +89,13 @@ class AddRealmUserToGroupForm(RoleGrantMixin, forms.Form):
             return RealmUserGroupMembership.objects.create(user=self.realm_user, group=realm_group)
 
 
-class RealmGroupMappingForm(RoleGrantMixin, forms.ModelForm):
+class RealmGroupMappingForm(forms.ModelForm):
     class Meta:
         model = RealmGroupMapping
         fields = "__all__"
 
-    def clean(self):
-        super().clean()
-        self.check_realm_group()
 
-
-class RoleMappingForm(RoleGrantMixin, forms.ModelForm):
+class RoleMappingForm(forms.ModelForm):
     class Meta:
         model = RoleMapping
         fields = ("realm_group", "group")
-
-    def clean(self):
-        super().clean()
-        group = self.cleaned_data.get("group")
-        if group:
-            self.check_role_grant("group", [group])

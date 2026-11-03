@@ -14,3 +14,4 @@ class ZentralRealmsAppConfig(ZentralAppConfig):
         "realmuser",
         "rolemapping",
     )
+    pbac_deprecated_write_models = permission_models

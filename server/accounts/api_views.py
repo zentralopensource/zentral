@@ -37,7 +37,7 @@ class OIDCAPITokenIssuerAuth(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# read only: a credential is written from a local session, and the console writes the issuers within the ceiling
+# read only: a credential is written from a local session, and a superuser writes the issuers in the console
 class OIDCAPITokenIssuerViewList(generics.ListAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
     queryset = OIDCAPITokenIssuer.objects.all()

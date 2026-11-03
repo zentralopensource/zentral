@@ -9,8 +9,8 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Tem
 from zentral.conf import api_base_url
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, LocalSuperuserRequiredMixin,
-                                 LocalUserRequiredMixin, RequestUserFormMixin, UpdateViewWithAudit,
-                                 UserPaginationListView, post_audit_event, post_delete_audit_event)
+                                 LocalUserRequiredMixin, UpdateViewWithAudit, UserPaginationListView,
+                                 is_local_superuser, post_audit_event, post_delete_audit_event)
 from .backends.registry import backend_classes
 from .forms import (AddRealmUserToGroupForm, RealmGroupMappingForm, RealmGroupSearchForm, RealmUserSearchForm,
                     RoleMappingForm)
@@ -89,7 +89,7 @@ class RealmView(PermissionRequiredMixin, DetailView):
         # realm group mappings
         ctx["realm_group_mappings"] = realm_group_mappings
         ctx["realm_group_mapping_count"] = realm_group_mappings.count()
-        if self.request.user.has_perm("realms.add_realmgroupmapping"):
+        if is_local_superuser(self.request):
             ctx["create_realm_group_mapping_url"] = reverse("realms:create_realm_group_mapping")
         # role mappings
         role_mappings = (
@@ -99,7 +99,7 @@ class RealmView(PermissionRequiredMixin, DetailView):
         )
         ctx["role_mappings"] = role_mappings
         ctx["role_mapping_count"] = role_mappings.count()
-        if self.request.user.has_perm("realms.add_rolemapping"):
+        if is_local_superuser(self.request):
             ctx["create_role_mapping_url"] = reverse("realms:create_role_mapping")
         # realm groups
         ctx["group_count"] = self.object.realmgroup_set.count()
@@ -170,23 +170,25 @@ class RealmGroupView(PermissionRequiredMixin, DetailView):
             ctx["users_url"] = reverse("realms:users") + f"?realm={self.object.realm.pk}&realm_group={self.object.pk}"
         ctx["realm_group_mappings"] = self.object.realmgroupmapping_set.all().order_by("claim", "value")
         ctx["realm_group_mapping_count"] = ctx["realm_group_mappings"].count()
-        if self.request.user.has_perm("realms.add_realmgroupmapping"):
+        if is_local_superuser(self.request):
             ctx["create_realm_group_mapping_url"] = reverse("realms:create_realm_group_mapping")
         ctx["role_mappings"] = self.object.rolemapping_set.all().order_by("group__name")
         ctx["role_mapping_count"] = ctx["role_mappings"].count()
-        if self.request.user.has_perm("realms.add_rolemapping"):
+        if is_local_superuser(self.request):
             ctx["create_role_mapping_url"] = reverse("realms:create_role_mapping")
         return ctx
 
 
-class CreateRealmGroupView(PermissionRequiredMixin, CreateViewWithAudit):
-    permission_required = "realms.add_realmgroup"
+# Until the delegated administration, a superuser writes the realm groups, their members and the mappings.
+# They give roles, and holding a role is not holding its access: a forbid on a role escapes a comparison.
+
+
+class CreateRealmGroupView(LocalSuperuserRequiredMixin, CreateViewWithAudit):
     model = RealmGroup
     fields = ("realm", "display_name",)
 
 
-class UpdateRealmGroupView(PermissionRequiredMixin, UpdateViewWithAudit):
-    permission_required = "realms.change_realmgroup"
+class UpdateRealmGroupView(LocalSuperuserRequiredMixin, UpdateViewWithAudit):
     model = RealmGroup
     fields = ("display_name",)
 
@@ -194,8 +196,7 @@ class UpdateRealmGroupView(PermissionRequiredMixin, UpdateViewWithAudit):
         return RealmGroup.objects.for_update()
 
 
-class DeleteRealmGroupView(PermissionRequiredMixin, DeleteViewWithAudit):
-    permission_required = "realms.delete_realmgroup"
+class DeleteRealmGroupView(LocalSuperuserRequiredMixin, DeleteViewWithAudit):
     success_url = reverse_lazy("realms:groups")
 
     def get_queryset(self):
@@ -255,8 +256,7 @@ class RealmUserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class AddRealmUserToGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, FormView):
-    permission_required = "realms.change_realmgroup"
+class AddRealmUserToGroupView(LocalSuperuserRequiredMixin, FormView):
     template_name = "realms/realmuser_add_to_group.html"
     form_class = AddRealmUserToGroupForm
 
@@ -283,8 +283,7 @@ class AddRealmUserToGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, R
         return redirect(self.realm_user)
 
 
-class RemoveRealmUserFromGroupView(LocalUserRequiredMixin, PermissionRequiredMixin, TemplateView):
-    permission_required = "realms.change_realmgroup"
+class RemoveRealmUserFromGroupView(LocalSuperuserRequiredMixin, TemplateView):
     template_name = "realms/realmuser_remove_from_group.html"
 
     def get_objects(self):
@@ -326,29 +325,24 @@ class RealmGroupMappingListView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data()
         ctx["realm_group_mappings"] = ctx["object_list"]
         ctx["realm_group_mapping_count"] = ctx["object_list"].count()
-        if self.request.user.has_perm("realms.add_realmgroupmapping"):
+        if is_local_superuser(self.request):
             ctx["create_realm_group_mapping_url"] = reverse("realms:create_realm_group_mapping")
         return ctx
 
 
-class CreateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
-                                  CreateViewWithAudit):
-    permission_required = "realms.add_realmgroupmapping"
+class CreateRealmGroupMappingView(LocalSuperuserRequiredMixin, CreateViewWithAudit):
     model = RealmGroupMapping
     form_class = RealmGroupMappingForm
     success_url = reverse_lazy("realms:realm_group_mappings")
 
 
-class UpdateRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
-                                  UpdateViewWithAudit):
-    permission_required = "realms.change_realmgroupmapping"
+class UpdateRealmGroupMappingView(LocalSuperuserRequiredMixin, UpdateViewWithAudit):
     model = RealmGroupMapping
     form_class = RealmGroupMappingForm
     success_url = reverse_lazy("realms:realm_group_mappings")
 
 
-class DeleteRealmGroupMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteViewWithAudit):
-    permission_required = "realms.delete_realmgroupmapping"
+class DeleteRealmGroupMappingView(LocalSuperuserRequiredMixin, DeleteViewWithAudit):
     model = RealmGroupMapping
     success_url = reverse_lazy("realms:realm_group_mappings")
 
@@ -364,27 +358,22 @@ class RoleMappingListView(PermissionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["role_mappings"] = ctx["object_list"]
         ctx["role_mapping_count"] = ctx["object_list"].count()
-        if self.request.user.has_perm("realms.add_rolemapping"):
+        if is_local_superuser(self.request):
             ctx["create_role_mapping_url"] = reverse("realms:create_role_mapping")
         return ctx
 
 
-class CreateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
-                            CreateViewWithAudit):
-    permission_required = "realms.add_rolemapping"
+class CreateRoleMappingView(LocalSuperuserRequiredMixin, CreateViewWithAudit):
     model = RoleMapping
     form_class = RoleMappingForm
 
 
-class UpdateRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
-                            UpdateViewWithAudit):
-    permission_required = "realms.change_rolemapping"
+class UpdateRoleMappingView(LocalSuperuserRequiredMixin, UpdateViewWithAudit):
     model = RoleMapping
     form_class = RoleMappingForm
 
 
-class DeleteRoleMappingView(LocalUserRequiredMixin, PermissionRequiredMixin, DeleteViewWithAudit):
-    permission_required = "realms.delete_rolemapping"
+class DeleteRoleMappingView(LocalSuperuserRequiredMixin, DeleteViewWithAudit):
     model = RoleMapping
     success_url = reverse_lazy("realms:role_mappings")
 

@@ -238,16 +238,16 @@ WHERE u.is_superuser AND NOT u.is_service_account AND NOT u.is_remote;
 
 #### 🧨 The OIDC token issuer API does not write the issuers
 
-`/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/` answer `GET` only now. A `POST`, a `PUT` or a `DELETE` gives a 405 error, or a 403 error when the token does not have the write permission of the method. An issuer makes API tokens for its service account, and a credential comes from a local session. Before, each API token with the issuer permissions wrote the issuers, and the token of a service account could make an issuer for its own account. Create, update and delete the issuers in the web console, with the same role check as before. The token exchange at `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/` does not change.
+`/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/` answer `GET` only now. A `POST`, a `PUT` or a `DELETE` gives a 405 error, or a 403 error when the token does not have the write permission of the method. An issuer makes API tokens for its service account, and a credential comes from a local session. Before, each API token with the issuer permissions wrote the issuers, and the token of a service account could make an issuer for its own account. A superuser writes the issuers in the web console (see below). The token exchange at `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/` does not change.
 
 
 #### 🧨 SCIM accepts only a service account with `Realms::Action::"provisionRealm"`
 
-The SCIM endpoints decide one new action now, `Realms::Action::"provisionRealm"`, on the realm of the URL. Before, they used the realm user and realm group actions of the console, so the token of each user with these actions could write the realm groups, and their roles, without the checks of the console. Zentral refuses the API token of a user with a 403 error, and logs the refusal. The action is in no action group. Only a superuser can make the API tokens and the token issuers of a service account that a policy gives `provisionRealm`.
+The SCIM endpoints decide one new action now, `Realms::Action::"provisionRealm"`, on the realm of the URL. Before, they used the realm user and realm group actions of the console, so the token of each user with these actions could write the realm groups, and their roles, without the checks of the console. Zentral refuses the API token of a user with a 403 error, and logs the refusal. The action is in no action group. Only a superuser makes the API tokens and the token issuers of a service account (see below).
 
 The upgrade keeps the SCIM integrations that follow the documentation working. If at least one realm has SCIM enabled, it makes a `SCIM provisioning` role, adds to it each active service account whose legacy permissions are exactly the eight realm user and realm group permissions of the documented SCIM policy (create, update, delete and view), and writes a `SCIM provisioning: <realm name>` policy for each realm with SCIM enabled. See the [SCIM documentation](https://www.zentral.com/docs/zentral/configuration/okta_scim/#the-upgrade-to-provisionrealm).
 
-Before the upgrade, check the roles of the service account that your IdP uses for SCIM. If it has other actions, for example through an Editor role, give it a role with only the documented SCIM policy, and remove it from the other roles. Otherwise, a superuser adds it to the `SCIM provisioning` role after the upgrade, and SCIM is refused until then. If an IdP calls SCIM with the API token of a user, make a service account before the upgrade, give it the documented SCIM policy, and set its token in the IdP. This query lists the users with an API token. The SCIM requests of their tokens stop after the upgrade:
+Before the upgrade, check the roles of the service account that your IdP uses for SCIM. If it has other actions, for example through an Editor role, give it a role with only the documented SCIM policy, and remove it from the other roles. Otherwise, a superuser adds it to the `SCIM provisioning` role after the upgrade, and SCIM is refused until then. If an IdP calls SCIM with the API token of a user, a superuser makes a service account before the upgrade, gives it the documented SCIM policy, and sets its token in the IdP. This query lists the users with an API token. The SCIM requests of their tokens stop after the upgrade:
 
 ```sql
 SELECT u.username, u.email, t.name, t.created_at
@@ -257,9 +257,18 @@ WHERE NOT u.is_service_account;
 ```
 
 
+#### 🧨 A superuser makes the writes that give access
+
+Until Zentral has a delegated administration, only a superuser, logged in without a realm, writes the users, the service accounts, the roles, the realm groups and their members, the realm group mappings, the role mappings, the API tokens and the OIDC token issuers of a service account, in the web console. A superuser also deletes the API tokens of another user, and neither makes nor updates them. The other users get a 403 error on these pages, and do not see their buttons. Each user still manages their own password and verification devices, and their own API tokens, except a superuser, who has none (see above).
+
+The write actions of these objects are deprecated. They stay in the PBAC schema, so that the policies that name them still save, but they give nothing: for example `Accounts::Action::"createUser"`, `Accounts::Action::"deleteAPIToken"`, `Auth::Action::"updateGroup"` or `Realms::Action::"createRoleMapping"`. Their description in the schema browser says so. Remove them from your policies: a later version removes them, and the delegated administration brings actions of its own. The view actions do not change.
+
+Before, a user with the permission did these operations within a ceiling: they gave only the roles that they had. A comparison of roles does not bound the access. A `forbid` on a role, a policy that names a service account, a policy on the type `ServiceAccount`, and a role given after a token all escape it. So the users who are not superusers ask a superuser to do these operations now. Do not give the superuser status to more users for it: a superuser skips PBAC. The existing tokens, token issuers, roles and mappings do not change.
+
+
 #### 🧨 Privilege escalation hardening — superusers
 
-Only a superuser can change a superuser. For a user who is not a superuser, the update and delete pages of a superuser answer 403, also with the `Accounts::Action::"updateUser"` and `Accounts::Action::"deleteUser"` actions, and Zentral logs the refusal. The user pages do not show the button. Only a superuser logged in without a realm can give or remove the superuser status, as before.
+Only a superuser can change a superuser, as each user (see above). Nobody deletes a superuser: remove the superuser status first. Only a superuser logged in without a realm can give or remove the superuser status, as before.
 
 
 #### 🧨 Privilege escalation hardening — realms
@@ -269,12 +278,10 @@ Only a superuser logged in without a realm can create or change a realm. The `Re
 
 #### 🧨 Privilege escalation hardening — users
 
-Only a user logged in without a realm can invite a user, create a service account, and change or delete a user or a service account, as the documentation says. With a realm login, these pages answer 403 for all users, superusers included. The delete page checks the login and the permission before it reads the user now: before, a request without a login got a different answer for an unknown user, for a superuser and for another user.
+The writes of the users and of the service accounts need a superuser logged in without a realm (see above). With a realm login, these pages answer 403. The delete page checks the login before it reads the user now: before, a request without a login got a different answer for an unknown user, for a superuser and for another user.
 
 
 #### 🧨 Privilege escalation hardening — realm groups
-
-In the console, a user who is not a superuser can create or change a role mapping only for a role that they have. A realm group mapping, and a user added to a realm group, follow the same rule: the realm group and its parents must map only roles that the user has. The user and service account forms already applied this rule.
 
 A realm group that has a realm group mapping, a role mapping or a child group cannot be deleted in the console now. Delete its mappings first: each deletion emits its own audit event. A child group gets its parent from SCIM, so change it in the IdP. Before, the deletion of the group removed its mappings with no event, and its child groups lost the roles of the group and of its parents with no event.
 

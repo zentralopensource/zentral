@@ -2,7 +2,6 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.core.exceptions import PermissionDenied
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -18,37 +17,21 @@ from accounts.models import Policy, User
 from accounts.utils import delete_api_tokens
 from pbac.entities import Principal
 from realms.models import get_matching_realm_users
-from zentral.utils.views import (CreateViewWithAudit, LocalUserRequiredMixin, RequestUserFormMixin,
-                                 UpdateViewWithAudit, has_local_login, post_delete_audit_event)
+from zentral.utils.views import (CreateViewWithAudit, LocalSuperuserRequiredMixin, UpdateViewWithAudit,
+                                 is_local_superuser, post_delete_audit_event)
 
 logger = logging.getLogger("zentral.accounts.views.users")
 
 
-def is_protected_superuser(request, user):
-    return user.is_superuser and not request.user.is_superuser
-
-
-def get_user_to_write(request, pk):
-    user = get_object_or_404(User, pk=pk)
-    # only a superuser changes a superuser. A 403 tells nothing that the requester cannot read:
-    # a write action includes the read of its resource (PBAC rule 8)
-    if is_protected_superuser(request, user):
-        logger.error("Permission denied on superuser %s", user.pk, extra={"request": request})
-        raise PermissionDenied
-    return user
-
-
-def set_write_urls(request, users, local_login):
+def set_write_urls(request, users):
     # no link to a page that would refuse the request
-    can_update = request.user.has_perm("accounts.change_user")
-    can_delete = request.user.has_perm("accounts.delete_user")
+    can_write = is_local_superuser(request)
     for user in users:
         user.update_url = user.delete_url = None
-        if not local_login or is_protected_superuser(request, user):
+        if not can_write:
             continue
-        if can_update:
-            user.update_url = reverse("accounts:update_user", args=(user.pk,))
-        if can_delete and user.deletable():
+        user.update_url = reverse("accounts:update_user", args=(user.pk,))
+        if user.deletable():
             user.delete_url = reverse("accounts:delete_user", args=(user.pk,))
 
 
@@ -64,8 +47,7 @@ class UsersView(PermissionRequiredMixin, TemplateView):
             for user in users:
                 user.realm_users = matching_realm_users[user.pk]
         service_accounts = list(User.objects.filter(is_service_account=True))
-        ctx["local_login"] = has_local_login(self.request)
-        set_write_urls(self.request, users + service_accounts, ctx["local_login"])
+        set_write_urls(self.request, users + service_accounts)
         ctx["users"] = users
         ctx["user_count"] = len(users)
         ctx["service_accounts"] = service_accounts
@@ -73,8 +55,11 @@ class UsersView(PermissionRequiredMixin, TemplateView):
         return ctx
 
 
-class InviteUserView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateViewWithAudit):
-    permission_required = 'accounts.add_user'
+# Until the delegated administration, a superuser makes each write that gives access. Holding the roles of an
+# account is not holding its access: a forbid on a role, and a role given later, escape a comparison of roles.
+
+
+class InviteUserView(LocalSuperuserRequiredMixin, CreateViewWithAudit):
     template_name = "accounts/user_form.html"
     form_class = InviteUserForm
     success_url = reverse_lazy("accounts:users")
@@ -85,9 +70,7 @@ class InviteUserView(LocalUserRequiredMixin, PermissionRequiredMixin, CreateView
         return ctx
 
 
-class CreateServiceAccountView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin,
-                               CreateViewWithAudit):
-    permission_required = ('accounts.add_user',)
+class CreateServiceAccountView(LocalSuperuserRequiredMixin, CreateViewWithAudit):
     template_name = "accounts/user_form.html"
     form_class = ServiceAccountForm
 
@@ -107,29 +90,20 @@ class UserView(PermissionRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["title"] = "{} {}".format(self.object.get_type_display().title(), self.object)
-        set_write_urls(self.request, [self.object], has_local_login(self.request))
+        set_write_urls(self.request, [self.object])
         groups = self.object.groups.all().order_by(Lower("name"))
         ctx["groups"] = groups
         ctx["group_count"] = groups.count()
         ctx["oidc_api_token_issuers"] = self.object.oidcapitokenissuer_set.all()
         ctx["oidc_api_token_issuer_count"] = ctx["oidc_api_token_issuers"].count()
         # gates the add and change flags below, not the delete one
-        can_issue_credentials = (
-            self.object.is_service_account and self.request.user.can_issue_credentials_for(self.object)
-        )
+        can_issue_credentials = self.object.is_service_account and is_local_superuser(self.request)
         ctx["can_manage_oidc_api_token_issuers"] = can_issue_credentials
         ctx["tokens"] = self.object.apitoken_set.all()
         ctx["token_count"] = ctx["tokens"].count()
-        ctx["can_delete_token"] = (
-            self.object == self.request.user or self.request.user.has_perm("accounts.delete_apitoken")
-        )
-        ctx["can_change_token"] = self.object.can_have_api_tokens and (
-            self.object == self.request.user
-            or (can_issue_credentials and self.request.user.has_perm("accounts.change_apitoken"))
-        )
-        ctx["can_add_token"] = self.object.can_have_api_tokens and (
-            self.object == self.request.user
-            or (can_issue_credentials and self.request.user.has_perm("accounts.add_apitoken"))
+        ctx["can_delete_token"] = self.object == self.request.user or is_local_superuser(self.request)
+        ctx["can_change_token"] = ctx["can_add_token"] = self.object.can_have_api_tokens and (
+            self.object == self.request.user or can_issue_credentials
         )
         ctx["verification_devices"] = self.object.get_verification_devices()
         ctx["verification_device_count"] = len(ctx["verification_devices"])
@@ -144,14 +118,13 @@ class UserView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateUserView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUserFormMixin, UpdateViewWithAudit):
-    permission_required = "accounts.change_user"
+class UpdateUserView(LocalSuperuserRequiredMixin, UpdateViewWithAudit):
     model = User
     # to avoid context collisions
     context_object_name = "user_to_update"
 
     def get_object(self, queryset=None):
-        return get_user_to_write(self.request, self.kwargs["pk"])
+        return get_object_or_404(User, pk=self.kwargs["pk"])
 
     def get_form_class(self):
         if self.object.is_service_account:
@@ -182,14 +155,13 @@ class UpdateUserView(LocalUserRequiredMixin, PermissionRequiredMixin, RequestUse
         return response
 
 
-class DeleteUserView(LocalUserRequiredMixin, PermissionRequiredMixin, TemplateView):
-    permission_required = "accounts.delete_user"
+class DeleteUserView(LocalSuperuserRequiredMixin, TemplateView):
     template_name = "accounts/delete_user.html"
 
-    # not in dispatch: the user is loaded after the login and permission checks of the mixins,
-    # so that a request without them cannot tell an unknown id from a superuser
+    # not in dispatch: the user is loaded after the check of the mixin, so that a refused request
+    # cannot tell which ids exist
     def load_user(self):
-        self.user = get_user_to_write(self.request, self.kwargs["pk"])
+        self.user = get_object_or_404(User, pk=self.kwargs["pk"])
         return self.user.deletable()
 
     def get(self, request, *args, **kwargs):

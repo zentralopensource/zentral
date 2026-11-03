@@ -57,16 +57,13 @@ Authorization is granted by writing Cedar policies that reference a Role (or a s
 
 Federated users are not authorized to modify the users and the user federation settings, regardless of which policies target them.
 
-A superuser cannot log in with a realm, and has no API token: the API refuses it. A user that a realm login made is never a superuser. The other operations on the users, the roles and the realms depend on the login:
+A superuser cannot log in with a realm, and has no API token: the API refuses it. A user that a realm login made is never a superuser.
 
-| Operation | Superuser | Other user, local login | Realm login |
-|---|---|---|---|
-| Write a policy or a realm | Yes | No | No |
-| Give or remove the superuser status | Yes | No | No |
-| Change or delete a superuser | Yes | No | No |
-| Invite, change or delete a user or a service account | Yes | With the permission | No |
-| Change the username or the email of a local user | Yes | Their own, with the permission | No |
-| Give a role, on a user, a service account or through a realm group | All roles | The roles that they have | No |
+Only a superuser, logged in without a realm, writes the identity objects: the policies, the realms, the users and the service accounts, the superuser status, the roles, the realm groups and their members, the realm group mappings, the role mappings, the API tokens and the token issuers of a service account, and the deletes of the API tokens of another user. Each user manages their own password, verification devices and API tokens.
+
+The policies have no write action in the PBAC schema. The write actions of the other objects are deprecated: they stay in the PBAC schema, give nothing, and a later version removes them. A test fails if the code checks one of them.
+
+Until Zentral has a delegated administration, a superuser makes each write that gives access. A check that compares the roles of two accounts does not see a `forbid` on a role, a policy that names an account, or a role given after a credential, so no check in the code reads the policies to bound a delegated administrator.
 
 Each view and each endpoint that a typed PBAC action protects follows the [PBAC rules for views and endpoints](pbac-rules.md). These rules also give the leak classes that rate a finding.
 

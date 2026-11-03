@@ -55,15 +55,11 @@
         {% endwith %}
         {% endif %}
         <td class="text-end py-0">
-          {% if not request.realm_authentication_session.is_remote %}
-            {% if perms.realms.change_realmgroupmapping %}
-              {% url 'realms:update_realm_group_mapping' realm_group_mapping.pk as url %}
-              {% button 'UPDATE' url "Edit group mapping" %}
-            {% endif %}
-            {% if perms.realms.delete_realmgroupmapping %}
-              {% url 'realms:delete_realm_group_mapping' realm_group_mapping.pk as url %}
-              {% button 'DELETE' url "Delete group mapping" %}
-            {% endif %}
+          {% if request|local_superuser %}
+            {% url 'realms:update_realm_group_mapping' realm_group_mapping.pk as url %}
+            {% button 'UPDATE' url "Edit group mapping" %}
+            {% url 'realms:delete_realm_group_mapping' realm_group_mapping.pk as url %}
+            {% button 'DELETE' url "Delete group mapping" %}
           {% endif %}
         </td>
       </tr>

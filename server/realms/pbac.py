@@ -59,14 +59,3 @@ class ProvisionRealmRequest(Request):
             provision_realm_action,
             get_realm_resource(realm),
         )
-
-
-def is_scim_account(service_account) -> bool:
-    """True if a policy gives the account provisionRealm, on all the realms or on some of them."""
-    # asked as an active account: a token made while it is inactive works when it is active again
-    principal = Principal(
-        "ServiceAccount", str(service_account.pk),
-        is_active=True,
-        parents=Principal.from_user(service_account).parents,
-    )
-    return engine.undecided_policies(Request(principal, provision_realm_action, None)) is not False

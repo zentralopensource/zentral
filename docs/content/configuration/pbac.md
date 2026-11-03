@@ -10,11 +10,11 @@ Zentral uses Policy-Based Access Control to decide what users and service accoun
 * **Principal**: an authenticated User or Service Account.
 * **Role**: a named bucket of access. Principals belong to zero or more Roles. Roles no longer carry permissions directly — they're labels that policies reference.
 * **Policy**: a Cedar source stored in the database. A policy grants one or more **actions** to principals matching some condition, typically *"principal is in some Role"*.
-* **Action**: the unit of authorization, e.g. `Inventory::Action::"createMachineTag"` or `Realms::Action::"viewRealmGroup"`. Every Zentral endpoint that requires auth declares the action it needs.
+* **Action**: the unit of authorization, e.g. `Inventory::Action::"createMachineTag"` or `Realms::Action::"viewRealmGroup"`. Every Zentral endpoint that requires auth declares the action it needs, except the writes of the identity objects (see [What a policy does not give](#what-a-policy-does-not-give)).
 
 Roles are managed under *Roles* in the platform-settings menu. A Role's detail / edit form no longer has a permissions checklist — access is granted by writing a policy that references the Role.
 
-Principals can be added to Roles manually (from the User or Service Account edit form) or automatically through the Realm → Realm Group → Role mapping path; see [SSO Setup](sso.md) for the latter.
+Principals can be added to Roles manually, by a superuser, from the User or Service Account edit form, or automatically through the Realm → Realm Group → Role mapping path; see [SSO Setup](sso.md) for the latter.
 
 ## Writing a policy
 
@@ -115,6 +115,14 @@ Note what the two halves do here: the `resource in` clause restricts *which mach
 The `resource in` clause works because membership is transitive: the action applies to `Inventory::Machine`, and a machine is a member of the meta business units it belongs to. The Schema browser shows the types a principal or a resource is a member of, after the word *in*. A clause can name the type the action declares, or any of those.
 
 Each row has its own action, so a `forbid` on the view action of a container does not hide its rows: forbid the action of the rows, with `resource in` the container. An action that changes or deletes a resource also shows it, so a `forbid` on the view action alone does not hide a resource from a role that can change or delete it ([PBAC rules](../development/pbac-rules.md)).
+
+## What a policy does not give
+
+Until Zentral has a delegated administration, only a superuser, logged in without a Realm, writes the identity objects: the Realms, the users and the service accounts, the roles, the Realm Groups and their members, the Realm Group mappings, the Role mappings, and the API tokens and the token issuers of a service account. A superuser also deletes the API tokens of another user. No policy gives these writes. Each user still manages their own password and verification devices, and their own API tokens, except a superuser, who has none. See [Who can give a Role](sso.md#who-can-give-a-role).
+
+Their write actions are deprecated: for example `Accounts::Action::"createUser"`, `Auth::Action::"updateGroup"` or `Realms::Action::"createRoleMapping"`. They stay in the schema, so that the policies that name them still save, but no page and no API endpoint checks them: they give nothing, whatever the policies say, `Action::"GlobalAdminActions"` included. The Schema browser marks them as deprecated. Remove them from your policies: a later version removes them. Their view actions, for example `Accounts::Action::"viewUser"`, do not change.
+
+The policies themselves have no write action: only a superuser writes them.
 
 ## Finding the action you need
 

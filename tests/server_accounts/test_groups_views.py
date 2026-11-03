@@ -33,6 +33,10 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
     def _get_url_namespace(self):
         return "accounts"
 
+    def _promote_ui_user_to_superuser(self):
+        self.ui_user.is_superuser = True
+        self.ui_user.save()
+
     # permissions denied
 
     def test_group_list_redirect(self):
@@ -78,7 +82,14 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         for text in (reverse("accounts:delete_group", args=(self.provisioned_group.pk,)),
                      reverse("accounts:update_group", args=(self.provisioned_group.pk,))):
             self.assertNotContains(response, text)
+        # until the delegated administration, only a superuser writes a role: the write actions are deprecated
         self.login("auth.view_group", "auth.add_group", "auth.change_group", "auth.delete_group")
+        response = self.client.get(reverse("accounts:groups"))
+        for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
+                     reverse("accounts:update_group", args=(self.group.pk,)),
+                     reverse("accounts:create_group")):
+            self.assertNotContains(response, text)
+        self._promote_ui_user_to_superuser()
         response = self.client.get(reverse("accounts:groups"))
         for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
                      reverse("accounts:update_group", args=(self.group.pk,)),
@@ -91,21 +102,24 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
     # create group
 
     def test_create_group_get(self):
-        self.login("auth.add_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.get(reverse("accounts:create_group"))
         self.assertTemplateUsed(response, "accounts/group_form.html")
         self.assertContains(response, "Roles")
         self.assertContains(response, "Create")
 
     def test_create_group_error(self):
-        self.login("auth.add_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.post(reverse("accounts:create_group"),
                                     {"name": self.group.name},
                                     follow=True)
         self.assertFormError(response.context["form"], "name", "Group with this Name already exists.")
 
     def test_create_group_ok(self):
-        self.login("auth.add_group", "auth.view_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         name = get_random_string(12)
         response = self.client.post(reverse("accounts:create_group"),
                                     {"name": name},
@@ -131,8 +145,13 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/group_detail.html")
         self.assertContains(response, self.group.name)
-        for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
-                     reverse("accounts:update_group", args=(self.group.pk,))):
+        for text in (reverse("accounts:update_group", args=(self.group.pk,)),
+                     reverse("accounts:delete_group", args=(self.group.pk,))):
+            self.assertNotContains(response, text)
+        self._promote_ui_user_to_superuser()
+        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        for text in (reverse("accounts:update_group", args=(self.group.pk,)),
+                     reverse("accounts:delete_group", args=(self.group.pk,))):
             self.assertContains(response, text)
 
     # referenced policies
@@ -190,20 +209,34 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
                      reverse("accounts:update_group", args=(self.provisioned_group.pk,))):
             self.assertNotContains(response, text)
 
+    def test_role_writes_need_a_superuser(self):
+        name = self.group.name
+        self.login("auth.view_group", "auth.add_group", "auth.change_group")
+        for url in (reverse("accounts:create_group"), reverse("accounts:update_group", args=(self.group.pk,))):
+            for method in (self.client.get, self.client.post):
+                with self.subTest(url=url, method=method.__name__):
+                    self.assertEqual(method(url, {"name": get_random_string(12)}).status_code, 403)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.name, name)
+        self.assertEqual(Group.objects.count(), 3)
+
     # update
 
     def test_update_group_404(self):
-        self.login("auth.change_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.get(reverse("accounts:update_group", args=(0,)))
         self.assertEqual(response.status_code, 404)
 
     def test_update_provisioned_group_404(self):
-        self.login("auth.change_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.get(reverse("accounts:update_group", args=(self.provisioned_group.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_update_group_get(self):
-        self.login("auth.change_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.get(reverse("accounts:update_group", args=(self.group.pk,)))
         self.assertTemplateUsed(response, "accounts/group_form.html")
         form = response.context["form"]
@@ -211,14 +244,16 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         self.assertNotIn("permissions", form.fields)
 
     def test_user_update_username_error(self):
-        self.login("auth.change_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         response = self.client.post(reverse("accounts:update_group", args=(self.group.pk,)),
                                     {"name": self.provisioned_group.name})
         self.assertTemplateUsed(response, "accounts/group_form.html")
         self.assertFormError(response.context["form"], "name", "Group with this Name already exists.")
 
     def test_update_group_ok(self):
-        self.login("auth.change_group", "auth.view_group")
+        self._promote_ui_user_to_superuser()
+        self.login()
         name = get_random_string(12)
         response = self.client.post(reverse("accounts:update_group", args=(self.group.pk,)),
                                     {"name": name},
@@ -229,16 +264,19 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
     # delete
 
     def test_delete_group_404(self):
+        self._promote_ui_user_to_superuser()
         self.login("auth.delete_group")
         response = self.client.post(reverse("accounts:delete_group", args=(0,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_provisioned_group_404(self):
+        self._promote_ui_user_to_superuser()
         self.login("auth.delete_group")
         response = self.client.post(reverse("accounts:delete_group", args=(self.provisioned_group.pk,)))
         self.assertEqual(response.status_code, 404)
 
     def test_delete_group_ok(self):
+        self._promote_ui_user_to_superuser()
         self.login("auth.delete_group", "auth.view_group")
         group_name = self.group.name
         response = self.client.post(reverse("accounts:delete_group", args=(self.group.pk,)),
@@ -246,3 +284,11 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "accounts/group_list.html")
         self.assertNotContains(response, group_name)
         self.assertContains(response, "Roles (2)")
+
+    def test_delete_group_needs_a_superuser(self):
+        # a forbid on a role turns its removal into a grant
+        self.login("auth.delete_group", "auth.view_group")
+        for method in (self.client.get, self.client.post):
+            response = method(reverse("accounts:delete_group", args=(self.group.pk,)))
+            self.assertEqual(response.status_code, 403)
+        self.assertTrue(Group.objects.filter(pk=self.group.pk).exists())

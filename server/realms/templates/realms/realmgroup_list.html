@@ -17,7 +17,7 @@
 <div class="d-flex justify-content-between mb-3">
     <h2 class="m-0">Group{{ paginator.count|pluralize }} ({{ paginator.count }})</h2>
     <div class="ms-auto">
-    {% if perms.realms.add_realmgroup %}
+    {% if request|local_superuser %}
       {% url 'realms:create_group' as url %}
       {% button 'CREATE' url "Create new realm group" %}
     {% endif %}
@@ -55,11 +55,11 @@
       </td>
       <td><a href="{{ obj.get_absolute_url }}">{{ obj.display_name }}</a></td>
       <td class="text-end py-0">
-        {% if perms.realms.change_realmgroup and obj.can_be_updated %}
+        {% if request|local_superuser and obj.can_be_updated %}
           {% url 'realms:update_group' obj.pk as url %}
           {% button 'UPDATE' url "Edit group" %}
         {% endif %}
-        {% if perms.realms.delete_realmgroup and obj.can_be_deleted %}
+        {% if request|local_superuser and obj.can_be_deleted %}
           {% url 'realms:delete_group' obj.pk as url %}
           {% button 'DELETE' url "Delete group" %}
         {% endif %}

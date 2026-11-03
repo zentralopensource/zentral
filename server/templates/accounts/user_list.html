@@ -13,7 +13,7 @@
     <h3 class="mb-3">User{{ user_count|pluralize }} ({{ user_count }})</h3>
 
     <div class="ms-auto">
-        {% if perms.accounts.add_user and local_login %}
+        {% if request|local_superuser %}
         <a href="{% url 'accounts:invite_user' %}" class="btn btn-link" type="button"
             data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Send an email invitation">
             <span class="bi bi-envelope-plus" aria-hidden="true"></span>
@@ -81,7 +81,7 @@
     <h3 class="mb-3">Service account{{ service_account_count|pluralize }} ({{ service_account_count }})</h3>
 
     <div class="ms-auto">
-        {% if perms.accounts.add_user and perms.accounts.add_apitoken and local_login %}
+        {% if request|local_superuser %}
             {% url 'accounts:create_service_account' as url %}
             {% button 'CREATE' url "Create new Service Account" %}
         {% endif %}

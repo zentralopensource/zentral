@@ -21,13 +21,13 @@ Zentral only stores a hash of the token, so a token that has been lost cannot be
 
 A service account is a Zentral account that cannot sign in to the web console — it exists to hold API credentials. Use one per integration, so that a leaked token can be revoked without disturbing anything else.
 
-To create one, open the **Platform settings** menu (the ⋮ icon in the top right corner), go to *Users*, and click on the [+] button in the *Service accounts* section.
+A superuser, logged in without a Realm, creates one: open the **Platform settings** menu (the ⋮ icon in the top right corner), go to *Users*, and click on the [+] button in the *Service accounts* section.
 
 |Field|Description|
 |---|---|
 |Name|Required. Up to 150 characters: letters, digits and `.`, `+`, `-`, `_`.|
 |Description|Optional, free text.|
-|Roles|The [roles](../configuration/pbac.md) the account belongs to. You can only grant roles you hold yourself.|
+|Roles|The [roles](../configuration/pbac.md) the account belongs to. Only a superuser gives or removes them.|
 
 The account's email address is derived from its name and the deployment's `api.fqdn` — you do not set it.
 
@@ -58,11 +58,11 @@ Issuing a token means handing out a credential, so Zentral is deliberately restr
 * anyone can create a token for **themselves**, from their own profile page, except a superuser;
 * **a superuser has no API token.** A superuser skips PBAC, so its token would be a credential that no policy bounds. The API refuses the token of a superuser with a `401`, and Zentral deletes the tokens of a user who becomes a superuser, with an audit event for each token. Use a [service account](#service-accounts) for an automation;
 * **nobody can create a token for another user** — not even a superuser. A user who needs a token creates their own;
-* creating a token for a **service account** additionally requires the `Accounts::Action::"createAPIToken"` action *and* holding every role that service account holds. This stops an operator from minting a credential more privileged than themselves. A service account named directly by a PBAC policy can only be issued tokens by a superuser, since its privileges no longer follow from its roles. The same goes for a [SCIM account](../configuration/okta_scim.md#policy), a service account that a policy gives `Realms::Action::"provisionRealm"`: its token writes the realm groups, and the realm groups give roles.
+* **only a superuser creates a token for a service account**, logged in without a Realm. Holding the roles of an account is not holding its access: a `forbid` on a role, a policy that names the account, a policy on the type `ServiceAccount`, and a role given after the token all escape a comparison of roles. So until Zentral has a delegated administration, a superuser issues the credentials of the service accounts.
 
-The same rule guards the pencil button on a service account's token: pushing an expiry date out keeps a credential alive, so it needs `Accounts::Action::"updateAPIToken"` and the same role check.
+The same rule guards the pencil button on a service account's token: pushing an expiry date out keeps a credential alive, so only a superuser does it.
 
-Revocation is intentionally easier than issuance: `Accounts::Action::"deleteAPIToken"` is enough to delete any token, with no role check, and you can always delete your own.
+You can always delete your own tokens. Only a superuser deletes the tokens of another account. If a token of a service account leaks and no superuser is available, ask the support.
 
 ### Expiring tokens
 
@@ -87,7 +87,7 @@ Each deletion emits a `zentral_audit` event, so a purge leaves a trail.
 
 A long-lived token in a CI system is a standing liability. As an alternative, a service account can carry one or more **OIDC API token issuers**: a workload that already has an OIDC identity token — a GitHub Actions job, a GitLab pipeline, a cloud workload — exchanges it for a short-lived Zentral API token, and no Zentral secret is stored anywhere.
 
-Issuers are managed from the service account's detail page, under *Platform settings > Users*. They can only be attached to a service account, never to a user.
+Issuers are managed from the service account's detail page, under *Platform settings > Users*. They can only be attached to a service account, never to a user. A superuser creates, updates and deletes them, as the tokens of a service account.
 
 |Field|Description|
 |---|---|

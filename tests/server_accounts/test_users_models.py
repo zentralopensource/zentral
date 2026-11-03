@@ -1,10 +1,8 @@
 from datetime import date, timedelta
 from importlib import import_module
-import uuid
 
-from accounts.models import APIToken, OIDCAPITokenIssuer, Policy, User
+from accounts.models import APIToken, OIDCAPITokenIssuer, User
 from django.apps import apps
-from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
@@ -99,113 +97,6 @@ class UsersModelsTestCase(TestCase, SerializeForEventAssertions):
             {"pk": str(self.oidc_api_token_issuer.pk),
              "name": self.oidc_api_token_issuer.name}
         )
-
-    # can_issue_credentials_for
-
-    def test_can_issue_credentials_for_no_roles(self):
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_can_issue_credentials_for_shared_role(self):
-        group = Group.objects.create(name=get_random_string(12))
-        self.user.groups.set([group])
-        self.service_account.groups.set([group])
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_can_issue_credentials_for_subset_of_roles(self):
-        # the requester may hold more roles than the target
-        group = Group.objects.create(name=get_random_string(12))
-        self.user.groups.set([group, Group.objects.create(name=get_random_string(12))])
-        self.service_account.groups.set([group])
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_cannot_issue_credentials_for_ungrantable_role(self):
-        self.service_account.groups.set([Group.objects.create(name=get_random_string(12))])
-        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_superuser_can_issue_credentials_for_ungrantable_role(self):
-        self.service_account.groups.set([Group.objects.create(name=get_random_string(12))])
-        self.user.is_superuser = True
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_service_account_requester_gets_no_superuser_bypass(self):
-        # save() forces it False on a service account, and the auth backend ignores it too
-        requester = User.objects.create_user(
-            username=get_random_string(12),
-            email="{}@zentral.io".format(get_random_string(12)),
-            is_service_account=True,
-        )
-        requester.is_superuser = True
-        self.service_account.groups.set([Group.objects.create(name=get_random_string(12))])
-        self.assertFalse(requester.can_issue_credentials_for(self.service_account))
-
-    def test_cannot_issue_credentials_for_service_account_named_by_policy(self):
-        Policy.objects.create(
-            name=get_random_string(12),
-            source=f'permit (principal == ServiceAccount::"{self.service_account.pk}", action, resource);',
-        )
-        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_cannot_issue_credentials_for_service_account_named_by_inactive_policy(self):
-        Policy.objects.create(
-            name=get_random_string(12),
-            is_active=False,
-            source=f'permit (principal == ServiceAccount::"{self.service_account.pk}", action, resource);',
-        )
-        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_can_issue_credentials_for_service_account_named_by_policy_as_superuser(self):
-        Policy.objects.create(
-            name=get_random_string(12),
-            source=f'permit (principal == ServiceAccount::"{self.service_account.pk}", action, resource);',
-        )
-        self.user.is_superuser = True
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_can_issue_credentials_for_service_account_named_as_user_by_policy(self):
-        # a User:: reference cannot match a service account principal
-        Policy.objects.create(
-            name=get_random_string(12),
-            source=f'permit (principal == User::"{self.service_account.pk}", action, resource);',
-        )
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
-
-    def _give_provision_realm(self, resource="resource"):
-        role = Group.objects.create(name=get_random_string(12))
-        self.service_account.groups.set([role])
-        self.user.groups.set([role])
-        Policy.objects.create(
-            name=get_random_string(12),
-            source=(f'permit (principal is ServiceAccount in Role::"{role.pk}", '
-                    f'action == Realms::Action::"provisionRealm", {resource});'),
-        )
-
-    def test_cannot_issue_credentials_for_scim_account(self):
-        self._give_provision_realm()
-        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_cannot_issue_credentials_for_scim_account_of_one_realm(self):
-        self._give_provision_realm(f'resource == Realms::Realm::"{uuid.uuid4()}"')
-        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_cannot_issue_credentials_for_inactive_scim_account(self):
-        self._give_provision_realm()
-        self.service_account.is_active = False
-        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_can_issue_credentials_for_scim_account_as_superuser(self):
-        self._give_provision_realm()
-        self.user.is_superuser = True
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
-
-    def test_can_issue_credentials_for_service_account_with_other_actions(self):
-        role = Group.objects.create(name=get_random_string(12))
-        self.service_account.groups.set([role])
-        self.user.groups.set([role])
-        Policy.objects.create(
-            name=get_random_string(12),
-            source=f'permit (principal in Role::"{role.pk}", action == Realms::Action::"viewRealmUser", resource);',
-        )
-        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
 
     # superusers
 

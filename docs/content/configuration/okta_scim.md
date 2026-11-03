@@ -17,20 +17,22 @@ The SCIM synchronization is part of the Zentral API. To let Okta authenticate wi
 
 A Zentral service account is a Zentral account that cannot log into the admin console. Only a service account can call the SCIM endpoints: Zentral refuses the API token of a user with a 403 error, whatever the policies say.
 
+A superuser does these steps, logged in without a realm:
+
 1. [Create a service account](../apps/core.md#service-accounts) for your SCIM integration.
 2. Give it a role that you use for SCIM only, for example `SCIM provisioning`.
 3. [Add an API token](../apps/core.md#api-tokens) to it from its detail page. The token is displayed once, and you will need it later to configure the Okta application.
-4. Ask a superuser to write the policy below.
+4. Write the policy below.
 
 ### Policy
 
 The SCIM endpoints check one action, `Realms::Action::"provisionRealm"`, on the realm of the SCIM URL. This action gives all the SCIM operations: read, create and update the realm users, and read, create, update and delete the realm groups and their members.
 
-- The realm user and realm group actions, for example `Realms::Action::"updateRealmGroup"`, are for the console pages only. They give no access to the SCIM endpoints.
+- The realm user and realm group write actions, for example `Realms::Action::"updateRealmGroup"`, are deprecated and give nothing: no access to the SCIM endpoints, and no access to the console pages, where a superuser makes these writes.
 - `provisionRealm` is in no action group. A policy that gives `Action::"GlobalAdminActions"` does not give it. A policy with a bare `action` gives it.
-- The realm groups give roles to the users. So, after a policy gives `provisionRealm` to a service account, only a superuser can make its API tokens and its token issuers.
+- The realm groups give roles to the users. Only a superuser makes the API tokens and the token issuers of a service account, so only a superuser makes a SCIM credential.
 
-Ask a superuser to write a [PBAC policy](pbac.md) for each SCIM realm:
+A superuser writes a [PBAC policy](pbac.md) for each SCIM realm:
 
 ```
 permit (
@@ -56,7 +58,7 @@ The existing tokens keep working. Before the upgrade, each SCIM account could wr
 
 - To limit an account to one realm, make one role for each realm, and change the policies.
 - When you enable SCIM on another realm, a superuser writes its policy.
-- Remove the old policy of the eight actions: SCIM does not use it anymore.
+- Remove the old policy of the eight actions: they are deprecated, and give nothing now.
 
 ## Update the Okta Application
 

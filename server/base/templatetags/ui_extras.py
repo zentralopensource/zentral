@@ -1,5 +1,6 @@
 import logging
 from django import template
+from zentral.utils.views import is_local_superuser
 
 
 register = template.Library()
@@ -43,6 +44,12 @@ def to_str(value):
 @register.filter
 def to_int(value):
     return int(value)
+
+
+@register.filter
+def local_superuser(request):
+    # the check of LocalSuperuserRequiredMixin: no control for a page that would refuse the request
+    return is_local_superuser(request)
 
 
 # Buttons

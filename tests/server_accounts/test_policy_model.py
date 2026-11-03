@@ -14,6 +14,7 @@ class PolicyModelTestCase(TestCase, SerializeForEventAssertions):
 
     def test_serialize_for_event_is_json_native(self):
         self.assert_serialize_for_event_is_json_native(force_policy())
+
     def test_clean_formats_valid_source(self):
         p = Policy(name=get_random_string(12), source='permit (principal,action,resource);')
         p.clean()
@@ -99,20 +100,6 @@ class PolicyModelTestCase(TestCase, SerializeForEventAssertions):
         # the trailing quote keeps them distinct.
         Policy.objects.create(name="r-72", source='permit (principal in Role::"72", action, resource);')
         self.assertFalse(Policy.objects.referencing_role(7).exists())
-
-    def test_referencing_service_account_ignores_user_and_role(self):
-        # insertion order differs from the expected one, to catch a missing order_by
-        Policy.objects.create(name="zeta", source='permit (principal == ServiceAccount::"1", action, resource);')
-        Policy.objects.create(name="alpha", source='permit (principal == ServiceAccount::"1", action, resource);')
-        Policy.objects.create(name="u-1", source='permit (principal == User::"1", action, resource);')
-        Policy.objects.create(name="r-1", source='permit (principal in Role::"1", action, resource);')
-        Policy.objects.create(name="sa-2", source='permit (principal == ServiceAccount::"2", action, resource);')
-        qs = Policy.objects.referencing_service_account(1)
-        self.assertEqual([p.name for p in qs], ["alpha", "zeta"])
-
-    def test_referencing_service_account_does_not_match_prefix_substring(self):
-        Policy.objects.create(name="sa-72", source='permit (principal == ServiceAccount::"72", action, resource);')
-        self.assertFalse(Policy.objects.referencing_service_account(7).exists())
 
     def test_referencing_user_matches_user_and_service_account(self):
         # Insertion order on purpose differs from the expected name order

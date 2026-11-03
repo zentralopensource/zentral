@@ -79,7 +79,7 @@
       <tr>
         <td>
           Group{{ groups_with_types|length|pluralize }} ({{ groups_with_types|length }})
-          {% if not request.realm_authentication_session.is_remote  and perms.realms.change_realmgroup %}
+          {% if request|local_superuser %}
           <a class="btn btn-link" href="{% url 'realms:add_user_to_group' object.pk %}">
             <i class="bi bi-plus-circle"></i>
           </a>
@@ -95,7 +95,7 @@
             {% else %}
             {{ group }} ({{ type }})
             {% endif %}
-            {% if not request.realm_authentication_session.is_remote and perms.realms.change_realmgroup and not group.scim_managed %}
+            {% if request|local_superuser and not group.scim_managed %}
             <a class="btn btn-link" href="{% url 'realms:remove_user_from_group' object.pk group.pk %}">
               <i class="bi bi-trash"></i>
             </a>
