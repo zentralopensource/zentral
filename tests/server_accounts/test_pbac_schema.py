@@ -98,7 +98,6 @@ class BuildSchemaIRTestCase(SimpleTestCase):
             "createMachineTag", ns,
             [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
             applies_to=applies_to,
-            legacy_perm="inventory.add_machinetag",
         )
         ir = build_schema_ir(self.engine)
         action_ir = ir.namespaces["Inventory"].actions["createMachineTag"]

@@ -744,18 +744,24 @@ class PBACEngineRegistrationTestCase(TestCase):
                 legacy_perm="inventory.view_machine",
             )
         self.assertEqual(cm.exception.args[0],
-                         "Action 'viewMachine' does not take System: it cannot have a legacy perm")
+                         "Action 'viewMachine' takes another resource than System: it cannot have a legacy perm")
         self.assertNotIn(("viewMachine", "Inventory"), self.engine.actions)
         self.assertNotIn("inventory.view_machine", self.engine.legacy_perm_actions)
 
     def test_register_action_legacy_perm_on_rows_and_system(self):
-        action = self.engine.register_action(
-            "createMachineTag", self.namespace,
-            [ActionGroupBasename.ADMIN],
-            applies_to=AppliesTo(principals=(USER,), resources=(ResourceType("Machine", self.namespace), SYSTEM)),
-            legacy_perm="inventory.add_machinetag",
-        )
-        self.assertIs(self.engine.legacy_perm_actions["inventory.add_machinetag"], action)
+        # a forbid on the rows would not apply to has_perm()
+        with self.assertRaises(ValueError) as cm:
+            self.engine.register_action(
+                "createMachineTag", self.namespace,
+                [ActionGroupBasename.ADMIN],
+                applies_to=AppliesTo(principals=(USER,),
+                                     resources=(ResourceType("Machine", self.namespace), SYSTEM)),
+                legacy_perm="inventory.add_machinetag",
+            )
+        self.assertEqual(cm.exception.args[0],
+                         "Action 'createMachineTag' takes another resource than System: it cannot have a legacy perm")
+        self.assertNotIn(("createMachineTag", "Inventory"), self.engine.actions)
+        self.assertNotIn("inventory.add_machinetag", self.engine.legacy_perm_actions)
 
     def test_get_action_returns_registered(self):
         action = self.engine.register_action(
