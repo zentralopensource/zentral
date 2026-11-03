@@ -5,14 +5,16 @@ from django.http import HttpResponse
 from django.urls import reverse
 from rest_framework.exceptions import NotFound
 from rest_framework.parsers import JSONParser
+from rest_framework.permissions import BasePermission
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.utils.encoders import JSONEncoder
 from rest_framework.views import APIView, exception_handler
 from accounts.api_authentication import APITokenAuthentication
+from pbac.utils import check_request
 from realms.models import Realm, RealmGroup, RealmUser
+from realms.pbac import ProvisionRealmRequest
 from zentral.conf import api_base_url
-from zentral.utils.drf import DefaultDjangoModelPermissions
 from .models import realm_group_members_updated
 from .scim import SCIMUser, SCIMException, SCIMGroup
 
@@ -42,33 +44,19 @@ class SCIMRenderer(JSONRenderer):
     encoder_class = SCIMEncoder
 
 
-class SCIMPermissions(DefaultDjangoModelPermissions):
-    def get_all_perms(self):
-        perms = []
-        for model in (RealmUser, RealmGroup):
-            kwargs = {"app_label": model._meta.app_label,
-                      "model_name": model._meta.model_name}
-            for method_perms in self.perms_map.values():
-                for method_perm in method_perms:
-                    perm = method_perm % kwargs
-                    if perm not in perms:
-                        perms.append(perm)
-        return perms
-
+class SCIMPermissions(BasePermission):
     def has_permission(self, request, view):
-        # Authenticated user
-        if not request.user or not request.user.is_authenticated:
+        user = request.user
+        if not user or not user.is_authenticated:
             return False
-        if view.model_class:
-            # Directly use the model_class and the parent's mapping
-            perms = self.get_required_permissions(request.method, view.model_class)
-            # Not PUT → GET implicitly
-            return request.user.has_perms(perms)
-        else:
-            for perm in self.get_all_perms():
-                if request.user.has_perm(perm):
-                    return True
-        return False
+        # Cedar gets no schema at decision time, and a superuser skips it: refuse the users first
+        if not user.is_service_account:
+            logger.error("Permission denied: SCIM caller %s is not a service account", user.pk,
+                         extra={"request": request})
+            return False
+        view.get_realm()
+        check_request(request, ProvisionRealmRequest(user, view.realm))
+        return True
 
 
 def scim_exception_handler(exc, context):
@@ -121,10 +109,6 @@ class SCIMView(APIView):
     @staticmethod
     def build_response(data, status):
         return Response(data, status=status, content_type="application/scim+json")
-
-    def initial(self, request, *args, **kwargs):
-        super().initial(request, *args, **kwargs)
-        self.get_realm()
 
 
 class SingleResourceSCIMView(SCIMView):

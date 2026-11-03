@@ -15,30 +15,48 @@ The SCIM synchronization is part of the Zentral API. To let Okta authenticate wi
 
 ### Service account
 
-A Zentral service account is a Zentral account that cannot log into the admin console. [Create one](../apps/core.md#service-accounts) for your SCIM integration, then [add an API token](../apps/core.md#api-tokens) to it from its detail page — the token is displayed once, and you will need it later to configure the Okta application. Note also the service account's numeric primary key (visible in the URL of the service-account detail page).
+A Zentral service account is a Zentral account that cannot log into the admin console. Only a service account can call the SCIM endpoints: Zentral refuses the API token of a user with a 403 error, whatever the policies say.
+
+1. [Create a service account](../apps/core.md#service-accounts) for your SCIM integration.
+2. Give it a role that you use for SCIM only, for example `SCIM provisioning`.
+3. [Add an API token](../apps/core.md#api-tokens) to it from its detail page. The token is displayed once, and you will need it later to configure the Okta application.
+4. Ask a superuser to write the policy below.
 
 ### Policy
 
-Create a [PBAC policy](pbac.md) targeting the service account directly, granting it the eight Realms actions SCIM needs to create, update, delete and view both Realm Groups and Realm Users:
+The SCIM endpoints check one action, `Realms::Action::"provisionRealm"`, on the realm of the SCIM URL. This action gives all the SCIM operations: read, create and update the realm users, and read, create, update and delete the realm groups and their members.
+
+- The realm user and realm group actions, for example `Realms::Action::"updateRealmGroup"`, are for the console pages only. They give no access to the SCIM endpoints.
+- `provisionRealm` is in no action group. A policy that gives `Action::"GlobalAdminActions"` does not give it. A policy with a bare `action` gives it.
+- The realm groups give roles to the users. So, after a policy gives `provisionRealm` to a service account, only a superuser can make its API tokens and its token issuers.
+
+Ask a superuser to write a [PBAC policy](pbac.md) for each SCIM realm:
 
 ```
 permit (
-  principal == ServiceAccount::"<okta-scim-service-account-pk>",
-  action in [
-    Realms::Action::"createRealmGroup",
-    Realms::Action::"updateRealmGroup",
-    Realms::Action::"deleteRealmGroup",
-    Realms::Action::"viewRealmGroup",
-    Realms::Action::"createRealmUser",
-    Realms::Action::"updateRealmUser",
-    Realms::Action::"deleteRealmUser",
-    Realms::Action::"viewRealmUser"
-  ],
-  resource
+  principal is ServiceAccount in Role::"<role-pk>",
+  action == Realms::Action::"provisionRealm",
+  resource == Realms::Realm::"<realm-uuid>"
 );
 ```
 
-Substitute `<okta-scim-service-account-pk>` with the pk of the service account you just created. `==` (rather than `in`) targets that specific service account; no Role indirection needed.
+Substitute `<role-pk>` with the pk of the role of the service account, and `<realm-uuid>` with the UUID of the realm, from the URL of its detail page. Keep `is ServiceAccount`: a role mapping can give the role to a user that a realm login makes.
+
+### The upgrade to `provisionRealm`
+
+Before `provisionRealm`, the SCIM endpoints used the realm user and realm group actions of the console. This documentation gave the SCIM service account a policy with eight of them: `createRealmGroup`, `updateRealmGroup`, `deleteRealmGroup`, `viewRealmGroup`, `createRealmUser`, `updateRealmUser`, `deleteRealmUser` and `viewRealmUser`. The upgrade does these steps, when at least one realm has SCIM enabled:
+
+1. It makes the `SCIM provisioning` role, or `SCIM provisioning (2)` if the name is taken.
+2. It adds to the role each active service account whose legacy permissions are exactly these eight. It does not check the typed actions, for example of MDM: the role only gives `provisionRealm`. An account with more actions, for example in an Editor role, or in the role of a Terraform or a CI integration, is not added: the upgrade cannot tell it from an integration that the policies also let call SCIM.
+3. It writes the policy above for each realm with SCIM enabled, with the name `SCIM provisioning: <realm name>`.
+
+Before the upgrade, give your SCIM service account a role with only the policy of the eight actions, and remove it from the other roles. The upgrade then adds it to the `SCIM provisioning` role, and SCIM keeps working. If you do not, a superuser adds the account to the `SCIM provisioning` role after the upgrade, and SCIM is refused until then.
+
+The existing tokens keep working. Before the upgrade, each SCIM account could write each SCIM realm, and the role and the policies keep this. After the upgrade:
+
+- To limit an account to one realm, make one role for each realm, and change the policies.
+- When you enable SCIM on another realm, a superuser writes its policy.
+- Remove the old policy of the eight actions: SCIM does not use it anymore.
 
 ## Update the Okta Application
 

@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from importlib import import_module
+import uuid
 
 from accounts.models import APIToken, OIDCAPITokenIssuer, Policy, User
 from django.apps import apps
@@ -165,6 +166,44 @@ class UsersModelsTestCase(TestCase, SerializeForEventAssertions):
         Policy.objects.create(
             name=get_random_string(12),
             source=f'permit (principal == User::"{self.service_account.pk}", action, resource);',
+        )
+        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
+
+    def _give_provision_realm(self, resource="resource"):
+        role = Group.objects.create(name=get_random_string(12))
+        self.service_account.groups.set([role])
+        self.user.groups.set([role])
+        Policy.objects.create(
+            name=get_random_string(12),
+            source=(f'permit (principal is ServiceAccount in Role::"{role.pk}", '
+                    f'action == Realms::Action::"provisionRealm", {resource});'),
+        )
+
+    def test_cannot_issue_credentials_for_scim_account(self):
+        self._give_provision_realm()
+        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
+
+    def test_cannot_issue_credentials_for_scim_account_of_one_realm(self):
+        self._give_provision_realm(f'resource == Realms::Realm::"{uuid.uuid4()}"')
+        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
+
+    def test_cannot_issue_credentials_for_inactive_scim_account(self):
+        self._give_provision_realm()
+        self.service_account.is_active = False
+        self.assertFalse(self.user.can_issue_credentials_for(self.service_account))
+
+    def test_can_issue_credentials_for_scim_account_as_superuser(self):
+        self._give_provision_realm()
+        self.user.is_superuser = True
+        self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
+
+    def test_can_issue_credentials_for_service_account_with_other_actions(self):
+        role = Group.objects.create(name=get_random_string(12))
+        self.service_account.groups.set([role])
+        self.user.groups.set([role])
+        Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal in Role::"{role.pk}", action == Realms::Action::"viewRealmUser", resource);',
         )
         self.assertTrue(self.user.can_issue_credentials_for(self.service_account))
 

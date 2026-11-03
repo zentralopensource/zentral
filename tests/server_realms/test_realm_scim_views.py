@@ -14,8 +14,15 @@ from rest_framework.request import Request
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from realms.models import RealmGroup, RealmUser, RealmUserGroupMembership
-from realms.scim_views import SCIMPermissions
 from .utils import force_realm, force_realm_group, force_realm_user, force_user
+
+
+# the actions that the SCIM endpoints decided before provisionRealm
+LEGACY_REALM_PERMS = tuple(
+    f"realms.{operation}_{model}"
+    for model in ("realmuser", "realmgroup")
+    for operation in ("view", "add", "change", "delete")
+)
 
 
 class RealmViewsTestCase(TestCase, LoginCase):
@@ -49,6 +56,15 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # utility methods
 
+    def set_provision_realm(self, realm=None):
+        self.set_policy(
+            "permit (\n"
+            f'  principal is ServiceAccount in Role::"{self.group.pk}",\n'
+            '  action == Realms::Action::"provisionRealm",\n'
+            f'  resource == Realms::Realm::"{(realm or self.realm).pk}"\n'
+            ");"
+        )
+
     def serialize_datetime(self, value):
         return f"{value.isoformat(timespec='milliseconds')}Z"
 
@@ -65,22 +81,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         if attr in ("get", "patch", "post", "put", "delete"):
             return partial(self._make_client_request, attr)
         raise AttributeError
-
-    # SCIMPermissions
-
-    def test_scim_permissions(self):
-        p = SCIMPermissions()
-        self.assertEqual(
-            p.get_all_perms(),
-            ['realms.view_realmuser',
-             'realms.add_realmuser',
-             'realms.change_realmuser',
-             'realms.delete_realmuser',
-             'realms.view_realmgroup',
-             'realms.add_realmgroup',
-             'realms.change_realmgroup',
-             'realms.delete_realmgroup']
-        )
 
     # Resource types
 
@@ -105,7 +105,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_resource_types_unknown_realm_404(self):
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_resource_types", args=(str(uuid.uuid4()),)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -118,7 +118,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_resource_types_no_scim_404(self):
         realm = force_realm()
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_resource_types", args=(realm.pk,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -129,7 +129,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_resource_types(self):
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_resource_types", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -178,7 +178,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_user_resource_type_unknown_realm_404(self):
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_resource_type", args=(str(uuid.uuid4()), "User")))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -191,7 +191,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_group_resource_type_no_scim_404(self):
         realm = force_realm()
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_resource_type", args=(realm.pk, "Group")))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -202,7 +202,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_user_resource_type(self):
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_resource_type", args=(self.realm.pk, "User")))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -219,7 +219,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_group_resource_type(self):
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_resource_type", args=(self.realm.pk, "Group")))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -260,7 +260,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_schemas_no_scim_404(self):
         realm = force_realm()
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_schemas", args=(realm.pk,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -271,7 +271,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_schemas(self):
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_schemas", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -304,7 +304,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_sp_config_no_scim_404(self):
         realm = force_realm()
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_sp_config", args=(realm.pk,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -315,7 +315,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_sp_config_permission(self):
-        self.set_permissions("realms.change_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_sp_config", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -359,7 +359,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_users_get_no_scim_404(self):
         realm = force_realm()
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_users", args=(realm.pk,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -373,7 +373,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         force_realm_user()
         _, user = force_realm_user(realm=self.realm, email_count=1)
         email = user.realmemail_set.first()
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -406,7 +406,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     # filter users
 
     def test_users_unsupported_filter(self):
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)),
                             {"filter": 'userName eq "yolo" and displayName eq "fomo"'})
         self.assertEqual(response.status_code, 400)
@@ -422,7 +422,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         force_realm_user(realm=self.realm)
         _, user = force_realm_user(realm=self.realm, email_count=1)
         email = user.realmemail_set.first()
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)),
                             {"filter": f'userName  eq   "{user.username}"'})
         self.assertEqual(response.status_code, 200)
@@ -466,7 +466,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_create_user_permission_denied(self):
-        self.set_permissions("realms.view_realmuser")
+        self.set_permissions(*LEGACY_REALM_PERMS)
         response = self.post(reverse("realms_public:scim_users", args=(self.realm.pk,)), {})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
@@ -478,7 +478,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_create_user_external_id_exists(self):
         _, user = force_realm_user(realm=self.realm)
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         first_name = get_random_string(12)
         last_name = get_random_string(12)
         username = get_random_string(12)
@@ -514,7 +514,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_create_user_username_exists(self):
         _, user = force_realm_user(realm=self.realm)
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         first_name = get_random_string(12)
         last_name = get_random_string(12)
         username = user.username
@@ -549,7 +549,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_create_user_invalid_input(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         response = self.post(
             reverse("realms_public:scim_users", args=(self.realm.pk,)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -572,7 +572,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_create_user_unsupported_schema(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         response = self.post(
             reverse("realms_public:scim_users", args=(self.realm.pk,)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User",
@@ -603,7 +603,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_create_user(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         first_name = get_random_string(12)
         last_name = get_random_string(12)
         username = get_random_string(12)
@@ -669,7 +669,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertTrue(before < user.scim_updated_at <= user.updated_at)
 
     def test_create_user_no_display_name(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         first_name = get_random_string(12)
         last_name = get_random_string(12)
         username = get_random_string(12)
@@ -721,7 +721,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(user.email, email.email)
 
     def test_create_user_no_update_user(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         first_name = get_random_string(12)
         last_name = get_random_string(12)
         username = get_random_string(12)
@@ -757,7 +757,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertFalse(user_to_update.is_active)
 
     def test_create_user_update_user(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         first_name = get_random_string(12)
         last_name = get_random_string(12)
         username = get_random_string(12)
@@ -800,7 +800,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(unmanaged_user.last_name, unmanaged_user_last_name)
 
     def test_create_user_update_local_user(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_provision_realm()
         first_name = get_random_string(12)
         last_name = get_random_string(12)
         username = get_random_string(12)
@@ -847,7 +847,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_user_put_permission_denied(self):
         _, user = force_realm_user(realm=self.realm)
-        self.set_permissions("realms.view_realmuser")
+        self.set_permissions(*LEGACY_REALM_PERMS)
         response = self.put(reverse("realms_public:scim_user", args=(self.realm.pk, user.pk)), {})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
@@ -866,7 +866,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         username = get_random_string(12)
         email = f"{username}@zentral.com"
         external_id = get_random_string(12)
-        self.set_permissions("realms.change_realmuser")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_user", args=(self.realm.pk, user.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -925,7 +925,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         unmanaged_user_last_name = unmanaged_user.last_name
         self.realm.enabled_for_login = True  # update
         self.realm.save()
-        self.set_permissions("realms.change_realmuser")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_user", args=(self.realm.pk, realm_user.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -959,7 +959,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def _put_update_user(self, realm_user, username, email, active, emails=None):
         self.realm.enabled_for_login = True  # update
         self.realm.save()
-        self.set_permissions("realms.change_realmuser")
+        self.set_provision_realm()
         return self.put(
             reverse("realms_public:scim_user", args=(self.realm.pk, realm_user.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -1160,7 +1160,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         last_name = get_random_string(12)
         username = get_random_string(12)
         email = f"{username}@zentral.com"
-        self.set_permissions("realms.change_realmuser")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_user", args=(self.realm.pk, user.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -1211,7 +1211,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         last_name = get_random_string(12)
         username = get_random_string(12)
         email = f"{username}@zentral.com"
-        self.set_permissions("realms.change_realmuser")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_user", args=(self.realm.pk, user.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -1282,7 +1282,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_user_get_no_scim_404(self):
         realm, user = force_realm_user()
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_user", args=(realm.pk, user.pk)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -1293,7 +1293,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_user_get_not_found_404(self):
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_user", args=(self.realm.pk, str(uuid.uuid4()))))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -1306,7 +1306,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_user_get(self):
         _, user = force_realm_user(realm=self.realm, email_count=1)
         email = user.realmemail_set.first()
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_user", args=(self.realm.pk, user.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -1334,7 +1334,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         root_group = force_realm_group(realm=self.realm)
         group = force_realm_group(realm=self.realm, parent=root_group)
         _, user = force_realm_user(realm=self.realm, group=group)
-        self.set_permissions("realms.view_realmuser")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_user", args=(self.realm.pk, user.pk)))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
@@ -1381,7 +1381,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_groups_get_permission_denied(self):
-        self.set_permissions("realms.view_realmuser")
+        self.set_permissions(*LEGACY_REALM_PERMS)
         response = self.get(reverse("realms_public:scim_groups", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
@@ -1394,7 +1394,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_groups_get_no_scim_404(self):
         realm = force_realm()
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_groups", args=(realm.pk,)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -1407,7 +1407,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_groups_get(self):
         force_realm_group()
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.view_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_groups", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -1432,7 +1432,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     # filter groups
 
     def test_groups_unsupported_filter(self):
-        self.set_permissions("realms.view_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_groups", args=(self.realm.pk,)),
                             {"filter": 'displayName co "yolo"'})
         self.assertEqual(response.status_code, 400)
@@ -1447,7 +1447,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     def test_groups_displayname_filter(self):
         force_realm_group(realm=self.realm)
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.view_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_groups", args=(self.realm.pk,)),
                             {"filter": f'displayName eq "{group.display_name}"'})
         self.assertEqual(response.status_code, 200)
@@ -1483,7 +1483,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_create_group_permission_denied(self):
-        self.set_permissions("realms.add_realmuser")
+        self.set_permissions(*LEGACY_REALM_PERMS)
         response = self.post(reverse("realms_public:scim_groups", args=(self.realm.pk,)), {})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
@@ -1495,7 +1495,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_create_group_external_id_exists(self):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.add_realmgroup")
+        self.set_provision_realm()
         display_name = get_random_string(12)
         external_id = group.scim_external_id
         response = self.post(
@@ -1515,7 +1515,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_create_group_display_name_exists(self):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.add_realmgroup")
+        self.set_provision_realm()
         display_name = group.display_name
         external_id = get_random_string(12)
         response = self.post(
@@ -1535,7 +1535,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     @patch("zentral.contrib.mdm.inventory.update_realm_tags")
     def test_create_group(self, update_realm_tags):
-        self.set_permissions("realms.add_realmgroup")
+        self.set_provision_realm()
         display_name = get_random_string(12)
         external_id = get_random_string(12)
         response = self.post(
@@ -1567,7 +1567,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         group = force_realm_group(realm=self.realm)
         display_name = get_random_string(12)
         external_id = get_random_string(12)
-        self.set_permissions("realms.add_realmgroup")
+        self.set_provision_realm()
         response = self.post(
             reverse("realms_public:scim_groups", args=(self.realm.pk,)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
@@ -1619,7 +1619,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_group_put_permission_denied(self):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.change_realmuser")
+        self.set_permissions(*LEGACY_REALM_PERMS)
         response = self.put(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)), {})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
@@ -1635,7 +1635,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         group.scim_managed = False  # force False
         group.save()
         display_name = get_random_string(12)
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
@@ -1667,7 +1667,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         external_id = group.scim_external_id
         self.assertIsNotNone(external_id)
         display_name = get_random_string(12)
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
@@ -1697,7 +1697,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         external_id = group.scim_external_id
         self.assertIsNotNone(external_id)
         display_name = get_random_string(12)
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
@@ -1723,7 +1723,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_group_invalid_input(self):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
@@ -1740,7 +1740,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_update_group_unsupported_schemas(self):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group",
@@ -1768,7 +1768,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(RealmUserGroupMembership.objects.filter(group=group, user=old_user_member).count(), 1)
         self.assertEqual(old_group_member.parent, group)
         display_name = get_random_string(12)
-        self.set_permissions("realms.change_realmgroup")
+        self.set_provision_realm()
         response = self.put(
             reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)),
             {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
@@ -1835,7 +1835,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         group = force_realm_group()
         realm = group.realm
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.view_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_group", args=(realm.pk, group.pk)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -1846,7 +1846,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_group_get_not_found_404(self):
-        self.set_permissions("realms.view_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_group", args=(self.realm.pk, str(uuid.uuid4()))))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -1858,7 +1858,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_group_get(self):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.view_realmgroup")
+        self.set_provision_realm()
         response = self.get(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -1890,7 +1890,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     def test_group_delete_permission_denied(self):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.view_realmgroup")
+        self.set_permissions(*LEGACY_REALM_PERMS)
         response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)))
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
@@ -1904,7 +1904,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         group = force_realm_group()
         realm = group.realm
         self.assertFalse(realm.scim_enabled)
-        self.set_permissions("realms.delete_realmgroup")
+        self.set_provision_realm()
         response = self.delete(reverse("realms_public:scim_group", args=(realm.pk, group.pk)))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -1915,7 +1915,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         )
 
     def test_group_delete_not_found_404(self):
-        self.set_permissions("realms.delete_realmgroup")
+        self.set_provision_realm()
         response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, str(uuid.uuid4()))))
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
@@ -1928,7 +1928,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
     @patch("zentral.contrib.mdm.inventory.update_realm_tags")
     def test_group_delete(self, update_realm_tags):
         group = force_realm_group(realm=self.realm)
-        self.set_permissions("realms.delete_realmgroup")
+        self.set_provision_realm()
         response = self.delete(reverse("realms_public:scim_group", args=(self.realm.pk, group.pk)))
         self.assertEqual(response.status_code, 204)
         self.assertEqual(len(update_realm_tags.call_args_list), 1)
@@ -1936,3 +1936,71 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(len(args), 2)
         self.assertEqual(args[0], self.realm)
         self.assertIsInstance(args[1], Request)
+
+    # provisionRealm
+
+    def test_user_with_provision_realm_refused(self):
+        user = force_user()
+        user.groups.set([self.group])
+        _, api_token = APIToken.objects.create_for_user(user=user)
+        # no type test in the policy: the engine alone would allow the user
+        self.set_policy(
+            f'permit (principal in Role::"{self.group.pk}", action == Realms::Action::"provisionRealm", resource);'
+        )
+        with self.assertLogs("zentral.realms.scim_views", "ERROR") as cm:
+            response = self.client.get(reverse("realms_public:scim_users", args=(self.realm.pk,)),
+                                       HTTP_AUTHORIZATION=f"Bearer {api_token}")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            cm.output,
+            [f"ERROR:zentral.realms.scim_views:Permission denied: SCIM caller {user.pk} is not a service account"]
+        )
+
+    def test_legacy_realm_permissions_refused(self):
+        self.set_permissions(*LEGACY_REALM_PERMS)
+        with self.assertLogs("zentral.pbac.utils", "ERROR") as cm:
+            response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn('Realms::Action::"provisionRealm"', cm.output[0])
+
+    def test_provision_realm_on_another_realm(self):
+        other_realm = force_realm()
+        other_realm.scim_enabled = True
+        other_realm.save()
+        self.set_provision_realm(other_realm)
+        with self.assertLogs("zentral.pbac.utils", "ERROR"):
+            response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
+        self.assertEqual(response.status_code, 403)
+        response = self.get(reverse("realms_public:scim_users", args=(other_realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+
+    def test_provision_realm_bare_action(self):
+        self.set_policy(f'permit (principal in Role::"{self.group.pk}", action, resource);')
+        response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+
+    def test_provision_realm_not_in_the_admin_actions(self):
+        self.set_policy(
+            f'permit (principal in Role::"{self.group.pk}", action in Action::"GlobalAdminActions", resource);'
+        )
+        with self.assertLogs("zentral.pbac.utils", "ERROR"):
+            response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_provision_realm_forbid_on_the_realm(self):
+        self.set_policy(
+            f'permit (principal in Role::"{self.group.pk}", action == Realms::Action::"provisionRealm", resource);\n'
+            f'forbid (principal, action, resource == Realms::Realm::"{self.realm.pk}");'
+        )
+        with self.assertLogs("zentral.pbac.utils", "ERROR"):
+            response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
+        self.assertEqual(response.status_code, 403)
+
+    def test_provision_realm_forbid_on_another_action(self):
+        self.set_policy(
+            f'permit (principal in Role::"{self.group.pk}", action == Realms::Action::"provisionRealm", resource);\n'
+            'forbid (principal, action == Realms::Action::"createRealmUser", resource);'
+        )
+        response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
+        self.assertEqual(response.status_code, 200)

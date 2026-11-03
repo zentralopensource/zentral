@@ -241,6 +241,22 @@ WHERE u.is_superuser AND NOT u.is_service_account AND NOT u.is_remote;
 `/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/` answer `GET` only now. A `POST`, a `PUT` or a `DELETE` gives a 405 error, or a 403 error when the token does not have the write permission of the method. An issuer makes API tokens for its service account, and a credential comes from a local session. Before, each API token with the issuer permissions wrote the issuers, and the token of a service account could make an issuer for its own account. Create, update and delete the issuers in the web console, with the same role check as before. The token exchange at `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/` does not change.
 
 
+#### 🧨 SCIM accepts only a service account with `Realms::Action::"provisionRealm"`
+
+The SCIM endpoints decide one new action now, `Realms::Action::"provisionRealm"`, on the realm of the URL. Before, they used the realm user and realm group actions of the console, so the token of each user with these actions could write the realm groups, and their roles, without the checks of the console. Zentral refuses the API token of a user with a 403 error, and logs the refusal. The action is in no action group. Only a superuser can make the API tokens and the token issuers of a service account that a policy gives `provisionRealm`.
+
+The upgrade keeps the SCIM integrations that follow the documentation working. If at least one realm has SCIM enabled, it makes a `SCIM provisioning` role, adds to it each active service account whose legacy permissions are exactly the eight realm user and realm group permissions of the documented SCIM policy (create, update, delete and view), and writes a `SCIM provisioning: <realm name>` policy for each realm with SCIM enabled. See the [SCIM documentation](https://www.zentral.com/docs/zentral/configuration/okta_scim/#the-upgrade-to-provisionrealm).
+
+Before the upgrade, check the roles of the service account that your IdP uses for SCIM. If it has other actions, for example through an Editor role, give it a role with only the documented SCIM policy, and remove it from the other roles. Otherwise, a superuser adds it to the `SCIM provisioning` role after the upgrade, and SCIM is refused until then. If an IdP calls SCIM with the API token of a user, make a service account before the upgrade, give it the documented SCIM policy, and set its token in the IdP. This query lists the users with an API token. The SCIM requests of their tokens stop after the upgrade:
+
+```sql
+SELECT u.username, u.email, t.name, t.created_at
+FROM accounts_apitoken t
+JOIN accounts_user u ON u.id = t.user_id
+WHERE NOT u.is_service_account;
+```
+
+
 #### 🧨 Privilege escalation hardening — superusers
 
 Only a superuser can change a superuser. For a user who is not a superuser, the update and delete pages of a superuser answer 403, also with the `Accounts::Action::"updateUser"` and `Accounts::Action::"deleteUser"` actions, and Zentral logs the refusal. The user pages do not show the button. Only a superuser logged in without a realm can give or remove the superuser status, as before.
