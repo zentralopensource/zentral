@@ -112,7 +112,7 @@ class OIDCUtilsTestCase(TestCase):
 
     # test get_openid_configuration
 
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_get_openid_configuration_missing_issuer(self, requests_get):
         requests_get.return_value.json.return_value = {}
         with self.assertRaisesRegex(
@@ -121,7 +121,7 @@ class OIDCUtilsTestCase(TestCase):
         ):
             get_openid_configuration("https://issuer.zentral.com")
 
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_get_openid_configuration_wrong_attr_type(self, requests_get):
         requests_get.return_value.json.return_value = {
             "id_token_signing_alg_values_supported": ["RS256"],

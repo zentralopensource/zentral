@@ -89,9 +89,9 @@ class RealmBackendsTestCase(TestCase):
         get_openid_configuration.assert_called_once_with(self.openidc_realm.config["discovery_url"])
 
     @patch("realms.backends.openidc.lib.get_openid_configuration")
-    @patch("realms.backends.openidc.lib.requests.post")
+    @patch("requests.Session.post")
     @patch("realms.backends.openidc.lib.verify_jws")
-    @patch("realms.backends.openidc.lib.requests.get")
+    @patch("requests.Session.get")
     def test_openidc_redirect(self, userinfo_request, verify_jws, token_request, get_openid_configuration):
         username = get_random_string(12)
         userinfo_request.return_value.json.return_value = {

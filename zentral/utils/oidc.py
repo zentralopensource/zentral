@@ -1,7 +1,8 @@
 import logging
 
 import jwt
-import requests
+
+from zentral.utils.requests import make_session
 
 
 logger = logging.getLogger("zentral.utils.oidc")
@@ -19,7 +20,7 @@ def get_discovery_uri_from_issuer_uri(issuer_uri):
 
 
 def get_openid_configuration(discovery_uri):
-    response = requests.get(discovery_uri)
+    response = make_session().get(discovery_uri)
     cfg = response.json()
     for required_attr, attr_type in (
         ("id_token_signing_alg_values_supported", list),

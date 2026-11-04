@@ -5,9 +5,9 @@ import random
 from urllib.parse import urlencode
 
 from django.core.exceptions import SuspiciousOperation
-import requests
 
 from zentral.utils.oidc import get_openid_configuration, verify_jws
+from zentral.utils.requests import make_session
 
 
 logger = logging.getLogger("server.realms.backends.openidc.lib")
@@ -76,7 +76,8 @@ def get_claims(discovery_url, client_id, redirect_uri, authorization_code, clien
     else:
         # PKCE
         data["code_verifier"] = code_verifier
-    response = requests.post(openid_configuration["token_endpoint"], data=data)
+    session = make_session()
+    response = session.post(openid_configuration["token_endpoint"], data=data)
     response.raise_for_status()
     response_j = response.json()
 
@@ -93,9 +94,9 @@ def get_claims(discovery_url, client_id, redirect_uri, authorization_code, clien
     userinfo_endpoint = openid_configuration.get("userinfo_endpoint")
     access_token = response_j.get("access_token")
     if userinfo_endpoint and access_token:
-        userinfo_response = requests.get(userinfo_endpoint,
-                                         headers={"Accept": "application/json",
-                                                  "Authorization": "Bearer {}".format(access_token)})
+        userinfo_response = session.get(userinfo_endpoint,
+                                        headers={"Accept": "application/json",
+                                                 "Authorization": "Bearer {}".format(access_token)})
         if userinfo_response.ok:
             claims.update(userinfo_response.json())
 
