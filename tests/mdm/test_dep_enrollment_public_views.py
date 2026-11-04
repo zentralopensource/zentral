@@ -371,7 +371,7 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertFalse(any(p["PayloadType"] == "com.apple.security.acme" for p in payload["PayloadContent"]))
         self.assertTrue(any(p["PayloadType"] == "com.apple.security.scep" for p in payload["PayloadContent"]))
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_dep_enroll_acme(self, requests_get, vicsp, post_event):
         response = Mock()
         response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
@@ -466,7 +466,7 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(last_event.payload["status"], "warning")
         self.assertEqual(last_event.payload["reason"], "OS update to version 17.1 (b) required")
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_dep_web_enroll_no_custom_views(self, requests_get, vicsp, post_event):
         response = Mock()
         response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
@@ -555,7 +555,7 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         ras = realm.realmauthenticationsession_set.order_by("-created_at").first()
         self.assertEqual(response.url, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_dep_web_enroll_custom_views(self, requests_get, vicsp, post_event):
         response = Mock()
         response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"

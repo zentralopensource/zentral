@@ -1,5 +1,7 @@
+import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util import Retry
+from base.utils import deployment_info
 
 
 class CustomHTTPAdapter(HTTPAdapter):
@@ -18,3 +20,12 @@ class CustomHTTPAdapter(HTTPAdapter):
         if timeout is None:
             kwargs["timeout"] = self.default_timeout
         return super().send(*args, **kwargs)
+
+
+def make_session(timeout=10, max_retries=1):
+    session = requests.Session()
+    session.headers["User-Agent"] = deployment_info.user_agent
+    adapter = CustomHTTPAdapter(timeout, max_retries)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session

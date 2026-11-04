@@ -44,7 +44,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
 
     # OIDC API token auth
 
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_auth_errors(self, requests_get):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         response = self.post(
@@ -373,7 +373,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_create_token_issuer(self, requests_get, post_event):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.set_permissions("accounts.add_oidcapitokenissuer")
@@ -452,7 +452,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
         self.assertEqual(response.status_code, 403, response.data)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_update_token_issuer(self, requests_get, post_event):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.set_permissions("accounts.change_oidcapitokenissuer")

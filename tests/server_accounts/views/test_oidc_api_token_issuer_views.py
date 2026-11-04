@@ -216,7 +216,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_create_issuer(self, requests_get, post_event):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.login(
@@ -274,7 +274,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     # mandatory CEL condition
 
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_create_issuer_blank_cel_condition(self, requests_get):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self.login("accounts.add_oidcapitokenissuer")
@@ -293,7 +293,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
         self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
 
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_update_issuer_blank_cel_condition(self, requests_get):
         """The condition cannot be dropped from an existing issuer."""
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
@@ -409,7 +409,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_update_issuer(self, requests_get, post_event):
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         issuer = self._force_issuer()

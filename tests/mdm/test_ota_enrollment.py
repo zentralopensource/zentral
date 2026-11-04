@@ -202,7 +202,7 @@ class TestOTAEnrollment(TestCase):
         session.refresh_from_db()
         self.assertEqual(session.status, OTAEnrollmentSession.PHASE_2)
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     @patch("zentral.contrib.mdm.public_views.ota.verify_zentral_scep_ca_issuer")
     @patch("zentral.contrib.mdm.public_views.ota.verify_apple_iphone_device_ca_issuer")
     @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
