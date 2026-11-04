@@ -629,8 +629,7 @@ class ESOSStore(BaseStore):
                     "aggs": {
                       "unique_msn": {
                         "cardinality": {
-                          "field": "machine_serial_number",
-                          "missing": 0
+                          "field": "machine_serial_number"
                         }
                       }
                     }
