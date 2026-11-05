@@ -19,7 +19,7 @@
     data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="View Token">
   </a>
   <div class="input-group mt-1 input-group-sm invisible w-50 alert alert-primary mt-1 p-2" style="display: none">
-    <input style="font-family:monospace" id="auth-token" class="secret form-control" disabled="true" value="{{ api_key }}" size="{{ api_key|length }}" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
+    <input id="auth-token" class="secret ed-secret form-control" disabled="true" value="{{ api_key }}" size="{{ api_key|length }}" data-bs-toggle="manual" data-bs-placement="bottom" data-bs-title="Copied!" />
     <span class="copy-secret bi bi-clipboard-plus input-group-text" aria-hidden="true" data-secret-id="auth-token" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Copy to clipboard" style="cursor:pointer;"></span>
   </div>
 </div>
