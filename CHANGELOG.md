@@ -14,6 +14,8 @@ A task that produces several files has a manifest in its result. The download en
 
 A read-only HTTP API is available for the compliance checks. `/api/compliance_checks/compliance_checks/` lists the compliance checks, with the number of machines for each status, and the number of machines with a status from a previous version of the check. `/api/compliance_checks/machine_statuses/` lists the status of each machine for each check, and you can filter it on the serial number of the machine and on the compliance check.
 
+An event of a machine has the meta business units of the machine in its linked objects now, under the `meta_business_unit` key. This is the key of the audit events of a meta business unit, so one search finds the events of the machines in a unit and the events about the unit. Zentral adds them in the enrich worker, before the probe matching, and to the incident events of the event too. The events stored before the update do not have them.
+
 
 #### Documentation
 
