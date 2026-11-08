@@ -248,8 +248,7 @@ def post_enrollment_secret_viewed_event(request, enrollments, secret_field, wher
     if not enrollments:
         return
     payload_enrollments = []
-    # linked, so that the events of the enrollments and of their business units show the read. Built here, not
-    # with EventMetadata.add_objects(), which checks each new key against a list: quadratic for a large list
+    # linked, so that the events of the enrollments and of their business units show the read
     enrollment_keys = {}
     mbu_pks = {}
     for enrollment in enrollments:

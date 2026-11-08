@@ -20,6 +20,8 @@ Zentral emits a `zentral_audit` event for each change in the console of a realm 
 
 Zentral emits a `zentral_password_reset_request` event for each password reset request, and a `zentral_password_change` event for each password change, with the old password or with a reset link. Before, only the logins left a trace, and a password reset link opens a local account.
 
+An event of a machine has the meta business units of the machine in its linked objects now, under the `meta_business_unit` key. This is the key of the audit events of a meta business unit, so one search finds the events of the machines in a unit and the events about the unit. Zentral adds them in the enrich worker, before the probe matching, and to the incident events of the event too. The events stored before the update do not have them.
+
 
 #### Documentation
 
