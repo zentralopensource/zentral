@@ -139,6 +139,12 @@ class ClickHouseStore(BaseStore):
             self.table_name,
             data,
             column_names=self.column_names,
+            settings={
+                # JSON inference stores a string that looks like a date as a Date or a DateTime,
+                # and the original spelling is lost. Keep the timestamps the event carries as strings.
+                "input_format_try_infer_dates": 0,
+                "input_format_try_infer_datetimes": 0,
+            },
         )
 
     def store(self, event):
