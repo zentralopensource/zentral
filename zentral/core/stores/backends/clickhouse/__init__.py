@@ -62,6 +62,12 @@ class ClickHouseStore(BaseStore):
         "metadata",
         "payload",
     )
+    insert_settings = {
+        # JSON inference stores a string that looks like a date as a Date or a DateTime,
+        # and the original spelling is lost. Keep the timestamps the event carries as strings.
+        "input_format_try_infer_dates": 0,
+        "input_format_try_infer_datetimes": 0,
+    }
     machine_events = True
     last_machine_heartbeats = True
     object_events = True
@@ -139,6 +145,7 @@ class ClickHouseStore(BaseStore):
             self.table_name,
             data,
             column_names=self.column_names,
+            settings=self.insert_settings,
         )
 
     def store(self, event):
@@ -233,8 +240,9 @@ class ClickHouseStore(BaseStore):
                 # when `type` is pinned by an equality predicate and the rows are read in order,
                 # and fails with CANNOT_PARSE_DATETIME (seen on 26.5.1.882, TODO: link upstream issue)
                 "use_top_k_dynamic_filtering": 0,
-                # the JSON columns are serialized by ClickHouse, so the datetimes they contain
-                # are formatted by the server. `iso` is the closest to what we store.
+                # the JSON columns are serialized by ClickHouse, so the datetimes inferred in the events
+                # stored before insert_settings are formatted by the server. `iso` is the closest to what
+                # we store. Remove it when the TTL has removed these events.
                 "date_time_output_format": "iso",
             },
         )

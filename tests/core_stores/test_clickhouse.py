@@ -7,7 +7,6 @@ from zentral.core.probes.models import ProbeSource
 from zentral.core.probes.probe import Probe
 from zentral.core.stores.backends.all import StoreBackend
 from zentral.core.stores.backends.clickhouse import ClickHouseStore, ClickHouseStoreSerializer
-from zentral.utils.time import naive_utc_fromisoformat
 from .utils import build_login_event, force_store
 from . import BaseTestStore, get_from_dt, make_event
 
@@ -47,17 +46,34 @@ class TestClickHouseStoreStorage(TestCase, BaseTestStore):
         event = make_event(msn=msn)
         for i in range(1100):
             event.payload[f"path_{i:04d}"] = [f"val_{i}"]
-        status_time = datetime(2026, 7, 31, 14, 24, 25, 877383)
-        event.payload["status_time"] = status_time.isoformat()
+        event.payload["status_time"] = datetime(2026, 7, 31, 14, 24, 25, 877383).isoformat()
         self.store.store(event)
         events, _ = self.store.fetch_machine_events(msn, from_dt=get_from_dt())
         self.assertEqual(len(events), 1)
-        payload = events[0].payload
-        # ClickHouse infers the datetimes, and formats them back when it serializes the column
-        self.assertEqual(naive_utc_fromisoformat(payload.pop("status_time")), status_time)
-        expected_payload = event.payload.copy()
-        expected_payload.pop("status_time")
-        self.assertEqual(payload, expected_payload)
+        self.assertEqual(events[0].payload, event.payload)
+
+    def test_store_keeps_date_strings(self):
+        msn = get_random_string(12)
+        event = make_event(msn=msn)
+        values = {
+            "date": "2026-11-01",
+            "datetime_t": "2026-11-01T10:00:00",
+            "datetime_space": "2026-11-01 10:00:00",
+            "datetime_tz": "2026-11-01T10:00:00+00:00",
+            "datetime_us_tz": "2026-11-01T10:00:00.123456+00:00",
+            "datetime_us_naive": "2026-11-01T10:00:00.123456",
+        }
+        event.payload.update(values)
+        self.store.store(event)
+        events, _ = self.store.fetch_machine_events(msn, from_dt=get_from_dt())
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].payload, event.payload)
+        result = self.store.client.query(
+            "SELECT " + ", ".join(f"dynamicType(payload.{key})" for key in values)
+            + " FROM zentral_events WHERE serial_number = {msn:String}",
+            parameters={"msn": msn},
+        )
+        self.assertEqual(result.result_rows, [tuple("String" for _ in values)])
 
     def test_aggregation_not_implemented(self):
         with self.assertRaises(NotImplementedError) as cm:
@@ -330,6 +346,7 @@ class TestClickHouseStore(TestCase):
         store.store(event)
         mocked_client.command.assert_called()
         mocked_client.insert.assert_called_once()
+        self.assertEqual(mocked_client.insert.call_args.kwargs["settings"], ClickHouseStore.insert_settings)
 
     @patch("zentral.core.stores.backends.clickhouse.clickhouse_connect.get_client")
     def test_bulk_store(self, get_client):
