@@ -427,9 +427,13 @@ class EventMetadata(object):
                 # should never happen
                 continue
             obj_args_list = self.objects.setdefault(extra_obj_key, [])
+            # compare the encoded args: a deserialized event has lists of strings, a new one tuples of values
+            encoded_obj_args_set = set(encode_args(obj_args) for obj_args in obj_args_list)
             for extra_obj_args in extra_obj_args_list:
-                if extra_obj_args not in obj_args_list:
+                encoded_extra_obj_args = encode_args(extra_obj_args)
+                if encoded_extra_obj_args not in encoded_obj_args_set:
                     obj_args_list.append(extra_obj_args)
+                    encoded_obj_args_set.add(encoded_extra_obj_args)
 
     def iter_loaded_probes(self):
         for serialized_probe in self.probes:
