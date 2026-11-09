@@ -5,7 +5,7 @@ import zlib
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -380,6 +380,62 @@ class MunkiAPIViewsTestCase(TestCase):
             "tags": [],
         }
         self.assertEqual(expected_response, response.json())
+
+    def _post_job_details_body(self, body, content_encoding, user_agent="munki"):
+        enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+        return self.client.post(
+            reverse("munki_public:job_details"),
+            body,
+            content_type="application/json",
+            headers={"Authorization": f"MunkiEnrolledMachine {enrolled_machine.token}",
+                     "Content-Encoding": content_encoding,
+                     "User-Agent": user_agent},
+        )
+
+    def test_job_details_compressed_content_encodings(self):
+        for content_encoding, user_agent, compress in (("zlib", "santa/2026.10", zlib.compress),
+                                                       ("gzip", "Zentral/mnkpf 0.1", zlib.compress)):
+            with self.subTest(content_encoding=content_encoding, user_agent=user_agent):
+                enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)
+                body = compress(json.dumps({"machine_serial_number": enrolled_machine.serial_number}).encode("utf-8"))
+                response = self.client.post(
+                    reverse("munki_public:job_details"),
+                    body,
+                    content_type="application/json",
+                    headers={"Authorization": f"MunkiEnrolledMachine {enrolled_machine.token}",
+                             "Content-Encoding": content_encoding,
+                             "User-Agent": user_agent},
+                )
+                self.assertEqual(response.status_code, 200)
+
+    def test_job_details_zlib_not_accepted(self):
+        with self.assertLogs("zentral.utils.api_views", level="WARNING") as cm:
+            response = self._post_job_details_body(zlib.compress(b"{}"), "zlib")
+        self.assertEqual([r.levelname for r in cm.records], ["WARNING"])
+        self.assertEqual(response.status_code, 415)
+
+    def test_job_details_invalid_compressed_body(self):
+        for content_encoding in ("deflate", "gzip"):
+            with self.subTest(content_encoding=content_encoding):
+                response = self._post_job_details_body(b"{}", content_encoding)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.content, b"Invalid compressed request body")
+
+    def test_job_details_empty_compressed_body(self):
+        response = self._post_job_details_body(b"", "deflate")
+        self.assertEqual(response.status_code, 400)
+
+    def test_job_details_compressed_empty_document(self):
+        response = self._post_job_details_body(zlib.compress(b""), "deflate")
+        self.assertEqual(response.status_code, 400)
+
+    @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=1024)
+    def test_job_details_decompressed_body_too_large(self):
+        body = gzip.compress(json.dumps({"yolo": "a" * 2048}).encode("utf-8"))
+        self.assertLess(len(body), 1024)
+        response = self._post_job_details_body(body, "gzip")
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.content, b"Request body too large")
 
     def test_job_details_with_collected_condition_keys(self):
         enrolled_machine = make_enrolled_machine(enrollment=self.enrollment)

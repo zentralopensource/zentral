@@ -1,7 +1,6 @@
 import json
 import logging
 from base64 import b64decode
-from gzip import GzipFile
 from itertools import chain, islice
 
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
@@ -41,7 +40,8 @@ from zentral.contrib.osquery.models import (
 from zentral.contrib.osquery.tags import TagUpdateAggregator
 from zentral.contrib.osquery.tasks import build_file_carving_session_archive
 from zentral.core.events.base import post_machine_conflict_event
-from zentral.utils.http import user_agent_and_ip_address_from_request
+from zentral.utils.http import (Compression, RequestBodyError, read_request_body,
+                                user_agent_and_ip_address_from_request)
 from zentral.utils.json import remove_null_character
 from zentral.utils.time import naive_utcfromtimestamp, naive_utcnow
 
@@ -64,10 +64,12 @@ class BaseJsonPostView(View):
 
     def post(self, request, *args, **kwargs):
         try:
-            if request.META.get("HTTP_CONTENT_ENCODING") == "gzip":
-                self.data = json.load(GzipFile(fileobj=request))
-            else:
-                self.data = json.loads(request.body)
+            payload = read_request_body(request, {"gzip": Compression.GZIP})
+        except RequestBodyError as e:
+            logger.warning("Could not read the request body: %s", e.message, extra={'request': request})
+            return JsonResponse({"error": e.message}, status=e.status)
+        try:
+            self.data = json.loads(payload)
         except ValueError:
             raise SuspiciousOperation("Could not read JSON data")
         if not isinstance(self.data, dict):

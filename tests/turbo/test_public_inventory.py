@@ -6,6 +6,8 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MachineSnapshot
 from zentral.contrib.inventory.utils import commit_machine_snapshot_and_trigger_events
 from zentral.contrib.turbo.events import TurboRequestEvent
+from zentral.contrib.turbo.public_views.base import REQUEST_BODY_ERROR_CODES
+from zentral.utils.http import RequestBodyError
 from .utils import TurboPublicTestCase, force_configuration, force_enrolled_machine
 
 
@@ -113,6 +115,24 @@ class TurboInventoryPublicTestCase(TurboPublicTestCase):
         response = self._inventory_encoded(token, b"not gzip", "gzip")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"error": "invalid_gzip"})
+
+    def test_inventory_unsupported_content_encoding(self):
+        _, _, token = self._enrolled()
+        response = self._inventory_encoded(token, b"{}", "deflate")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "unsupported_content_encoding"})
+
+    def test_inventory_gzip_too_large(self):
+        _, _, token = self._enrolled()
+        body = gzip.compress(json.dumps({"system_info": {"computer_name": "a" * 2048}}).encode("utf-8"))
+        self.assertLess(len(body), 1024)
+        with self.settings(DATA_UPLOAD_MAX_MEMORY_SIZE=1024):
+            response = self._inventory_encoded(token, body, "gzip")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "payload_too_large"})
+
+    def test_each_request_body_error_has_a_wire_code(self):
+        self.assertEqual(set(REQUEST_BODY_ERROR_CODES), set(RequestBodyError.__subclasses__()))
 
     @patch("zentral.contrib.turbo.public_views.inventory.post_machine_snapshot_raw_event")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")

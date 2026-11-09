@@ -1,7 +1,6 @@
 import json
 import logging
 from uuid import UUID
-import zlib
 from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.http import JsonResponse
 from django.utils import timezone
@@ -18,7 +17,8 @@ from zentral.contrib.santa.incidents import SyncIncident
 from zentral.contrib.santa.models import Configuration, EnrolledMachine, Enrollment, MachineRule
 from zentral.core.incidents.models import Severity
 from zentral.utils.certificates import parse_dn
-from zentral.utils.http import user_agent_and_ip_address_from_request
+from zentral.utils.http import (Compression, RequestBodyError, read_request_body,
+                                user_agent_and_ip_address_from_request)
 
 
 logger = logging.getLogger('zentral.contrib.santa.views.api')
@@ -27,6 +27,7 @@ logger = logging.getLogger('zentral.contrib.santa.views.api')
 class BaseSyncView(View):
     allow_doctor_test = False
     doctor_test_machine_id = "santactl-doctor-test"
+    max_request_body_size = None
 
     def _get_enrollment_secret_secret(self):
         try:
@@ -55,10 +56,9 @@ class BaseSyncView(View):
             return None
 
     def _get_json_data(self, request):
-        payload = request.body
+        payload = read_request_body(request, {"zlib": Compression.ZLIB, "deflate": Compression.ZLIB},
+                                    self.max_request_body_size)
         try:
-            if request.META.get('HTTP_CONTENT_ENCODING', None) in ("zlib", "deflate"):
-                payload = zlib.decompress(payload)
             data = json.loads(payload)
         except ValueError:
             data = None
@@ -83,6 +83,11 @@ class BaseSyncView(View):
                 raise PermissionDenied("Missing client certificate")
             return enrolled_machine
 
+    def authenticate(self):
+        self.enrolled_machine = self.get_enrolled_machine()
+        if not self.enrolled_machine:
+            raise PermissionDenied("Machine not enrolled")
+
     def doctor_test_response(self):
         raise NotImplementedError
 
@@ -105,31 +110,50 @@ class BaseSyncView(View):
 
         self.user_agent, self.ip = user_agent_and_ip_address_from_request(request)
 
-        self.request_data = self._get_json_data(request)
+        # the body is read only once the secret is known. Reading it costs memory, and the
+        # decompression costs a lot more of it than the client sends.
+        self.authenticate()
 
-        self.enrolled_machine = self.get_enrolled_machine()
-        if not self.enrolled_machine:
-            raise PermissionDenied("Machine not enrolled")
+        try:
+            self.request_data = self._get_json_data(request)
+        except RequestBodyError as e:
+            logger.warning("Machine %s: %s", self.hardware_uuid, e.message)
+            return JsonResponse({"detail": e.message}, status=e.status)
 
         return JsonResponse(self.do_post())
 
 
 class PreflightView(BaseSyncView):
     allow_doctor_test = True
+    # the body of a machine that is not enrolled yet is read before its secret is verified.
+    # A preflight over the limit stops the syncs of the machine.
+    max_request_body_size = 8192
 
-    def doctor_test_response(self):
-        # The probe uses a sentinel machine id that is never enrolled, so we cannot validate a
-        # machine. We do confirm the enrollment secret (and client certificate, if required) so
-        # that a misconfigured client still gets a meaningful failure from doctor.
+    def _get_enrollment(self):
         try:
-            enrollment = Enrollment.objects.select_related("configuration").get(
+            enrollment = Enrollment.objects.select_related("configuration", "secret").get(
                 secret__secret=self.enrollment_secret_secret
             )
         except Enrollment.DoesNotExist:
             raise PermissionDenied("Unknown enrollment secret")
         if enrollment.configuration.client_certificate_auth and not self.client_cert_dn:
             raise PermissionDenied("Missing client certificate")
+        return enrollment
+
+    def doctor_test_response(self):
+        # The probe uses a sentinel machine id that is never enrolled, so we cannot validate a
+        # machine. We do confirm the enrollment secret (and client certificate, if required) so
+        # that a misconfigured client still gets a meaningful failure from doctor.
+        self._get_enrollment()
         return JsonResponse({})
+
+    def authenticate(self):
+        # a machine that is not enrolled yet is enrolled with the request data. Its secret is verified
+        # at the enrollment, because the serial number restriction of the secret needs the request data.
+        self.enrollment = None
+        self.enrolled_machine = self.get_enrolled_machine()
+        if not self.enrolled_machine:
+            self.enrollment = self._get_enrollment()
 
     def _get_primary_user(self):
         # primary user
@@ -189,13 +213,7 @@ class PreflightView(BaseSyncView):
         return defaults
 
     def _enroll_machine(self):
-        try:
-            enrollment = (Enrollment.objects.select_related("configuration", "secret")
-                                    .get(secret__secret=self.enrollment_secret_secret))
-        except Enrollment.DoesNotExist:
-            raise PermissionDenied("Unknown enrollment secret")
-        if enrollment.configuration.client_certificate_auth and not self.client_cert_dn:
-            raise PermissionDenied("Missing client certificate")
+        enrollment = self.enrollment
         try:
             verify_enrollment_secret(
                 "santa_enrollment", self.enrollment_secret_secret,
@@ -257,24 +275,18 @@ class PreflightView(BaseSyncView):
 
         return enrolled_machine
 
-    def get_enrolled_machine(self):
-        self.enrollment_action = None
-        enrolled_machine = super().get_enrolled_machine()
-        if not enrolled_machine:
-            enrolled_machine = self._enroll_machine()
-        else:
-            changed_attrs = []
-            for attr, val in self._get_enrolled_machine_defaults().items():
-                if getattr(enrolled_machine, attr) != val:
-                    setattr(enrolled_machine, attr, val)
-                    changed_attrs.append(attr)
-            if changed_attrs:
-                # only the reported attributes are written. A full save would write every
-                # column from a row read at the beginning of the request, and clobber what
-                # another request committed in the meantime - a clean sync queued by an
-                # operator, for instance
-                enrolled_machine.save(update_fields=changed_attrs + ["updated_at"])
-        return enrolled_machine
+    def _update_enrolled_machine(self):
+        changed_attrs = []
+        for attr, val in self._get_enrolled_machine_defaults().items():
+            if getattr(self.enrolled_machine, attr) != val:
+                setattr(self.enrolled_machine, attr, val)
+                changed_attrs.append(attr)
+        if changed_attrs:
+            # only the reported attributes are written. A full save would write every
+            # column from a row read at the beginning of the request, and clobber what
+            # another request committed in the meantime - a clean sync queued by an
+            # operator, for instance
+            self.enrolled_machine.save(update_fields=changed_attrs + ["updated_at"])
 
     def _commit_machine_snapshot(self):
         try:
@@ -327,6 +339,11 @@ class PreflightView(BaseSyncView):
         commit_machine_snapshot_and_trigger_events(tree)
 
     def do_post(self):
+        self.enrollment_action = None
+        if not self.enrolled_machine:
+            self.enrolled_machine = self._enroll_machine()
+        else:
+            self._update_enrolled_machine()
         self._commit_machine_snapshot()
         configuration = self.enrolled_machine.enrollment.configuration
         comparable_santa_version = self.enrolled_machine.get_comparable_santa_version()

@@ -1,9 +1,10 @@
+import gzip
 import json
 import uuid
 from datetime import datetime
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
 from django.utils.text import slugify
@@ -459,6 +460,34 @@ class OsqueryAPIViewsTestCase(TestCase):
     def test_config_wrong_node_key(self):
         response = self.post_as_json("config", {"node_key": "godzilla"})
         self.assertContains(response, '{"node_invalid": true}', status_code=200)
+
+    def _post_config_body(self, body, content_encoding):
+        return self.client.post(reverse("osquery_public:config"), body, content_type="application/json",
+                                headers={"Content-Encoding": content_encoding})
+
+    def test_config_gzip(self):
+        response = self._post_config_body(gzip.compress(b'{"node_key": "godzilla"}'), "gzip")
+        self.assertContains(response, '{"node_invalid": true}', status_code=200)
+
+    def test_config_invalid_gzip(self):
+        response = self._post_config_body(b'{"node_key": "godzilla"}', "gzip")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "Invalid compressed request body"})
+
+    def test_config_unsupported_content_encoding(self):
+        with self.assertLogs("zentral.contrib.osquery.views.api", level="WARNING") as cm:
+            response = self._post_config_body(b'{"node_key": "godzilla"}', "deflate")
+        self.assertEqual([r.levelname for r in cm.records], ["WARNING"])
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.json(), {"error": "Unsupported content encoding"})
+
+    @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=1024)
+    def test_config_gzip_too_large(self):
+        body = gzip.compress(json.dumps({"node_key": "a" * 2048}).encode("utf-8"))
+        self.assertLess(len(body), 1024)
+        response = self._post_config_body(body, "gzip")
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.json(), {"error": "Request body too large"})
 
     def test_config_ok(self):
         tag = Tag.objects.create(name=get_random_string(12))

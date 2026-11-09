@@ -1,10 +1,11 @@
 import json
 import uuid
+import zlib
 from unittest.mock import patch
 
 from django.db import connection
 from django.db.models import F
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import NoReverseMatch, reverse
 from django.utils.crypto import get_random_string
@@ -1551,6 +1552,127 @@ class SantaAPIViewsTestCase(TestCase):
                         headers={"Zentral-Authorization": f"Bearer {self.enrollment_secret.secret}"}
                     )
                     self.assertEqual(response.status_code, 400)
+
+    def _post_body(self, url_name, hardware_uuid, body, content_encoding=None, enrollment_secret=None):
+        headers = {"Zentral-Authorization": f"Bearer {enrollment_secret or self.enrollment_secret.secret}"}
+        if content_encoding:
+            headers["Content-Encoding"] = content_encoding
+        return self.client.post(reverse(f"santa_public:{url_name}", args=(hardware_uuid,)),
+                                body, content_type="application/json", headers=headers)
+
+    @patch("zentral.contrib.santa.public_views.read_request_body")
+    def test_sync_stages_unknown_secret_body_not_read(self, read_request_body):
+        body = zlib.compress(b"{}")
+        for url_name in ("preflight", "ruledownload", "eventupload", "postflight"):
+            for hardware_uuid in (self.enrolled_machine.hardware_uuid, uuid.uuid4()):
+                with self.subTest(url_name=url_name, hardware_uuid=hardware_uuid):
+                    response = self._post_body(url_name, hardware_uuid, body, "zlib",
+                                               enrollment_secret=get_random_string(12))
+                    self.assertEqual(response.status_code, 403)
+        read_request_body.assert_not_called()
+
+    @patch("zentral.contrib.santa.public_views.read_request_body")
+    def test_sync_stages_machine_not_enrolled_body_not_read(self, read_request_body):
+        body = zlib.compress(b"{}")
+        for url_name in ("ruledownload", "eventupload", "postflight"):
+            with self.subTest(url_name=url_name):
+                response = self._post_body(url_name, uuid.uuid4(), body, "zlib")
+                self.assertEqual(response.status_code, 403)
+        read_request_body.assert_not_called()
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_invalid_secret(self, post_event):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        body = zlib.compress(json.dumps(data).encode("utf-8"))
+        for attr, val, err_msg in (("revoked_at", naive_utcnow(), "revoked"),
+                                   ("expired_at", naive_utcnow(), "expired"),
+                                   ("udids", [str(uuid.uuid4())], "udid mismatch"),
+                                   ("quota", 1, "quota used up")):
+            with self.subTest(attr=attr):
+                post_event.reset_mock()
+                enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit,
+                                                                    request_count=1, **{attr: val})
+                Enrollment.objects.create(configuration=self.configuration, secret=enrollment_secret)
+                response = self._post_body("preflight", hardware_uuid, body, "zlib",
+                                           enrollment_secret=enrollment_secret.secret)
+                self.assertEqual(response.status_code, 403)
+                post_event.assert_called_once()
+                event = post_event.call_args.args[0]
+                self.assertEqual(event.metadata.machine_serial_number, serial_number)
+                self.assertEqual(event.payload["status"], "failure")
+                self.assertEqual(event.payload["reason"], err_msg)
+                self.assertEqual(event.payload["type"], "santa_enrollment")
+        self.assertFalse(EnrolledMachine.objects.filter(hardware_uuid=hardware_uuid).exists())
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_preflight_body_too_large(self, post_event):
+        for enrolled in (False, True):
+            data, serial_number, hardware_uuid = self._get_preflight_data(enrolled=enrolled)
+            data["hostname"] = "a" * 8192
+            body = json.dumps(data).encode("utf-8")
+            compressed_body = zlib.compress(body)
+            self.assertLess(len(compressed_body), 8192)
+            for body, content_encoding in ((body, None), (compressed_body, "zlib")):
+                with self.subTest(enrolled=enrolled, content_encoding=content_encoding):
+                    response = self._post_body("preflight", hardware_uuid, body, content_encoding)
+                    self.assertEqual(response.status_code, 413)
+                    self.assertEqual(response.json(), {"detail": "Request body too large"})
+        post_event.assert_not_called()
+        self.assertEqual(EnrolledMachine.objects.count(), 1)
+
+    @patch("zentral.contrib.santa.models.MachineRuleManager.get_next_rule_batch")
+    def test_sync_stage_body_over_preflight_limit(self, get_next_rule_batch):
+        get_next_rule_batch.return_value = ([], None)
+        cursor = "a" * 8192
+        body = zlib.compress(json.dumps({"cursor": cursor}).encode("utf-8"))
+        response = self._post_body("ruledownload", self.enrolled_machine.hardware_uuid, body, "zlib")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"rules": []})
+        self.assertEqual(get_next_rule_batch.call_args.args[2], cursor)
+
+    def test_preflight_enrollment_serial_number_mismatch(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        enrollment_secret = EnrollmentSecret.objects.create(meta_business_unit=self.meta_business_unit,
+                                                            serial_numbers=[get_random_string(12)])
+        Enrollment.objects.create(configuration=self.configuration, secret=enrollment_secret)
+        response = self.post_as_json("preflight", hardware_uuid, data, enrollment_secret=enrollment_secret.secret)
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(EnrolledMachine.objects.filter(hardware_uuid=hardware_uuid).exists())
+
+    def test_preflight_enrollment_compressed_body(self):
+        data, serial_number, hardware_uuid = self._get_preflight_data()
+        response = self._post_body("preflight", hardware_uuid, zlib.compress(json.dumps(data).encode("utf-8")),
+                                   "zlib")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(EnrolledMachine.objects.get(hardware_uuid=hardware_uuid).serial_number, serial_number)
+
+    def test_sync_stage_compressed_body(self):
+        for content_encoding in ("zlib", "deflate"):
+            with self.subTest(content_encoding=content_encoding):
+                response = self._post_body("ruledownload", self.enrolled_machine.hardware_uuid,
+                                           zlib.compress(b"{}"), content_encoding)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {"rules": []})
+
+    def test_sync_stage_invalid_compressed_body(self):
+        response = self._post_body("ruledownload", self.enrolled_machine.hardware_uuid, b"{}", "zlib")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Invalid compressed request body"})
+
+    def test_sync_stage_unsupported_content_encoding(self):
+        with self.assertLogs("zentral.contrib.santa.views.api", level="WARNING") as cm:
+            response = self._post_body("ruledownload", self.enrolled_machine.hardware_uuid, b"{}", "br")
+        self.assertEqual([r.levelname for r in cm.records], ["WARNING"])
+        self.assertEqual(response.status_code, 415)
+        self.assertEqual(response.json(), {"detail": "Unsupported content encoding"})
+
+    @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=1024)
+    def test_sync_stage_decompressed_body_too_large(self):
+        body = zlib.compress(json.dumps({"cursor": "a" * 2048}).encode("utf-8"))
+        self.assertLess(len(body), 1024)
+        response = self._post_body("ruledownload", self.enrolled_machine.hardware_uuid, body, "zlib")
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.json(), {"detail": "Request body too large"})
 
     def test_legacy_public_urls_are_disabled_on_tests(self):
         hardware_uuid = uuid.uuid4()

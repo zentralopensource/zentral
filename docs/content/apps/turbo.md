@@ -541,7 +541,8 @@ The device endpoints always answer with JSON – never with an HTML error page.
 |`400`|`{"error": "invalid_enrollment"}`|The enroll body or the enrollment secret was refused. Deliberately opaque.|
 |`400`|`{"error": "invalid_json"}`|The body is not a JSON object.|
 |`400`|`{"error": "invalid_gzip"}`|`Content-Encoding: gzip` was set, but the body could not be decompressed.|
-|`400`|`{"error": "payload_too_large"}`|The body is over the server limit.|
+|`400`|`{"error": "unsupported_content_encoding"}`|The `Content-Encoding` is not `gzip` or `identity`.|
+|`400`|`{"error": "payload_too_large"}`|The body is over the server limit, before or after decompression.|
 |`400`|`{"error": "invalid_results"}`|`results` is not a list.|
 |`400`|`{"error": "invalid_jobs"}`|`jobs` is not a list.|
 

@@ -1,18 +1,24 @@
-import gzip
 import hashlib
 import json
 import logging
 
-from django.core.exceptions import RequestDataTooBig
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import View
 
-from zentral.utils.http import user_agent_and_ip_address_from_request
+from zentral.utils.http import (Compression, InvalidCompressedBody, RequestBodyError, RequestBodyTooLarge,
+                                UnsupportedContentEncoding, read_request_body, user_agent_and_ip_address_from_request)
 from ..events import post_turbo_request_event
 from ..models import EnrolledMachine
 
 logger = logging.getLogger("zentral.contrib.turbo.public_views.base")
+
+
+REQUEST_BODY_ERROR_CODES = {
+    InvalidCompressedBody: "invalid_gzip",
+    RequestBodyTooLarge: "payload_too_large",
+    UnsupportedContentEncoding: "unsupported_content_encoding",
+}
 
 
 class WireError(Exception):
@@ -112,16 +118,11 @@ class BaseEnrolledMachinePostView(BaseEnrolledMachineView):
     def get_json_data(self, request):
         # gzip is the one Content-Encoding the agent uses: standard, and available out of the box on
         # both ends (Python's gzip, the agent's libz). We control both sides, so there is nothing else
-        # to accept — any other body is read as is.
+        # to accept.
         try:
-            payload = request.body
-        except RequestDataTooBig:
-            raise WireError("payload_too_large")
-        if request.META.get("HTTP_CONTENT_ENCODING") == "gzip":
-            try:
-                payload = gzip.decompress(payload)
-            except (OSError, EOFError):
-                raise WireError("invalid_gzip")
+            payload = read_request_body(request, {"gzip": Compression.GZIP})
+        except RequestBodyError as e:
+            raise WireError(REQUEST_BODY_ERROR_CODES[type(e)])
         try:
             data = json.loads(payload)
         except ValueError:

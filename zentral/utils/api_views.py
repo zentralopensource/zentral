@@ -1,11 +1,9 @@
-from gzip import GzipFile
 import json
 import logging
-import zlib
 from django.core.exceptions import SuspiciousOperation
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.views.generic import View
-from .http import user_agent_and_ip_address_from_request
+from .http import Compression, RequestBodyError, read_request_body, user_agent_and_ip_address_from_request
 
 
 logger = logging.getLogger('zentral.utils.api_views')
@@ -38,22 +36,25 @@ class JSONPostAPIView(View):
     def do_post(self, data):
         raise NotImplementedError
 
+    def get_content_encodings(self):
+        encodings = {"deflate": Compression.ZLIB, "gzip": Compression.GZIP}
+        if "santa" in self.user_agent:
+            encodings["zlib"] = Compression.ZLIB
+        if self.user_agent == "Zentral/mnkpf 0.1":
+            # this client sends a zlib stream as gzip
+            encodings["gzip"] = Compression.ZLIB
+        return encodings
+
     def post(self, request, *args, **kwargs):
-        payload = request.body
-        if not payload:
+        try:
+            payload = read_request_body(request, self.get_content_encodings())
+        except RequestBodyError as e:
+            logger.warning("Could not read the request body: %s", e.message, extra={'request': request})
+            return HttpResponse(e.message, status=e.status)
+        # a compressed empty document is not an empty request
+        if not request.body:
             data = payload
         else:
-            content_encoding = request.META.get('HTTP_CONTENT_ENCODING', None)
-            if content_encoding:
-                # try to decompress the payload.
-                if content_encoding == "deflate" \
-                   or "santa" in self.user_agent and content_encoding == "zlib" \
-                   or self.user_agent == "Zentral/mnkpf 0.1" and content_encoding == "gzip":
-                    payload = zlib.decompress(payload)
-                elif content_encoding == "gzip":
-                    payload = GzipFile(fileobj=request).read()
-                else:
-                    return HttpResponse("Unsupported Media Type", status=415)
             try:
                 payload = payload.decode(self.payload_encoding)
             except UnicodeDecodeError:
