@@ -1,6 +1,7 @@
 import datetime
 from unittest.mock import patch, Mock
 import uuid
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.apps_books import (AppsBooksClient,
@@ -211,6 +212,20 @@ class MDMAppsBooksClientTestCase(TestCase):
         self.assertEqual(client.get_service_config(), {"ok": 2})
         self.assertEqual(len(client.session.get.call_args_list), 2)
 
+    def test_get_service_config_shares_limits(self):
+        client, location = self._get_client(
+            [{"limits": {"maxAssets": 1, "maxSerialNumbers": 2}},
+             {"limits": {"maxAssets": 3, "maxSerialNumbers": 4}}],
+            True
+        )
+        cache_key = f"apps-books:limits:{location.mdm_info_id}"
+        cache.delete(cache_key)
+        client.get_service_config()
+        self.assertEqual(cache.get(cache_key), {"maxAssets": 1, "maxSerialNumbers": 2})
+        client._service_config_ts -= client.service_config_max_age_seconds + 1
+        client.get_service_config()
+        self.assertEqual(cache.get(cache_key), {"maxAssets": 3, "maxSerialNumbers": 4})
+
     # get_asset
 
     def test_get_asset_ok(self):
@@ -374,6 +389,26 @@ class MDMAppsBooksClientTestCase(TestCase):
              {"assets": un_deux, "serialNumbers": ["C"]},
              {"assets": trois, "serialNumbers": ["C"]}]
         )
+
+    def test_iter_manage_assets_requests_shared_limits(self):
+        client, location = self._get_client([], True)
+        cache.set(f"apps-books:limits:{location.mdm_info_id}", {"maxAssets": 1, "maxSerialNumbers": 2})
+        self.assertEqual(
+            list(client.iter_manage_assets_requests([("un", "STDQ"), ("deux", "STDQ")], ["A"], shared_limits=True)),
+            [{"assets": [{"adamId": "un", "pricingParam": "STDQ"}], "serialNumbers": ["A"]},
+             {"assets": [{"adamId": "deux", "pricingParam": "STDQ"}], "serialNumbers": ["A"]}]
+        )
+        client.session.get.assert_not_called()
+
+    def test_iter_manage_assets_requests_default_limits(self):
+        client, location = self._get_client([], True)
+        cache.delete(f"apps-books:limits:{location.mdm_info_id}")
+        assets = [(str(i), "STDQ") for i in range(26)]
+        serial_numbers = [str(i) for i in range(1001)]
+        requests = list(client.iter_manage_assets_requests(assets, serial_numbers, shared_limits=True))
+        self.assertEqual([(len(r["assets"]), len(r["serialNumbers"])) for r in requests],
+                         [(25, 1000), (1, 1000), (25, 1), (1, 1)])
+        client.session.get.assert_not_called()
 
     # post_raw_associations
 

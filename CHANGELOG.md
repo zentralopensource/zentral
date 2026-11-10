@@ -573,6 +573,8 @@ Fixed the Apps and Books license assignment to the devices of DEP virtual server
 
 Fixed the Apps and Books requests sent with the previous server token after a user uploads a new one. A running process kept the token it read first, and Apple rejected its requests until the process restarted. When Apple rejects the token, Zentral reads the token of the location again, and sends the request one more time only if the token changed. The logs show the error number that Apple returns, for example 9621 for an expired token.
 
+An MDM check-in does not send a request to Apple to get the Apps and Books request limits anymore. The background tasks get the limits and keep them for all the processes, and a check-in uses the limits that Apple documents until a task gets them. Before, a check-in waited as long as Apple asked when Apple refused the request with a `429` or a `503` error.
+
 Fixed the scope of a Monolith sub manifest package that uses the *Default Installs* key. Zentral put the package in the `default_installs` of every machine, and ignored the excluded tags and the shards. A machine out of scope kept a self-serve entry that can install the package later, with no request from the user. The web console form also removed the excluded tags and the shards from a package that uses the *Managed Updates* key.
 
 A rebuilt Monolith enrollment package keeps its file name now, on a storage that does not overwrite files. When an orphan file used the name, the storage saved the package under a name with a random suffix. Zentral deletes the orphan file before it saves the package.
