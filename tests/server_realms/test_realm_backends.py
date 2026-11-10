@@ -131,6 +131,7 @@ class RealmBackendsTestCase(TestCase):
             userinfo_request.return_value.status_code = 200
             token_request.return_value.status_code = 200
             userinfo_request.return_value.json.return_value = {
+                "sub": username,
                 "username": username,
                 "email": f"{username}@example.com",
             }

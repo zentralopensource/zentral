@@ -72,6 +72,26 @@ def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, ex
     return "{}?{}".format(openid_configuration["authorization_endpoint"], urlencode(data))
 
 
+def get_userinfo_claims(response, id_token_sub):
+    # a signed or encrypted response is a JWT, and not JSON
+    try:
+        userinfo = response.json()
+    except ValueError:
+        logger.warning("UserInfo response skipped: it is not JSON")
+        return {}
+    if not isinstance(userinfo, dict):
+        logger.warning("UserInfo response skipped: it is not a JSON object")
+        return {}
+    # OpenID Connect Core 1.0 §5.3.2
+    if id_token_sub is None:
+        logger.warning("UserInfo response skipped: the ID token has no sub")
+        return {}
+    if userinfo.get("sub") != id_token_sub:
+        logger.warning("UserInfo response skipped: its sub is not the sub of the ID token")
+        return {}
+    return userinfo
+
+
 def get_claims(discovery_url, client_id, redirect_uri, authorization_code, client_secret, code_verifier, nonce):
     # a RealmUserError gives the error page of the authentication session
     try:
@@ -143,6 +163,6 @@ def get_claims(discovery_url, client_id, redirect_uri, authorization_code, clien
                 logger.warning("UserInfo request error", exc_info=True)
             else:
                 if userinfo_response.status_code == 200:
-                    claims.update(userinfo_response.json())
+                    claims.update(get_userinfo_claims(userinfo_response, claims.get("sub")))
 
     return claims

@@ -113,3 +113,45 @@ class OpenIDCLibTestCase(SimpleTestCase):
         for userinfo_status in (302, 429, 503):
             self._setup(get_openid_configuration, post, get, verify_jws, userinfo_status=userinfo_status)
             self.assertEqual(self._get_claims(), {"sub": "yolo", "nonce": "the-nonce"})
+
+    def _assert_userinfo_skipped(self, reason):
+        with self.assertLogs("server.realms.backends.openidc.lib", level="WARNING") as cm:
+            claims = self._get_claims()
+        self.assertEqual(cm.output,
+                         [f"WARNING:server.realms.backends.openidc.lib:UserInfo response skipped: {reason}"])
+        return claims
+
+    def test_userinfo_not_json_skipped(self, get_openid_configuration, post, get, verify_jws):
+        self._setup(get_openid_configuration, post, get, verify_jws)
+        # a signed userinfo response
+        get.return_value = make_response(200, b"eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ5b2xvIn0.c2ln")
+        self.assertEqual(
+            self._assert_userinfo_skipped("it is not JSON"),
+            {"sub": "yolo", "nonce": "the-nonce"}
+        )
+
+    def test_userinfo_not_a_json_object_skipped(self, get_openid_configuration, post, get, verify_jws):
+        self._setup(get_openid_configuration, post, get, verify_jws)
+        get.return_value.json.return_value = ["yolo@example.com"]
+        self.assertEqual(
+            self._assert_userinfo_skipped("it is not a JSON object"),
+            {"sub": "yolo", "nonce": "the-nonce"}
+        )
+
+    def test_userinfo_sub_mismatch_skipped(self, get_openid_configuration, post, get, verify_jws):
+        for userinfo in ({"sub": "another-sub", "email": "yolo@example.com"},
+                         {"email": "yolo@example.com"}):
+            self._setup(get_openid_configuration, post, get, verify_jws)
+            get.return_value.json.return_value = userinfo
+            self.assertEqual(
+                self._assert_userinfo_skipped("its sub is not the sub of the ID token"),
+                {"sub": "yolo", "nonce": "the-nonce"}
+            )
+
+    def test_userinfo_no_id_token_sub_skipped(self, get_openid_configuration, post, get, verify_jws):
+        self._setup(get_openid_configuration, post, get, verify_jws)
+        verify_jws.return_value = {"nonce": "the-nonce"}
+        self.assertEqual(
+            self._assert_userinfo_skipped("the ID token has no sub"),
+            {"nonce": "the-nonce"}
+        )
