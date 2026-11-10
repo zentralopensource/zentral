@@ -243,6 +243,11 @@ WHERE u.is_superuser AND NOT u.is_service_account AND NOT u.is_remote;
 `/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/` answer `GET` only now. A `POST`, a `PUT` or a `DELETE` gives a 405 error, or a 403 error when the token does not have the write permission of the method. An issuer makes API tokens for its service account, and a credential comes from a local session. Before, each API token with the issuer permissions wrote the issuers, and the token of a service account could make an issuer for its own account. A superuser writes the issuers in the web console (see below). The token exchange at `/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/` does not change.
 
 
+#### 🧨 `max_retries` is the number of retries
+
+A `max_retries` or `retries` setting of an HTTP client gives that number of retries now, and `0` gives none. Before, Zentral made one retry more than the setting. This applies to the HTTP, Splunk, Datadog, Panther and Sumo Logic event stores, the HTTP and Slack probe actions, the Jamf API client, the Apps and Books client, and the DigiCert and IDent certificate issuers. With the default `max_retries` of 3, an event store makes 4 attempts instead of 5. The `max_retries` of the HTTP event store and of the IDent certificate issuers accepts `0` now.
+
+
 #### 🧨 SCIM accepts only a service account with `Realms::Action::"provisionRealm"`
 
 The SCIM endpoints decide one new action now, `Realms::Action::"provisionRealm"`, on the realm of the URL. Before, they used the realm user and realm group actions of the console, so the token of each user with these actions could write the realm groups, and their roles, without the checks of the console. Zentral refuses the API token of a user with a 403 error, and logs the refusal. The action is in no action group. Only a superuser makes the API tokens and the token issuers of a service account (see below).

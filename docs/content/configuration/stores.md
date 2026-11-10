@@ -267,7 +267,7 @@ Events are POSTed one by one, as JSON, to an arbitrary endpoint.
 | `password` | string | no | | **Secret.** Basic authentication. Requires `username`. |
 | `headers` | list of objects | no | `[]` | Extra headers, each an object with a `name` and a `value`. **The values are secrets.** The `Content-Type` header is set to `application/json`. An `Authorization` header cannot be combined with `username`/`password`. |
 | `request_timeout` | integer | no | `120` | In seconds. 1 – 600. |
-| `max_retries` | integer | no | `3` | 1 – 5. |
+| `max_retries` | integer | no | `3` | 0 – 5. The number of retries after the first attempt. |
 | `concurrency` | integer | no | `1` | 1 – 20. The number of threads used to post the events, to increase the throughput of the store worker. **Only works with the AWS SNS/SQS queues backend.** |
 
 #### Example

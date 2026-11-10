@@ -7,7 +7,7 @@ class CustomHTTPAdapter(HTTPAdapter):
         self.default_timeout = default_timeout
         super().__init__(
             max_retries=Retry(
-                total=retries + 1,
+                total=retries,
                 backoff_factor=1,
                 status_forcelist=[429, 500, 502, 503, 504]
             )

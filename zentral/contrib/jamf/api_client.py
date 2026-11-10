@@ -39,7 +39,7 @@ class APIClientError(Exception):
 
 class APIClient(object):
     default_timeout = 15  # 15 seconds
-    max_retries = 3  # max 3 attempts
+    max_retries = 3
     # bearer token auth
     token_min_validity_seconds = 300  # 5 min
 

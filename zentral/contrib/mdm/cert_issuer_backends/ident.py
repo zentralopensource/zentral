@@ -105,6 +105,6 @@ class IDentSerializer(serializers.Serializer):
         default=IDent.default_request_timeout,
     )
     max_retries = serializers.IntegerField(
-        min_value=1,
+        min_value=0,
         default=IDent.default_max_retries,
     )

@@ -149,7 +149,7 @@ class HTTPStoreSerializer(serializers.Serializer):
         default=HTTPStoreClient.default_request_timeout,
     )
     max_retries = serializers.IntegerField(
-        min_value=1,
+        min_value=0,
         max_value=HTTPStoreClient.max_max_retries,
         default=HTTPStoreClient.default_max_retries,
     )

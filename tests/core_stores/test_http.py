@@ -155,6 +155,18 @@ class HttpStoreTestCase(TestCase):
              "max_retries": ["Ensure this value is less than or equal to 5."]},
         )
 
+    def test_serializer_max_retries_range(self):
+        for max_retries, error in ((-1, "Ensure this value is greater than or equal to 0."),
+                                   (0, None),
+                                   (5, None)):
+            s = HTTPStoreSerializer(data={"endpoint_url": "https://www.example.com", "max_retries": max_retries})
+            if error:
+                self.assertFalse(s.is_valid())
+                self.assertEqual(s.errors, {"max_retries": [error]})
+            else:
+                self.assertTrue(s.is_valid(), s.errors)
+                self.assertEqual(s.validated_data["max_retries"], max_retries)
+
     def test_serializer_incorrect_endpoint_url_type(self):
         s = HTTPStoreSerializer(data={"endpoint_url": 1})
         self.assertFalse(s.is_valid())
