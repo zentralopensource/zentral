@@ -136,6 +136,24 @@
           <td>{{ object.declarative_management|yesno }}</td>
         </tr>
         <tr>
+          <th>Status reports</th>
+          <td>
+            {% if latest_status_report %}
+              Latest on {{ latest_status_report.received_at|date:"SHORT_DATETIME_FORMAT" }}{% if latest_status_report.full_report %} (full){% endif %}
+              {% if not latest_status_report.full_report %}
+                <br>
+                {% if latest_full_status_report %}
+                  Latest full on {{ latest_full_status_report.received_at|date:"SHORT_DATETIME_FORMAT" }}
+                {% else %}
+                  No full report
+                {% endif %}
+              {% endif %}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
           <th>Software update enforcement</th>
           <td>
             {% if software_update_enforcement %}

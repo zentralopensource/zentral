@@ -16,6 +16,7 @@ from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.models import (
     Blueprint,
     DeviceArtifact,
+    DeviceStatusReport,
     Platform,
     TargetArtifact,
 )
@@ -392,6 +393,63 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Pending 26.7.2 (25G332)")
         self.assertContains(response, "2 failures, last on ")
         self.assertContains(response, ": Software update failed.")
+
+    def _force_status_reports(self, enrolled_device, *full_reports):
+        latest_full_report = None
+        for day, full_report in enumerate(full_reports, start=1):
+            report = DeviceStatusReport.objects.create(
+                enrolled_device=enrolled_device,
+                received_at=datetime(2026, 11, day, 12, 34),
+                full_report=full_report,
+                data={"FullReport": True} if full_report else {},
+            )
+            if full_report:
+                latest_full_report = report
+        if latest_full_report:
+            latest_full_report.latest_full_report = True
+            latest_full_report.save()
+
+    def _get_enrolled_device(self, enrolled_device):
+        self.login("mdm.view_enrolleddevice")
+        response = self.client.get(reverse("mdm:enrolled_device", args=(enrolled_device.pk,)))
+        self.assertEqual(response.status_code, 200)
+        return response
+
+    def test_enrolled_device_no_status_reports(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        response = self._get_enrolled_device(session.enrolled_device)
+        self.assertIsNone(response.context["latest_status_report"])
+        self.assertNotIn("latest_full_status_report", response.context)
+        self.assertContains(response, "<tr><th>Status reports</th><td>-</td></tr>", html=True)
+
+    def test_enrolled_device_status_reports_latest_full(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._force_status_reports(session.enrolled_device, False, True)
+        response = self._get_enrolled_device(session.enrolled_device)
+        self.assertTrue(response.context["latest_status_report"].full_report)
+        self.assertNotIn("latest_full_status_report", response.context)
+        self.assertContains(response, " (full)")
+        self.assertNotContains(response, "Latest full on")
+        self.assertNotContains(response, "No full report")
+
+    def test_enrolled_device_status_reports_partial_after_full(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._force_status_reports(session.enrolled_device, True, False, False)
+        response = self._get_enrolled_device(session.enrolled_device)
+        self.assertEqual(response.context["latest_status_report"].received_at, datetime(2026, 11, 3, 12, 34))
+        self.assertEqual(response.context["latest_full_status_report"].received_at, datetime(2026, 11, 1, 12, 34))
+        self.assertNotContains(response, " (full)")
+        self.assertContains(response, "Latest full on")
+        self.assertNotContains(response, "No full report")
+
+    def test_enrolled_device_status_reports_no_full_report(self):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        self._force_status_reports(session.enrolled_device, False)
+        response = self._get_enrolled_device(session.enrolled_device)
+        self.assertIsNone(response.context["latest_full_status_report"])
+        self.assertNotContains(response, " (full)")
+        self.assertNotContains(response, "Latest full on")
+        self.assertContains(response, "No full report")
 
     def test_enrolled_device_enrollment_link(self):
         session, device_udid, serial_number = force_ota_enrollment_session(self.mbu, completed=True)

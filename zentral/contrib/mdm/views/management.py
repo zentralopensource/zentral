@@ -1397,6 +1397,11 @@ class EnrolledDeviceView(PermissionRequiredMixin, DetailView):
         ctx["target_artifacts_count"] = len(ctx["target_artifacts"])
         ctx["software_update_enforcement"] = target.software_update_enforcement
         ctx["software_update_enforcement_declaration"] = target.software_update_enforcement_declaration
+        # status reports
+        status_reports = self.object.status_reports.only("received_at", "full_report").order_by("-id")
+        ctx["latest_status_report"] = status_reports.first()
+        if ctx["latest_status_report"] and not ctx["latest_status_report"].full_report:
+            ctx["latest_full_status_report"] = status_reports.filter(latest_full_report=True).first()
         engine.authorize_requests([ctx["block_state_request"]] + force_install_requests)
         # commands
         commands_qs = (

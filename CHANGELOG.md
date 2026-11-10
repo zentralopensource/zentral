@@ -72,6 +72,8 @@ The enrolled device page shows the software update status of a device: the insta
 
 Zentral keeps the DDM status reports of the enrolled devices and users on iOS, iPadOS and tvOS 17 or later, and on macOS 14 or later. The older versions do not mark their full reports, so their reports are not kept. The new `cleanup_mdm_status_reports` command deletes the reports older than 30 days, or than the `status_report_retention_days` of the MDM configuration. For each device and user, it keeps the newest full report received before that date and every report after it, because the status is rebuilt from them. Run the command once a day: without it, Zentral does not delete the reports. Two runs at the same time give the same result as one run. The command posts an `mdm_status_report_cleanup_started` and an `mdm_status_report_cleanup_finished` event.
 
+The enrolled device page shows the date of the latest DDM status report that Zentral keeps, and if it is a full report. When it is not a full report, the page shows the date of the latest full report, or that Zentral keeps no full report for the device.
+
 
 #### Monolith
 
