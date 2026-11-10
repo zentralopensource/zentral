@@ -7,7 +7,9 @@ from urllib.parse import urlencode
 from django.core.exceptions import SuspiciousOperation
 import requests
 
+from realms.exceptions import RealmUserError
 from zentral.utils.oidc import get_openid_configuration, verify_jws
+from zentral.utils.requests import make_session
 
 
 logger = logging.getLogger("server.realms.backends.openidc.lib")
@@ -63,7 +65,11 @@ def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, ex
 
 
 def get_claims(discovery_url, client_id, redirect_uri, authorization_code, client_secret, code_verifier):
-    openid_configuration = get_openid_configuration(discovery_url)
+    # a RealmUserError gives the error page of the authentication session
+    try:
+        openid_configuration = get_openid_configuration(discovery_url)
+    except (requests.RequestException, ValueError):
+        raise RealmUserError("Could not get the OpenID configuration")
 
     # use authorization code to get the tokens
     data = {"client_id": client_id,
@@ -76,27 +82,35 @@ def get_claims(discovery_url, client_id, redirect_uri, authorization_code, clien
     else:
         # PKCE
         data["code_verifier"] = code_verifier
-    response = requests.post(openid_configuration["token_endpoint"], data=data)
-    response.raise_for_status()
-    response_j = response.json()
+    with make_session() as session:
+        try:
+            response = session.post(openid_configuration["token_endpoint"], data=data)
+        except requests.RequestException:
+            raise RealmUserError("Could not get the tokens")
+        response.raise_for_status()
+        response_j = response.json()
 
-    # decode & verify claims
-    claims = verify_jws(
-        token=response_j["id_token"],
-        issuer=openid_configuration["issuer"],
-        audience=client_id,
-        openid_configuration=openid_configuration,
-        exception_class=SuspiciousOperation,
-    )
+        # decode & verify claims
+        claims = verify_jws(
+            token=response_j["id_token"],
+            issuer=openid_configuration["issuer"],
+            audience=client_id,
+            openid_configuration=openid_configuration,
+            exception_class=SuspiciousOperation,
+        )
 
-    # enrich claims with userinfo endpoint if possible
-    userinfo_endpoint = openid_configuration.get("userinfo_endpoint")
-    access_token = response_j.get("access_token")
-    if userinfo_endpoint and access_token:
-        userinfo_response = requests.get(userinfo_endpoint,
-                                         headers={"Accept": "application/json",
-                                                  "Authorization": "Bearer {}".format(access_token)})
-        if userinfo_response.ok:
-            claims.update(userinfo_response.json())
+        # enrich claims with userinfo endpoint if possible
+        userinfo_endpoint = openid_configuration.get("userinfo_endpoint")
+        access_token = response_j.get("access_token")
+        if userinfo_endpoint and access_token:
+            try:
+                userinfo_response = session.get(userinfo_endpoint,
+                                                headers={"Accept": "application/json",
+                                                         "Authorization": "Bearer {}".format(access_token)})
+            except requests.RequestException:
+                logger.warning("UserInfo request error", exc_info=True)
+            else:
+                if userinfo_response.ok:
+                    claims.update(userinfo_response.json())
 
     return claims

@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmAuthenticationSession
+import requests
 
 from zentral.conf import settings
 
@@ -89,9 +90,9 @@ class RealmBackendsTestCase(TestCase):
         get_openid_configuration.assert_called_once_with(self.openidc_realm.config["discovery_url"])
 
     @patch("realms.backends.openidc.lib.get_openid_configuration")
-    @patch("realms.backends.openidc.lib.requests.post")
+    @patch("requests.Session.post")
     @patch("realms.backends.openidc.lib.verify_jws")
-    @patch("realms.backends.openidc.lib.requests.get")
+    @patch("requests.Session.get")
     def test_openidc_redirect(self, userinfo_request, verify_jws, token_request, get_openid_configuration):
         username = get_random_string(12)
         userinfo_request.return_value.json.return_value = {
@@ -131,6 +132,28 @@ class RealmBackendsTestCase(TestCase):
         self.assertEqual(response.context["user"].username, username)
         self.assertEqual(response.context["user"].email, f"{username}@example.com")
         self.assertTemplateUsed(response, "base/index.html")
+
+    @patch("realms.backends.openidc.lib.get_openid_configuration")
+    def test_openidc_redirect_identity_provider_error(self, get_openid_configuration):
+        get_openid_configuration.side_effect = requests.Timeout("Boom!!!")
+        ras = RealmAuthenticationSession.objects.create(
+            realm=self.openidc_realm,
+            backend_state=None,
+            callback="realms.utils.login_callback",
+            callback_kwargs={"next_url": "/"},
+        )
+        session = self.client.session
+        session[f"realm_{self.openidc_realm.pk}_session"] = str(ras.pk)
+        session.save()
+        params = urlencode({"state": str(ras.pk), "code": "the-code"})
+        response = self.client.get(
+            reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)) + f"?{params}"
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertTemplateUsed(response, "realms/ras_finalization_error.html")
+        self.assertEqual(response.context["message"], "Could not get the OpenID configuration")
+        ras.refresh_from_db()
+        self.assertIsNone(ras.user)
 
     def test_saml_login(self):
         next_url = "/{}".format(get_random_string(12))

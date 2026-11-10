@@ -344,7 +344,7 @@ class MDMCertIssuerBackendsTestCase(TestCase):
 
     # BaseMicrosoftCA - for uncovered lines elsewhere
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_base_microsoft_ca_raise_for_status(self, requests_get):
         response = Mock()
         response.raise_for_status.side_effect = Exception("Boom!!!")
@@ -354,7 +354,7 @@ class MDMCertIssuerBackendsTestCase(TestCase):
             backend.update_acme_payload({}, True, True, Mock())
         self.assertEqual(cm.exception.args[0], "Request error: Boom!!!")
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_microsoft_ca_unicode_error(self, requests_get):
         response = Mock()
         response.content = b"\x01"
@@ -364,7 +364,7 @@ class MDMCertIssuerBackendsTestCase(TestCase):
             backend.update_acme_payload({}, True, True, Mock())
         self.assertEqual(cm.exception.args[0], "Could not decode response.")
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_okta_ca_no_match(self, requests_get):
         response = Mock()
         response.content = "no match!".encode("windows-1252")
@@ -374,7 +374,7 @@ class MDMCertIssuerBackendsTestCase(TestCase):
             backend.update_acme_payload({}, True, True, Mock())
         self.assertEqual(cm.exception.args[0], "Could not find challenge in response.")
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_okta_ca_update_scep(self, requests_get):
         response = Mock()
         response.content = "challenge password is: <B> abc123 </B>".encode("windows-1252")

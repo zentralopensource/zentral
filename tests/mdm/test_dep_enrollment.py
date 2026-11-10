@@ -74,7 +74,7 @@ class TestDEPEnrollment(TestCase):
         )
         self.assertIsNone(build_acme_payload(session, {"PRODUCT": "Mac14,2", "OS_VERSION": "15.6.1"}))
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     def test_dep_enrollment_session_acme_payload(self, requests_get):
         response = Mock()
         response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"

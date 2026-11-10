@@ -7,13 +7,14 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 
 import jwt
+import requests
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from jwt.algorithms import RSAAlgorithm
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 
-from zentral.utils.oidc import get_openid_configuration, verify_jws
+from zentral.utils.oidc import get_openid_configuration, verify_jws, verify_jws_with_discovery
 
 
 # see https://github.com/jpadilla/pyjwt/blob/2.15.0/jwt/jwks_client.py#L167
@@ -112,7 +113,7 @@ class OIDCUtilsTestCase(TestCase):
 
     # test get_openid_configuration
 
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_get_openid_configuration_missing_issuer(self, requests_get):
         requests_get.return_value.json.return_value = {}
         with self.assertRaisesRegex(
@@ -121,7 +122,7 @@ class OIDCUtilsTestCase(TestCase):
         ):
             get_openid_configuration("https://issuer.zentral.com")
 
-    @patch("zentral.utils.oidc.requests.get")
+    @patch("requests.Session.get")
     def test_get_openid_configuration_wrong_attr_type(self, requests_get):
         requests_get.return_value.json.return_value = {
             "id_token_signing_alg_values_supported": ["RS256"],
@@ -160,6 +161,18 @@ class OIDCUtilsTestCase(TestCase):
         self.assertEqual(claims["iss"], issuer)
         self.assertEqual(claims["aud"], audience)
         self.assertEqual(claims["sub"], sub)
+        build_opener.return_value.open.assert_called_once()
+        self.assertEqual(build_opener.return_value.open.call_args.kwargs["timeout"], 10)
+
+    @patch("requests.Session.get")
+    def test_verify_jws_with_discovery_errors(self, requests_get):
+        for side_effect in (requests.Timeout("Boom!!!"), requests.ConnectionError("Boom!!!"), ValueError("Boom!!!")):
+            requests_get.side_effect = side_effect
+            with self.assertRaisesRegex(ValueError, r"^Could not get the OpenID configuration$"):
+                verify_jws_with_discovery("token", "https://issuer.zentral.com", "my-client",
+                                          exception_class=ValueError)
+            with self.assertRaises(type(side_effect)):
+                verify_jws_with_discovery("token", "https://issuer.zentral.com", "my-client")
 
     def test_verify_jws_none_alg(self):
         issuer = "https://issuer.zentral.com"

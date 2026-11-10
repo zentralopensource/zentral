@@ -1,7 +1,7 @@
 import logging
 import re
 from rest_framework import serializers
-import requests
+from zentral.utils.requests import make_session
 from .base import CertIssuerError, CertIssuer
 
 
@@ -22,7 +22,8 @@ class BaseMicrosoftCA(CertIssuer):
 
     def get_challenge(self):
         try:
-            r = requests.get(self.url, auth=(self.username, self.password))
+            with make_session() as session:
+                r = session.get(self.url, auth=(self.username, self.password))
             r.raise_for_status()
         except Exception as e:
             raise CertIssuerError(f"Request error: {e}")

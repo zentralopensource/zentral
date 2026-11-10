@@ -169,7 +169,7 @@ class ReenrollCommandTestCase(TestCase):
              "com.apple.mdm"]
         )
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     @patch("zentral.contrib.mdm.payloads.sign_payload")
     def test_build_command_t2_acme_no_attest(self, sign_payload, requests_get):
         response = Mock()
@@ -203,7 +203,7 @@ class ReenrollCommandTestCase(TestCase):
         self.assertTrue(acme_payload["Attest"] is False)
         self.assertTrue(acme_payload["HardwareBound"] is True)
 
-    @patch("zentral.contrib.mdm.cert_issuer_backends.base_microsoft_ca.requests.get")
+    @patch("requests.Session.get")
     @patch("zentral.contrib.mdm.payloads.sign_payload")
     def test_build_command_silicon_acme_attest(self, sign_payload, requests_get):
         response = Mock()

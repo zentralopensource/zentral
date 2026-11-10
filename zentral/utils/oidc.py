@@ -3,6 +3,8 @@ import logging
 import jwt
 import requests
 
+from zentral.utils.requests import make_session
+
 
 logger = logging.getLogger("zentral.utils.oidc")
 
@@ -19,7 +21,8 @@ def get_discovery_uri_from_issuer_uri(issuer_uri):
 
 
 def get_openid_configuration(discovery_uri):
-    response = requests.get(discovery_uri)
+    with make_session() as session:
+        response = session.get(discovery_uri)
     cfg = response.json()
     for required_attr, attr_type in (
         ("id_token_signing_alg_values_supported", list),
@@ -46,7 +49,7 @@ def verify_jws(token, issuer, audience, openid_configuration, exception_class=No
         header = jwt.get_unverified_header(token)
         if "alg" in header and header["alg"].upper() == "NONE":
             raise jwt.InvalidAlgorithmError("The none alg is not allowed")
-        jwk_client = jwt.PyJWKClient(openid_configuration["jwks_uri"])
+        jwk_client = jwt.PyJWKClient(openid_configuration["jwks_uri"], timeout=10)
         signing_key = jwk_client.get_signing_key_from_jwt(token).key
         return jwt.decode(
             token,
@@ -69,8 +72,12 @@ def verify_jws(token, issuer, audience, openid_configuration, exception_class=No
 
 
 def verify_jws_with_discovery(token, issuer_uri, audience, exception_class=None):
-    return verify_jws(
-        token, issuer_uri, audience,
-        get_openid_configuration_from_issuer_uri(issuer_uri),
-        exception_class,
-    )
+    try:
+        openid_configuration = get_openid_configuration_from_issuer_uri(issuer_uri)
+    except (requests.RequestException, ValueError):
+        msg = "Could not get the OpenID configuration"
+        logger.exception(msg)
+        if exception_class:
+            raise exception_class(msg)
+        raise
+    return verify_jws(token, issuer_uri, audience, openid_configuration, exception_class)
