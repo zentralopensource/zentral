@@ -45,6 +45,7 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
 
     @patch("requests.Session.get")
     def test_auth_errors(self, requests_get):
+        requests_get.return_value.status_code = 200
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         response = self.post(
             url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(self.issuer.pk,)),
@@ -60,7 +61,8 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
     @patch("requests.Session.get")
     def test_auth_discovery_errors(self, requests_get):
         for side_effect, status_code in ((requests.Timeout("Boom!!!"), None),
-                                         (requests.ConnectionError("Boom!!!"), None)):
+                                         (None, 302),
+                                         (None, 500)):
             requests_get.reset_mock()
             requests_get.side_effect = side_effect
             requests_get.return_value.status_code = status_code

@@ -115,6 +115,7 @@ class OIDCUtilsTestCase(TestCase):
 
     @patch("requests.Session.get")
     def test_get_openid_configuration_missing_issuer(self, requests_get):
+        requests_get.return_value.status_code = 200
         requests_get.return_value.json.return_value = {}
         with self.assertRaisesRegex(
             ValueError,
@@ -124,6 +125,7 @@ class OIDCUtilsTestCase(TestCase):
 
     @patch("requests.Session.get")
     def test_get_openid_configuration_wrong_attr_type(self, requests_get):
+        requests_get.return_value.status_code = 200
         requests_get.return_value.json.return_value = {
             "id_token_signing_alg_values_supported": ["RS256"],
             "issuer": "https://issuer.zentral.com",
@@ -134,6 +136,45 @@ class OIDCUtilsTestCase(TestCase):
             r"OpenID configuration 'jwks_uri' is not a str"
         ):
             get_openid_configuration("https://issuer.zentral.com")
+
+    @patch("requests.Session.get")
+    def test_get_openid_configuration(self, requests_get):
+        cfg = self._make_oid_config("https://issuer.zentral.com")
+        requests_get.return_value.status_code = 200
+        requests_get.return_value.json.return_value = cfg
+        self.assertEqual(
+            get_openid_configuration("https://issuer.zentral.com/.well-known/openid-configuration"),
+            cfg
+        )
+        requests_get.assert_called_once_with(
+            "https://issuer.zentral.com/.well-known/openid-configuration",
+            allow_redirects=False,
+        )
+
+    @patch("requests.Session.get")
+    def test_get_openid_configuration_redirect(self, requests_get):
+        requests_get.return_value.status_code = 302
+        requests_get.return_value.json.return_value = self._make_oid_config("https://issuer.zentral.com")
+        with self.assertRaisesRegex(ValueError, r"OpenID configuration response status 302"):
+            get_openid_configuration("https://issuer.zentral.com")
+        requests_get.return_value.json.assert_not_called()
+
+    @patch("requests.Session.get")
+    def test_get_openid_configuration_not_a_json_object(self, requests_get):
+        requests_get.return_value.status_code = 200
+        requests_get.return_value.json.return_value = ["issuer"]
+        with self.assertRaisesRegex(ValueError, r"OpenID configuration is not a JSON object"):
+            get_openid_configuration("https://issuer.zentral.com")
+
+    @patch("requests.Session.get")
+    def test_get_openid_configuration_jwks_uri_not_https(self, requests_get):
+        for jwks_uri in ("file:///etc/passwd", "http://169.254.169.254/latest/meta-data/", "HTTPS://issuer"):
+            cfg = self._make_oid_config("https://issuer.zentral.com")
+            cfg["jwks_uri"] = jwks_uri
+            requests_get.return_value.status_code = 200
+            requests_get.return_value.json.return_value = cfg
+            with self.assertRaisesRegex(ValueError, r"OpenID configuration 'jwks_uri' does not use https"):
+                get_openid_configuration("https://issuer.zentral.com")
 
     # test verify_jws
 
@@ -163,6 +204,24 @@ class OIDCUtilsTestCase(TestCase):
         self.assertEqual(claims["sub"], sub)
         build_opener.return_value.open.assert_called_once()
         self.assertEqual(build_opener.return_value.open.call_args.kwargs["timeout"], 10)
+
+    @patch("jwt.jwks_client.urllib.request.build_opener")
+    def test_verify_jws_jwks_uri_not_https(self, build_opener):
+        issuer = "https://issuer.zentral.com"
+        audience = "my-client"
+        token = self._make_token(iss=issuer, aud=audience)
+        for jwks_uri in (None, "file:///etc/passwd", "http://169.254.169.254/latest/meta-data/"):
+            openid_configuration = self._make_oid_config(issuer)
+            openid_configuration["jwks_uri"] = jwks_uri
+            with self.assertRaisesRegex(ValueError, r"Invalid token"):
+                verify_jws(
+                    token=token,
+                    issuer=issuer,
+                    audience=audience,
+                    openid_configuration=openid_configuration,
+                    exception_class=ValueError,
+                )
+        build_opener.assert_not_called()
 
     @patch("requests.Session.get")
     def test_verify_jws_with_discovery_errors(self, requests_get):

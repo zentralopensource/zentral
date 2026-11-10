@@ -8,7 +8,7 @@ from django.core.exceptions import SuspiciousOperation
 import requests
 
 from realms.exceptions import RealmUserError
-from zentral.utils.oidc import get_openid_configuration, verify_jws
+from zentral.utils.oidc import get_openid_configuration, uses_https, verify_jws
 from zentral.utils.requests import make_session
 
 
@@ -82,13 +82,27 @@ def get_claims(discovery_url, client_id, redirect_uri, authorization_code, clien
     else:
         # PKCE
         data["code_verifier"] = code_verifier
+    # the token request carries the authorization code and the client secret,
+    # and the userinfo request the access token
+    token_endpoint = openid_configuration.get("token_endpoint")
+    if not uses_https(token_endpoint):
+        raise SuspiciousOperation("The token endpoint does not use https")
+    userinfo_endpoint = openid_configuration.get("userinfo_endpoint")
+    if userinfo_endpoint and not uses_https(userinfo_endpoint):
+        raise SuspiciousOperation("The userinfo endpoint does not use https")
     with make_session() as session:
         try:
-            response = session.post(openid_configuration["token_endpoint"], data=data)
+            response = session.post(token_endpoint, data=data, allow_redirects=False)
         except requests.RequestException:
             raise RealmUserError("Could not get the tokens")
-        response.raise_for_status()
-        response_j = response.json()
+        if response.status_code != 200:
+            raise SuspiciousOperation(f"Token endpoint response status {response.status_code}")
+        try:
+            response_j = response.json()
+        except ValueError:
+            response_j = None
+        if not isinstance(response_j, dict) or not isinstance(response_j.get("id_token"), str):
+            raise SuspiciousOperation("Invalid token response")
 
         # decode & verify claims
         claims = verify_jws(
@@ -100,17 +114,17 @@ def get_claims(discovery_url, client_id, redirect_uri, authorization_code, clien
         )
 
         # enrich claims with userinfo endpoint if possible
-        userinfo_endpoint = openid_configuration.get("userinfo_endpoint")
         access_token = response_j.get("access_token")
         if userinfo_endpoint and access_token:
             try:
                 userinfo_response = session.get(userinfo_endpoint,
                                                 headers={"Accept": "application/json",
-                                                         "Authorization": "Bearer {}".format(access_token)})
+                                                         "Authorization": "Bearer {}".format(access_token)},
+                                                allow_redirects=False)
             except requests.RequestException:
                 logger.warning("UserInfo request error", exc_info=True)
             else:
-                if userinfo_response.ok:
+                if userinfo_response.status_code == 200:
                     claims.update(userinfo_response.json())
 
     return claims

@@ -20,10 +20,21 @@ def get_discovery_uri_from_issuer_uri(issuer_uri):
     return issuer_uri.rstrip("/") + "/.well-known/openid-configuration"
 
 
+# OpenID Connect Discovery requires https for the endpoints of the configuration,
+# and urllib, which PyJWKClient uses, also reads file:// URLs
+def uses_https(url):
+    return isinstance(url, str) and url.startswith("https://")
+
+
 def get_openid_configuration(discovery_uri):
+    # a redirect would send the request to a URL that the configuration does not contain
     with make_session() as session:
-        response = session.get(discovery_uri)
+        response = session.get(discovery_uri, allow_redirects=False)
+    if response.status_code != 200:
+        raise ValueError(f"OpenID configuration response status {response.status_code}")
     cfg = response.json()
+    if not isinstance(cfg, dict):
+        raise ValueError("OpenID configuration is not a JSON object")
     for required_attr, attr_type in (
         ("id_token_signing_alg_values_supported", list),
         ("issuer", str),
@@ -33,6 +44,8 @@ def get_openid_configuration(discovery_uri):
             raise ValueError(f"Missing '{required_attr}' in OpenID configuration")
         if not isinstance(cfg[required_attr], attr_type):
             raise ValueError(f"OpenID configuration '{required_attr}' is not a {attr_type.__name__}")
+    if not uses_https(cfg["jwks_uri"]):
+        raise ValueError("OpenID configuration 'jwks_uri' does not use https")
     return cfg
 
 
@@ -49,7 +62,10 @@ def verify_jws(token, issuer, audience, openid_configuration, exception_class=No
         header = jwt.get_unverified_header(token)
         if "alg" in header and header["alg"].upper() == "NONE":
             raise jwt.InvalidAlgorithmError("The none alg is not allowed")
-        jwk_client = jwt.PyJWKClient(openid_configuration["jwks_uri"], timeout=10)
+        jwks_uri = openid_configuration["jwks_uri"]
+        if not uses_https(jwks_uri):
+            raise jwt.PyJWKClientError("The jwks_uri does not use https")
+        jwk_client = jwt.PyJWKClient(jwks_uri, timeout=10)
         signing_key = jwk_client.get_signing_key_from_jwt(token).key
         return jwt.decode(
             token,

@@ -95,6 +95,8 @@ class RealmBackendsTestCase(TestCase):
     @patch("requests.Session.get")
     def test_openidc_redirect(self, userinfo_request, verify_jws, token_request, get_openid_configuration):
         username = get_random_string(12)
+        userinfo_request.return_value.status_code = 200
+        token_request.return_value.status_code = 200
         userinfo_request.return_value.json.return_value = {
             "username": username,
             "email": f"{username}@example.com",

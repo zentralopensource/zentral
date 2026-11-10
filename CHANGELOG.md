@@ -248,6 +248,11 @@ WHERE u.is_superuser AND NOT u.is_service_account AND NOT u.is_remote;
 A `max_retries` or `retries` setting of an HTTP client gives that number of retries now, and `0` gives none. Before, Zentral made one retry more than the setting. This applies to the HTTP, Splunk, Datadog, Panther and Sumo Logic event stores, the HTTP and Slack probe actions, the Jamf API client, the Apps and Books client, and the DigiCert and IDent certificate issuers. With the default `max_retries` of 3, an event store makes 4 attempts instead of 5. The `max_retries` of the HTTP event store and of the IDent certificate issuers accepts `0` now.
 
 
+#### 🧨 The OpenID Connect configuration requests do not follow a redirect
+
+Zentral does not follow a redirect when it gets the OpenID Connect configuration of a realm or of an API token issuer now, and a response other than 200 is an error. The `jwks_uri` of the configuration must use https, as the OpenID Connect Discovery specification requires, and so must the `token_endpoint` and the `userinfo_endpoint` that the SSO login calls. The token and the userinfo requests do not follow a redirect either. Before, an https issuer URI could redirect the request to a plain HTTP or internal address, the `jwks_uri` could name any URL, a local `file://` path included, and the authorization code, the client secret and the access token could be sent over plain HTTP. Before the upgrade, make sure that the discovery URL of each OpenID Connect realm, and the issuer URI of each API token issuer, answers 200 with no redirect, and that the endpoints of its configuration use https.
+
+
 #### 🧨 SCIM accepts only a service account with `Realms::Action::"provisionRealm"`
 
 The SCIM endpoints decide one new action now, `Realms::Action::"provisionRealm"`, on the realm of the URL. Before, they used the realm user and realm group actions of the console, so the token of each user with these actions could write the realm groups, and their roles, without the checks of the console. Zentral refuses the API token of a user with a 403 error, and logs the refusal. The action is in no action group. Only a superuser makes the API tokens and the token issuers of a service account (see below).

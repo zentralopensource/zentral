@@ -216,6 +216,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("requests.Session.get")
     def test_create_issuer(self, requests_get, post_event):
+        requests_get.return_value.status_code = 200
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self._promote_ui_user_to_superuser()
         self.login(
@@ -271,10 +272,33 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
+    @patch("requests.Session.get")
+    def test_create_issuer_discovery_redirect(self, requests_get):
+        requests_get.return_value.status_code = 302
+        self._promote_ui_user_to_superuser()
+        self.login("accounts.add_oidcapitokenissuer")
+        response = self.client.post(
+            self.build_url("create_oidc_api_token_issuer", self.service_account.pk),
+            self._issuer_form_payload(),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "accounts/oidcapitokenissuer_form.html")
+        self.assertEqual(
+            response.context["form"].errors,
+            {"issuer_uri": ["Could not find valid OpenID configuration"]},
+        )
+        requests_get.assert_called_once_with(
+            "https://accounts.google.com/.well-known/openid-configuration",
+            allow_redirects=False,
+        )
+        self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
+
     # mandatory CEL condition
 
     @patch("requests.Session.get")
     def test_create_issuer_blank_cel_condition(self, requests_get):
+        requests_get.return_value.status_code = 200
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         self._promote_ui_user_to_superuser()
         self.login("accounts.add_oidcapitokenissuer")
@@ -296,6 +320,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     @patch("requests.Session.get")
     def test_update_issuer_blank_cel_condition(self, requests_get):
         """The condition cannot be dropped from an existing issuer."""
+        requests_get.return_value.status_code = 200
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         issuer = self._force_issuer()
         self._promote_ui_user_to_superuser()
@@ -415,6 +440,7 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     @patch("requests.Session.get")
     def test_update_issuer(self, requests_get, post_event):
+        requests_get.return_value.status_code = 200
         requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
         issuer = self._force_issuer()
         prev_value = issuer.serialize_for_event()
