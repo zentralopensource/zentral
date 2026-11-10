@@ -13,7 +13,9 @@ from cryptography.hazmat.primitives import serialization
 from jwt.algorithms import RSAAlgorithm
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+import responses
 
+from base.utils import deployment_info
 from zentral.utils.oidc import get_openid_configuration, verify_jws, verify_jws_with_discovery
 
 
@@ -113,68 +115,62 @@ class OIDCUtilsTestCase(TestCase):
 
     # test get_openid_configuration
 
-    @patch("requests.Session.get")
-    def test_get_openid_configuration_missing_issuer(self, requests_get):
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = {}
-        with self.assertRaisesRegex(
-            ValueError,
-            r"Missing 'id_token_signing_alg_values_supported' in OpenID configuration"
-        ):
-            get_openid_configuration("https://issuer.zentral.com")
+    def test_get_openid_configuration_missing_issuer(self):
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get("https://issuer.zentral.com", json={})
+            with self.assertRaisesRegex(
+                ValueError,
+                r"Missing 'id_token_signing_alg_values_supported' in OpenID configuration"
+            ):
+                get_openid_configuration("https://issuer.zentral.com")
 
-    @patch("requests.Session.get")
-    def test_get_openid_configuration_wrong_attr_type(self, requests_get):
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = {
-            "id_token_signing_alg_values_supported": ["RS256"],
-            "issuer": "https://issuer.zentral.com",
-            "jwks_uri": None,  # Not a string
-        }
-        with self.assertRaisesRegex(
-            ValueError,
-            r"OpenID configuration 'jwks_uri' is not a str"
-        ):
-            get_openid_configuration("https://issuer.zentral.com")
+    def test_get_openid_configuration_wrong_attr_type(self):
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get("https://issuer.zentral.com", json={
+                "id_token_signing_alg_values_supported": ["RS256"],
+                "issuer": "https://issuer.zentral.com",
+                "jwks_uri": None,  # Not a string
+            })
+            with self.assertRaisesRegex(
+                ValueError,
+                r"OpenID configuration 'jwks_uri' is not a str"
+            ):
+                get_openid_configuration("https://issuer.zentral.com")
 
-    @patch("requests.Session.get")
-    def test_get_openid_configuration(self, requests_get):
+    def test_get_openid_configuration(self):
         cfg = self._make_oid_config("https://issuer.zentral.com")
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = cfg
-        self.assertEqual(
-            get_openid_configuration("https://issuer.zentral.com/.well-known/openid-configuration"),
-            cfg
-        )
-        requests_get.assert_called_once_with(
-            "https://issuer.zentral.com/.well-known/openid-configuration",
-            allow_redirects=False,
-        )
+        discovery_uri = "https://issuer.zentral.com/.well-known/openid-configuration"
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get(discovery_uri, json=cfg)
+            self.assertEqual(get_openid_configuration(discovery_uri), cfg)
+            self.assertEqual(len(rsps.calls), 1)
+            self.assertEqual(rsps.calls[0].request.url, discovery_uri)
+            self.assertEqual(rsps.calls[0].request.headers["User-Agent"], deployment_info.user_agent)
+            self.assertEqual(rsps.calls[0].request.req_kwargs["timeout"], 10)
 
-    @patch("requests.Session.get")
-    def test_get_openid_configuration_redirect(self, requests_get):
-        requests_get.return_value.status_code = 302
-        requests_get.return_value.json.return_value = self._make_oid_config("https://issuer.zentral.com")
-        with self.assertRaisesRegex(ValueError, r"OpenID configuration response status 302"):
-            get_openid_configuration("https://issuer.zentral.com")
-        requests_get.return_value.json.assert_not_called()
+    def test_get_openid_configuration_redirect(self):
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            # the target is not registered: following the redirect would raise a ConnectionError
+            rsps.get("https://issuer.zentral.com", status=302,
+                     headers={"Location": "http://169.254.169.254/latest/meta-data/"})
+            with self.assertRaisesRegex(ValueError, r"OpenID configuration response status 302"):
+                get_openid_configuration("https://issuer.zentral.com")
+            self.assertEqual(len(rsps.calls), 1)
 
-    @patch("requests.Session.get")
-    def test_get_openid_configuration_not_a_json_object(self, requests_get):
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = ["issuer"]
-        with self.assertRaisesRegex(ValueError, r"OpenID configuration is not a JSON object"):
-            get_openid_configuration("https://issuer.zentral.com")
+    def test_get_openid_configuration_not_a_json_object(self):
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get("https://issuer.zentral.com", json=["issuer"])
+            with self.assertRaisesRegex(ValueError, r"OpenID configuration is not a JSON object"):
+                get_openid_configuration("https://issuer.zentral.com")
 
-    @patch("requests.Session.get")
-    def test_get_openid_configuration_jwks_uri_not_https(self, requests_get):
+    def test_get_openid_configuration_jwks_uri_not_https(self):
         for jwks_uri in ("file:///etc/passwd", "http://169.254.169.254/latest/meta-data/", "HTTPS://issuer"):
             cfg = self._make_oid_config("https://issuer.zentral.com")
             cfg["jwks_uri"] = jwks_uri
-            requests_get.return_value.status_code = 200
-            requests_get.return_value.json.return_value = cfg
-            with self.assertRaisesRegex(ValueError, r"OpenID configuration 'jwks_uri' does not use https"):
-                get_openid_configuration("https://issuer.zentral.com")
+            with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+                rsps.get("https://issuer.zentral.com", json=cfg)
+                with self.assertRaisesRegex(ValueError, r"OpenID configuration 'jwks_uri' does not use https"):
+                    get_openid_configuration("https://issuer.zentral.com")
 
     # test verify_jws
 
@@ -223,15 +219,15 @@ class OIDCUtilsTestCase(TestCase):
                 )
         build_opener.assert_not_called()
 
-    @patch("requests.Session.get")
-    def test_verify_jws_with_discovery_errors(self, requests_get):
-        for side_effect in (requests.Timeout("Boom!!!"), requests.ConnectionError("Boom!!!"), ValueError("Boom!!!")):
-            requests_get.side_effect = side_effect
-            with self.assertRaisesRegex(ValueError, r"^Could not get the OpenID configuration$"):
-                verify_jws_with_discovery("token", "https://issuer.zentral.com", "my-client",
-                                          exception_class=ValueError)
-            with self.assertRaises(type(side_effect)):
-                verify_jws_with_discovery("token", "https://issuer.zentral.com", "my-client")
+    def test_verify_jws_with_discovery_errors(self):
+        for error in (requests.Timeout("Boom!!!"), requests.ConnectionError("Boom!!!"), ValueError("Boom!!!")):
+            with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+                rsps.get("https://issuer.zentral.com/.well-known/openid-configuration", body=error)
+                with self.assertRaisesRegex(ValueError, r"^Could not get the OpenID configuration$"):
+                    verify_jws_with_discovery("token", "https://issuer.zentral.com", "my-client",
+                                              exception_class=ValueError)
+                with self.assertRaises(type(error)):
+                    verify_jws_with_discovery("token", "https://issuer.zentral.com", "my-client")
 
     def test_verify_jws_none_alg(self):
         issuer = "https://issuer.zentral.com"

@@ -18,6 +18,7 @@ from cryptography.x509.oid import NameOID
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmGroup, RealmUser
+import responses
 
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.app_manifest import read_package_info
@@ -203,6 +204,12 @@ def force_push_certificate(
 
 
 # ACME issuer
+
+
+def register_microsoft_ca_challenge(cert_issuer, challenge="1000000000000002"):
+    # the encoding of the server, not backend.encoding: a wrong backend encoding must fail the tests
+    responses.get(cert_issuer.get_backend(load=True).url,
+                  body=f"challenge password is: <B> {challenge} </B>".encode("utf-16"))
 
 
 def force_acme_issuer(

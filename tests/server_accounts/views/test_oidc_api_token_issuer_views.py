@@ -3,11 +3,15 @@ from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+import responses
 
 from accounts.models import OIDCAPITokenIssuer, User
 from tests.server_accounts.utils import GOOGLE_OPENID_CONFIGURATION
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.core.events.base import AuditEvent
+
+
+GOOGLE_DISCOVERY_URI = "https://accounts.google.com/.well-known/openid-configuration"
 
 
 class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
@@ -214,10 +218,9 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("requests.Session.get")
-    def test_create_issuer(self, requests_get, post_event):
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_create_issuer(self, post_event):
+        responses.get(GOOGLE_DISCOVERY_URI, json=GOOGLE_OPENID_CONFIGURATION)
         self._promote_ui_user_to_superuser()
         self.login(
             "accounts.add_oidcapitokenissuer",
@@ -272,9 +275,11 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"accounts_oidc_api_token_issuer": [str(issuer.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["accounts", "zentral"])
 
-    @patch("requests.Session.get")
-    def test_create_issuer_discovery_redirect(self, requests_get):
-        requests_get.return_value.status_code = 302
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_create_issuer_discovery_redirect(self):
+        # the target is not registered: following the redirect would raise a ConnectionError
+        responses.get(GOOGLE_DISCOVERY_URI, status=302,
+                      headers={"Location": "http://169.254.169.254/latest/meta-data/"})
         self._promote_ui_user_to_superuser()
         self.login("accounts.add_oidcapitokenissuer")
         response = self.client.post(
@@ -288,18 +293,14 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
             response.context["form"].errors,
             {"issuer_uri": ["Could not find valid OpenID configuration"]},
         )
-        requests_get.assert_called_once_with(
-            "https://accounts.google.com/.well-known/openid-configuration",
-            allow_redirects=False,
-        )
+        self.assertEqual(len(responses.calls), 1)
         self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
 
     # mandatory CEL condition
 
-    @patch("requests.Session.get")
-    def test_create_issuer_blank_cel_condition(self, requests_get):
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_create_issuer_blank_cel_condition(self):
+        responses.get(GOOGLE_DISCOVERY_URI, json=GOOGLE_OPENID_CONFIGURATION)
         self._promote_ui_user_to_superuser()
         self.login("accounts.add_oidcapitokenissuer")
         payload = self._issuer_form_payload()
@@ -317,11 +318,10 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
         self.assertFalse(OIDCAPITokenIssuer.objects.filter(user=self.service_account).exists())
 
-    @patch("requests.Session.get")
-    def test_update_issuer_blank_cel_condition(self, requests_get):
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_update_issuer_blank_cel_condition(self):
         """The condition cannot be dropped from an existing issuer."""
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+        responses.get(GOOGLE_DISCOVERY_URI, json=GOOGLE_OPENID_CONFIGURATION)
         issuer = self._force_issuer()
         self._promote_ui_user_to_superuser()
         self.login("accounts.change_oidcapitokenissuer")
@@ -438,10 +438,9 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
-    @patch("requests.Session.get")
-    def test_update_issuer(self, requests_get, post_event):
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_update_issuer(self, post_event):
+        responses.get(GOOGLE_DISCOVERY_URI, json=GOOGLE_OPENID_CONFIGURATION)
         issuer = self._force_issuer()
         prev_value = issuer.serialize_for_event()
         self._promote_ui_user_to_superuser()

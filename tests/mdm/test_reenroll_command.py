@@ -1,9 +1,10 @@
 import plistlib
 import uuid
 from datetime import timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
+import responses
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -19,7 +20,7 @@ from zentral.contrib.mdm.models import (
 )
 from zentral.utils.time import naive_utcnow
 
-from .utils import force_dep_enrollment_session
+from .utils import force_dep_enrollment_session, register_microsoft_ca_challenge
 
 
 class ReenrollCommandTestCase(TestCase):
@@ -169,12 +170,10 @@ class ReenrollCommandTestCase(TestCase):
              "com.apple.mdm"]
         )
 
-    @patch("requests.Session.get")
+    @responses.activate(assert_all_requests_are_fired=True)
     @patch("zentral.contrib.mdm.payloads.sign_payload")
-    def test_build_command_t2_acme_no_attest(self, sign_payload, requests_get):
-        response = Mock()
-        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
-        requests_get.return_value = response
+    def test_build_command_t2_acme_no_attest(self, sign_payload):
+        register_microsoft_ca_challenge(self.dep_enrollment.acme_issuer)
         sign_payload.side_effect = lambda a: a  # bypass payload signature
         # Enrolled device has a T1 secure enclave, there is no advantage using an ACME payload
         enrolled_device = self.dep_enrollment_session.enrolled_device
@@ -203,12 +202,10 @@ class ReenrollCommandTestCase(TestCase):
         self.assertTrue(acme_payload["Attest"] is False)
         self.assertTrue(acme_payload["HardwareBound"] is True)
 
-    @patch("requests.Session.get")
+    @responses.activate(assert_all_requests_are_fired=True)
     @patch("zentral.contrib.mdm.payloads.sign_payload")
-    def test_build_command_silicon_acme_attest(self, sign_payload, requests_get):
-        response = Mock()
-        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
-        requests_get.return_value = response
+    def test_build_command_silicon_acme_attest(self, sign_payload):
+        register_microsoft_ca_challenge(self.dep_enrollment.acme_issuer)
         sign_payload.side_effect = lambda a: a  # bypass payload signature
         # Enrolled device has a T1 secure enclave, there is no advantage using an ACME payload
         enrolled_device = self.dep_enrollment_session.enrolled_device

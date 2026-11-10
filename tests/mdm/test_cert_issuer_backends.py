@@ -1,7 +1,9 @@
+import base64
 import uuid
 from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+import responses
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import Platform
 from zentral.contrib.mdm.cert_issuer_backends import (CertIssuerBackend,
@@ -376,44 +378,44 @@ class MDMCertIssuerBackendsTestCase(TestCase):
 
     # BaseMicrosoftCA - for uncovered lines elsewhere
 
-    @patch("requests.Session.get")
-    def test_base_microsoft_ca_raise_for_status(self, requests_get):
-        response = Mock()
-        response.raise_for_status.side_effect = Exception("Boom!!!")
-        requests_get.return_value = response
+    def test_base_microsoft_ca_raise_for_status(self):
         backend = force_acme_issuer(backend=CertIssuerBackend.MicrosoftCA).get_backend(load=True)
-        with self.assertRaises(CertIssuerError) as cm:
-            backend.update_acme_payload({}, True, True, Mock())
-        self.assertEqual(cm.exception.args[0], "Request error: Boom!!!")
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get(backend.url, status=500)
+            with self.assertRaises(CertIssuerError) as cm:
+                backend.update_acme_payload({}, True, True, Mock())
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Request error: 500 Server Error: Internal Server Error for url: {backend.url}"
+        )
 
-    @patch("requests.Session.get")
-    def test_microsoft_ca_unicode_error(self, requests_get):
-        response = Mock()
-        response.content = b"\x01"
-        requests_get.return_value = response
+    def test_microsoft_ca_unicode_error(self):
         backend = force_acme_issuer(backend=CertIssuerBackend.MicrosoftCA).get_backend(load=True)
-        with self.assertRaises(CertIssuerError) as cm:
-            backend.update_acme_payload({}, True, True, Mock())
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get(backend.url, body=b"\x01")
+            with self.assertRaises(CertIssuerError) as cm:
+                backend.update_acme_payload({}, True, True, Mock())
         self.assertEqual(cm.exception.args[0], "Could not decode response.")
 
-    @patch("requests.Session.get")
-    def test_okta_ca_no_match(self, requests_get):
-        response = Mock()
-        response.content = "no match!".encode("windows-1252")
-        requests_get.return_value = response
+    def test_okta_ca_no_match(self):
         backend = force_acme_issuer(backend=CertIssuerBackend.OktaCA).get_backend(load=True)
-        with self.assertRaises(CertIssuerError) as cm:
-            backend.update_acme_payload({}, True, True, Mock())
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get(backend.url, body="no match!".encode("windows-1252"))
+            with self.assertRaises(CertIssuerError) as cm:
+                backend.update_acme_payload({}, True, True, Mock())
         self.assertEqual(cm.exception.args[0], "Could not find challenge in response.")
 
-    @patch("requests.Session.get")
-    def test_okta_ca_update_scep(self, requests_get):
-        response = Mock()
-        response.content = "challenge password is: <B> abc123 </B>".encode("windows-1252")
-        requests_get.return_value = response
+    def test_okta_ca_update_scep(self):
         backend = force_scep_issuer(backend=CertIssuerBackend.OktaCA).get_backend(load=True)
         scep_payload = {}
-        backend.update_scep_payload(scep_payload, Mock())
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get(backend.url, body="challenge password is: <B> abc123 </B>".encode("windows-1252"))
+            backend.update_scep_payload(scep_payload, Mock())
+            self.assertEqual(len(rsps.calls), 1)
+            self.assertEqual(
+                rsps.calls[0].request.headers["Authorization"],
+                "Basic " + base64.b64encode(f"{backend.username}:{backend.password}".encode()).decode(),
+            )
         self.assertEqual(scep_payload["Challenge"], "abc123")
         self.assertEqual(scep_payload["Keysize"], backend.instance.key_size)
         self.assertEqual(scep_payload["Key Type"], "RSA")
