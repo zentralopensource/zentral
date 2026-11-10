@@ -82,7 +82,7 @@ A view that only a legacy permission protects is not in the scope of these rules
     - Why: the answer for a row then does not change with the request, and `visible_rows()` can write the policies as SQL. Cedar keeps the context for information that is unique to one request.
 11. **A typed action is never reachable through `has_perm()`.** A legacy permission maps only to an action on `System`.
     - `register_action()` refuses a legacy permission on an action that does not take `System`.
-    - The Django permissions of a model with typed actions map to no action (`pbac_excluded_default_permissions`).
+    - The Django permissions of a model with typed actions map to no action (`None` in `pbac_default_permission_groups`).
 12. **Fail closed.** Cedar skips a policy that errors, so a `forbid` that errors allows.
     - Declare the attributes as required in the schema. Validate each policy when it is saved.
     - The SQL filter writes only the expressions that cannot error. A policy with another expression gets one decision for each row.

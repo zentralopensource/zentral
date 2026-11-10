@@ -189,6 +189,28 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
         self.assertNotContains(response, "<h3>Polic")
 
+    def test_view_group_policies_section_action_groups(self):
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal in Role::"{self.group.pk}", action, resource);\n',
+        )
+        for action_group, visible in (
+            ('Action::"GlobalViewerActions"', False),
+            ('Action::"GlobalUserActions"', False),
+            ('Action::"GlobalAdminActions"', True),
+        ):
+            self.set_policy(
+                f'permit (principal in Role::"{self._get_group().pk}", action in {action_group}, resource);'
+            )
+            self.client.force_login(self._get_user())
+            response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+            with self.subTest(action_group=action_group):
+                self.assertEqual(response.status_code, 200)
+                if visible:
+                    self.assertContains(response, p.name)
+                else:
+                    self.assertNotContains(response, p.name)
+
     def test_view_provisioned_group_no_perms_get(self):
         self.login("auth.view_group")
         response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))

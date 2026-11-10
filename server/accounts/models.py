@@ -19,6 +19,7 @@ from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 from django_celery_results.models import TaskResult
 
+from pbac.engine import ActionGroupBasename
 from zentral.utils.base64 import trimmed_urlsafe_b64decode
 from zentral.utils.oidc import get_discovery_uri_from_issuer_uri
 from zentral.utils.token import (
@@ -412,7 +413,13 @@ class Policy(models.Model):
     # add/change/delete operations are not exposed as PBAC actions and cannot
     # be CEDAR-granted. They're enforced via LocalSuperuserRequiredMixin in
     # the views instead.
-    pbac_excluded_default_permissions = ("add", "change", "delete")
+    # The policies map who can do what in the deployment: only the Admin groups read them.
+    pbac_default_permission_groups = {
+        "add": None,
+        "change": None,
+        "delete": None,
+        "view": (ActionGroupBasename.ADMIN,),
+    }
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)

@@ -537,6 +537,29 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         # The row's <th>Polic…</th> shouldn't be in the rendered HTML.
         self.assertNotContains(response, "<th>Polic")
 
+    def test_view_user_policies_section_action_groups(self):
+        from accounts.models import Policy
+        p = Policy.objects.create(
+            name=get_random_string(12),
+            source=f'permit (principal == User::"{self.user.pk}", action, resource);\n',
+        )
+        for action_group, visible in (
+            ('Action::"GlobalViewerActions"', False),
+            ('Action::"GlobalUserActions"', False),
+            ('Action::"GlobalAdminActions"', True),
+        ):
+            self.set_policy(
+                f'permit (principal in Role::"{self._get_group().pk}", action in {action_group}, resource);'
+            )
+            self.client.force_login(self._get_user())
+            response = self.client.get(reverse("accounts:user", args=(self.user.pk,)))
+            with self.subTest(action_group=action_group):
+                self.assertEqual(response.status_code, 200)
+                if visible:
+                    self.assertContains(response, p.name)
+                else:
+                    self.assertNotContains(response, p.name)
+
     # profile
 
     def test_profile_login_redirect(self):

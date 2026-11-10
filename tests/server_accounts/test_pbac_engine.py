@@ -1,11 +1,15 @@
+from types import SimpleNamespace
+
 from django.test import TestCase
 
 from pbac.engine import (
     ActionGroupBasename,
     ActionRegistrationConflict,
+    DefaultPermissionGroupsError,
     Engine,
     EntityTypeConflict,
     engine,
+    get_default_permission_groups,
 )
 from pbac.types import (
     AppliesTo,
@@ -1033,6 +1037,15 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
             self.assertIn(engine.get_action_group(basename, namespace), action.parents)
             self.assertIn(engine.get_action_group(basename), action.parents)
 
+    def test_view_policy_action_belongs_to_admin_groups_only(self):
+        action = engine.legacy_perm_actions["accounts.view_policy"]
+        namespace = engine.get_namespace("Accounts")
+        self.assertEqual(
+            set(action.parents),
+            {engine.get_action_group(ActionGroupBasename.ADMIN, namespace),
+             engine.get_action_group(ActionGroupBasename.ADMIN)},
+        )
+
     def test_mutating_machine_tag_actions_excluded_from_viewer_group(self):
         # The flip side of the fix: create/deleteMachineTag mutate, so a viewer
         # must never reach them. Guards against someone copy-pasting the viewer
@@ -1046,3 +1059,56 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
             action = engine.legacy_perm_actions[legacy_perm]
             for group in viewer_groups:
                 self.assertNotIn(group, action.parents)
+
+
+class PBACDefaultPermissionGroupsTestCase(TestCase):
+    @staticmethod
+    def _model(default_permissions=("add", "change", "delete", "view"), **attrs):
+        return type("Thing", (), {
+            "_meta": SimpleNamespace(label="tests.Thing", default_permissions=default_permissions),
+            **attrs,
+        })
+
+    def test_defaults(self):
+        self.assertEqual(
+            get_default_permission_groups(self._model()),
+            {"add": (ActionGroupBasename.ADMIN,),
+             "change": (ActionGroupBasename.ADMIN,),
+             "delete": (ActionGroupBasename.ADMIN,),
+             "view": (ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER)},
+        )
+
+    def test_overrides(self):
+        model = self._model(pbac_default_permission_groups={"add": None, "view": (ActionGroupBasename.ADMIN,)})
+        groups = get_default_permission_groups(model)
+        self.assertIsNone(groups["add"])
+        self.assertEqual(groups["change"], (ActionGroupBasename.ADMIN,))
+        self.assertEqual(groups["view"], (ActionGroupBasename.ADMIN,))
+
+    def test_operation_without_default_permission(self):
+        model = self._model(default_permissions=("add", "change", "delete"),
+                            pbac_default_permission_groups={"view": (ActionGroupBasename.ADMIN,)})
+        with self.assertRaisesMessage(DefaultPermissionGroupsError, "tests.Thing: no 'view' default permission"):
+            get_default_permission_groups(model)
+
+    def test_unknown_default_permission(self):
+        with self.assertRaisesMessage(DefaultPermissionGroupsError,
+                                      "tests.Thing: unknown default permission 'publish'"):
+            get_default_permission_groups(self._model(default_permissions=("publish",)))
+
+    def test_invalid_groups(self):
+        for group_basenames in ((), ("Admin",), [None]):
+            model = self._model(pbac_default_permission_groups={"view": group_basenames})
+            with self.subTest(group_basenames=group_basenames), \
+                 self.assertRaisesMessage(DefaultPermissionGroupsError,
+                                          "tests.Thing: 'view' needs None or ActionGroupBasename members"):
+                get_default_permission_groups(model)
+
+    def test_every_model_setting_is_valid(self):
+        from django.apps import apps
+        for model in apps.get_models():
+            get_default_permission_groups(model)
+
+    def test_policy_writes_have_no_action(self):
+        for operation in ("add", "change", "delete"):
+            self.assertNotIn(f"accounts.{operation}_policy", engine.legacy_perm_actions)

@@ -61,6 +61,8 @@ Each contrib app's actions are members of `<Namespace>::Action::"AdminActions"`,
 
 The three groups are nested. `ViewerActions` contains the read actions. `UserActions` contains the same read actions, and adds the daily operations, for example a machine tag change or a Santa clean sync. `AdminActions` contains all of them, and adds the configuration changes. A role with `UserActions` can thus do all that a role with `ViewerActions` can do.
 
+`Accounts::Action::"viewPolicy"` opens the policies and the Schema browser. The policies show who can do what in the deployment, so this action is a member of the `AdminActions` groups only, and not of `UserActions` or `ViewerActions`.
+
 A small number of actions read a secret — the MDM admin password, device lock PIN, FileVault PRK and recovery password. They have a `view` prefix, but they are members of `UserActions` and not of `ViewerActions`.
 
 ```
@@ -128,7 +130,7 @@ The policies themselves have no write action: only a superuser writes them.
 
 Four options, in order of usefulness:
 
-1. **The Schema browser.** Open *Policies* in the platform-settings menu and click *Schema*. It lists every action Zentral knows about, grouped by namespace. Each action shows what it authorizes, the entity types it applies to, the types those are members of, and the context attributes a `when` clause can read. This is the canonical reference — it always matches the running engine.
+1. **The Schema browser.** Open *Policies* in the platform-settings menu and click *Schema*. It needs `Accounts::Action::"viewPolicy"`. It lists every action Zentral knows about, grouped by namespace. Each action shows what it authorizes, the entity types it applies to, the types those are members of, and the context attributes a `when` clause can read. This is the canonical reference — it always matches the running engine.
 2. **The app docs.** Every API endpoint in [`docs/apps/`](../apps/_index.md) lists its `PBAC action(s):` directly under the HTTP method.
 3. **The Policy edit form.** Cedar validation rejects unknown action ids with a clear error naming the offending reference, so a save attempt against `Inventory::Action::"crteateMachineTag"` returns *"unrecognized action `Inventory::Action::"crteateMachineTag"`"*.
 4. **The `pbac_dump_schema` management command.** It prints the schema of the running engine as one document, in the Cedar human-readable syntax or in the Cedar JSON syntax. Use it to compare two versions of Zentral. It does not include the help text of the Schema browser.

@@ -673,7 +673,7 @@ class JobScope(models.Model):
     #
     # pbac.py registers the four actions by hand: create on the configuration, view, update and
     # delete on the row. An auto-registered action takes System, so a policy cannot refuse one kind.
-    pbac_excluded_default_permissions = ("add", "change", "delete", "view")
+    pbac_default_permission_groups = {"add": None, "change": None, "delete": None, "view": None}
 
     configuration = models.ForeignKey(Configuration, on_delete=models.CASCADE)
     tags = models.ManyToManyField(Tag, blank=True, related_name="%(app_label)s_%(class)s_tags")

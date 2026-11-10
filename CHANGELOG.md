@@ -207,6 +207,11 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 ### Backward incompatibilities
 
 
+#### 🧨 Only the `AdminActions` groups give `viewPolicy`
+
+`Accounts::Action::"viewPolicy"` is a member of `Accounts::Action::"AdminActions"` and `Action::"GlobalAdminActions"` only now. Before, it was also a member of the `UserActions` and `ViewerActions` groups, like the other view actions. The policies show who can do what in the deployment. A role with `UserActions` or `ViewerActions` does not see the policies, the Schema browser, or the policies on the pages of a role and of a user, anymore. A policy that names `viewPolicy` does not change. To keep this access for a role, add `Accounts::Action::"viewPolicy"` to one of its policies.
+
+
 #### 🧨 A superuser cannot log in with a realm
 
 A realm login that finds a superuser fails now, and the realm session of a user stops when the user becomes a superuser. A superuser logs in with a password. Through a realm, the IdP would control each superuser account. A user that a realm login made has no password, so it cannot be a superuser: the update page of such a user does not show the superuser status, and `create_zentral_user --superuser` refuses such a user and exits with the code 16. The upgrade removes the superuser status from each remote user, without a check.

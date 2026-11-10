@@ -59,6 +59,49 @@ class ActionRegistrationConflict(ValueError):
     pass
 
 
+class DefaultPermissionGroupsError(ValueError):
+    pass
+
+
+DEFAULT_PERMISSION_GROUPS = {
+    "add": (ActionGroupBasename.ADMIN,),
+    "change": (ActionGroupBasename.ADMIN,),
+    "delete": (ActionGroupBasename.ADMIN,),
+    # User is a superset of Viewer.
+    "view": (ActionGroupBasename.ADMIN, ActionGroupBasename.USER, ActionGroupBasename.VIEWER),
+}
+
+
+def get_default_permission_groups(model: ModelBase) -> dict:
+    """Return the action groups of each default operation of a model. None registers no action.
+
+    A model sets pbac_default_permission_groups to restrict some operations, e.g. near-root
+    capabilities like the Policy writes, which must be gated outside the policy system that they
+    would otherwise bound. The setting restricts access, so a mistake in its content stops the
+    startup instead of leaving the defaults in place. A misspelled setting name is not detected:
+    test the groups of the actions of the model.
+    """
+    opts = model._meta
+    overrides = getattr(model, "pbac_default_permission_groups", {})
+    groups = {}
+    for operation in opts.default_permissions:
+        if operation not in DEFAULT_PERMISSION_GROUPS:
+            raise DefaultPermissionGroupsError(f"{opts.label}: unknown default permission {operation!r}")
+        groups[operation] = DEFAULT_PERMISSION_GROUPS[operation]
+    for operation, group_basenames in overrides.items():
+        if operation not in groups:
+            raise DefaultPermissionGroupsError(f"{opts.label}: no {operation!r} default permission")
+        if group_basenames is not None and (
+            not group_basenames
+            or not all(isinstance(basename, ActionGroupBasename) for basename in group_basenames)
+        ):
+            raise DefaultPermissionGroupsError(
+                f"{opts.label}: {operation!r} needs None or ActionGroupBasename members"
+            )
+        groups[operation] = group_basenames
+    return groups
+
+
 class EntityTypeConflict(ValueError):
     pass
 
@@ -265,28 +308,19 @@ class Engine:
         namespace = self._get_app_config_namespace(app_config)
         object_name = model._meta.object_name
         opts = model._meta
-        # Models can opt specific default operations out of PBAC mapping by
-        # listing them in pbac_excluded_default_permissions. Used for near-root
-        # capabilities (e.g. Policy mutations) that must be gated outside the
-        # policy system they would otherwise bound.
-        excluded = getattr(model, "pbac_excluded_default_permissions", ())
-        for operation in opts.default_permissions:
-            if operation in excluded:
+        for operation, group_basenames in get_default_permission_groups(model).items():
+            if group_basenames is None:
                 continue
-            group_basenames = [ActionGroupBasename.ADMIN]
             if operation == "add":
                 action_action = "create"
             elif operation == "change":
                 action_action = "update"
             else:
                 action_action = operation
-                if operation == "view":
-                    # User is a superset of Viewer.
-                    group_basenames.extend([ActionGroupBasename.USER, ActionGroupBasename.VIEWER])
             action_id = f"{action_action}{object_name}"
             codename = get_permission_codename(operation, opts)
             self.register_action(
-                action_id, namespace, group_basenames,
+                action_id, namespace, list(group_basenames),
                 LEGACY_PERM_APPLIES_TO,
                 legacy_perm=f"{app_config.label}.{codename}",
                 help_text=DEPRECATED_HELP_TEXT if deprecated_writes and operation != "view" else "",

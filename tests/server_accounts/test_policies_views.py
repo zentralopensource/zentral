@@ -97,6 +97,39 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("accounts:delete_policy", args=(p_first.pk,)))
         self.assertContains(response, reverse("accounts:update_policy", args=(p_first.pk,)))
 
+    # action groups
+
+    def _set_action_group_policy(self, action_group):
+        self.set_policy(f'permit (principal in Role::"{self.group.pk}", action in {action_group}, resource);')
+        self.client.force_login(self.user)
+
+    def test_policy_pages_permission_denied_with_viewer_and_user_action_groups(self):
+        p = force_policy()
+        for action_group in (
+            'Action::"GlobalViewerActions"',
+            'Action::"GlobalUserActions"',
+            'Accounts::Action::"ViewerActions"',
+            'Accounts::Action::"UserActions"',
+        ):
+            self._set_action_group_policy(action_group)
+            with self.subTest(action_group=action_group):
+                # the policy grants the other view actions of the namespace
+                self.assertEqual(self.client.get(self.build_url("users")).status_code, 200)
+                for url in (self.build_url("policies"),
+                            self.build_url("policies_schema"),
+                            self.build_url("policy", p.pk)):
+                    self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_policy_pages_ok_with_admin_action_groups(self):
+        p = force_policy()
+        for action_group in ('Action::"GlobalAdminActions"', 'Accounts::Action::"AdminActions"'):
+            self._set_action_group_policy(action_group)
+            with self.subTest(action_group=action_group):
+                for url in (self.build_url("policies"),
+                            self.build_url("policies_schema"),
+                            self.build_url("policy", p.pk)):
+                    self.assertEqual(self.client.get(url).status_code, 200)
+
     # schema
 
     def test_policies_schema_redirect(self):
@@ -122,7 +155,7 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
 
     def test_policies_schema_no_excluded_actions(self):
         # createPolicy / updatePolicy / deletePolicy are not registered as PBAC
-        # actions (see Policy.pbac_excluded_default_permissions); they must not
+        # actions (see Policy.pbac_default_permission_groups); they must not
         # appear on the schema page.
         self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policies_schema"))
