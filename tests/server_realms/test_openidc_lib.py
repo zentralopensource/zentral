@@ -31,12 +31,12 @@ class OpenIDCLibTestCase(SimpleTestCase):
     def _get_claims(self):
         return get_claims(
             "https://issuer.example.com/.well-known/openid-configuration",
-            "client-id", "https://zentral/redirect", "the-code", "the-secret", None,
+            "client-id", "https://zentral/redirect", "the-code", "the-secret", None, "the-nonce",
         )
 
     def _setup(self, get_openid_configuration, post, get, verify_jws,
                userinfo_status=200, **cfg):
-        verify_jws.return_value = {"sub": "yolo"}
+        verify_jws.return_value = {"sub": "yolo", "nonce": "the-nonce"}
         get_openid_configuration.return_value = {**OPENID_CONFIGURATION, **cfg}
         post.return_value.status_code = 200
         post.return_value.json.return_value = {"id_token": "id", "access_token": "access"}
@@ -45,7 +45,7 @@ class OpenIDCLibTestCase(SimpleTestCase):
 
     def test_claims_with_userinfo(self, get_openid_configuration, post, get, verify_jws):
         self._setup(get_openid_configuration, post, get, verify_jws)
-        self.assertEqual(self._get_claims(), {"sub": "yolo", "email": "yolo@example.com"})
+        self.assertEqual(self._get_claims(), {"sub": "yolo", "nonce": "the-nonce", "email": "yolo@example.com"})
         self.assertEqual(post.call_args.args, ("https://issuer.example.com/token",))
         self.assertFalse(post.call_args.kwargs["allow_redirects"])
         self.assertEqual(get.call_args.args, ("https://issuer.example.com/userinfo",))
@@ -69,7 +69,7 @@ class OpenIDCLibTestCase(SimpleTestCase):
         self._setup(get_openid_configuration, post, get, verify_jws)
         get.side_effect = requests.Timeout("Boom!!!")
         with self.assertLogs("server.realms.backends.openidc.lib", level="WARNING") as cm:
-            self.assertEqual(self._get_claims(), {"sub": "yolo"})
+            self.assertEqual(self._get_claims(), {"sub": "yolo", "nonce": "the-nonce"})
         self.assertEqual([r.getMessage() for r in cm.records], ["UserInfo request error"])
 
     def test_token_endpoint_not_https(self, get_openid_configuration, post, get, verify_jws):
@@ -90,7 +90,7 @@ class OpenIDCLibTestCase(SimpleTestCase):
     def test_no_userinfo_endpoint(self, get_openid_configuration, post, get, verify_jws):
         self._setup(get_openid_configuration, post, get, verify_jws)
         get_openid_configuration.return_value.pop("userinfo_endpoint")
-        self.assertEqual(self._get_claims(), {"sub": "yolo"})
+        self.assertEqual(self._get_claims(), {"sub": "yolo", "nonce": "the-nonce"})
         get.assert_not_called()
 
     def test_token_endpoint_error_status(self, get_openid_configuration, post, get, verify_jws):
@@ -112,4 +112,4 @@ class OpenIDCLibTestCase(SimpleTestCase):
     def test_userinfo_error_skipped(self, get_openid_configuration, post, get, verify_jws):
         for userinfo_status in (302, 429, 503):
             self._setup(get_openid_configuration, post, get, verify_jws, userinfo_status=userinfo_status)
-            self.assertEqual(self._get_claims(), {"sub": "yolo"})
+            self.assertEqual(self._get_claims(), {"sub": "yolo", "nonce": "the-nonce"})

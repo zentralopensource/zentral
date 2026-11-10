@@ -1,7 +1,9 @@
 import logging
 import base64
 import hashlib
+import hmac
 import random
+import secrets
 from urllib.parse import urlencode
 
 from django.core.exceptions import SuspiciousOperation
@@ -43,7 +45,12 @@ def generate_pkce_codes():
     return code_challenge, code_verifier
 
 
-def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, extra_scopes, state, code_challenge):
+def generate_nonce():
+    return secrets.token_urlsafe(32)
+
+
+def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, extra_scopes, state, code_challenge,
+                                      nonce):
     scopes = ["openid"]
     if extra_scopes:
         scopes.extend(extra_scopes)
@@ -54,6 +61,7 @@ def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, ex
             "response_mode": "query",
             "scope": " ".join(scopes),
             "state": state,
+            "nonce": nonce,
             }
     if code_challenge:
         # PKCE
@@ -64,7 +72,7 @@ def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, ex
     return "{}?{}".format(openid_configuration["authorization_endpoint"], urlencode(data))
 
 
-def get_claims(discovery_url, client_id, redirect_uri, authorization_code, client_secret, code_verifier):
+def get_claims(discovery_url, client_id, redirect_uri, authorization_code, client_secret, code_verifier, nonce):
     # a RealmUserError gives the error page of the authentication session
     try:
         openid_configuration = get_openid_configuration(discovery_url)
@@ -112,6 +120,16 @@ def get_claims(discovery_url, client_id, redirect_uri, authorization_code, clien
             openid_configuration=openid_configuration,
             exception_class=SuspiciousOperation,
         )
+
+        # OpenID Connect Core 1.0 §3.1.3.7, step 11. A session started before the nonce was sent has none.
+        id_token_nonce = claims.get("nonce")
+        if (
+            not nonce
+            or not isinstance(id_token_nonce, str)
+            # compare_digest refuses a str that is not ASCII, and JSON can carry a lone surrogate
+            or not hmac.compare_digest(id_token_nonce.encode("utf-8", "surrogatepass"), nonce.encode("utf-8"))
+        ):
+            raise SuspiciousOperation("Invalid nonce")
 
         # enrich claims with userinfo endpoint if possible
         access_token = response_j.get("access_token")

@@ -89,6 +89,8 @@ class RealmBackendsTestCase(TestCase):
                                    reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)))]
         )
         self.assertEqual(query["state"], [str(ras.pk)])
+        self.assertEqual(query["nonce"], [ras.backend_state["nonce"]])
+        self.assertGreaterEqual(len(ras.backend_state["nonce"]), 43)
         # no client secret: PKCE with S256, RFC 7636 §4.2
         self.assertEqual(query["code_challenge_method"], ["S256"])
         code_verifier = ras.backend_state["code_verifier"]
@@ -113,57 +115,83 @@ class RealmBackendsTestCase(TestCase):
         )
         response = self.client.post(reverse("realms_public:login", args=(realm.pk,)), {"next": "/"})
         ras = RealmAuthenticationSession.objects.get(realm=realm)
-        self.assertIsNone(ras.backend_state)
+        self.assertEqual(list(ras.backend_state.keys()), ["nonce"])
         query = parse_qs(urlparse(response.url).query)
         self.assertEqual(query["state"], [str(ras.pk)])
+        self.assertEqual(query["nonce"], [ras.backend_state["nonce"]])
         self.assertNotIn("code_challenge_method", query)
         self.assertNotIn("code_challenge", query)
 
-    @patch("realms.backends.openidc.lib.get_openid_configuration")
-    @patch("requests.Session.post")
-    @patch("realms.backends.openidc.lib.verify_jws")
-    @patch("requests.Session.get")
-    def test_openidc_redirect(self, userinfo_request, verify_jws, token_request, get_openid_configuration):
+    def _openidc_redirect(self, backend_state, id_token_claims):
         username = get_random_string(12)
-        userinfo_request.return_value.status_code = 200
-        token_request.return_value.status_code = 200
-        userinfo_request.return_value.json.return_value = {
-            "username": username,
-            "email": f"{username}@example.com",
-        }
-        verify_jws.return_value = {
-            "iss": "https://issuer.example.com",
-            "aud": self.openidc_realm.config["client_id"],
-            "sub": username,
-        }
-        token_request.return_value.json.return_value = {
-            "id_token": "bla",
-            "access_token": "hoho",
-            "issuer": "https://issuer.example.com",
-        }
-        get_openid_configuration.return_value = {
-            "issuer": "https://issuer.example.com",
-            "token_endpoint": "https://issuer.example.com/token",
-            "userinfo_endpoint": "https://issuer.example.com/user-info",
-        }
-        ras = RealmAuthenticationSession.objects.create(
-            realm=self.openidc_realm,
-            backend_state=None,
-            callback="realms.utils.login_callback",
-            callback_kwargs={"next_url": "/"},
-        )
-        params = urlencode({"state": str(ras.pk), "code": "the-code"})
-        session = self.client.session
-        session[f"realm_{self.openidc_realm.pk}_session"] = str(ras.pk)
-        session.save()
-        response = self.client.get(
-            reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)) + f"?{params}",
-            follow=True,
+        with patch("realms.backends.openidc.lib.get_openid_configuration") as get_openid_configuration, \
+             patch("requests.Session.post") as token_request, \
+             patch("realms.backends.openidc.lib.verify_jws") as verify_jws, \
+             patch("requests.Session.get") as userinfo_request:
+            userinfo_request.return_value.status_code = 200
+            token_request.return_value.status_code = 200
+            userinfo_request.return_value.json.return_value = {
+                "username": username,
+                "email": f"{username}@example.com",
+            }
+            verify_jws.return_value = {
+                "iss": "https://issuer.example.com",
+                "aud": self.openidc_realm.config["client_id"],
+                "sub": username,
+                **id_token_claims,
+            }
+            token_request.return_value.json.return_value = {
+                "id_token": "bla",
+                "access_token": "hoho",
+                "issuer": "https://issuer.example.com",
+            }
+            get_openid_configuration.return_value = {
+                "issuer": "https://issuer.example.com",
+                "token_endpoint": "https://issuer.example.com/token",
+                "userinfo_endpoint": "https://issuer.example.com/user-info",
+            }
+            ras = RealmAuthenticationSession.objects.create(
+                realm=self.openidc_realm,
+                backend_state=backend_state,
+                callback="realms.utils.login_callback",
+                callback_kwargs={"next_url": "/"},
+            )
+            params = urlencode({"state": str(ras.pk), "code": "the-code"})
+            session = self.client.session
+            session[f"realm_{self.openidc_realm.pk}_session"] = str(ras.pk)
+            session.save()
+            response = self.client.get(
+                reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)) + f"?{params}",
+                follow=True,
+            )
+        ras.refresh_from_db()
+        return response, ras, username, token_request
+
+    def test_openidc_redirect(self):
+        response, ras, username, token_request = self._openidc_redirect(
+            {"nonce": "the-nonce", "code_verifier": "the-verifier"},
+            {"nonce": "the-nonce"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["user"].username, username)
         self.assertEqual(response.context["user"].email, f"{username}@example.com")
         self.assertTemplateUsed(response, "base/index.html")
+        self.assertEqual(token_request.call_args.kwargs["data"]["code_verifier"], "the-verifier")
+
+    def test_openidc_redirect_invalid_nonce(self):
+        for backend_state, id_token_claims in (
+            ({"nonce": "the-nonce"}, {"nonce": "another-nonce"}),
+            ({"nonce": "the-nonce"}, {}),
+            ({"nonce": "the-nonce"}, {"nonce": ["the-nonce"]}),
+            ({"nonce": "the-nonce"}, {"nonce": "the-nonce-é"}),
+            ({"nonce": "the-nonce"}, {"nonce": "the-nonce-\ud800"}),
+            # a session started before the nonce was sent
+            ({"code_verifier": "the-verifier"}, {"nonce": "the-nonce"}),
+            (None, {}),
+        ):
+            response, ras, _, _ = self._openidc_redirect(backend_state, id_token_claims)
+            self.assertEqual(response.status_code, 400)
+            self.assertIsNone(ras.user)
 
     @patch("realms.backends.openidc.lib.get_openid_configuration")
     def test_openidc_redirect_identity_provider_error(self, get_openid_configuration):

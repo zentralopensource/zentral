@@ -4,7 +4,7 @@ from zentral.conf import api_base_url
 from realms.backends.base import BaseBackend
 from realms.exceptions import RealmUserError
 from zentral.utils.json import remove_null_character
-from .lib import build_authorization_code_flow_url, generate_pkce_codes, get_claims
+from .lib import build_authorization_code_flow_url, generate_nonce, generate_pkce_codes, get_claims
 
 
 logger = logging.getLogger("zentral.realms.backends.openidc")
@@ -36,14 +36,15 @@ class OpenIDConnectRealmBackend(BaseBackend):
     def initialize_session(self, request, callback, **callback_kwargs):
         config = self.instance.config
 
+        nonce = generate_nonce()
+        backend_state = {"nonce": nonce}
         if not config.get("client_secret"):
             # PKCE
             code_challenge, code_verifier = generate_pkce_codes()
-            backend_state = {"code_verifier": code_verifier}
+            backend_state["code_verifier"] = code_verifier
         else:
             # client secret
             code_challenge = None
-            backend_state = None
 
         from realms.models import RealmAuthenticationSession
         ras = RealmAuthenticationSession(
@@ -63,10 +64,11 @@ class OpenIDConnectRealmBackend(BaseBackend):
             self.ac_redirect_uri(),
             config["extra_scopes"],
             str(ras.pk),
-            code_challenge
+            code_challenge,
+            nonce,
         )
 
-    def update_or_create_realm_user(self, authorization_code, code_verifier):
+    def update_or_create_realm_user(self, authorization_code, code_verifier, nonce):
         config = self.instance.config
         claims = get_claims(
             config["discovery_url"],
@@ -74,7 +76,8 @@ class OpenIDConnectRealmBackend(BaseBackend):
             self.ac_redirect_uri(),
             authorization_code,
             config.get("client_secret"),
-            code_verifier
+            code_verifier,
+            nonce,
         )
 
         # default realm user attributes for update or create

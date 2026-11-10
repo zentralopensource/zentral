@@ -42,12 +42,13 @@ class AuthorizationCodeFlowRedirectView(View):
             raise SuspiciousOperation("Missing code")
 
         # exchange code for tokens, and build realm user with them
-        code_verifier = None
+        code_verifier = nonce = None
         if ras.backend_state:
             code_verifier = ras.backend_state.get("code_verifier")
+            nonce = ras.backend_state.get("nonce")
 
         try:
-            realm_user = backend_instance.update_or_create_realm_user(code, code_verifier)
+            realm_user = backend_instance.update_or_create_realm_user(code, code_verifier, nonce)
         except RealmUserError as e:
             logger.exception("Could not update or create realm user")
             return ras_finalization_error(request, ras, exception=e)
