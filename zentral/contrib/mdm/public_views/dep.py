@@ -124,7 +124,7 @@ class MDMProfileResponseMixin:
 
 class DEPEnrollView(DEPEnrollMixin, MDMProfileResponseMixin, View):
     def get_payload_data(self):
-        return self.request.read()
+        return self.request.body
 
     def post(self, request, *args, **kwargs):
         self.get_payload()

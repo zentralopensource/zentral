@@ -1,7 +1,7 @@
 import os.path
 import plistlib
 from unittest.mock import Mock, patch
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import RealmAuthenticationSession
@@ -75,6 +75,16 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(profile["PayloadOrganization"], enrollment.display_name)
 
     # ota_enroll
+
+    @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=1024)
+    @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
+    def test_ota_enroll_body_too_large(self, verify_signed_payload, post_event):
+        response = self.client.post(reverse("mdm_public:ota_enroll"),
+                                    data=b"a" * 1025,
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        verify_signed_payload.assert_not_called()
+        post_event.assert_not_called()
 
     def test_ota_enroll_no_realm_phase_2_bad_secret(self, post_event):
         force_ota_enrollment(self.mbu)

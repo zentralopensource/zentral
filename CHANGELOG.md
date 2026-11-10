@@ -557,6 +557,8 @@ Fixed the Jamf mobile devices that Zentral did not update after the first import
 
 Fixed the iPads imported from Jamf, which had the iOS platform. Jamf gives iOS as the OS of an iPad, and Zentral used this name. An iPad with OS version 13.1 or later has the iPadOS platform now. The iPads change platform at their next update from Jamf: add iPadOS to the compliance checks and to the probe filters that select the iPads with the iOS platform.
 
+The MDM DEP and OTA enrollment endpoints refuse a request body over the `DATA_UPLOAD_MAX_MEMORY_SIZE` limit now, with a `400` response. They read the body from the request stream, without the limit, and only the reverse proxy limited its size. They read the body before they verify its signature, so a client without credentials could make a web worker keep a large body in memory.
+
 Fixed the MDM devices list that moved devices between its pages: it sorted on the last seen timestamp, which is null until a device checks in. The sort includes the primary key now.
 
 Fixed nine MDM API list endpoints that ignored the `ordering` query parameter: the enrolled devices one and the eight artifact ones. The queries had no `ORDER BY`, so a client that read the pages could miss rows and get others two times. The seven endpoints of an artifact version order on the artifact version timestamps now. Each endpoint also orders on the primary key.

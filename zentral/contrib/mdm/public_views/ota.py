@@ -72,7 +72,7 @@ class OTAEnrollView(PostEventMixin, View):
     def post(self, request, *args, **kwargs):
         # Verify payload signature, extract signed payload
         try:
-            certificates, payload = verify_signed_payload(request.read())
+            certificates, payload = verify_signed_payload(request.body)
         except ValueError:
             self.abort("posted data is not signed")
 

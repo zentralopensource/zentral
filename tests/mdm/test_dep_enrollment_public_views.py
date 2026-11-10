@@ -4,7 +4,7 @@ import plistlib
 import uuid
 from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
@@ -61,6 +61,16 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 400)
         self.assertAbort(post_event, "secret verification failed: 'unknown secret'")
+
+    @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=1024)
+    def test_dep_enroll_body_too_large(self, vicsp, post_event):
+        enrollment = force_dep_enrollment(self.mbu)
+        response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
+                                    data=b"a" * 1025,
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        vicsp.assert_not_called()
+        post_event.assert_not_called()
 
     def test_dep_enroll_invalid_payload_signature(self, vicsp, post_event):
         vicsp.side_effect = ValueError
