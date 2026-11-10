@@ -57,7 +57,7 @@ def build_authorization_code_flow_url(discovery_url, client_id, redirect_uri, ex
             }
     if code_challenge:
         # PKCE
-        data["code_challenge_method"] = "S256",
+        data["code_challenge_method"] = "S256"
         data["code_challenge"] = code_challenge
 
     openid_configuration = get_openid_configuration(discovery_url)

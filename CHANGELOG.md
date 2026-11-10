@@ -509,6 +509,8 @@ Fixed the enrich worker that restarted again and again on an event with a machin
 
 Zentral does not use the HMAC algorithms that an OpenID Connect issuer advertises anymore. It verifies an ID token with a key from the issuer JWKS, and the HMAC algorithms use the client secret. An ID token signed with one of them gives an invalid token error now, and not a 500 error.
 
+The SSO login of an OpenID Connect realm without a client secret sends `code_challenge_method=S256` now. Since PKCE was added, it sent the value `('S256',)`. RFC 7636 §4.4.1 requires an identity provider to answer `invalid_request` to a method that it does not support.
+
 Fixed the `zentral_audit` events of the Santa enrollments and the Santa enrolled machines, which were not linked to the object they report. A model that declares the parents of an object replaced the link to the object itself, and the events of that object did not reach its page. A model keeps control of its own key when it declares one, because the MDM commands are linked by UUID and not by primary key.
 
 Fixed the version of an Osquery query in the events published when a user changed the query from the web console. The version was a database expression, and not a number.

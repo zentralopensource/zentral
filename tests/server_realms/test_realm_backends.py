@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import uuid
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -87,7 +89,35 @@ class RealmBackendsTestCase(TestCase):
                                    reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)))]
         )
         self.assertEqual(query["state"], [str(ras.pk)])
+        # no client secret: PKCE with S256, RFC 7636 §4.2
+        self.assertEqual(query["code_challenge_method"], ["S256"])
+        code_verifier = ras.backend_state["code_verifier"]
+        self.assertEqual(
+            query["code_challenge"],
+            [base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode("ascii")).digest()).rstrip(b"=").decode()]
+        )
         get_openid_configuration.assert_called_once_with(self.openidc_realm.config["discovery_url"])
+
+    @patch("realms.backends.openidc.lib.get_openid_configuration")
+    def test_openidc_login_client_secret_no_pkce(self, get_openid_configuration):
+        get_openid_configuration.return_value = {"authorization_endpoint": "https://www.example.com/authorization"}
+        realm = Realm.objects.create(
+            name=get_random_string(12),
+            backend="openidc",
+            username_claim="username",
+            config={"discovery_url": "https://issuer.example.com/.well-known/openid-configuration",
+                    "client_id": str(uuid.uuid4()),
+                    "client_secret": get_random_string(12),
+                    "extra_scopes": []},
+            enabled_for_login=True
+        )
+        response = self.client.post(reverse("realms_public:login", args=(realm.pk,)), {"next": "/"})
+        ras = RealmAuthenticationSession.objects.get(realm=realm)
+        self.assertIsNone(ras.backend_state)
+        query = parse_qs(urlparse(response.url).query)
+        self.assertEqual(query["state"], [str(ras.pk)])
+        self.assertNotIn("code_challenge_method", query)
+        self.assertNotIn("code_challenge", query)
 
     @patch("realms.backends.openidc.lib.get_openid_configuration")
     @patch("requests.Session.post")
