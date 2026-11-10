@@ -1517,7 +1517,9 @@ class MDMViewsTestCase(TestCase):
         session.enrolled_device.refresh_from_db()
         self.assertEqual(session.enrolled_device.declarations_token, declarations_token)
         location_cache_get.assert_called_once_with(str(blueprint.default_location.mdm_info_id))
-        client.iter_manage_assets_requests.assert_called_once_with([("0123456789", "STDQ")], [serial_number])
+        client.iter_manage_assets_requests.assert_called_once_with(
+            [("0123456789", "STDQ")], [serial_number], shared_limits=True
+        )
         client.post_raw_associations.assert_called_once_with(manage_assets_request)
         # event marked as OTF assignment
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
@@ -1580,7 +1582,7 @@ class MDMViewsTestCase(TestCase):
             json_response, Target(session.enrolled_device).declaration_items
         )
         client.iter_manage_assets_requests.assert_called_once_with(
-            [("0123456789", "STDQ")], [serial_number]
+            [("0123456789", "STDQ")], [serial_number], shared_limits=True
         )
         client.post_raw_associations.assert_called_once_with(manage_assets_request)
         logger_exception.assert_called_once_with("Could not post device %s associations", serial_number)
@@ -1622,7 +1624,7 @@ class MDMViewsTestCase(TestCase):
             json_response, Target(session.enrolled_device).declaration_items
         )
         client.iter_manage_assets_requests.assert_called_once_with(
-            [("0123456789", "STDQ")], [serial_number]
+            [("0123456789", "STDQ")], [serial_number], shared_limits=True
         )
         client.post_raw_associations.assert_called_once_with(manage_assets_request)
         # event marked as OTF assignment
@@ -3291,7 +3293,8 @@ class MDMViewsTestCase(TestCase):
         client.iter_manage_assets_requests.assert_called_once_with(
             [(av.store_app.location_asset.asset.adam_id,
               av.store_app.location_asset.asset.pricing_param)],
-            [serial_number]
+            [serial_number],
+            shared_limits=True,
         )
         client.post_raw_associations.assert_called_once_with(manage_assets_request)
         # association event set in cache to be recognized as OTF assignment when processing the notifications

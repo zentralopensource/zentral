@@ -66,6 +66,10 @@ class AppsBooksClient:
     retries = 2
     # Apple can change the limits and the URLs without notice, and asks to read them again every 5 minutes
     service_config_max_age_seconds = 300
+    # The documented values, used until a background task reads the limits from Apple
+    default_limits = {"maxAssets": 25, "maxSerialNumbers": 1000}
+    # After this time without a read from Apple, the shared limits expire and the documented values are used
+    shared_limits_max_age_seconds = 86400
 
     def __init__(
         self,
@@ -194,7 +198,24 @@ class AppsBooksClient:
         ):
             self._service_config = self.make_request("service/config")
             self._service_config_ts = time.monotonic()
+            # the cache key needs the MDM info ID, which a client built from a server token alone does not have
+            if self.mdm_info_id:
+                self._share_limits(self._service_config.get("limits"))
         return self._service_config
+
+    def _share_limits(self, limits):
+        if not isinstance(limits, dict) or not all(
+            type(limits.get(key)) is int and limits[key] > 0 for key in self.default_limits
+        ):
+            logger.error("Location %s: bad limits in the service config", self.location_name)
+            return
+        cache.set(self.limits_cache_key,
+                  {key: limits[key] for key in self.default_limits},
+                  self.shared_limits_max_age_seconds)
+
+    @property
+    def limits_cache_key(self):
+        return f"apps-books:limits:{self.mdm_info_id}"
 
     # assets
 
@@ -305,8 +326,12 @@ class AppsBooksClient:
             "serialNumbers": serial_numbers,
         }
 
-    def iter_manage_assets_requests(self, assets, serial_numbers):
-        limits = self.get_service_config()["limits"]
+    def iter_manage_assets_requests(self, assets, serial_numbers, shared_limits=False):
+        if shared_limits:
+            # no request to Apple: it can wait for the Retry-After of a 429 or a 503, with no limit
+            limits = cache.get(self.limits_cache_key) or self.default_limits
+        else:
+            limits = self.get_service_config()["limits"]
         asset_batches = list(batched(assets, limits["maxAssets"]))
         # serial numbers in the outer loop: they can come from a database cursor, which can be read only once
         for serial_number_batch in batched(serial_numbers, limits["maxSerialNumbers"]):
@@ -455,7 +480,9 @@ def ensure_target_asset_assignments(target):
     for mdm_info_id, assets in missing_assets.items():
         try:
             _, client = location_cache.get(mdm_info_id)
-            for manage_assets_request in client.iter_manage_assets_requests(assets, [target.serial_number]):
+            for manage_assets_request in client.iter_manage_assets_requests(
+                assets, [target.serial_number], shared_limits=True
+            ):
                 event_id = client.post_raw_associations(manage_assets_request)
                 # The cache key indicates that the event is for on-the-fly assignments.
                 # The device will be poked when a successful notification is received.
