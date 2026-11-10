@@ -4,8 +4,8 @@
     {
       "name": "zentralopensource/zentral",
       "kind": "terraform-provider",
-      "min_version": "0.1.85",
-      "note": "The provider release that manages this Zentral's API. Set it in required_providers wherever the Zentral configuration is kept. Release 0.1.85 sends the device OS version range of a software update enforcement, which this Zentral requires in each update of an enforcement. An older provider fails each update with a 400."
+      "min_version": "0.1.86",
+      "note": "The provider release that manages this Zentral's API. Set it in required_providers wherever the Zentral configuration is kept. Release 0.1.85 sends the device OS version range of a software update enforcement, which this Zentral requires in each update of an enforcement. An older provider fails each update with a 400. Release 0.1.86 gives the IDent certificate issuers the request timeout default of this Zentral, 15 seconds, and checks the request timeout and the retries within the limits of this Zentral, at most 30 seconds and 3 retries. It also accepts 0 retries for the HTTP event stores. An older provider sends a 30 second request timeout for an IDent issuer that does not set one, and fails at apply time, with a 400, on a value above the limits."
     }
   ]
 }

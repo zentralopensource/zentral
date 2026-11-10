@@ -379,8 +379,8 @@ class MDMSCEPIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                  'description': 'description',
                  'ident_kwargs': {
                      'bearer_token': 'YoloFomo',
-                     'max_retries': 5,
-                     'request_timeout': 123,
+                     'max_retries': 2,
+                     'request_timeout': 25,
                      'url': 'https://example.com/ident/',
                  },
                  'url': 'https://example.com/scep/'}
@@ -399,8 +399,8 @@ class MDMSCEPIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'key_usage': 5,
              'ident_kwargs': {
                  'bearer_token': 'YoloFomo',
-                 'max_retries': 5,
-                 'request_timeout': 123,
+                 'max_retries': 2,
+                 'request_timeout': 25,
                  'url': 'https://example.com/ident/',
              },
              'name': name,
@@ -420,8 +420,8 @@ class MDMSCEPIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                      'backend': 'IDENT',
                      'backend_kwargs': {
                          'bearer_token_hash': '69fd1658dc95ce930f492232866e1c980ac3fb4e4319a8189b141be3d18a6a33',
-                         'max_retries': 5,
-                         'request_timeout': 123,
+                         'max_retries': 2,
+                         'request_timeout': 25,
                          'url': 'https://example.com/ident/',
                      },
                      'created_at': scep_issuer.created_at.isoformat(),

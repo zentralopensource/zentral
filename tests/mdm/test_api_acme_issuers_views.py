@@ -519,7 +519,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'ident_kwargs': {
                  'url': 'https://example.com/ident/',
                  'bearer_token': 'YoloFomo',
-                 'request_timeout': 30,
+                 'request_timeout': 15,
                  'max_retries': 3,
              },
              'hardware_bound': True,
@@ -545,7 +545,7 @@ class MDMACMEIssuerAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                             '69fd1658dc95ce930f492232866e1c980ac3fb4e4319a8189b141be3d18a6a33'
                                         ),
                                         'max_retries': 3,
-                                        'request_timeout': 30,
+                                        'request_timeout': 15,
                                         'url': 'https://example.com/ident/'},
                      'created_at': acme_issuer.created_at.isoformat(),
                      'description': 'description',

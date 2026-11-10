@@ -90,7 +90,9 @@ class Digicert(CertIssuer):
         s.headers.update({'x-api-key': self.api_token,
                           'Content-Type': 'application/json',
                           'User-Agent': deployment_info.user_agent})
-        s.mount(self.api_base_url, CustomHTTPAdapter(self.default_request_timeout, self.default_max_retries))
+        # called during an MDM enrollment or check-in, and urllib3 does not cap a Retry-After wait
+        s.mount(self.api_base_url, CustomHTTPAdapter(self.default_request_timeout, self.default_max_retries,
+                                                     respect_retry_after_header=False))
         return s
 
     def get_seat_id_from_san(self, scep_payload):

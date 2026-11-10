@@ -7,7 +7,7 @@ from zentral.contrib.mdm.models import Platform
 from zentral.contrib.mdm.cert_issuer_backends import (CertIssuerBackend,
                                                       get_cached_cert_issuer_backend, test_acme_payload)
 from zentral.contrib.mdm.cert_issuer_backends.base import CertIssuer, CertIssuerError
-from zentral.contrib.mdm.cert_issuer_backends.ident import IDent
+from zentral.contrib.mdm.cert_issuer_backends.ident import IDent, IDentSerializer
 from .utils import force_acme_issuer, force_dep_enrollment_session, force_scep_issuer
 
 
@@ -101,6 +101,15 @@ class MDMCertIssuerBackendsTestCase(TestCase):
         with self.assertRaises(CertIssuerError) as cm:
             backend.get_seat_id({"SubjectAltName": {"dNSName": "YoLoFoMo"}})
         self.assertEqual(cm.exception.args[0], "Unknown seat ID mapping 'YOLO'")
+
+    def test_web_request_backends_no_retry_after_wait(self):
+        digicert = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
+        ident = force_scep_issuer(backend=CertIssuerBackend.IDent).get_backend(load=True)
+        for backend, url, max_retries in ((digicert, digicert.api_base_url, digicert.default_max_retries),
+                                          (ident, ident.url, ident.max_retries)):
+            retry = backend.session.get_adapter(url).max_retries
+            self.assertFalse(retry.respect_retry_after_header)
+            self.assertEqual(retry.total, max_retries)
 
     def test_digicert_seat_email_enrollment_session(self):
         backend = force_scep_issuer(backend=CertIssuerBackend.Digicert).get_backend(load=True)
@@ -248,6 +257,29 @@ class MDMCertIssuerBackendsTestCase(TestCase):
         )
 
     # IDent
+
+    def test_ident_serializer_defaults(self):
+        s = IDentSerializer(data={"url": "https://www.example.com", "bearer_token": "yolo"})
+        self.assertTrue(s.is_valid(), s.errors)
+        self.assertEqual(s.validated_data["request_timeout"], 15)
+        self.assertEqual(s.validated_data["max_retries"], 3)
+
+    def test_ident_serializer_ranges(self):
+        for attr, value, error in (
+            ("max_retries", -1, "Ensure this value is greater than or equal to 0."),
+            ("max_retries", 0, None),
+            ("max_retries", 3, None),
+            ("max_retries", 4, "Ensure this value is less than or equal to 3."),
+            ("request_timeout", 0, "Ensure this value is greater than or equal to 1."),
+            ("request_timeout", 30, None),
+            ("request_timeout", 31, "Ensure this value is less than or equal to 30."),
+        ):
+            s = IDentSerializer(data={"url": "https://www.example.com", "bearer_token": "yolo", attr: value})
+            if error:
+                self.assertFalse(s.is_valid())
+                self.assertEqual(s.errors, {attr: [error]})
+            else:
+                self.assertTrue(s.is_valid(), s.errors)
 
     def test_ident_get_csr_config(self):
         self.assertEqual(

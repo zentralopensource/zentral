@@ -20,8 +20,10 @@ class IDent(CertIssuer):
     encrypted_kwargs_paths = (
         ["bearer_token"],
     )
-    default_request_timeout = 30
+    default_request_timeout = 15
+    max_request_timeout = 30
     default_max_retries = 3
+    max_max_retries = 3
 
     @cached_property
     def session(self):
@@ -29,7 +31,8 @@ class IDent(CertIssuer):
         s.headers.update({'Authorization': f'Bearer {self.bearer_token}',
                           'Content-Type': 'application/json',
                           'User-Agent': deployment_info.user_agent})
-        s.mount(self.url, CustomHTTPAdapter(self.request_timeout, self.max_retries))
+        # called during an MDM enrollment or check-in, and urllib3 does not cap a Retry-After wait
+        s.mount(self.url, CustomHTTPAdapter(self.request_timeout, self.max_retries, respect_retry_after_header=False))
         return s
 
     @staticmethod
@@ -102,9 +105,11 @@ class IDentSerializer(serializers.Serializer):
     bearer_token = serializers.CharField()
     request_timeout = serializers.IntegerField(
         min_value=1,
+        max_value=IDent.max_request_timeout,
         default=IDent.default_request_timeout,
     )
     max_retries = serializers.IntegerField(
         min_value=0,
+        max_value=IDent.max_max_retries,
         default=IDent.default_max_retries,
     )
