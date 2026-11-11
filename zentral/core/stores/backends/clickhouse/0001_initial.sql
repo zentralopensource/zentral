@@ -37,7 +37,7 @@ AS SELECT
     date_trunc('day', created_at) AS date,
     tags AS tag,
     count(*) AS events,
-    uniqExactState(serial_number) AS machines
+    uniqExactIfState(serial_number, serial_number != '') AS machines
 FROM `{database}`.`{table_name}`
 ARRAY JOIN tags
 GROUP BY

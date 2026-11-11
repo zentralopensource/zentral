@@ -309,3 +309,12 @@ class BaseTestStore(object):
         _, events, machines = aggs[-1]
         self.assertEqual(events, 2)
         self.assertEqual(machines, 1)
+
+    def test_get_app_hist_data_events_without_machine(self):
+        tag = get_random_string(12).lower()
+        for serial_number in (None, None, get_random_string(12)):
+            self.store.store(TestEvent1(EventMetadata(machine_serial_number=serial_number, tags=[tag]), {}))
+        aggs = self.store.get_app_hist_data("day", 15, tag)
+        _, events, machines = aggs[-1]
+        self.assertEqual(events, 3)
+        self.assertEqual(machines, 1)
