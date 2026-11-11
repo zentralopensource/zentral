@@ -2,6 +2,7 @@ import plistlib
 from unittest.mock import Mock, patch
 import uuid
 from django.test import TestCase
+import responses
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.conf import settings
@@ -9,7 +10,8 @@ from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.models import EnrolledDevice, OTAEnrollment, OTAEnrollmentSession, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
-from .utils import complete_enrollment_session, force_ota_enrollment, force_realm, force_realm_user
+from .utils import (complete_enrollment_session, force_ota_enrollment, force_realm, force_realm_user,
+                    register_microsoft_ca_challenge)
 
 
 class TestOTAEnrollment(TestCase):
@@ -202,7 +204,7 @@ class TestOTAEnrollment(TestCase):
         session.refresh_from_db()
         self.assertEqual(session.status, OTAEnrollmentSession.PHASE_2)
 
-    @patch("requests.Session.get")
+    @responses.activate(assert_all_requests_are_fired=True)
     @patch("zentral.contrib.mdm.public_views.ota.verify_zentral_scep_ca_issuer")
     @patch("zentral.contrib.mdm.public_views.ota.verify_apple_iphone_device_ca_issuer")
     @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
@@ -211,9 +213,9 @@ class TestOTAEnrollment(TestCase):
         mocked_verify_signed_payload,
         mocked_verify_apple_iphone_device_ca_issuer,
         mocked_verify_zentral_scep_ca_issuer,
-        requests_get,
     ):
         enrollment = force_ota_enrollment(self.mbu)
+        register_microsoft_ca_challenge(enrollment.acme_issuer)
         serial_number = get_random_string(12)
         udid = str(uuid.uuid4()).upper()
         session = OTAEnrollmentSession.objects.create_from_machine_info(enrollment, serial_number, udid)
@@ -240,9 +242,6 @@ class TestOTAEnrollment(TestCase):
         mocked_verify_signed_payload.return_value = (certificates, plistlib.dumps(payload))
         mocked_verify_apple_iphone_device_ca_issuer.return_value = False
         mocked_verify_zentral_scep_ca_issuer.return_value = True
-        challenge_resp = Mock()
-        challenge_resp.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
-        requests_get.return_value = challenge_resp
         response = self.client.post(reverse("mdm_public:ota_enroll"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")
