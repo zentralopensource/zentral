@@ -15,9 +15,15 @@ class FileDownloadContentNegotiationTestCase(SimpleTestCase):
         headers = {"Accept": accept} if accept else {}
         return Request(self.factory.get(path, headers=headers))
 
+    def build_post_request(self, content_type):
+        return Request(self.factory.post("/", data="yolo", content_type=content_type))
+
     def test_select_parser(self):
         parser = JSONParser()
-        self.assertIs(self.negotiation.select_parser(self.build_request(), [parser]), parser)
+        self.assertIs(self.negotiation.select_parser(self.build_post_request("application/json"), [parser]), parser)
+
+    def test_select_parser_other_content_type(self):
+        self.assertIsNone(self.negotiation.select_parser(self.build_post_request("text/plain"), [JSONParser()]))
 
     def test_select_renderer_no_accept(self):
         renderer = JSONRenderer()

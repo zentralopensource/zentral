@@ -5,9 +5,8 @@ from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
-from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
-from zentral.utils.drf import (DjangoPermissionRequired, FileDownloadContentNegotiation, ListCreateAPIViewWithAudit,
+from zentral.utils.drf import (DjangoPermissionRequired, FileDownloadAPIView, ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
 from ..models import Enrollment
 from ..serializers import EnrollmentSerializer
@@ -36,14 +35,13 @@ class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
         return super().perform_destroy(instance)
 
 
-class EnrollmentConfiguration(APIView):
+class EnrollmentConfiguration(FileDownloadAPIView):
     """
     base enrollment configuration class. To be subclassed.
     """
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "turbo.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
-    content_negotiation_class = FileDownloadContentNegotiation
 
     def get_content(self, enrollment):
         raise NotImplementedError

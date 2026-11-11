@@ -1943,6 +1943,13 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)), include_token=False)
         self.assertEqual(response.status_code, 401)
 
+    def test_get_enrollment_plist_accept_content_type_unauthorized(self):
+        enrollment, _ = force_enrollment(mbu=self.mbu)
+        response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)),
+                            include_token=False, accept="application/x-plist")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response["Content-Type"], "application/json")
+
     def test_get_enrollment_plist_permission_denied(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))

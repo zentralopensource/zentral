@@ -1,9 +1,8 @@
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
-from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired, FileDownloadContentNegotiation,
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired, FileDownloadAPIView,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .models import Configuration, Enrollment, ScriptCheck
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
@@ -44,11 +43,10 @@ class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # enrollment packages
 
 
-class EnrollmentPackage(APIView):
+class EnrollmentPackage(FileDownloadAPIView):
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "munki.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
-    content_negotiation_class = FileDownloadContentNegotiation
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])

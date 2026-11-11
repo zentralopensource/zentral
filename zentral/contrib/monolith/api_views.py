@@ -18,7 +18,7 @@ from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (
     DefaultDjangoModelPermissions,
     DjangoPermissionRequired,
-    FileDownloadContentNegotiation,
+    FileDownloadAPIView,
     ListCreateAPIViewWithAudit,
     MaxLimitOffsetPagination,
     RetrieveUpdateDestroyAPIViewWithAudit,
@@ -204,14 +204,13 @@ class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
         return response
 
 
-class EnrollmentConfiguration(APIView):
+class EnrollmentConfiguration(FileDownloadAPIView):
     """
     base enrollment configuration class. To be subclassed.
     """
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "monolith.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
-    content_negotiation_class = FileDownloadContentNegotiation
 
     def get_content(self, enrollment):
         raise NotImplementedError

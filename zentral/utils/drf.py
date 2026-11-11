@@ -5,9 +5,10 @@ from django.db import transaction
 from django_filters import rest_framework as filters
 from pbac.engine import engine
 from rest_framework import generics
-from rest_framework.negotiation import BaseContentNegotiation
+from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, DjangoModelPermissions
+from rest_framework.views import APIView
 from zentral.core.events.base import AuditEvent
 
 
@@ -17,15 +18,19 @@ logger = logging.getLogger("zentral.utils.drf")
 # content negotiation
 
 
-class FileDownloadContentNegotiation(BaseContentNegotiation):
+class FileDownloadContentNegotiation(DefaultContentNegotiation):
     # The file goes out in a plain Django response, with its own content type. The Accept header is about the file,
     # not about the answers that go through a renderer, errors included. Negotiating it against the renderers gave
     # a 406, before authentication, to a client that accepted only the type of the file.
-    def select_parser(self, request, parsers):
-        return parsers[0]
-
     def select_renderer(self, request, renderers, format_suffix=None):
         return (renderers[0], renderers[0].media_type)
+
+
+# views
+
+
+class FileDownloadAPIView(APIView):
+    content_negotiation_class = FileDownloadContentNegotiation
 
 
 # pagination

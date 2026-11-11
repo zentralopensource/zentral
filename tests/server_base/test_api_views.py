@@ -223,6 +223,12 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                             include_token=False)
         self.assertEqual(response.status_code, 401)
 
+    def test_result_file_download_accept_content_type_unauthorized(self):
+        response = self.get(reverse("base_api:task_result_file_download", args=(str(uuid.uuid4()),)),
+                            include_token=False, accept="text/plain")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.headers["Content-Type"], "application/json")
+
     def test_result_file_download_404(self):
         response = self.get(reverse("base_api:task_result_file_download", args=(str(uuid.uuid4()),)))
         self.assertEqual(response.status_code, 404)
@@ -310,6 +316,14 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                             include_token=False)
         self.assertRedirects(response, f"/{filepath}", fetch_redirect_response=False)
 
+    @patch("base.api_views.file_storage_has_signed_urls")
+    def test_result_file_download_redirect_accept_content_type(self, file_storage_has_signed_urls):
+        file_storage_has_signed_urls.return_value = True
+        tr, result, filepath = force_task_result(user=self.service_account)
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)),
+                            accept=result["headers"]["Content-Type"])
+        self.assertRedirects(response, f"/{filepath}", fetch_redirect_response=False)
+
     # task result manifest download
 
     def test_result_download_manifest(self):
@@ -386,12 +400,31 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.headers["Content-Disposition"], 'attachment; filename="machine-00001.parquet"')
         self.assertEqual(b"".join(response.streaming_content), b"yolo")
 
+    def test_result_download_file_accept_content_type(self):
+        tr, _, location = self.force_manifest_task_result(user=self.service_account)
+        default_storage.save(f"{location}machine/machine-00001.parquet", ContentFile(b"yolo"))
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,))
+                            + "?file=machine%2Fmachine-00001.parquet",
+                            accept="application/vnd.apache.parquet")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "application/octet-stream")
+        self.assertEqual(b"".join(response.streaming_content), b"yolo")
+
     @patch("base.api_views.file_storage_has_signed_urls")
     def test_result_download_file_redirect(self, file_storage_has_signed_urls):
         file_storage_has_signed_urls.return_value = True
         tr, _, location = self.force_manifest_task_result(user=self.service_account)
         response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,))
                             + "?file=machine/machine-00001.parquet")
+        self.assertRedirects(response, f"/{location}machine/machine-00001.parquet", fetch_redirect_response=False)
+
+    @patch("base.api_views.file_storage_has_signed_urls")
+    def test_result_download_file_redirect_accept_content_type(self, file_storage_has_signed_urls):
+        file_storage_has_signed_urls.return_value = True
+        tr, _, location = self.force_manifest_task_result(user=self.service_account)
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,))
+                            + "?file=machine/machine-00001.parquet",
+                            accept="application/vnd.apache.parquet")
         self.assertRedirects(response, f"/{location}machine/machine-00001.parquet", fetch_redirect_response=False)
 
     def test_result_download_file_unknown_key_404(self):

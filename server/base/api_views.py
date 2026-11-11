@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from accounts.api_authentication import APITokenAuthentication
 from accounts.models import task_results_for_user
-from zentral.utils.drf import FileDownloadContentNegotiation
+from zentral.utils.drf import FileDownloadAPIView
 from zentral.utils.storage import file_storage_has_signed_urls, file_storage_signed_url_expiration
 from zentral.utils.time import naive_utcnow
 
@@ -67,9 +67,7 @@ class TaskResultView(BaseTaskResultView):
         return Response(response)
 
 
-class TaskResultFileDownloadView(BaseTaskResultView):
-    content_negotiation_class = FileDownloadContentNegotiation
-
+class TaskResultFileDownloadView(FileDownloadAPIView, BaseTaskResultView):
     @cached_property
     def _redirect_to_files(self):
         return file_storage_has_signed_urls()
