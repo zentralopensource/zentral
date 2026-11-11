@@ -883,12 +883,12 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     # ensure_target_asset_assignments
 
     @patch("zentral.contrib.mdm.apps_books.AppsBooksClient.make_request")
-    def test_ensure_target_asset_assignments_max_assets(self, make_request):
+    def test_ensure_target_asset_assignments_shared_limits(self, make_request):
         location = force_location()
+        cache.set(f"apps-books:limits:{location.mdm_info_id}", {"maxAssets": 2, "maxSerialNumbers": 1000})
         event_id1 = str(uuid.uuid4())
         event_id2 = str(uuid.uuid4())
         make_request.side_effect = [
-            {"limits": {"maxAssets": 2, "maxSerialNumbers": 1000}},
             {"eventId": event_id1},
             {"eventId": event_id2},
         ]
@@ -900,8 +900,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         ensure_target_asset_assignments(target)
         self.assertEqual(
             make_request.call_args_list,
-            [call("service/config"),
-             call("assets/associate", json={"assets": [{"adamId": "un", "pricingParam": "STDQ"},
+            [call("assets/associate", json={"assets": [{"adamId": "un", "pricingParam": "STDQ"},
                                                        {"adamId": "deux", "pricingParam": "STDQ"}],
                                             "serialNumbers": [target.serial_number]}),
              call("assets/associate", json={"assets": [{"adamId": "trois", "pricingParam": "STDQ"}],
@@ -911,11 +910,37 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id2)), "1")
 
     @patch("zentral.contrib.mdm.apps_books.AppsBooksClient.make_request")
+    def test_ensure_target_asset_assignments_default_limits(self, make_request):
+        location = force_location()
+        event_id1 = str(uuid.uuid4())
+        event_id2 = str(uuid.uuid4())
+        make_request.side_effect = [
+            {"eventId": event_id1},
+            {"eventId": event_id2},
+        ]
+        adam_ids = [str(i) for i in range(26)]
+        target = Mock(
+            serial_number=get_random_string(10),
+            missing_asset_assignments=[(str(location.mdm_info_id), adam_id, "STDQ") for adam_id in adam_ids],
+        )
+        ensure_target_asset_assignments(target)
+        self.assertEqual(
+            make_request.call_args_list,
+            [call("assets/associate", json={"assets": [{"adamId": adam_id, "pricingParam": "STDQ"}
+                                                       for adam_id in adam_ids[:25]],
+                                            "serialNumbers": [target.serial_number]}),
+             call("assets/associate", json={"assets": [{"adamId": "25", "pricingParam": "STDQ"}],
+                                            "serialNumbers": [target.serial_number]})]
+        )
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id1)), "1")
+        self.assertEqual(cache.get(get_otf_association_cache_key(event_id2)), "1")
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient.make_request")
     def test_ensure_target_asset_assignments_second_request_error(self, make_request):
         location = force_location()
+        cache.set(f"apps-books:limits:{location.mdm_info_id}", {"maxAssets": 1, "maxSerialNumbers": 1000})
         event_id = str(uuid.uuid4())
         make_request.side_effect = [
-            {"limits": {"maxAssets": 1, "maxSerialNumbers": 1000}},
             {"eventId": event_id},
             AppsBooksAPIError("Error 9646"),
         ]
@@ -926,7 +951,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         )
         with self.assertLogs("zentral.contrib.mdm.apps_books", level="ERROR") as cm:
             ensure_target_asset_assignments(target)
-        self.assertEqual(len(make_request.call_args_list), 3)
+        self.assertEqual(len(make_request.call_args_list), 2)
         # the device is still notified when the association of the first request is done
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
         self.assertEqual(len(cm.output), 1)
@@ -948,15 +973,13 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         )
         with patch.object(client, "session") as session:
             session.headers = {}
-            session.get.return_value = Mock(
-                status_code=200, **{"json.return_value": {"limits": {"maxAssets": 25, "maxSerialNumbers": 1000}}}
-            )
             session.post.side_effect = [
                 Mock(status_code=401, **{"json.return_value": {"errorNumber": 9625}}),
                 Mock(status_code=200, **{"json.return_value": {"eventId": event_id}}),
             ]
             ensure_target_asset_assignments(target)
         self.assertEqual(session.headers["Authorization"], f"Bearer {new_server_token}")
+        session.get.assert_not_called()
         self.assertEqual(len(session.post.call_args_list), 2)
         self.assertEqual(cache.get(get_otf_association_cache_key(event_id)), "1")
 
