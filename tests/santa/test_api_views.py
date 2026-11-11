@@ -2905,6 +2905,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                          f'attachment; filename="zentral_santa_configuration.enrollment_{enrollment.pk}.plist"')
         self.assertEqual(int(response['Content-Length']), len(response.content))
 
+    def test_get_enrollment_plist_accept_content_type(self):
+        enrollment, _ = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollment_plist', args=(enrollment.pk,)),
+                            accept="application/x-plist")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/x-plist')
+
     def test_get_enrollment_configuration_profile_unauthorized(self):
         enrollment, _ = self.force_enrollment()
         self.set_permissions("santa.view_enrollment")
@@ -2949,6 +2957,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
         self.assertEqual(response['Content-Disposition'], f'attachment; filename="{identifier}.mobileconfig"')
         self.assertEqual(int(response['Content-Length']), len(response.content))
+
+    def test_get_enrollment_configuration_profile_accept_content_type(self):
+        enrollment, _ = self.force_enrollment()
+        self.set_permissions("santa.view_enrollment")
+        response = self.get(reverse('santa_api:enrollment_configuration_profile', args=(enrollment.pk,)),
+                            accept="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/octet-stream')
 
     # create enrollment
 

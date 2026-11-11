@@ -1427,6 +1427,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response['Last-Modified'], http_date(enrollment.updated_at.timestamp()))
         self.assertEqual(response['ETag'], f'W/"osquery.enrollment-{enrollment.pk}-1"')
 
+    def test_get_enrollment_package_accept_content_type(self):
+        enrollment, _ = self.force_enrollment()
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)),
+                            accept="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "application/octet-stream")
+
     def test_get_enrollment_package_user_not_modified_etag_header(self):
         enrollment, _ = self.force_enrollment()
         etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
@@ -1524,6 +1532,30 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response['Content-Type'], "text/plain")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_setup.ps1"')
 
+    def test_get_enrollment_powershell_script_accept_content_type(self):
+        enrollment, _ = self.force_enrollment()
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse("osquery_api:enrollment_powershell_script", args=(enrollment.pk,)),
+                            accept="text/plain")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "text/plain")
+
+    def test_get_enrollment_powershell_script_accept_other_content_type(self):
+        enrollment, _ = self.force_enrollment()
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse("osquery_api:enrollment_powershell_script", args=(enrollment.pk,)),
+                            accept="text/csv")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "text/plain")
+
+    def test_get_enrollment_powershell_script_accept_content_type_unauthorized(self):
+        enrollment, _ = self.force_enrollment()
+        response = self.get(reverse("osquery_api:enrollment_powershell_script", args=(enrollment.pk,)),
+                            include_token=False, accept="text/plain")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response['Content-Type'], "application/json")
+        self.assertEqual(response.json(), {"detail": "Authentication credentials were not provided."})
+
     # get enrollment script
 
     def test_get_enrollment_script_unauthorized(self):
@@ -1563,6 +1595,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "text/x-shellscript")
         self.assertEqual(response['Content-Disposition'], 'attachment; filename="zentral_osquery_setup.sh"')
+
+    def test_get_enrollment_script_accept_content_type(self):
+        enrollment, _ = self.force_enrollment()
+        self.set_permissions("osquery.view_enrollment")
+        response = self.get(reverse("osquery_api:enrollment_script", args=(enrollment.pk,)),
+                            accept="text/x-shellscript")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], "text/x-shellscript")
 
     # create enrollment
 

@@ -19,7 +19,7 @@ from pbac.engine import engine
 from zentral.contrib.inventory.models import File, MetaMachine, Tag
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.core.events.base import AuditEvent
-from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired,
+from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired, FileDownloadContentNegotiation,
                                ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
                                PBACPermission, PBACRetrieveUpdateDestroyAPIViewWithAudit,
                                RetrieveUpdateDestroyAPIViewWithAudit)
@@ -94,6 +94,7 @@ class EnrollmentConfiguration(APIView):
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "santa.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
+    content_negotiation_class = FileDownloadContentNegotiation
 
     def get_content(self, enrollment):
         raise NotImplementedError

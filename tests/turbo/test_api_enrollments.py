@@ -76,6 +76,31 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
         self.assertTrue(data["plist_download_url"].endswith(
             reverse("turbo_api:enrollment_plist", args=(enrollment.pk,))))
 
+    def test_get_enrollment_plist_accept_content_type(self):
+        enrollment = force_enrollment(meta_business_unit=self.mbu)
+        self.set_permissions("turbo.view_enrollment")
+        response = self.get(reverse("turbo_api:enrollment_plist", args=(enrollment.pk,)),
+                            accept="application/x-plist")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/x-plist")
+        self.assertEqual(response["Content-Disposition"],
+                         f'attachment; filename="zentral_turbo_configuration.enrollment_{enrollment.pk}.plist"')
+
+    def test_get_enrollment_configuration_profile_accept_content_type(self):
+        enrollment = force_enrollment(meta_business_unit=self.mbu)
+        self.set_permissions("turbo.view_enrollment")
+        response = self.get(reverse("turbo_api:enrollment_configuration_profile", args=(enrollment.pk,)),
+                            accept="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/octet-stream")
+
+    def test_get_enrollment_configuration_profile_accept_content_type_unauthorized(self):
+        enrollment = force_enrollment(meta_business_unit=self.mbu)
+        response = self.get(reverse("turbo_api:enrollment_configuration_profile", args=(enrollment.pk,)),
+                            include_token=False, accept="application/octet-stream")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response["Content-Type"], "application/json")
+
     def test_list_enrollments_annotates_machine_count(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
         make_enrolled_machine(enrollment)

@@ -18,6 +18,7 @@ class RequestCase(ABC):
         method="GET",
         content_type="application/json",
         ip=None,
+        accept=None,
     ):
         kwargs = {}
         if data is not None:
@@ -26,6 +27,8 @@ class RequestCase(ABC):
             kwargs["HTTP_AUTHORIZATION"] = f"Token {self._get_api_key()}"
         if ip:
             kwargs["HTTP_X_REAL_IP"] = ip
+        if accept:
+            kwargs["HTTP_ACCEPT"] = accept
         if method == "POST":
             kwargs["content_type"] = content_type
             return self.client.post(url, **kwargs)
@@ -35,8 +38,8 @@ class RequestCase(ABC):
         else:
             return self.client.get(url, **kwargs)
 
-    def get(self, url, data=None, include_token=True):
-        return self.make_request(url, data, include_token, method="GET")
+    def get(self, url, data=None, include_token=True, accept=None):
+        return self.make_request(url, data, include_token, method="GET", accept=accept)
 
     def post(self, url, data=None, include_token=True, content_type="application/json", ip=None):
         return self.make_request(url, data, include_token, method="POST", content_type=content_type, ip=ip)

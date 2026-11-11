@@ -7,7 +7,7 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
-from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
+from zentral.utils.drf import (DjangoPermissionRequired, FileDownloadContentNegotiation, ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
 from ..models import Enrollment
 from ..serializers import EnrollmentSerializer
@@ -43,6 +43,7 @@ class EnrollmentConfiguration(APIView):
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "turbo.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
+    content_negotiation_class = FileDownloadContentNegotiation
 
     def get_content(self, enrollment):
         raise NotImplementedError

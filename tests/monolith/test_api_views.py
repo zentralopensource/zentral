@@ -1988,6 +1988,14 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                          f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.plist"')
         self.assertEqual(int(response['Content-Length']), len(response.content))
 
+    def test_get_enrollment_plist_accept_content_type(self):
+        enrollment, _ = force_enrollment(mbu=self.mbu)
+        self.set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)),
+                            accept="application/x-plist")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/x-plist')
+
     # enrollment configuration profile
 
     def test_get_enrollment_configuration_profile_unauthorized(self):
@@ -2043,6 +2051,14 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
             f'attachment; filename="zentral_monolith_configuration.enrollment_{enrollment.pk}.mobileconfig"'
         )
         self.assertEqual(int(response['Content-Length']), len(response.content))
+
+    def test_get_enrollment_configuration_profile_accept_content_type(self):
+        enrollment, _ = force_enrollment(mbu=self.mbu)
+        self.set_permissions("monolith.view_enrollment")
+        response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)),
+                            accept="application/octet-stream")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/octet-stream')
 
     # list manifest catalogs
 

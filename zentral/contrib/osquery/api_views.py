@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
 from zentral.core.events.base import AuditEvent
-from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
+from zentral.utils.drf import (DjangoPermissionRequired, FileDownloadContentNegotiation, ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
 from .events import post_osquery_pack_update_events
 from .models import Configuration, ConfigurationPack, Enrollment, Pack, Query, AutomaticTableConstruction, FileCategory
@@ -103,6 +103,7 @@ class EnrollmentArtifact(APIView):
     authentication_classes = [APITokenAuthentication, SessionAuthentication]
     permission_required = "osquery.view_enrollment"
     permission_classes = [DjangoPermissionRequired]
+    content_negotiation_class = FileDownloadContentNegotiation
     builder_class = None
 
     def get(self, request, *args, **kwargs):

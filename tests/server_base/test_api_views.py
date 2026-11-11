@@ -258,6 +258,16 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.headers["Content-Disposition"], result["headers"]["Content-Disposition"])
         self.assertEqual(b"".join(response.streaming_content), b"yolo")
 
+    def test_result_file_download_direct_accept_content_type(self):
+        tr, result, filepath = force_task_result(user=self.service_account)
+        with default_storage.open(filepath, "wb") as f:
+            f.write(b"yolo")
+        content_type = result["headers"]["Content-Type"]
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)), accept=content_type)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], content_type)
+        self.assertEqual(b"".join(response.streaming_content), b"yolo")
+
     def test_result_file_download_other_user_404(self):
         tr, _, filepath = force_task_result(user=self.other_user)
         with default_storage.open(filepath, "wb") as f:
@@ -313,6 +323,14 @@ class BaseAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                   "download_url": f"/api/task_result/{tr.task_id}/download/?file=machine%2Fmachine-00001.parquet"}
         }
         self.assertEqual(response.json(), expected)
+
+    def test_result_download_manifest_accept_other_content_type(self):
+        tr, _, _ = self.force_manifest_task_result(user=self.service_account)
+        response = self.get(reverse("base_api:task_result_file_download", args=(tr.task_id,)),
+                            accept="application/vnd.apache.parquet")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Content-Type"], "application/json")
+        self.assertEqual(set(response.json()["files"]), {"machine/machine-00001.parquet"})
 
     def test_result_download_manifest_login(self):
         tr, manifest, _ = self.force_manifest_task_result(user=self.user)
