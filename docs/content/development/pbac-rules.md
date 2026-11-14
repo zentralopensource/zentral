@@ -18,7 +18,7 @@ A view that only a legacy permission protects is not in the scope of these rules
 | Page gate | The decision that opens a page. It can be a legacy permission. |
 | Row | One item of a list, or of a section of a page. |
 | Control | A button or a link that starts an operation. |
-| Preview | A decision that Zentral asks before it knows the context, for example before the operator picks the job of a create. Its Deny is final. Its Allow only means "could be permitted". See rule 5. |
+| Preview | A decision that Zentral asks before it knows the context or the resource, for example before the operator picks the job of a create. Its Deny is final. Its Allow only means "could be permitted". See rule 5. |
 
 ## Decisions
 
@@ -47,6 +47,7 @@ A view that only a legacy permission protects is not in the scope of these rules
     - Allow, or "it depends on the job": at least one job could be permitted. Zentral opens the form, but it has permitted nothing yet.
     - The write: on the submit, Zentral asks again, with the job that the operator picked. Example: a policy permits `sysdiagnose` jobs only. The preview opens the page, and the submit of a `file_export` job gets a 403.
     - In the code: a request with `unknown_context=True`. `PBACViewMixin` and `PBACPermission` refuse a preview as a gate, because its Allow is not a decision. `check_request()` accepts a preview only where Zentral uses its Deny alone.
+    - A request without a resource is a preview too, with `engine.undecided_policies()`. Example: the mass tagging API answers 403 before it reads the body when no tag can be permitted.
 
 ## Lists and filters
 

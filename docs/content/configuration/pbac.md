@@ -95,6 +95,29 @@ permit (
 when { context has tagName && context.tagName == "YOLO" };
 ```
 
+These two actions protect the tags page of a machine. The mass tagging API, `/api/inventory/machines/tags/`, uses `Inventory::Action::"tagAnyMachine"` on the tag instead, and a policy scoped to machines does not limit it.
+
+A fence on a tag thus needs a `forbid` for each path. On the tags page, the tag is in the context. On the mass tagging API, the tag is the resource. These two policies keep a role away from the `VIP` tag (pk 12) on the two paths. They name the tag by its primary key, so they still apply when the tag gets a new name:
+
+```
+forbid (
+  principal in Role::"6", // Support
+  action in
+    [Inventory::Action::"createMachineTag",
+     Inventory::Action::"deleteMachineTag"],
+  resource
+)
+when { context has tagID && context.tagID == 12 };
+
+forbid (
+  principal in Role::"6", // Support
+  action == Inventory::Action::"tagAnyMachine",
+  resource == Inventory::Tag::"12"
+);
+```
+
+A `SET` operation of the mass tagging API removes the other tags of its taxonomy. It needs `tagAnyMachine` on each tag of the taxonomy, so the second policy also refuses a `SET` operation on the taxonomy of the `VIP` tag.
+
 Three features worth pointing out:
 
 * **Comments.** `//` opens a single-line Cedar comment — useful for naming the role inline since policies otherwise only carry the numeric pk.

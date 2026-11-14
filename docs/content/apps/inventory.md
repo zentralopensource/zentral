@@ -320,13 +320,21 @@ Some examples:
 ### `/api/inventory/machines/tags/`
 
 * method: POST
-* PBAC actions:
-    * `Inventory::Action::"createTag"`
-    * `Inventory::Action::"createTaxonomy"`
-    * `Inventory::Action::"createMachineTag"`
-    * `Inventory::Action::"deleteMachineTag"`
+* PBAC action: `Inventory::Action::"tagAnyMachine"`, on each tag that the request adds or removes
 
-Use this endpoint to tag machines using serial numbers or principal user information (unique IDs or principal names). Three different operations are possible: `ADD`, `REMOVE`, `SET`. For the `SET` operation, the `taxonomy` attribute is required. For the `REMOVE` operation, the `taxonomy` attribute must not be used. For the `ADD` operation and `REMOVE` operation, the `names` attribute must not be empty. To scope the machines, use either `serial_numbers` or `principal_users`.
+Use this endpoint to tag machines using serial numbers or principal user information (unique IDs or principal names). Three different operations are possible: `ADD`, `REMOVE`, `SET`. For the `SET` operation, the `taxonomy` attribute is required. For the `ADD` operation and the `REMOVE` operation, the `taxonomy` attribute must not be used, and the `names` attribute must not be empty. To scope the machines, use either `serial_numbers` or `principal_users`.
+
+The endpoint uses the tags and the taxonomies that exist. It does not create them. Create them first, with `POST /api/inventory/tags/` and `POST /api/inventory/taxonomies/`, in the console, or with Terraform.
+
+The resource of `tagAnyMachine` is the tag (`Inventory::Tag`), not the machine. A tag is a member of its taxonomy, so a policy with `resource in Inventory::Taxonomy::"…"` covers the tags of the taxonomy. The action is in the `AdminActions` group. It adds and it removes.
+
+A policy scoped to machines, for example with `resource in Inventory::MetaBusinessUnit::"…"`, never limits this endpoint. The endpoint can tag any serial number, also a serial number that is not in the inventory. Do not give `tagAnyMachine` to a role that you keep to some machines. Such a role uses the tags page of each machine, with `createMachineTag` and `deleteMachineTag`.
+
+A `SET` operation gives its tags to the machines, and removes the other tags of its taxonomy from them. Its tags must be in its taxonomy. A tag of another taxonomy, or a tag without taxonomy, gets the 400 of an unknown tag. It needs `tagAnyMachine` on each tag of the taxonomy. A `SET` operation without names removes each tag of the taxonomy, and needs the action on each of them too.
+
+An unknown tag and a refused tag get the same 400 (`Unknown tag.`). An unknown taxonomy, a taxonomy with a refused tag and a taxonomy without tags get the same 400 (`Unknown taxonomy.`). Nothing changes then.
+
+The answer gives the number of machines that the request found. With `principal_users`, this number tells how many machines have these principal users, also to a role that can use only one tag. Give `tagAnyMachine` only to a role that can know it.
 
 Example payload to tag machines using their principal users:
 
@@ -339,18 +347,18 @@ Example payload to tag machines using their principal users:
   "operations": [
     {"kind": "SET", "taxonomy": "Department", "names": ["IT"]},
     {"kind": "REMOVE", "names": ["Orange", "Red"]},
-    {"kind": "ADD", "taxonomy": "Branch", "names": ["Hamburg"]},
-    {"kind": "ADD", "names": ["Blue"]}
+    {"kind": "ADD", "names": ["Hamburg", "Blue"]}
   ]
 }
 ```
 
-When this payload is posted, Zentral looks for all the machines having matching principal users. For each machine, four operations are applied:
+When this payload is posted, Zentral looks for all the machines having matching principal users. For each machine, three operations are applied:
 
- 1. make sure that a `IT` tag exists from the `Department` taxonomy, and remove any other tag from this taxonomy.
- 2. remove any `Orange` or `Red` tags.
- 3. add a `Hamburg` tag in the `Branch` taxonomy.
- 4. add a `Blue` tag without taxonomy.
+ 1. add the `IT` tag, and remove the other tags of the `Department` taxonomy.
+ 2. remove the `Orange` and `Red` tags.
+ 3. add the `Hamburg` and `Blue` tags.
+
+The `Department` taxonomy and the five tags must exist.
 
 Example payload to tag machines using their serial numbers:
 
@@ -365,7 +373,7 @@ Example payload to tag machines using their serial numbers:
 
 When this payload is posted, Zentral looks for all the machines having matching serial numbers. For each machine, one operations is applied:
 
- 1. make sure that a `HR` tag exists from the `Department` taxonomy, and remove any other tag from this taxonomy.
+ 1. add the `HR` tag, and remove the other tags of the `Department` taxonomy.
 
 The response format is:
 

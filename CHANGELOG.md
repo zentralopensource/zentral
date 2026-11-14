@@ -322,6 +322,21 @@ A realm group that has a realm group mapping, a role mapping or a child group ca
 A `PUT` on `/api/mdm/software_update_enforcements/<id>/` that omits an attribute gets a 400 now, with "This field is required." for each missing one. Before, an omitted optional attribute, such as `tags`, `delay_days` or `local_time`, kept its stored value. The new `min_device_os_version` and `max_device_os_version` attributes are required too, so a Terraform provider or a goztl that predates them cannot update an enforcement anymore. Upgrade the Terraform provider first, to `0.1.85` or later, then Zentral: the provider sends the two attributes to an older Zentral, which ignores them.
 
 
+#### 🧨 The mass tagging API has its own PBAC action, and uses existing tags only
+
+`POST /api/inventory/machines/tags/` uses one action now: `Inventory::Action::"tagAnyMachine"`. Its resource is the tag, of the new `Inventory::Tag` type. A tag is a member of its taxonomy, of the new `Inventory::Taxonomy` type, so `resource in Inventory::Taxonomy::"…"` covers the tags of a taxonomy. The action adds the tag and removes it. A `SET` operation needs it on each tag of its taxonomy. The action is in the `AdminActions` group.
+
+The endpoint does not create tags and taxonomies anymore. Create them first, with `/api/inventory/tags/` and `/api/inventory/taxonomies/`, in the console, or with Terraform. An unknown tag gets a 400, as a tag that the caller cannot use. So does an unknown taxonomy. Before, an `ADD` or a `SET` operation created the missing ones, and a `REMOVE` of an unknown tag did nothing. An `ADD` operation with a `taxonomy` attribute gets a 400 too. So does a `SET` operation with a tag that is not in its taxonomy, for example a tag without taxonomy. Before, the operation gave the tag to the machines, and removed the tags of its taxonomy.
+
+Before, the endpoint needed `createTag`, `createTaxonomy`, `createMachineTag` and `deleteMachineTag`, and it decided them on `System::"any"`. A policy that grants the `AdminActions` group needs no change. A policy that names these four actions for this endpoint must name `tagAnyMachine`. The policies that Zentral made from the legacy roles name the four actions, not the new one: examine them before the upgrade.
+
+A policy scoped to machines, for example with `resource in Inventory::MetaBusinessUnit::"…"`, never limits this endpoint: it can tag a serial number that is not in the inventory. Do not give the action to a role that you keep to some machines.
+
+`createMachineTag` and `deleteMachineTag` take the machine only now, and the `inventory.add_machinetag` and `inventory.delete_machinetag` legacy permissions do not map to them anymore. They still protect the tags page of a machine. If you upgrade from a version before 2026.4, the policies that Zentral makes from the legacy roles do not name these two actions: add them to the roles that had the two permissions.
+
+The tags of a `REMOVE` operation, and the taxonomy of a `SET` operation without names, must exist now. A missing one gets a 400, and the request changes nothing. Before, Zentral ignored it. A refused one gets the same 400, so that the answer does not tell which tags exist. A `SET` operation on a taxonomy without tags gets the same 400: before, it changed nothing and answered 200.
+
+
 #### 🧨 The path of tini in the Docker image
 
 The Docker image installs tini from the Debian packages. Its path is `/usr/bin/tini` now, not `/tini`. If your deployment sets its own entrypoint with `/tini`, change it to `/usr/bin/tini`.

@@ -45,6 +45,8 @@ class MachineTagOperation(serializers.Serializer):
             if not names:
                 raise serializers.ValidationError({"names": "This list may not be empty for REMOVE operations"})
         elif kind == "ADD":
+            if taxonomy:
+                raise serializers.ValidationError({"taxonomy": "This field may not be set for ADD operations"})
             if not names:
                 raise serializers.ValidationError({"names": "This list may not be empty for ADD operations"})
         return data

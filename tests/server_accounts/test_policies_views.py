@@ -170,7 +170,8 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         # The context shape of an action, with a "?" on the optional attributes.
         self.login("accounts.view_policy")
         response = self.client.get(self.build_url("policies_schema"))
-        self.assertContains(response, "<code>tagName?: String</code>", html=True)
+        self.assertContains(response, "<code>tagName: String</code>", html=True)
+        self.assertContains(response, "<code>taxonomyName?: String</code>", html=True)
         self.assertContains(response, "<code>configurationID: Long</code>", html=True)
         self.assertContains(response, "The name of the Santa configuration of the machine.")
 
@@ -248,8 +249,8 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         body = response.content.decode()
         self.assertNotIn("attr.required", body)
         # a required and an optional attribute of the same action
-        self.assertIn("<code>tagName?: String</code>", body)
-        self.assertIn("<code>configurationID: Long</code>", body)
+        self.assertIn("<code>taxonomyName?: String</code>", body)
+        self.assertIn("<code>tagName: String</code>", body)
 
     def test_policies_schema_filter_controls_present(self):
         self.login("accounts.view_policy")

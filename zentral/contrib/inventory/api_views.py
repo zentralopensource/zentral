@@ -1,25 +1,32 @@
-from django.db import connection
+import itertools
+import logging
+from django.db import IntegrityError, OperationalError, connection, transaction
+from django.db.models import Q
 from django.http import Http404
 from django.urls import reverse
 from django.utils import timezone
 from django_filters import rest_framework as filters
+from psycopg2.errors import DeadlockDetected
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
+from pbac.engine import engine
+from pbac.entities import Principal, Request
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
                                RetrieveUpdateDestroyAPIViewWithAudit)
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .models import (JMESPathCheck,
                      MachineSnapshot,
-                     MachineTag,
                      MetaBusinessUnit,
                      MetaMachine,
                      Tag, Taxonomy)
+from .pbac import TagAnyMachineRequest, tag_any_machine_action
 from .serializers import (CleanupInventorySerializer,
                           FullExportSerializer,
                           JMESPathCheckSerializer,
@@ -41,43 +48,103 @@ from .tasks import (cleanup_inventory,
 from .utils import MSQuery, add_machine_tags, archive_machine_snapshots, remove_machine_tags
 
 
+logger = logging.getLogger("zentral.contrib.inventory.api_views")
+
+
 # Machine mass tagging
 
 
-class UpdateMachineTags(APIView):
-    permission_required = ("inventory.add_tag", "inventory.add_taxonomy",
-                           "inventory.add_machinetag", "inventory.delete_machinetag")
-    permission_classes = [DjangoPermissionRequired]
+class MachineTagsUpdatePermission(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        # A preview on all the tags, before the validation of the body. Its Deny is final. Its Allow only
+        # means that some tag could be permitted: the post decides on each one.
+        principal = Principal.from_user(request.user)
+        if engine.undecided_policies(Request(principal, tag_any_machine_action, None)):
+            return True
+        logger.error("Permission denied %s %s on any resource", principal, tag_any_machine_action,
+                     extra={"request": request})
+        return False
 
-    def _prepare_taxonomies_and_tags(self):
-        self.tags_to_set = {}
+
+class UpdateMachineTags(APIView):
+    # no decision on the machines, see tagAnyMachine in .pbac
+    permission_classes = [MachineTagsUpdatePermission]
+
+    max_attempts = 3
+
+    def _resolve_tags(self):
+        operations = self.data["operations"]
+        taxonomies = {taxonomy.name: taxonomy
+                      for taxonomy in Taxonomy.objects.filter(
+                          name__in={operation["taxonomy"] for operation in operations if operation["kind"] == "SET"}
+                      )}
+        names = set(itertools.chain.from_iterable(operation["names"] for operation in operations
+                                                  if operation["kind"] != "SET"))
+        tags = {}
+        taxonomy_tags = {taxonomy: [] for taxonomy in taxonomies.values()}
+        for tag in (Tag.objects.select_related("taxonomy")
+                               .filter(Q(name__in=names) | Q(taxonomy__in=taxonomy_tags))
+                               .order_by("pk")):
+            if tag.taxonomy in taxonomy_tags:
+                taxonomy_tags[tag.taxonomy].append(tag)
+            tags[tag.name] = tag
+        pbac_requests = {tag.pk: TagAnyMachineRequest(self.request.user, tag) for tag in tags.values()}
+        engine.authorize_requests(list(pbac_requests.values()))
+        for pbac_request in pbac_requests.values():
+            if not pbac_request.is_authorized:
+                logger.error("Permission denied %s", pbac_request, extra={"request": self.request})
+
+        def is_authorized(tag):
+            return pbac_requests[tag.pk].is_authorized
+
+        # A refused tag gets the answer of an unknown tag. A SET operation removes the other tags of its
+        # taxonomy, so a taxonomy with a refused tag gets the answer of an unknown taxonomy. A SET operation
+        # gives the tags of its taxonomy only: a tag of another taxonomy gets the answer of an unknown tag.
+        # A taxonomy without tags gets the answer of an unknown taxonomy too: a SET operation on it would
+        # change nothing, with no decision, and its answer would count the machines of the principal users.
+        errors = {}
+        tags_to_set = {}
         self.tags_to_add = []
         self.tags_to_remove = []
-        self.taxonomies_to_clear = []
-        for operation in self.data["operations"]:
-            kind = operation["kind"]
-            taxonomy_name = operation.get("taxonomy")
-            names = operation["names"]
+        for index, operation in enumerate(operations):
+            operation_errors = {}
             taxonomy = None
-            if taxonomy_name and (kind == "ADD" or (kind == "SET" and names)):
-                taxonomy, _ = Taxonomy.objects.get_or_create(name=taxonomy_name)
-            if kind == "SET":
-                if names:
-                    self.tags_to_set.setdefault(taxonomy, []).extend(
-                        Tag.objects.get_or_create(name=name, defaults={"taxonomy": taxonomy})[0]
-                        for name in names
-                    )
+            if operation["kind"] == "SET":
+                taxonomy = taxonomies.get(operation["taxonomy"])
+                if (
+                    taxonomy is None
+                    or not taxonomy_tags[taxonomy]
+                    or not all(is_authorized(tag) for tag in taxonomy_tags[taxonomy])
+                ):
+                    operation_errors["taxonomy"] = ["Unknown taxonomy."]
+                operation_known_tags = {tag.name: tag for tag in taxonomy_tags.get(taxonomy, [])}
+            else:
+                operation_known_tags = tags
+            operation_tags = []
+            name_errors = {}
+            for name_index, name in enumerate(operation["names"]):
+                tag = operation_known_tags.get(name)
+                if tag is None or not is_authorized(tag):
+                    name_errors[name_index] = ["Unknown tag."]
                 else:
-                    self.taxonomies_to_clear.append(taxonomy_name)
-            elif kind == "ADD":
-                self.tags_to_add.extend(
-                    Tag.objects.get_or_create(name=name, defaults={"taxonomy": taxonomy})[0]
-                    for name in names
-                )
-            elif kind == "REMOVE":
-                self.tags_to_remove.extend(
-                    Tag.objects.filter(name__in=names)
-                )
+                    operation_tags.append(tag)
+            if name_errors:
+                operation_errors["names"] = name_errors
+            if operation_errors:
+                errors[index] = operation_errors
+            elif operation["kind"] == "SET":
+                # the SET operations on one taxonomy give the tags of all of them
+                tags_to_set.setdefault(taxonomy, []).extend(operation_tags)
+            elif operation["kind"] == "ADD":
+                self.tags_to_add.extend(operation_tags)
+            else:
+                self.tags_to_remove.extend(operation_tags)
+        if errors:
+            raise ValidationError({"operations": errors})
+        self.tags_to_set = [(set_tags, [tag for tag in taxonomy_tags[taxonomy] if tag not in set_tags])
+                            for taxonomy, set_tags in tags_to_set.items()]
 
     def _iter_serial_numbers(self):
         # serial numbers
@@ -111,35 +178,15 @@ class UpdateMachineTags(APIView):
     def _update_machine_tags(self, serial_number):
         total_removed = 0
         total_added = 0
-        if self.taxonomies_to_clear:
-            total_removed += remove_machine_tags(
-                serial_number,
-                [mt.tag
-                 for mt in MachineTag.objects.select_related("tag")
-                                             .filter(serial_number=serial_number,
-                                                     tag__taxonomy__name__in=self.taxonomies_to_clear)],
-                self.request,
-            )
-        for taxonomy, tags in self.tags_to_set.items():
+        for tags, other_tags in self.tags_to_set:
             total_added += add_machine_tags(serial_number, tags, self.request)
-            total_removed += remove_machine_tags(
-                serial_number,
-                [mt.tag
-                 for mt in MachineTag.objects.select_related("tag")
-                                             .filter(serial_number=serial_number,
-                                                     tag__taxonomy=taxonomy)
-                                             .exclude(tag__in=tags)],
-                self.request,
-            )
+            total_removed += remove_machine_tags(serial_number, other_tags, self.request)
         total_added += add_machine_tags(serial_number, self.tags_to_add, self.request)
         total_removed += remove_machine_tags(serial_number, self.tags_to_remove, self.request)
         return total_removed, total_added
 
-    def post(self, request, *args, **kwargs):
-        serializer = MachineTagsUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.data = serializer.data
-        self._prepare_taxonomies_and_tags()
+    def _update(self):
+        self._resolve_tags()
         found_machines = 0
         total_removed = 0
         total_added = 0
@@ -148,9 +195,31 @@ class UpdateMachineTags(APIView):
             removed, added = self._update_machine_tags(serial_number)
             total_removed += removed
             total_added += added
-        return Response({"machines": {"found": found_machines},
-                         "tags": {"added": total_added,
-                                  "removed": total_removed}})
+        # The foreign keys of the machine tags are deferred. Without this check, a tag that another request
+        # deleted would fail the commit, after the response.
+        connection.check_constraints()
+        return {"machines": {"found": found_machines},
+                "tags": {"added": total_added,
+                         "removed": total_removed}}
+
+    def post(self, request, *args, **kwargs):
+        serializer = MachineTagsUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.data = serializer.data
+        # Another request can delete a tag of this one, or deadlock with it. The operation then runs again from
+        # the start, so a deleted tag gets the answer of an unknown tag.
+        attempt = 1
+        while True:
+            try:
+                with transaction.atomic():
+                    return Response(self._update())
+            except (IntegrityError, OperationalError) as e:
+                if attempt >= self.max_attempts or (
+                    isinstance(e, OperationalError) and not isinstance(e.__cause__, DeadlockDetected)
+                ):
+                    raise
+                logger.warning("Mass tagging attempt %s failed: %s", attempt, e, extra={"request": request})
+                attempt += 1
 
 
 # MetaMachine

@@ -1,11 +1,12 @@
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from accounts.models import User
+from accounts.models import Policy, User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.models import (MachineSnapshotCommit, MachineTag, MetaMachine,
@@ -94,6 +95,20 @@ class MachineTagsViewsTestCase(TestCase, LoginCase):
         self.login()
         response = self.client.post(reverse("inventory:create_machine_tag", args=("1111", 2222)))
         self.assertEqual(response.status_code, 404)  # unknown tag
+
+    def test_policy_reads_the_tag_without_has(self):
+        # the tag is always in the context, its taxonomy is not
+        policy = Policy(name=get_random_string(12), source=(
+            'forbid (principal, action == Inventory::Action::"createMachineTag", resource)'
+            ' when { context.tagName == "yolo" || context.tagID == 1 };'
+        ))
+        policy.full_clean()
+        policy.source = (
+            'forbid (principal, action == Inventory::Action::"createMachineTag", resource)'
+            ' when { context.taxonomyName == "yolo" };'
+        )
+        with self.assertRaises(ValidationError):
+            policy.full_clean()
 
     def test_create_tag_permission_denied(self):
         tag = Tag.objects.create(name=get_random_string(12))
