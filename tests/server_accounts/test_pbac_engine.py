@@ -1026,6 +1026,23 @@ class PBACEngineSingletonAppliesToTestCase(TestCase):
         resource_names = {r.name for r in action.applies_to.resources}
         self.assertEqual(resource_names, {"Machine", "System"})
 
+    def test_tag_any_machine_action(self):
+        # the mass tagging API needs Admin-only createTag and createTaxonomy, so the reach stays the same
+        namespace = engine.get_namespace("Inventory")
+        action = engine.get_action("tagAnyMachine", namespace)
+        self.assertEqual(action.parents, [engine.get_action_group(ActionGroupBasename.ADMIN, namespace),
+                                          engine.get_action_group(ActionGroupBasename.ADMIN)])
+        self.assertEqual([r.name for r in action.applies_to.resources], ["Tag"])
+        self.assertIsNone(action.applies_to.context)
+        self.assertNotIn(action, engine.legacy_perm_actions.values())
+        tag_type = engine.entity_types[("Tag", "Inventory")]
+        taxonomy_type = engine.entity_types[("Taxonomy", "Inventory")]
+        self.assertEqual(tag_type.parents, (taxonomy_type,))
+        self.assertEqual(taxonomy_type.parents, ())
+        for entity_type in (tag_type, taxonomy_type):
+            self.assertEqual(list(entity_type.attrs), ["name"])
+            self.assertTrue(entity_type.attrs["name"].required)
+
     def test_view_machine_tag_action_belongs_to_admin_user_and_viewer_groups(self):
         # viewMachineTag is read-only, so — like every model-default view*
         # action the engine auto-registers — it must sit in the Viewer group,

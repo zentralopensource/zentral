@@ -12,7 +12,7 @@ from pbac.types import (
     ResourceType,
 )
 
-from .models import MachineSnapshot, MetaBusinessUnit, MetaMachine, Tag
+from .models import MachineSnapshot, MetaBusinessUnit, MetaMachine, Tag, Taxonomy
 
 # namespace
 
@@ -29,6 +29,15 @@ def get_namespace() -> Namespace:
 
 MBU_RESOURCE_TYPE = ResourceType("MetaBusinessUnit", get_namespace())
 MACHINE_RESOURCE_TYPE = ResourceType("Machine", get_namespace(), parents=(MBU_RESOURCE_TYPE,))
+# A tag has its taxonomy as its only container, not its meta business unit. On a machine,
+# `resource in Inventory::MetaBusinessUnit::"…"` means the machines of the business unit. On a tag, it would
+# mean the tags that belong to the business unit, on any machine.
+TAXONOMY_RESOURCE_TYPE = ResourceType("Taxonomy", get_namespace(), attrs={
+    "name": AttrSpec(str, help_text="The name of the taxonomy."),
+})
+TAG_RESOURCE_TYPE = ResourceType("Tag", get_namespace(), attrs={
+    "name": AttrSpec(str, help_text="The name of the tag."),
+}, parents=(TAXONOMY_RESOURCE_TYPE,))
 
 
 # actions
@@ -90,6 +99,24 @@ delete_machine_tag_action = engine.register_action(
 )
 
 
+# tagAnyMachine takes the tag, not the machine: it is for the writes that name machines by serial number or by
+# principal user, and a serial number that is not in the inventory yet. A decision on such a machine would tell
+# whether it exists, so a policy scoped to machines never limits the action. A policy such as
+# `resource in Inventory::Taxonomy::"…"` covers the tags of a taxonomy.
+
+
+tag_any_machine_action = engine.register_action(
+    "tagAnyMachine",
+    get_namespace(),
+    [ActionGroupBasename.ADMIN],
+    applies_to=AppliesTo(
+        principals=(USER, SERVICE_ACCOUNT),
+        resources=(TAG_RESOURCE_TYPE,),
+    ),
+    help_text="Give the tag to machines, or remove it from them, whatever the machines are.",
+)
+
+
 # viewMachineTag has no typed PBAC request class today; it's only exercised
 # via the legacy-perm path. Keep it at LEGACY_PERM_APPLIES_TO until a typed
 # view path is introduced.
@@ -112,6 +139,17 @@ def get_mbu_resource(mbu: MetaBusinessUnit) -> Resource:
 
 def get_mbu_resource_from_pk(mbu_pk: int) -> Resource:
     return Resource("MetaBusinessUnit", str(mbu_pk), get_namespace())
+
+
+def get_taxonomy_resource(taxonomy: Taxonomy) -> Resource:
+    return Resource("Taxonomy", str(taxonomy.pk), get_namespace(), attrs={"name": taxonomy.name})
+
+
+def get_tag_resource(tag: Tag) -> Resource:
+    parents = []
+    if tag.taxonomy:
+        parents.append(get_taxonomy_resource(tag.taxonomy))
+    return Resource("Tag", str(tag.pk), get_namespace(), parents, attrs={"name": tag.name})
 
 
 def get_meta_machine_resource(machine: MetaMachine) -> Resource:
@@ -184,3 +222,8 @@ class CreateMachineTagRequest(BaseMachineTagRequest):
 
 class DeleteMachineTagRequest(BaseMachineTagRequest):
     action = delete_machine_tag_action
+
+
+class TagAnyMachineRequest(Request):
+    def __init__(self, user_obj, tag: Tag) -> None:
+        super().__init__(Principal.from_user(user_obj), tag_any_machine_action, get_tag_resource(tag))
