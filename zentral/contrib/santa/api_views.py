@@ -22,7 +22,7 @@ from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired, FileDownloadAPIView,
                                IntegerFilter, ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
                                PBACPermission, PBACRetrieveUpdateDestroyAPIViewWithAudit,
-                               RetrieveUpdateDestroyAPIViewWithAudit)
+                               RefusalAsNotFoundMixin, RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.inventory.enrollment_secrets import (EnrollmentSecretDetailMixin,
                                                           EnrollmentSecretListMixin,
                                                           enrollment_secret_download)
@@ -175,7 +175,7 @@ class EnrolledMachineList(generics.ListAPIView):
         return ViewEnrolledMachineRequest(request.user)
 
 
-class ForceEnrolledMachineCleanSync(generics.GenericAPIView):
+class ForceEnrolledMachineCleanSync(RefusalAsNotFoundMixin, generics.GenericAPIView):
     """
     Queue a clean sync for the next preflight of an enrolled machine, or cancel it
     """
@@ -186,6 +186,13 @@ class ForceEnrolledMachineCleanSync(generics.GenericAPIView):
     serializer_class = ForceCleanSyncSerializer
 
     def get_pbac_request(self, request):
+        if request.method == "POST":
+            # the sync type is part of the context the policies are evaluated against, so it
+            # has to be validated before the decision. It is a constant choice, validated
+            # before the machine is read, so that its error does not depend on the machine
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.sync_type = serializer.validated_data["sync_type"]
         self.enrolled_machine = self.get_object()
         self.machine = MetaMachine(self.enrolled_machine.serial_number)
         if request.method == "DELETE":
@@ -194,12 +201,6 @@ class ForceEnrolledMachineCleanSync(generics.GenericAPIView):
             # take back when none is queued
             self.sync_type = (self.enrolled_machine.forced_sync_type
                               or EnrolledMachine.SyncType.CLEAN)
-        else:
-            # the sync type is part of the context the policies are evaluated against, so it
-            # has to be validated before the decision is made: an unknown one is a 400
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            self.sync_type = serializer.validated_data["sync_type"]
         return ForceCleanSyncRequest(request.user, self.machine, self.enrolled_machine,
                                      self.sync_type)
 
@@ -230,8 +231,8 @@ class ForceEnrolledMachineCleanSync(generics.GenericAPIView):
 
 
 class ScopedConfigurationItemFilter(filters.FilterSet):
-    configuration_id = filters.ModelChoiceFilter(field_name="configuration", required=True,
-                                                 queryset=Configuration.objects.all())
+    # the value is not resolved: an unknown id and an id without visible rows give the same empty list
+    configuration_id = IntegerFilter(field_name="configuration_id", required=True)
 
 
 class BaseScopedConfigurationItemList(ListCreateAPIViewWithAudit):
@@ -256,6 +257,14 @@ class BaseScopedConfigurationItemList(ListCreateAPIViewWithAudit):
         serializer.is_valid(raise_exception=True)
         return self.create_pbac_request_class(request.user, serializer.validated_data["configuration"])
 
+    def permission_denied(self, request, message=None, code=None):
+        if request.method == "POST" and request.successful_authenticator:
+            # the configuration pk is guessable, so a refused create gets the error of an unknown pk
+            serializer = ScopedConfigurationItemResourceSerializer(data=request.data)
+            serializer.fields["configuration"].queryset = Configuration.objects.none()
+            serializer.is_valid(raise_exception=True)
+        super().permission_denied(request, message, code)
+
     def get_queryset(self):
         # the tags are prefetched for the serializer, which reads them for every row.
         # Ordered on the queryset, and on the primary key too: a name is unique in a
@@ -276,7 +285,7 @@ class BaseScopedConfigurationItemList(ListCreateAPIViewWithAudit):
         return [i for i, r in zip(items, requests) if r.is_authorized]
 
 
-class BaseScopedConfigurationItemDetail(PBACRetrieveUpdateDestroyAPIViewWithAudit):
+class BaseScopedConfigurationItemDetail(RefusalAsNotFoundMixin, PBACRetrieveUpdateDestroyAPIViewWithAudit):
     def get_queryset(self):
         # the PBAC resource reads the configuration. A prefetch of the tags saves no query: on
         # a retrieve it costs as much as it saves, and set() drops the cache on a write

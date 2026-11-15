@@ -672,6 +672,8 @@ Response:
 * Optional attribute:
   * `sync_type`: `CLEAN` (the default) or `CLEAN_ALL`. See [Clean syncs](#clean-syncs) for what Santa deletes in each case.
 
+An unknown `sync_type` is a 400, before the enrolled machine is read. A refused request is a 404, like an ID that names no enrolled machine.
+
 Use this endpoint to make an enrolled machine rebuild its rule database during its next preflight. Nothing is pushed to the machine – Santa syncs on its own schedule, so the clean sync happens within the `Full sync interval` of its configuration, 10 min by default.
 
 The queued clean sync is consumed by the first clean sync the machine is answered, whatever asked for it. If the machine never confirms that session with a postflight, Zentral asks for another clean sync during the next preflight.
@@ -1623,7 +1625,7 @@ The scoped client modes of a Santa configuration. See [Scoped client modes](#sco
 * Content-Type: application/json
 * PBAC action: `Santa::Action::"viewScopedClientMode"`
 * Required filter parameter:
-    * `configuration_id`: the ID of the Santa configuration. An ID that names no configuration is a 400.
+    * `configuration_id`: the ID of the Santa configuration. An integer that names no configuration gives an empty list, like a configuration without an entry that the caller can see. A value that is not an integer is a 400.
 
 The results are paginated, use the `limit` and the `offset` parameters to page through them. They are in the alphabetical order of the names.
 
@@ -1683,6 +1685,8 @@ Response:
     * `serial_numbers`, `excluded_serial_numbers`, `primary_users`, `excluded_primary_users`: arrays of strings.
     * `tags`, `excluded_tags`: arrays of tag IDs.
 
+A refused create is a 400 on `configuration`, with the error of an ID that names no configuration.
+
 Example:
 
 ```bash
@@ -1695,6 +1699,8 @@ $ curl -X POST \
 ```
 
 ### /api/santa/scoped_client_modes/`<int:pk>`/
+
+> **_NOTE:_** A refused request is a 404, like an ID that names no scoped client mode. A caller cannot learn which IDs exist.
 
 #### Get a scoped client mode.
 
@@ -1736,7 +1742,7 @@ The scoped path regexes of a Santa configuration. See [Scoped path regexes](#sco
 * Content-Type: application/json
 * PBAC action: `Santa::Action::"viewScopedPathRegex"`
 * Required filter parameter:
-    * `configuration_id`: the ID of the Santa configuration. An ID that names no configuration is a 400.
+    * `configuration_id`: the ID of the Santa configuration. An integer that names no configuration gives an empty list, like a configuration without an entry that the caller can see. A value that is not an integer is a 400.
 
 The results are paginated and ordered like the [scoped client modes](#list-the-scoped-client-modes-of-a-configuration), and an entry the caller is not allowed to see is absent from them.
 
@@ -1791,6 +1797,8 @@ Response:
     * `serial_numbers`, `excluded_serial_numbers`, `primary_users`, `excluded_primary_users`: arrays of strings.
     * `tags`, `excluded_tags`: arrays of tag IDs.
 
+A refused create is a 400 on `configuration`, with the error of an ID that names no configuration.
+
 Example:
 
 ```bash
@@ -1803,6 +1811,8 @@ $ curl -X POST \
 ```
 
 ### /api/santa/scoped_path_regexes/`<int:pk>`/
+
+> **_NOTE:_** A refused request is a 404, like an ID that names no scoped path regex. A caller cannot learn which IDs exist.
 
 #### Get a scoped path regex.
 

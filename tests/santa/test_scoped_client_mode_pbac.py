@@ -97,7 +97,7 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
              "client_mode": Configuration.LOCKDOWN_MODE,
              "event_detail_source": ScopedClientMode.EventDetailSource.INHERIT},
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         self.assertEqual(ScopedClientMode.objects.count(), 0)
 
     def test_create(self):
@@ -131,7 +131,7 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
             f' resource == Santa::Configuration::"{other.pk}");'
         ))
         response = self.client.get(reverse("santa:create_scoped_client_mode", args=(configuration.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     # update
 
@@ -148,7 +148,7 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
         response = self.client.get(
             reverse("santa:update_scoped_client_mode", args=(configuration.pk, scm.pk))
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_update(self):
         configuration = force_configuration()
@@ -199,7 +199,7 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
         response = self.client.get(
             reverse("santa:update_scoped_client_mode", args=(scm.configuration.pk, scm.pk))
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     # view
 
@@ -223,6 +223,25 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
             response, reverse("santa:delete_scoped_client_mode", args=(configuration.pk, scm.pk))
         )
 
+    # a refusal on a guessable id
+
+    def test_without_a_policy_existing_and_unknown_ids_give_the_same_404(self):
+        configuration = force_configuration()
+        entry = self.force_scoped_client_mode(configuration)
+        self.login_with_policy(self.policy())
+        for name, existing_args, unknown_args in (
+            ("create_scoped_client_mode", (configuration.pk,), (configuration.pk + 1,)),
+            ("update_scoped_client_mode", (configuration.pk, entry.pk), (configuration.pk, entry.pk + 1)),
+            ("delete_scoped_client_mode", (configuration.pk, entry.pk), (configuration.pk, entry.pk + 1)),
+        ):
+            with self.assertLogs("zentral.pbac.utils", "WARNING"):
+                existing_response = self.client.post(reverse(f"santa:{name}", args=existing_args))
+            unknown_response = self.client.post(reverse(f"santa:{name}", args=unknown_args))
+            self.assertEqual(existing_response.status_code, 404)
+            self.assertEqual(unknown_response.status_code, 404)
+            self.assertEqual(existing_response.content, unknown_response.content)
+        self.assertTrue(ScopedClientMode.objects.filter(pk=entry.pk).exists())
+
     # delete
 
     def test_delete_denied_without_a_policy(self):
@@ -232,7 +251,7 @@ class SantaScopedClientModePBACTestCase(TestCase, LoginCase):
         response = self.client.get(
             reverse("santa:delete_scoped_client_mode", args=(configuration.pk, scm.pk))
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_delete(self):
         configuration = force_configuration()

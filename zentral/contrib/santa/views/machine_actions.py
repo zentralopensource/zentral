@@ -22,6 +22,7 @@ class BaseCleanSyncView(PBACViewMixin, TemplateView):
     get_success_message().
     """
     pbac_request_class = ForceCleanSyncRequest
+    refusal_as_not_found = True
 
     def get_pbac_request_kwargs(self, kwargs):
         self.machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])

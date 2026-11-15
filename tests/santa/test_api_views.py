@@ -275,8 +275,26 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_force_clean_sync_permission_denied(self):
         enrolled_machine = self.force_enrolled_machine()
         url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
-        response = self.post(url, {})
-        self.assertEqual(response.status_code, 403)
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            response = self.post(url, {})
+        self.assertEqual(response.status_code, 404)
+        enrolled_machine.refresh_from_db()
+        self.assertIsNone(enrolled_machine.forced_sync_type)
+
+    def test_force_clean_sync_no_policy_same_answer_for_existing_and_unknown_machine(self):
+        enrolled_machine = self.force_enrolled_machine()
+        urls = [reverse("santa_api:force_enrolled_machine_clean_sync", args=(pk,))
+                for pk in (enrolled_machine.pk, enrolled_machine.pk + 1)]
+        for body, status_code in (({"sync_type": "CLEAN"}, 404),
+                                  ({"sync_type": "BOGUS"}, 400)):
+            existing_response, unknown_response = (self.post(url, body) for url in urls)
+            self.assertEqual(existing_response.status_code, status_code)
+            self.assertEqual(unknown_response.status_code, status_code)
+            self.assertEqual(existing_response.json(), unknown_response.json())
+        existing_response, unknown_response = (self.delete(url) for url in urls)
+        self.assertEqual(existing_response.status_code, 404)
+        self.assertEqual(unknown_response.status_code, 404)
+        self.assertEqual(existing_response.json(), unknown_response.json())
 
     def test_force_clean_sync_unknown_enrolled_machine(self):
         self.set_policy(self.force_clean_sync_policy())
@@ -374,7 +392,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_policy(self.force_clean_sync_policy(sync_type="CLEAN"))
         url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
         response = self.post(url, {"sync_type": "CLEAN_ALL"})
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         response = self.post(url, {"sync_type": "CLEAN"})
         self.assertEqual(response.status_code, 200)
 
@@ -391,7 +409,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_policy(self.force_clean_sync_policy(mbu=other_mbu))
         url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
         response = self.post(url, {})
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     # cancel a queued clean sync
 
@@ -428,7 +446,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         url = reverse("santa_api:force_enrolled_machine_clean_sync", args=(enrolled_machine.pk,))
         # the cancellation is authorized against the sync type it takes back
         response = self.delete(url)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     # ingest file info
 

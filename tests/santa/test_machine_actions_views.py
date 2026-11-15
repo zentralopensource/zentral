@@ -68,7 +68,22 @@ class SantaMachineActionsViewsTestCase(TestCase, LoginCase):
         machine = MetaMachine(enrolled_machine.serial_number)
         self.login()
         response = self.client.get(self.force_url(machine))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
+
+    def test_without_a_policy_enrolled_and_unknown_machines_give_the_same_answer(self):
+        enrolled_machine = force_enrolled_machine()
+        machine = MetaMachine(enrolled_machine.serial_number)
+        unknown_machine = MetaMachine(get_random_string(12))
+        self.login()
+        for url_func in (self.force_url, self.cancel_url):
+            with self.assertLogs("zentral.pbac.utils", "WARNING"):
+                existing_response = self.client.post(url_func(machine))
+            unknown_response = self.client.post(url_func(unknown_machine))
+            self.assertEqual(existing_response.status_code, 404)
+            self.assertEqual(unknown_response.status_code, 404)
+            self.assertEqual(existing_response.content, unknown_response.content)
+        enrolled_machine.refresh_from_db()
+        self.assertIsNone(enrolled_machine.forced_sync_type)
 
     def test_force_clean_sync_machine_not_enrolled(self):
         self.login()
@@ -144,7 +159,7 @@ class SantaMachineActionsViewsTestCase(TestCase, LoginCase):
         machine = MetaMachine(enrolled_machine.serial_number)
         self.login()
         self.set_clean_sync_policy(sync_type="CLEAN")
-        self.assertEqual(self.client.get(self.force_url(machine, "CLEAN_ALL")).status_code, 403)
+        self.assertEqual(self.client.get(self.force_url(machine, "CLEAN_ALL")).status_code, 404)
         self.assertEqual(self.client.get(self.force_url(machine)).status_code, 200)
 
     # cancel a queued clean sync
@@ -183,7 +198,7 @@ class SantaMachineActionsViewsTestCase(TestCase, LoginCase):
         self.set_clean_sync_policy(sync_type="CLEAN")
         # the cancellation is authorized against the sync type it takes back
         response = self.client.get(self.cancel_url(machine))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_cancel_clean_sync_when_none_is_queued_posts_no_event(self, post_event):

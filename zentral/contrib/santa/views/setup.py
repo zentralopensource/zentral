@@ -334,6 +334,7 @@ class DeleteVotingGroupView(PermissionRequiredMixin, DeleteViewWithAudit):
 
 class CreateScopedClientModeView(PBACViewMixin, CreateViewWithAudit):
     pbac_request_class = CreateScopedClientModeRequest
+    refusal_as_not_found = True
     model = ScopedClientMode
     form_class = ScopedClientModeForm
 
@@ -354,6 +355,7 @@ class CreateScopedClientModeView(PBACViewMixin, CreateViewWithAudit):
 
 class UpdateScopedClientModeView(PBACViewMixin, UpdateViewWithAudit):
     pbac_request_class = UpdateScopedClientModeRequest
+    refusal_as_not_found = True
     model = ScopedClientMode
     form_class = ScopedClientModeForm
 
@@ -382,6 +384,7 @@ class UpdateScopedClientModeView(PBACViewMixin, UpdateViewWithAudit):
 
 class DeleteScopedClientModeView(PBACViewMixin, DeleteViewWithAudit):
     pbac_request_class = DeleteScopedClientModeRequest
+    refusal_as_not_found = True
     model = ScopedClientMode
 
     def get_pbac_request_kwargs(self, kwargs):
@@ -403,6 +406,7 @@ class DeleteScopedClientModeView(PBACViewMixin, DeleteViewWithAudit):
 
 class CreateScopedPathRegexView(PBACViewMixin, CreateViewWithAudit):
     pbac_request_class = CreateScopedPathRegexRequest
+    refusal_as_not_found = True
     model = ScopedPathRegex
     form_class = ScopedPathRegexForm
 
@@ -423,6 +427,7 @@ class CreateScopedPathRegexView(PBACViewMixin, CreateViewWithAudit):
 
 class UpdateScopedPathRegexView(PBACViewMixin, UpdateViewWithAudit):
     pbac_request_class = UpdateScopedPathRegexRequest
+    refusal_as_not_found = True
     model = ScopedPathRegex
     form_class = ScopedPathRegexForm
 
@@ -451,6 +456,7 @@ class UpdateScopedPathRegexView(PBACViewMixin, UpdateViewWithAudit):
 
 class DeleteScopedPathRegexView(PBACViewMixin, DeleteViewWithAudit):
     pbac_request_class = DeleteScopedPathRegexRequest
+    refusal_as_not_found = True
     model = ScopedPathRegex
 
     def get_pbac_request_kwargs(self, kwargs):

@@ -12,7 +12,6 @@ from zentral.contrib.inventory.models import Tag
 from zentral.contrib.santa.models import Configuration, ScopedClientMode, ScopedPathRegex
 from .utils import assert_audit_event, force_configuration
 
-INVALID_CONFIGURATION = "Select a valid choice. That choice is not one of the available choices."
 DUPLICATE_NAME = "The fields configuration, name must make a unique set."
 
 
@@ -127,18 +126,40 @@ class ScopedItemAPITestMixin:
         self.set_policy(self.all_actions_policy())
         response = self.get(self.list_url() + "?configuration_id=yolo")
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(),
-                         {"configuration_id": [INVALID_CONFIGURATION]})
+        self.assertEqual(response.json(), {"configuration_id": ["Enter a whole number."]})
 
-    def test_list_with_a_configuration_that_does_not_exist_is_a_400(self):
-        configuration = force_configuration()
-        pk = configuration.pk
-        configuration.delete()
+    def test_list_with_a_configuration_that_is_not_an_integer(self):
+        # a decimal is not truncated to another configuration, and a large exponent is not expanded
         self.set_policy(self.all_actions_policy())
-        response = self.get(self.list_url() + f"?configuration_id={pk}")
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(),
-                         {"configuration_id": [INVALID_CONFIGURATION]})
+        for value in ("1.9", "1e2", "-1e1000000"):
+            response = self.get(self.list_url() + f"?configuration_id={value}")
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json(), {"configuration_id": ["Enter a whole number."]})
+
+    def assert_empty_list(self, configuration_id):
+        response = self.get(self.list_url() + f"?configuration_id={configuration_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"count": 0, "next": None, "previous": None, "results": []})
+
+    def test_list_unknown_hidden_and_empty_configurations_give_the_same_empty_list(self):
+        hidden_configuration = force_configuration()
+        self.force_item(hidden_configuration)
+        visible_configuration = force_configuration()
+        self.set_policy(self.all_actions_policy(
+            resource=f'resource in Santa::Configuration::"{visible_configuration.pk}"'
+        ))
+        unknown_configuration = force_configuration()
+        unknown_pk = unknown_configuration.pk
+        unknown_configuration.delete()
+        for configuration_id in (unknown_pk, 2 ** 63, hidden_configuration.pk, visible_configuration.pk):
+            self.assert_empty_list(configuration_id)
+
+    def test_list_without_a_policy_existing_and_unknown_configurations_give_the_same_empty_list(self):
+        configuration = force_configuration()
+        self.force_item(configuration)
+        empty_configuration = force_configuration()
+        for configuration_id in (configuration.pk, empty_configuration.pk, empty_configuration.pk + 1):
+            self.assert_empty_list(configuration_id)
 
     def test_list(self):
         configuration = force_configuration()
@@ -227,11 +248,23 @@ class ScopedItemAPITestMixin:
                              include_token=False)
         self.assertEqual(response.status_code, 401)
 
+    def assert_unknown_configuration(self, response, pk):
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"configuration": [f'Invalid pk "{pk}" - object does not exist.']})
+
     def test_create_permission_denied(self):
         configuration = force_configuration()
-        response = self.post(self.list_url(),
-                             {"configuration": configuration.pk, **self.item_data()})
-        self.assertEqual(response.status_code, 403)
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            response = self.post(self.list_url(),
+                                 {"configuration": configuration.pk, **self.item_data()})
+        self.assert_unknown_configuration(response, configuration.pk)
+        self.assertFalse(self.model.objects.filter(configuration=configuration).exists())
+
+    def test_create_without_a_policy_existing_and_unknown_configurations_give_the_same_answer(self):
+        configuration = force_configuration()
+        for pk in (configuration.pk, configuration.pk + 1):
+            response = self.post(self.list_url(), {"configuration": pk, **self.item_data()})
+            self.assert_unknown_configuration(response, pk)
 
     def test_create_permission_denied_on_another_configuration(self):
         configuration = force_configuration()
@@ -240,7 +273,7 @@ class ScopedItemAPITestMixin:
         ))
         response = self.post(self.list_url(),
                              {"configuration": configuration.pk, **self.item_data()})
-        self.assertEqual(response.status_code, 403)
+        self.assert_unknown_configuration(response, configuration.pk)
 
     def test_create_without_the_configuration_is_a_400(self):
         # the configuration is the resource of the decision, so it is read before the
@@ -253,8 +286,7 @@ class ScopedItemAPITestMixin:
     def test_create_with_a_configuration_that_does_not_exist_is_a_400(self):
         self.set_policy(self.all_actions_policy())
         response = self.post(self.list_url(), {"configuration": 2 ** 31 - 1, **self.item_data()})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("configuration", response.json())
+        self.assert_unknown_configuration(response, 2 ** 31 - 1)
 
     def test_create_permission_denied_before_the_rest_of_the_body(self):
         # the item validator reads the stored entries, so it answers after the decision: a
@@ -263,7 +295,7 @@ class ScopedItemAPITestMixin:
         item = self.force_item(configuration)
         response = self.post(self.list_url(),
                              {"configuration": configuration.pk, **self.item_data(name=item.name)})
-        self.assertEqual(response.status_code, 403)
+        self.assert_unknown_configuration(response, configuration.pk)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create(self, post_event):
@@ -313,10 +345,15 @@ class ScopedItemAPITestMixin:
         response = self.get(self.detail_url(item), include_token=False)
         self.assertEqual(response.status_code, 401)
 
+    def assert_not_found(self, response):
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), {"detail": "Not found."})
+
     def test_retrieve_permission_denied(self):
         item = self.force_item(force_configuration())
-        response = self.get(self.detail_url(item))
-        self.assertEqual(response.status_code, 403)
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            response = self.get(self.detail_url(item))
+        self.assert_not_found(response)
 
     def test_retrieve_permission_denied_on_another_configuration(self):
         item = self.force_item(force_configuration())
@@ -324,7 +361,7 @@ class ScopedItemAPITestMixin:
             resource=f'resource in Santa::Configuration::"{force_configuration().pk}"'
         ))
         response = self.get(self.detail_url(item))
-        self.assertEqual(response.status_code, 403)
+        self.assert_not_found(response)
 
     def test_retrieve_an_entry_that_does_not_exist_is_a_404(self):
         item = self.force_item(force_configuration())
@@ -332,18 +369,16 @@ class ScopedItemAPITestMixin:
         item.delete()
         self.set_policy(self.all_actions_policy())
         response = self.get(self.detail_url_for_pk(pk))
-        self.assertEqual(response.status_code, 404)
+        self.assert_not_found(response)
 
-    def test_retrieve_separates_a_refused_entry_from_one_that_does_not_exist(self):
-        # the entry is the resource of the view action, so it is read to build the request and
-        # a primary key that is not stored is a 404 before any decision is taken. The list
-        # endpoint hides that difference on purpose, the detail endpoint does not: an entry the
-        # caller may not see answers 403, and the primary key is all it gives away
+    def test_without_a_policy_existing_and_unknown_entries_give_the_same_answer(self):
         item = self.force_item(force_configuration())
-        pk = item.pk
-        self.assertEqual(self.get(self.detail_url_for_pk(pk)).status_code, 403)
-        item.delete()
-        self.assertEqual(self.get(self.detail_url_for_pk(pk)).status_code, 404)
+        for pk in (item.pk, item.pk + 1):
+            self.assert_not_found(self.get(self.detail_url_for_pk(pk)))
+            # no validation error on the body before the decision
+            self.assert_not_found(self.put(self.detail_url_for_pk(pk), {"name": ""}))
+            self.assert_not_found(self.delete(self.detail_url_for_pk(pk)))
+        self.assertTrue(self.model.objects.filter(pk=item.pk).exists())
 
     def test_retrieve(self):
         configuration = force_configuration()
@@ -363,7 +398,7 @@ class ScopedItemAPITestMixin:
         self.set_policy(self.policy("view"))
         response = self.put(self.detail_url(item),
                             self.full_item_data(item.configuration))
-        self.assertEqual(response.status_code, 403)
+        self.assert_not_found(response)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update(self, post_event):
@@ -519,7 +554,7 @@ class ScopedItemAPITestMixin:
         item = self.force_item(force_configuration())
         self.set_policy(self.policy("view", "update"))
         response = self.delete(self.detail_url(item))
-        self.assertEqual(response.status_code, 403)
+        self.assert_not_found(response)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete(self, post_event):
