@@ -14,10 +14,11 @@ from zentral.core.stores.backends.s3_parquet import S3ParquetStoreSerializer
 from zentral.core.stores.backends.snowflake import SnowflakeStoreSerializer
 from zentral.core.stores.backends.splunk import SplunkStoreSerializer
 from zentral.core.stores.backends.sumo_logic import SumoLogicStoreSerializer
+from zentral.utils.pbac_secrets import BackendInstanceSecretsSerializerMixin
 from .models import Store
 
 
-class StoreSerializer(serializers.ModelSerializer):
+class StoreSerializer(BackendInstanceSecretsSerializerMixin, serializers.ModelSerializer):
     event_filters = EventFilterSetSerializer(required=False)
     clickhouse_kwargs = ClickHouseStoreSerializer(source="get_clickhouse_kwargs", required=False, allow_null=True)
     datadog_kwargs = DatadogStoreSerializer(source="get_datadog_kwargs", required=False, allow_null=True)

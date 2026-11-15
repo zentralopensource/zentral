@@ -35,7 +35,27 @@ Stores are **database objects**, not a section of the `base.json` configuration 
 * the [**Zentral Terraform provider**](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs), with the [`zentral_store`](https://registry.terraform.io/providers/zentralopensource/zentral/latest/docs/resources/store) resource, which is built on that API. It covers four of the backends – see the [backend overview](#available-backends),
 * **provisioning**, from the Zentral configuration, for stores that must be deployed with the instance.
 
-The Zentral UI at `/stores/` is **read-only**: it lists the configured stores and displays their settings, with the secrets redacted. The `stores.view_store` permission is required.
+The Zentral UI at `/stores/` is **read-only**: it lists the configured stores and displays their settings, with the hash of each secret in place of its value. The `stores.view_store` permission is required.
+
+### Secrets in the API
+
+* PBAC action: `Stores::Action::"viewStoreSecrets"`
+
+The options that the [backend options](#backend-options) mark as secrets are the secrets of a store: its passwords, tokens and keys. `GET /api/stores/` and `GET /api/stores/<id>/` return them only with this action. Without it, the API returns the SHA-256 hash of each secret in place of its value, with the `_hash` suffix on its key, as the audit events and the Zentral UI show it. For example, `"password": "fomo"` becomes `"password_hash": "48ffcddb…"`.
+
+The responses of a create and of an update give back the secrets that the request sent, with no decision. An update replaces all the options of the backend: a secret that the body leaves out is removed, not kept.
+
+The action is in the `AdminActions` groups only. The `UserActions` and `ViewerActions` groups and `stores.view_store` do not give it. The API needs `stores.view_store` too, to read the store. The action takes the store as its resource, so a policy can give the secrets of one store:
+
+```
+permit (
+  principal in Role::"6",
+  action == Stores::Action::"viewStoreSecrets",
+  resource == Stores::Store::"52d03e13-7a8c-4ef6-9e48-3bc2b4a1f7a1"
+);
+```
+
+The service account of the Terraform provider needs this action. Without it, the provider finds a hash in place of each secret, and plans a change at each run.
 
 A store created by provisioning carries a `provisioning_uid` and can only be changed by updating the configuration: the API refuses to update or delete it, and its `backend` and backend options are omitted from the API representation. Stores created through the API are called *custom* stores, and their number is limited – see [`max_custom_store_count`](#max_custom_store_count).
 

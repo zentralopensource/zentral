@@ -428,6 +428,13 @@ The objects that exist are not examined at the upgrade. Each one is decided at i
 `POST /api/santa/rulesets/update/` does not create tags anymore. A tag name in the `tags` or the `excluded_tags` of a rule must be the name of a tag that exists. An unknown name gets a 400 with `Unknown tag: …`, and the request changes nothing. Before, the endpoint created each missing tag, without taxonomy, and it did not ask for `createTag`. Create the tags first, with `/api/inventory/tags/`, in the console, or with Terraform. The endpoint is deprecated, and off by default: this change applies only when the `enable_ruleset_update_api` option is `true`.
 
 
+#### 🧨 The API returns the secrets of a store with `Stores::Action::"viewStoreSecrets"` only
+
+`GET /api/stores/` and `GET /api/stores/<id>/` return the passwords, tokens and keys of the backend of a store only to a principal with the new `Stores::Action::"viewStoreSecrets"` action. Without it, the API returns the SHA-256 hash of each secret, with the `_hash` suffix on its key, as the audit events and the Zentral UI show it. Before, `stores.view_store` was enough, so the roles with the `ViewerActions` or the `UserActions` group read the secrets. The action is in the `AdminActions` groups only, and its resource is the store, of the new `Stores::Store` type. It does not give the read of the store: the API still needs `stores.view_store`. The responses of a create and of an update give back the secrets that the request sent.
+
+A policy that grants the `AdminActions` group needs no change. The service account of the Terraform provider reads the secrets to find a change: give it the action before the upgrade, or each plan shows a change of each `zentral_store`.
+
+
 #### 🧨 The path of tini in the Docker image
 
 The Docker image installs tini from the Debian packages. Its path is `/usr/bin/tini` now, not `/tini`. If your deployment sets its own entrypoint with `/tini`, change it to `/usr/bin/tini`.

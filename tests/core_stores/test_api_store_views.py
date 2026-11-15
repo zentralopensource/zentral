@@ -3,9 +3,13 @@ from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from accounts.models import APIToken, User
+from pbac.engine import engine
+from pbac.entities import Entity
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.core.events.base import AuditEvent
@@ -43,6 +47,65 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     def _get_api_key(self):
         return self.api_key
 
+    # utils
+
+    def _force_store_with_secrets(self):
+        return force_store(backend_kwargs={"endpoint_url": "https://www.example.com",
+                                           "username": "yolo",
+                                           "password": "fomo",
+                                           "headers": [{"name": "X-Fomo", "value": "Yolo"}]})
+
+    def _set_secrets_policy(self, permit_scope="resource", forbid_scope=None, permission="stores.view_store"):
+        source = ""
+        if permission:
+            source += ("permit (\n"
+                       f"  principal in {Entity('Role', str(self.group.pk))},\n"
+                       f"  action == {engine.legacy_perm_actions[permission]},\n"
+                       "  resource\n"
+                       ");\n")
+        source += ("permit (\n"
+                   f"  principal in {Entity('Role', str(self.group.pk))},\n"
+                   '  action == Stores::Action::"viewStoreSecrets",\n'
+                   f"  {permit_scope}\n"
+                   ");\n")
+        if forbid_scope:
+            source += ("forbid (\n"
+                       "  principal,\n"
+                       '  action == Stores::Action::"viewStoreSecrets",\n'
+                       f"  {forbid_scope}\n"
+                       ");\n")
+        self.set_policy(source)
+
+    def _http_kwargs(self, with_secrets):
+        http_kwargs = {"concurrency": 1,
+                       "endpoint_url": "https://www.example.com",
+                       "max_retries": 3,
+                       "request_timeout": 120,
+                       "username": "yolo",
+                       "verify_tls": True}
+        if with_secrets:
+            http_kwargs["password"] = "fomo"
+            http_kwargs["headers"] = [{"name": "X-Fomo", "value": "Yolo"}]
+        else:
+            http_kwargs["password_hash"] = "48ffcddb8b19a5f98d4b1b8c08b4024b12b6f24affeb50b1265aed528a2dd671"
+            http_kwargs["headers"] = [
+                {"name": "X-Fomo", "value_hash": "3c7faa49423a3e7c0d33bbeecb185ce7b2bfa2d82b557a090795b420f450eee9"}
+            ]
+        return http_kwargs
+
+    def _store_data(self, store, with_secrets):
+        return {'admin_console': False,
+                'backend': 'HTTP',
+                'created_at': store.created_at.isoformat(),
+                'description': '',
+                'event_filters': {},
+                'events_url_authorized_roles': [],
+                'http_kwargs': self._http_kwargs(with_secrets),
+                'id': str(store.pk),
+                'name': store.name,
+                'provisioning_uid': None,
+                'updated_at': store.updated_at.isoformat()}
+
     # list stores
 
     def test_list_stores_unauthorized(self):
@@ -71,7 +134,7 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
               'http_kwargs': {'concurrency': 1,
                               'endpoint_url': 'https://www.example.com',
                               'max_retries': 3,
-                              'password': None,
+                              'password_hash': None,
                               'request_timeout': 120,
                               'username': None,
                               'verify_tls': True},
@@ -80,6 +143,62 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
               'provisioning_uid': None,
               'updated_at': store.updated_at.isoformat()}]
         )
+
+    def test_list_stores_without_secrets(self):
+        store = self._force_store_with_secrets()
+        self.set_permissions("stores.view_store")
+        # the hashes of the secrets: a filter, which logs nothing
+        with self.assertNoLogs("zentral.pbac.utils"):
+            response = self.get(reverse("stores_api:stores") + f"?name={store.name}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [self._store_data(store, with_secrets=False)])
+
+    def test_list_stores_with_secrets(self):
+        store = self._force_store_with_secrets()
+        self._set_secrets_policy()
+        response = self.get(reverse("stores_api:stores") + f"?name={store.name}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [self._store_data(store, with_secrets=True)])
+
+    def test_list_stores_with_secrets_forbid_one_store(self):
+        store1 = self._force_store_with_secrets()
+        store2 = self._force_store_with_secrets()
+        self._set_secrets_policy(forbid_scope=f'resource == Stores::Store::"{store2.pk}"')
+        response = self.get(reverse("stores_api:stores"))
+        self.assertEqual(response.status_code, 200)
+        data = {d["id"]: d for d in response.json()}
+        self.assertEqual(data[str(store1.pk)], self._store_data(store1, with_secrets=True))
+        self.assertEqual(data[str(store2.pk)], self._store_data(store2, with_secrets=False))
+
+    def test_list_stores_with_secrets_one_store(self):
+        store1 = self._force_store_with_secrets()
+        store2 = self._force_store_with_secrets()
+        self._set_secrets_policy(permit_scope=f'resource == Stores::Store::"{store1.pk}"')
+        response = self.get(reverse("stores_api:stores"))
+        self.assertEqual(response.status_code, 200)
+        data = {d["id"]: d for d in response.json()}
+        self.assertEqual(data[str(store1.pk)], self._store_data(store1, with_secrets=True))
+        self.assertEqual(data[str(store2.pk)], self._store_data(store2, with_secrets=False))
+
+    def test_list_stores_with_secrets_without_view_store(self):
+        self._force_store_with_secrets()
+        self._set_secrets_policy(permission=None)
+        response = self.get(reverse("stores_api:stores"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_list_stores_with_secrets_query_count(self):
+        self._set_secrets_policy()
+        query_counts = []
+        for row_count in (2, 5):
+            Store.objects.all().delete()
+            for _ in range(row_count):
+                self._force_store_with_secrets()
+            self.get(reverse("stores_api:stores"))  # warm up the process-level caches
+            with CaptureQueriesContext(connection) as ctx:
+                response = self.get(reverse("stores_api:stores"))
+            self.assertEqual(len(response.json()), row_count)
+            query_counts.append(len(ctx.captured_queries))
+        self.assertEqual(query_counts[0], query_counts[1])
 
     def test_list_provisioned_store(self):
         store = force_store(provisioned=True)
@@ -451,32 +570,33 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_store(self):
-        store = force_store()
-        response = self.get(reverse("stores_api:store", args=(store.pk,)))
+        store = self._force_store_with_secrets()
         self.set_permissions("stores.view_store")
+        # the hashes of the secrets: a filter, which logs nothing
+        with self.assertNoLogs("zentral.pbac.utils"):
+            response = self.get(reverse("stores_api:store", args=(store.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), self._store_data(store, with_secrets=False))
+
+    def test_get_store_with_secrets(self):
+        store = self._force_store_with_secrets()
+        self._set_secrets_policy()
         response = self.get(reverse("stores_api:store", args=(store.pk,)))
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(
-            data,
-            {'admin_console': False,
-             'backend': 'HTTP',
-             'created_at': store.created_at.isoformat(),
-             'description': '',
-             'event_filters': {},
-             'events_url_authorized_roles': [],
-             'http_kwargs': {'concurrency': 1,
-                             'endpoint_url': 'https://www.example.com',
-                             'max_retries': 3,
-                             'password': None,
-                             'request_timeout': 120,
-                             'username': None,
-                             'verify_tls': True},
-             'id': str(store.pk),
-             'name': store.name,
-             'provisioning_uid': None,
-             'updated_at': store.updated_at.isoformat()}
-        )
+        self.assertEqual(response.json(), self._store_data(store, with_secrets=True))
+
+    def test_get_store_with_secrets_forbid_store(self):
+        store = self._force_store_with_secrets()
+        self._set_secrets_policy(forbid_scope=f'resource == Stores::Store::"{store.pk}"')
+        response = self.get(reverse("stores_api:store", args=(store.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), self._store_data(store, with_secrets=False))
+
+    def test_get_store_with_secrets_without_view_store(self):
+        store = self._force_store_with_secrets()
+        self._set_secrets_policy(permission=None)
+        response = self.get(reverse("stores_api:store", args=(store.pk,)))
+        self.assertEqual(response.status_code, 403)
 
     def test_get_provisioned_store(self):
         store = force_store(provisioned=True)
@@ -602,6 +722,64 @@ class StoreAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(sorted(metadata["tags"]), ["stores", "zentral"])
         setup_store_worker_queue.assert_called_once_with(store)
         send_notification.assert_called_once_with("stores.store", str(store.pk))
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.setup_store_worker_queue")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_store_returns_secrets(self, post_event, setup_store_worker_queue, send_notification):
+        store = self._force_store_with_secrets()
+        self.set_permissions("stores.change_store")
+        response = self.put(
+            reverse("stores_api:store", args=(store.pk,)),
+            {"name": store.name,
+             "backend": "HTTP",
+             "http_kwargs": {"endpoint_url": "https://www.example.com",
+                             "username": "yolo",
+                             "password": "fomo",
+                             "headers": [{"name": "X-Fomo", "value": "Yolo"}]}},
+        )
+        self.assertEqual(response.status_code, 200)
+        store.instance.refresh_from_db()
+        self.assertEqual(response.json(), self._store_data(store.instance, with_secrets=True))
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.setup_store_worker_queue")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_store_forbid_secrets_echoes_body(self, post_event, setup_store_worker_queue, send_notification):
+        store = self._force_store_with_secrets()
+        self._set_secrets_policy(forbid_scope=f'resource == Stores::Store::"{store.pk}"',
+                                 permission="stores.change_store")
+        response = self.put(
+            reverse("stores_api:store", args=(store.pk,)),
+            {"name": store.name,
+             "backend": "HTTP",
+             "http_kwargs": {"endpoint_url": "https://www.example.com",
+                             "username": "yolo",
+                             "password": "yolo"}},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["http_kwargs"]["password"], "yolo")
+        self.assertNotIn("headers", response.json()["http_kwargs"])
+
+    @patch("base.notifier.Notifier.send_notification")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.setup_store_worker_queue")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_update_store_without_password_removes_it(self, post_event, setup_store_worker_queue,
+                                                      send_notification):
+        store = self._force_store_with_secrets()
+        self.set_permissions("stores.change_store")
+        response = self.put(
+            reverse("stores_api:store", args=(store.pk,)),
+            {"name": store.name,
+             "backend": "HTTP",
+             "http_kwargs": {"endpoint_url": "https://www.example.com"}},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["http_kwargs"]["password"])
+        store.instance.refresh_from_db()
+        backend_kwargs = store.instance.get_backend_kwargs()
+        self.assertNotIn("password", backend_kwargs)
+        self.assertNotIn("headers", backend_kwargs)
 
     # delete store
 

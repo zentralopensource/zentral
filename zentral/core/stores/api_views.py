@@ -1,15 +1,18 @@
 from rest_framework.exceptions import ValidationError
 from zentral.core.queues import queues
 from zentral.utils.drf import ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit
+from zentral.utils.pbac_secrets import SecretsAPIViewMixin
 from .conf import stores
 from .models import Store
+from .pbac import ViewStoreSecretsRequest
 from .serializers import StoreSerializer
 from .sync import signal_store_change
 
 
-class StoreDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class StoreDetail(SecretsAPIViewMixin, RetrieveUpdateDestroyAPIViewWithAudit):
     queryset = Store.objects.all()
     serializer_class = StoreSerializer
+    view_secrets_request_class = ViewStoreSecretsRequest
 
     def on_commit_callback_extra(self, instance):
         signal_store_change(instance)
@@ -35,9 +38,10 @@ class StoreDetail(RetrieveUpdateDestroyAPIViewWithAudit):
         queues.setup_store_worker_queue(store)
 
 
-class StoreList(ListCreateAPIViewWithAudit):
-    queryset = Store.objects.all()
+class StoreList(SecretsAPIViewMixin, ListCreateAPIViewWithAudit):
+    queryset = Store.objects.prefetch_related("events_url_authorized_roles")
     serializer_class = StoreSerializer
+    view_secrets_request_class = ViewStoreSecretsRequest
     filterset_fields = ('name',)
 
     def on_commit_callback_extra(self, instance):

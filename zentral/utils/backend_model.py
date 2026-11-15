@@ -80,6 +80,14 @@ class Backend:
 
         return self._iter_kwargs(hash_secret, self.instance.backend_kwargs, enc_path_suffix="_hash")
 
+    def hash_kwargs(self, kwargs):
+        # the plain values, with the hashes of get_kwargs_for_event()
+
+        def hash_secret(v, **secret_engine_kwargs):
+            return hashlib.sha256(v.encode("utf-8")).hexdigest()
+
+        return self._iter_kwargs(hash_secret, kwargs, enc_path_suffix="_hash")
+
 
 class BackendInstance(models.Model):
     name = models.CharField(unique=True)
@@ -101,6 +109,10 @@ class BackendInstance(models.Model):
     def get_backend_kwargs_for_event(self):
         backend = self.get_backend()
         return backend.get_kwargs_for_event()
+
+    def hash_backend_kwargs(self, kwargs):
+        backend = self.get_backend()
+        return backend.hash_kwargs(kwargs)
 
     def set_backend_kwargs(self, kwargs):
         backend = self.get_backend()

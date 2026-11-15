@@ -65,6 +65,8 @@ The three groups are nested. `ViewerActions` contains the read actions. `UserAct
 
 A small number of actions read a secret — the MDM admin password, device lock PIN, FileVault PRK and recovery password. They have a `view` prefix, but they are members of `UserActions` and not of `ViewerActions`.
 
+The `view…Secrets` actions read the passwords, tokens and keys of an object, for example `Stores::Action::"viewStoreSecrets"` for a [store](stores.md#secrets-in-the-api). They are members of `AdminActions` only. They do not give the read of the object: its view action does. Without them, the API returns the hash of each secret in place of its value.
+
 ```
 // Anyone in this Role can perform every "view" action across every Zentral app.
 permit (
