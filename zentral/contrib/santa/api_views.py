@@ -20,7 +20,7 @@ from zentral.contrib.inventory.models import File, MetaMachine
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired, FileDownloadAPIView,
-                               ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
+                               IntegerFilter, ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
                                PBACPermission, PBACRetrieveUpdateDestroyAPIViewWithAudit,
                                RetrieveUpdateDestroyAPIViewWithAudit)
 from zentral.contrib.inventory.enrollment_secrets import (EnrollmentSecretDetailMixin,
@@ -138,7 +138,7 @@ class EnrollmentConfigurationProfile(EnrollmentConfiguration):
 
 
 class EnrolledMachineFilter(filters.FilterSet):
-    configuration_id = filters.NumberFilter(field_name="enrollment__configuration_id")
+    configuration_id = IntegerFilter(field_name="enrollment__configuration_id")
 
     class Meta:
         model = EnrolledMachine

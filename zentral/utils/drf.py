@@ -1,3 +1,4 @@
+from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django_filters import rest_framework as filters
@@ -34,6 +35,15 @@ class FileDownloadAPIView(APIView):
 class MaxLimitOffsetPagination(LimitOffsetPagination):
     default_limit = 50
     max_limit = 500
+
+
+# filters
+
+
+class IntegerFilter(filters.NumberFilter):
+    # a NumberFilter reads a Decimal, which the lookup turns into an int: "1.9" would match 1, and the int()
+    # of "-1e1000000" holds a worker for seconds
+    field_class = forms.IntegerField
 
 
 # permissions

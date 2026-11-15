@@ -218,6 +218,14 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(json_response["count"], 1)
         self.assertEqual(json_response["results"][0]["id"], enrolled_machine.pk)
 
+    def test_enrolled_machines_filter_by_a_configuration_id_that_is_not_an_integer(self):
+        self.set_policy(self.view_enrolled_machine_policy())
+        url = reverse("santa_api:enrolled_machines")
+        for value in ("1.9", "-1e1000000"):
+            response = self.get(f"{url}?configuration_id={value}")
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json(), {"configuration_id": ["Enter a whole number."]})
+
     def test_enrolled_machines_filter_by_queued_clean_sync(self):
         enrolled_machine = self.force_enrolled_machine(forced_sync_type=EnrolledMachine.SyncType.CLEAN_ALL)
         self.force_enrolled_machine()
