@@ -47,7 +47,7 @@ A view that only a legacy permission protects is not in the scope of these rules
     - Allow, or "it depends on the job": at least one job could be permitted. Zentral opens the form, but it has permitted nothing yet.
     - The write: on the submit, Zentral asks again, with the job that the operator picked. Example: a policy permits `sysdiagnose` jobs only. The preview opens the page, and the submit of a `file_export` job gets a 403.
     - In the code: a request with `unknown_context=True`. `PBACViewMixin` and `PBACPermission` refuse a preview as a gate, because its Allow is not a decision. `check_request()` accepts a preview only where Zentral uses its Deny alone.
-    - A request without a resource is a preview too, with `engine.undecided_policies()`. Example: the mass tagging API answers 403 before it reads the body when no tag can be permitted.
+    - A request without a resource is a preview too, with `engine.undecided_policies()` (`pbac.utils.could_be_permitted()`). Example: the mass tagging API answers 403 before it reads the body when no tag can be permitted.
 
 ## Lists and filters
 
@@ -63,7 +63,7 @@ A view that only a legacy permission protects is not in the scope of these rules
         - The resource has a legacy permission: the field needs it, else the field is not on the form. Example: the *Configuration* select of the Turbo schedule lists needs `turbo.view_configuration`.
         - The resource has a typed view action: the choices are `visible_rows(user, <its view request class>, queryset)`. The view gives the user to the form, and the form sets the queryset of the field in its `__init__`.
         - The choices are constants, not resources (a job kind): no decision.
-    - Not for a write form. A picker of a write form narrows only the choices that it shows, with the decision of each choice (`OfferAuthorizedJobsMixin`). Its validation keeps all the objects, so a forged post reaches the decision (rules 4 and 5).
+    - Not for a write form. A picker of a write form narrows only the choices that it shows (`choices`, never `queryset`), with the decision of each choice (`OfferAuthorizedJobsMixin`). Its validation keeps all the objects, so a forged post reaches the decision on the submitted value, after the validation (rules 4 and 5).
 
 ## Writes
 
@@ -92,9 +92,12 @@ A view that only a legacy permission protects is not in the scope of these rules
 ## Identifiers, answers and logs
 
 13. **A refusal on a guessable id gives the same answer as an unknown id.** The id in the URL or the body of a typed resource is a UUID. Then a 404 (unknown) and a 403 (refused) can differ.
-    - Where the id can be guessed (a serial number, an integer key, a name), a refusal gives the answer of an unknown id: a 404 for a URL, a 400 for a body field.
+    - Where the id can be guessed (a serial number, an integer key, a name), a refusal gives the answer of an unknown id: a 404 for a URL, a 400 for a body field, and in a form, the error of an unknown choice.
+    - This covers each guessable id in the URL or the body, as the resource of the decision or in its context. Not a UUID: the job of a Turbo schedule is in the context of the create, but its key is a UUID, so the refusal of a forged job is a 403 (rule 5).
     - Policies name ids that never change: UUIDs, and the URL-safe serial number of a machine.
-14. **Log every refusal. Audit every write.** `check_request()` and `PBACPermission` log the refused request. Each write sends an audit event after the commit.
+14. **Log every refused decision. Audit every write.** A refusal is logged at the `WARNING` level, with the request that was decided: `pbac.utils.refused_requests()` decides a batch and logs each refused request, and `check_request()`, `could_be_permitted()` and `PBACPermission` use it. A preview logs its partial request: an unknown resource is `?`, and an unknown context is marked `(preview)`. Each write sends an audit event after the commit.
+    - A filter is not a decision, and logs nothing: a list, the choices of a select, a control that is hidden (rules 6 and 7).
+    - A refusal is an answer of the policies, not a fault of Zentral, so it is not an error.
     - A superuser skips Cedar: each decision allows. So a test with a superuser proves nothing about a policy.
 
 ## Tests

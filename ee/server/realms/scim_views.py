@@ -51,8 +51,8 @@ class SCIMPermissions(BasePermission):
             return False
         # Cedar gets no schema at decision time, and a superuser skips it: refuse the users first
         if not user.is_service_account:
-            logger.error("Permission denied: SCIM caller %s is not a service account", user.pk,
-                         extra={"request": request})
+            logger.warning("Permission denied: SCIM caller %s is not a service account", user.pk,
+                           extra={"request": request})
             return False
         view.get_realm()
         check_request(request, ProvisionRealmRequest(user, view.realm))

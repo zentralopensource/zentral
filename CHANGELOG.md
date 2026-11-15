@@ -210,6 +210,10 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 
 ### Backward incompatibilities
 
+#### 🧨 PBAC refusals are logged at the `WARNING` level, by `zentral.pbac.utils`
+
+A PBAC refusal is logged at the `WARNING` level now, not `ERROR`: it is an answer of the policies, not a fault of Zentral. The refusals of the API permission classes are logged by `zentral.pbac.utils` now, like the others, not by `zentral.utils.drf`. The SCIM refusal of a caller that is not a service account stays with `zentral.realms.scim_views`, at the `WARNING` level too. The line names the request that was decided, for example `Permission denied Request <User::"12" Inventory::Action::"updateTag" Inventory::Tag::"34"> Denied`. An unknown resource is `?`, and a request with an unknown context ends with `(preview)`. An alert on the refusals must match these loggers at the `WARNING` level, or the `Permission denied` message. A list, a select or a hidden control that Zentral filters logs nothing.
+
 
 #### 🧨 Only the `AdminActions` groups give `viewPolicy`
 

@@ -115,13 +115,13 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
 
     def test_post_permission_denied(self):
         # a refused write with a body that is not valid: 403, not 400
-        with self.assertLogs("zentral.contrib.inventory.api_views", "ERROR") as cm:
+        with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
             response = self.post({}, include_token=True)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
             cm.output,
-            [f'ERROR:zentral.contrib.inventory.api_views:Permission denied User::"{self.user.pk}" '
-             'Inventory::Action::"tagAnyMachine" on any resource']
+            [f'WARNING:zentral.pbac.utils:Permission denied Request <User::"{self.user.pk}" '
+             'Inventory::Action::"tagAnyMachine" ?> Denied']
         )
 
     def test_post_empty_tags(self):
@@ -278,7 +278,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_required_permission(
             self._policy("forbid", "tagAnyMachine", when=f'resource.name == "{refused_tag_name}"')
         )
-        with self.assertNoLogs("zentral.contrib.inventory.api_views", "ERROR"):
+        with self.assertNoLogs("zentral.pbac.utils", "WARNING"):
             response = self.post({"operations": [{"kind": "SET",
                                                   "taxonomy": taxonomy_name,
                                                   "names": [tag_without_taxonomy.name,
@@ -604,7 +604,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
             self._policy("forbid", "tagAnyMachine", when=f'resource.name == "{refused_tag.name}"')
         )
         expected_response = {"operations": {"0": {"names": {"1": ["Unknown tag."]}}}}
-        with self.assertLogs("zentral.contrib.inventory.api_views", "ERROR") as cm:
+        with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
             response = self.post({"operations": [{"kind": "ADD", "names": [tag.name, refused_tag.name]}],
                                   "serial_numbers": [serial_number]})
         self.assertEqual(response.status_code, 400)
@@ -635,7 +635,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_required_permission(
             self._policy("forbid", "tagAnyMachine", scope=f'resource in Inventory::Taxonomy::"{taxonomy.pk}"')
         )
-        with self.assertLogs("zentral.contrib.inventory.api_views", "ERROR") as cm:
+        with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
             response = self.post({"operations": [{"kind": "ADD", "names": [other_tag.name, tag.name]}],
                                   "serial_numbers": [serial_number]})
         self.assertEqual(response.status_code, 400)
@@ -700,7 +700,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_required_permission(
             self._policy("forbid", "tagAnyMachine", scope=f'resource == Inventory::Tag::"{removed_tag.pk}"')
         )
-        with self.assertLogs("zentral.contrib.inventory.api_views", "ERROR") as cm:
+        with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
             response = self.post({"operations": [{"kind": "SET", "taxonomy": taxonomy_name,
                                                   "names": [kept_tag_name]}],
                                   "serial_numbers": [serial_number]})
@@ -727,7 +727,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.set_policy(self._policy("permit", "tagAnyMachine")
                         + self._policy("forbid", "tagAnyMachine", when=f'resource.name == "{refused_tag_name}"'))
         expected_response = {"operations": {"0": {"names": {"1": ["Unknown tag."]}}}}
-        with self.assertLogs("zentral.contrib.inventory.api_views", "ERROR") as cm:
+        with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
             response = self.post({"operations": [{"kind": "REMOVE", "names": [tag_name, refused_tag_name]}],
                                   "serial_numbers": [serial_number]})
         self.assertEqual(response.status_code, 400)
@@ -752,7 +752,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         expected_response = {"operations": {"1": {"taxonomy": ["Unknown taxonomy."]}}}
         tag = Tag.objects.create(name=get_random_string(12))
         operations = [{"kind": "REMOVE", "names": [tag.name]}]
-        with self.assertLogs("zentral.contrib.inventory.api_views", "ERROR") as cm:
+        with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
             response = self.post({"operations": operations + [{"kind": "SET", "taxonomy": taxonomy_name, "names": []}],
                                   "serial_numbers": [serial_number]})
         self.assertEqual(response.status_code, 400)
@@ -846,7 +846,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         )
         for api_key in (self.api_key, self.service_account_api_key):
             for kind in ("ADD", "REMOVE"):
-                with self.assertLogs("zentral.contrib.inventory.api_views", "ERROR"):
+                with self.assertLogs("zentral.pbac.utils", "WARNING"):
                     response = self.post_as(api_key, {"operations": [{"kind": kind, "names": [tag.name]}],
                                                       "serial_numbers": [serial_number]})
                 self.assertEqual(response.status_code, 400)

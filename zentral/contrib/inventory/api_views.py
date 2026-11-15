@@ -15,8 +15,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
-from pbac.engine import engine
-from pbac.entities import Principal, Request
+from pbac.utils import could_be_permitted, refused_requests
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
                                RetrieveUpdateDestroyAPIViewWithAudit)
@@ -60,12 +59,7 @@ class MachineTagsUpdatePermission(BasePermission):
             return False
         # A preview on all the tags, before the validation of the body. Its Deny is final. Its Allow only
         # means that some tag could be permitted: the post decides on each one.
-        principal = Principal.from_user(request.user)
-        if engine.undecided_policies(Request(principal, tag_any_machine_action, None)):
-            return True
-        logger.error("Permission denied %s %s on any resource", principal, tag_any_machine_action,
-                     extra={"request": request})
-        return False
+        return could_be_permitted(request, tag_any_machine_action)
 
 
 class UpdateMachineTags(APIView):
@@ -91,10 +85,7 @@ class UpdateMachineTags(APIView):
                 taxonomy_tags[tag.taxonomy].append(tag)
             tags[tag.name] = tag
         pbac_requests = {tag.pk: TagAnyMachineRequest(self.request.user, tag) for tag in tags.values()}
-        engine.authorize_requests(list(pbac_requests.values()))
-        for pbac_request in pbac_requests.values():
-            if not pbac_request.is_authorized:
-                logger.error("Permission denied %s", pbac_request, extra={"request": self.request})
+        refused_requests(self.request, pbac_requests.values())
 
         def is_authorized(tag):
             return pbac_requests[tag.pk].is_authorized

@@ -1947,18 +1947,18 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.set_policy(
             f'permit (principal in Role::"{self.group.pk}", action == Realms::Action::"provisionRealm", resource);'
         )
-        with self.assertLogs("zentral.realms.scim_views", "ERROR") as cm:
+        with self.assertLogs("zentral.realms.scim_views", "WARNING") as cm:
             response = self.client.get(reverse("realms_public:scim_users", args=(self.realm.pk,)),
                                        HTTP_AUTHORIZATION=f"Bearer {api_token}")
         self.assertEqual(response.status_code, 403)
         self.assertEqual(
             cm.output,
-            [f"ERROR:zentral.realms.scim_views:Permission denied: SCIM caller {user.pk} is not a service account"]
+            [f"WARNING:zentral.realms.scim_views:Permission denied: SCIM caller {user.pk} is not a service account"]
         )
 
     def test_legacy_realm_permissions_refused(self):
         self.set_permissions(*LEGACY_REALM_PERMS)
-        with self.assertLogs("zentral.pbac.utils", "ERROR") as cm:
+        with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
             response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 403)
         self.assertEqual(len(cm.output), 1)
@@ -1969,7 +1969,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         other_realm.scim_enabled = True
         other_realm.save()
         self.set_provision_realm(other_realm)
-        with self.assertLogs("zentral.pbac.utils", "ERROR"):
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
             response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 403)
         response = self.get(reverse("realms_public:scim_users", args=(other_realm.pk,)))
@@ -1984,7 +1984,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.set_policy(
             f'permit (principal in Role::"{self.group.pk}", action in Action::"GlobalAdminActions", resource);'
         )
-        with self.assertLogs("zentral.pbac.utils", "ERROR"):
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
             response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 403)
 
@@ -1993,7 +1993,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
             f'permit (principal in Role::"{self.group.pk}", action == Realms::Action::"provisionRealm", resource);\n'
             f'forbid (principal, action, resource == Realms::Realm::"{self.realm.pk}");'
         )
-        with self.assertLogs("zentral.pbac.utils", "ERROR"):
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
             response = self.get(reverse("realms_public:scim_users", args=(self.realm.pk,)))
         self.assertEqual(response.status_code, 403)
 

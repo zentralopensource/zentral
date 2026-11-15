@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied
 
 from base.notifier import notifier
 from .engine import engine
+from .entities import Principal, Request
 
 
 logger = logging.getLogger("zentral.pbac.utils")
@@ -14,10 +15,41 @@ def signal_policy_change():
     notifier.send_notification("policies.change")
 
 
+def log_refusal(request, pbac_request):
+    # an answer of the policies, not a fault of Zentral
+    logger.warning("Permission denied %r", pbac_request, extra={"request": request})
+
+
+def refused_requests(request, pbac_requests):
+    """Decide the requests in one batch, log each refused one, and return them.
+
+    The caller chooses the answer: a 403, or the answer of an unknown id when the id can be guessed.
+    """
+    pbac_requests = list(pbac_requests)
+    if not pbac_requests:
+        return []
+    engine.authorize_requests(pbac_requests)
+    refused = [pbac_request for pbac_request in pbac_requests if not pbac_request.is_authorized]
+    for pbac_request in refused:
+        log_refusal(request, pbac_request)
+    return refused
+
+
 def check_request(request, pbac_request):
     # A preview is accepted: its Deny is final. A caller that gates a view must refuse a preview
     # first, because its Allow only means "could be permitted".
-    engine.authorize_request(pbac_request)
-    if not pbac_request.is_authorized:
-        logger.error("Permission denied %s", pbac_request, extra={"request": request})
+    if refused_requests(request, [pbac_request]):
         raise PermissionDenied
+
+
+def could_be_permitted(request, action):
+    """A preview: False when no policy can permit the action for the user, on any resource.
+
+    A False is final. A True is not a decision: the caller decides on each resource.
+    """
+    pbac_request = Request(Principal.from_user(request.user), action, None)
+    if engine.undecided_policies(pbac_request):
+        return True
+    pbac_request.is_authorized = False
+    log_refusal(request, pbac_request)
+    return False

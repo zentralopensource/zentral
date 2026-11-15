@@ -160,4 +160,9 @@ class Request:
             return "Denied"
 
     def __repr__(self):
-        return f"Request <{self.principal} {self.action} {self.resource}> {self.get_authorized_display()}"
+        # no resource: a list, or a preview on any resource. The request cannot tell them apart.
+        resource = "?" if self.unknown_resource else self.resource
+        display = f"Request <{self.principal} {self.action} {resource}> {self.get_authorized_display()}"
+        if self.unknown_context:
+            display += " (preview)"
+        return display
