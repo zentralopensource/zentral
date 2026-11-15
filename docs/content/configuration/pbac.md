@@ -61,7 +61,7 @@ Each contrib app's actions are members of `<Namespace>::Action::"AdminActions"`,
 
 The three groups are nested. `ViewerActions` contains the read actions. `UserActions` contains the same read actions, and adds the daily operations, for example a machine tag change or a Santa clean sync. `AdminActions` contains all of them, and adds the configuration changes. A role with `UserActions` can thus do all that a role with `ViewerActions` can do.
 
-`Accounts::Action::"viewPolicy"` opens the policies and the Schema browser. The policies show who can do what in the deployment, so this action is a member of the `AdminActions` groups only, and not of `UserActions` or `ViewerActions`.
+`Accounts::Action::"viewPolicy"` opens the policies and the Schema browser. The policies show who can do what in the deployment, so this action is a member of the `AdminActions` groups only, and not of `UserActions` or `ViewerActions`. `Accounts::Action::"viewOIDCAPITokenIssuerCondition"` is in the same case: the CEL condition of an OIDC API token issuer shows which workloads get an API token of a service account. The other fields of an issuer stay with `viewOIDCAPITokenIssuer`.
 
 A small number of actions read a secret — the MDM admin password, device lock PIN, FileVault PRK and recovery password. They have a `view` prefix, but they are members of `UserActions` and not of `ViewerActions`.
 

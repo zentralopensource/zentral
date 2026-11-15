@@ -100,7 +100,7 @@ A view that only a legacy permission protects is not in the scope of these rules
     - This covers each guessable id in the URL or the body, as the resource of the decision or in its context. Not a UUID: the job of a Turbo schedule is in the context of the create, but its key is a UUID, so the refusal of a forged job is a 403 (rule 5).
     - Policies name ids that never change: UUIDs, and the URL-safe serial number of a machine.
 14. **Log every refused decision. Audit every write.** A refusal is logged at the `WARNING` level, with the request that was decided: `pbac.utils.refused_requests()` decides a batch and logs each refused request, and `check_request()`, `could_be_permitted()` and `PBACPermission` use it. A preview logs its partial request: an unknown resource is `?`, and an unknown context is marked `(preview)`. Each write sends an audit event after the commit.
-    - A filter is not a decision, and logs nothing: a list, the choices of a select, a control that is hidden (rules 6 and 7).
+    - A filter is not a decision, and logs nothing: a list, the choices of a select, a control that is hidden, a field that is left out of a response (rules 2, 6 and 7).
     - A refusal is an answer of the policies, not a fault of Zentral, so it is not an error.
     - A superuser skips Cedar: each decision allows. So a test with a superuser proves nothing about a policy.
 

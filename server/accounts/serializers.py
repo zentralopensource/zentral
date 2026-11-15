@@ -4,7 +4,7 @@ import re
 
 import celpy
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -12,6 +12,7 @@ from zentral.core.events.base import AuditEvent
 from zentral.utils.oidc import verify_jws_with_discovery
 
 from .models import APIToken, Group, OIDCAPITokenIssuer, Policy, ProvisionedRole, User
+from .pbac import issuers_with_visible_condition
 
 logger = logging.getLogger("server.accounts.serializer")
 
@@ -68,10 +69,43 @@ class PolicyProvisioningSerializer(serializers.ModelSerializer):
         return data
 
 
+class OIDCAPITokenIssuerListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        issuers = list(data.all() if isinstance(data, models.manager.BaseManager) else data)
+        # one Cedar call for the rows of the page
+        self.child.decide_conditions(issuers)
+        return super().to_representation(issuers)
+
+
 class OIDCAPITokenIssuerSerializer(serializers.ModelSerializer):
+    # cel_condition needs viewOIDCAPITokenIssuerCondition. Without it, the key is absent: an empty
+    # condition already means that an issuer written before the field became required has none.
     class Meta:
         model = OIDCAPITokenIssuer
-        fields = "__all__"
+        fields = (
+            "id",
+            "user",
+            "name",
+            "description",
+            "issuer_uri",
+            "audience",
+            "cel_condition",
+            "max_validity",
+            "created_at",
+            "updated_at",
+        )
+        list_serializer_class = OIDCAPITokenIssuerListSerializer
+
+    def decide_conditions(self, issuers):
+        self._visible_condition_pks = issuers_with_visible_condition(self.context.get("request"), issuers)
+
+    def to_representation(self, instance):
+        if not hasattr(self, "_visible_condition_pks"):
+            self.decide_conditions([instance])
+        data = super().to_representation(instance)
+        if instance.pk not in self._visible_condition_pks:
+            del data["cel_condition"]
+        return data
 
 
 class OIDCAPITokenIssuerAuthSerializer(serializers.Serializer):

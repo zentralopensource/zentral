@@ -94,8 +94,13 @@ class UserView(PermissionRequiredMixin, DetailView):
         groups = self.object.groups.all().order_by(Lower("name"))
         ctx["groups"] = groups
         ctx["group_count"] = groups.count()
-        ctx["oidc_api_token_issuers"] = self.object.oidcapitokenissuer_set.all()
-        ctx["oidc_api_token_issuer_count"] = ctx["oidc_api_token_issuers"].count()
+        # the issuers are read only for a role that can see them, not only hidden in the template
+        show_issuers = (self.object.is_service_account
+                        and self.request.user.has_perm("accounts.view_oidcapitokenissuer"))
+        ctx["show_oidc_api_token_issuers"] = show_issuers
+        if show_issuers:
+            ctx["oidc_api_token_issuers"] = list(self.object.oidcapitokenissuer_set.all())
+            ctx["oidc_api_token_issuer_count"] = len(ctx["oidc_api_token_issuers"])
         # gates the add and change flags below, not the delete one
         can_issue_credentials = self.object.is_service_account and is_local_superuser(self.request)
         ctx["can_manage_oidc_api_token_issuers"] = can_issue_credentials

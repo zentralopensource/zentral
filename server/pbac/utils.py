@@ -36,6 +36,19 @@ def refused_requests(request, pbac_requests):
     return refused
 
 
+def permitted_pks(user_obj, request_class, objects):
+    """Decide request_class on each object in one batch, and return the primary keys of the permitted ones.
+
+    For a field that a response leaves out without the action: a filter, which logs nothing (rule 14).
+    """
+    objects = list(objects)
+    if not objects:
+        return set()
+    pbac_requests = [request_class(user_obj, obj) for obj in objects]
+    engine.authorize_requests(pbac_requests)
+    return {obj.pk for obj, pbac_request in zip(objects, pbac_requests) if pbac_request.is_authorized}
+
+
 def check_request(request, pbac_request, not_found_model=None):
     # A preview is accepted: its Deny is final. A caller that gates a view must refuse a preview
     # first, because its Allow only means "could be permitted".

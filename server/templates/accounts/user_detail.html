@@ -70,7 +70,7 @@
         </tr>
         {% endif %}
         {% endif %}
-        {% if object.is_service_account and perms.accounts.view_oidcapitokenissuer %}
+        {% if show_oidc_api_token_issuers %}
         <tr>
         <th>OIDC API token issuer{{ oidc_api_token_issuer_count|pluralize }} ({{ oidc_api_token_issuer_count }})</th>
         <td>

@@ -89,6 +89,8 @@ A long-lived token in a CI system is a standing liability. As an alternative, a 
 
 Issuers are managed from the service account's detail page, under *Platform settings > Users*. They can only be attached to a service account, never to a user. A superuser creates, updates and deletes them, as the tokens of a service account.
 
+Reading an issuer needs `Accounts::Action::"viewOIDCAPITokenIssuer"`, like the other view actions. Its CEL condition needs `Accounts::Action::"viewOIDCAPITokenIssuerCondition"` too, a member of the `AdminActions` groups only: the condition names the workloads that get an API token of the service account, so it shows an attacker which workload to compromise. The resource of this action is the issuer, a member of its service account: `resource in ServiceAccount::"…"` gives the conditions of the issuers of one account, and `resource in Role::"…"` the conditions of the issuers of the service accounts of one role. The `zentral_audit` event of an issuer write carries the condition, so that a change of it is in the audit trail. A role that reads these events reads the condition: other decisions gate them, for example the probes, and the access to the event stores.
+
 |Field|Description|
 |---|---|
 |Name|Required, unique across the deployment.|
@@ -108,7 +110,7 @@ An issuer that does not accept a token — bad signature, wrong audience, or a c
 
 Once the issuer exists, the workload exchanges its identity token at [`/api/accounts/token_issuers/oidc/<uuid:issuer_id>/auth/`](#apiaccountstoken_issuersoidcuuidissuer_idauth). The tokens it mints are ordinary API tokens with an expiry, and appear in the service account's token list like any other.
 
-The API reads the issuers, at `/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/`, but does not write them: an issuer makes credentials, and a credential comes from a local session. Create, update and delete the issuers in the web console. A `POST`, a `PUT` or a `DELETE` on these endpoints gives a `405`, or a `403` when the token does not have the write permission of the method.
+The API reads the issuers, at `/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/`, with the `cel_condition` key only when `viewOIDCAPITokenIssuerCondition` allows it on the issuer. Else the key is absent: an empty `cel_condition` means that the issuer has no condition. The API does not write the issuers: an issuer makes credentials, and a credential comes from a local session. Create, update and delete the issuers in the web console. A `POST`, a `PUT` or a `DELETE` on these endpoints gives a `405`, or a `403` when the token does not have the write permission of the method.
 
 ## Password events
 

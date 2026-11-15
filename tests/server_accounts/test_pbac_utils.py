@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from cedarpy import format_policies
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
@@ -7,7 +8,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import Policy, User
 from pbac.engine import engine
 from pbac.entities import Principal, Request
-from pbac.utils import check_request, could_be_permitted, refused_requests
+from pbac.utils import check_request, could_be_permitted, permitted_pks, refused_requests
 
 
 class CheckRequestTestCase(TestCase):
@@ -81,6 +82,18 @@ class CheckRequestTestCase(TestCase):
     def test_refused_requests_empty(self):
         with self.assertNoLogs("zentral.pbac.utils"):
             self.assertEqual(refused_requests(self.request, []), [])
+
+    def _perm_request(self, user_obj, obj):
+        return Request(Principal.from_user(user_obj), engine.legacy_perm_actions[obj.perm], engine.system_any_resource)
+
+    def test_permitted_pks(self):
+        objects = [SimpleNamespace(pk=1, perm="accounts.view_user"),
+                   SimpleNamespace(pk=2, perm="accounts.delete_user")]
+        with self.assertNoLogs("zentral.pbac.utils"):
+            self.assertEqual(permitted_pks(self.user, self._perm_request, (obj for obj in objects)), {1})
+
+    def test_permitted_pks_empty(self):
+        self.assertEqual(permitted_pks(self.user, self._perm_request, []), set())
 
     def test_could_be_permitted(self):
         self.request.user = self.user

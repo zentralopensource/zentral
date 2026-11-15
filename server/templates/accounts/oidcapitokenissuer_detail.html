@@ -51,10 +51,12 @@
             <th>Audience</th>
             <td><code>{{ object.audience }}</code></td>
           </tr>
+          {% if show_cel_condition %}
           <tr>
             <th>CEL condition</th>
             <td>{% if object.cel_condition %}<code>{{ object.cel_condition }}</code>{% else %}-{% endif %}</td>
           </tr>
+          {% endif %}
           <tr>
             <th>Max validity</th>
             <td>{% if object.max_validity %}{{ object.max_validity }}s{% else %}-{% endif %}</td>

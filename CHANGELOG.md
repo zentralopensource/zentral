@@ -217,6 +217,19 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 A PBAC refusal is logged at the `WARNING` level now, not `ERROR`: it is an answer of the policies, not a fault of Zentral. The refusals of the API permission classes are logged by `zentral.pbac.utils` now, like the others, not by `zentral.utils.drf`. The SCIM refusal of a caller that is not a service account stays with `zentral.realms.scim_views`, at the `WARNING` level too. The line names the request that was decided, for example `Permission denied Request <User::"12" Inventory::Action::"updateTag" Inventory::Tag::"34"> Denied`. An unknown resource is `?`, and a request with an unknown context ends with `(preview)`. An alert on the refusals must match these loggers at the `WARNING` level, or the `Permission denied` message. A list, a select or a hidden control that Zentral filters logs nothing.
 
 
+#### 🧨 The CEL condition of an OIDC API token issuer needs `viewOIDCAPITokenIssuerCondition`
+
+The CEL condition of an OIDC API token issuer names the workloads that get an API token of its service account, for example a repository and a branch. It shows an attacker which workload to compromise. The new action `Accounts::Action::"viewOIDCAPITokenIssuerCondition"`, a member of `Accounts::Action::"AdminActions"` and `Action::"GlobalAdminActions"` only, gives it:
+
+- `/api/accounts/token_issuers/oidc/` and `/api/accounts/token_issuers/oidc/<uuid:pk>/` return the `cel_condition` key only for an issuer whose condition this action allows. Else the key is absent. An empty `cel_condition` still means that the issuer has no condition.
+- The page of an issuer shows the condition only to a role with this action.
+- The resource of the action is `Accounts::OIDCAPITokenIssuer`, a member of its service account, and so of the roles of this account.
+
+`Accounts::Action::"viewOIDCAPITokenIssuer"` does not change: a role with `ViewerActions` still sees the issuers, with their issuer URI and their audience. These two fields are not secrets: an identity provider such as GitHub Actions signs a token for any audience. A service account that reads `cel_condition` with the API needs the new action in one of its policies. The Terraform provider and goztl do not read the issuers.
+
+The API names the fields of an issuer one by one: a new field of the model is not returned until it is added to the list.
+
+
 #### 🧨 Only the `AdminActions` groups give `viewPolicy`
 
 `Accounts::Action::"viewPolicy"` is a member of `Accounts::Action::"AdminActions"` and `Action::"GlobalAdminActions"` only now. Before, it was also a member of the `UserActions` and `ViewerActions` groups, like the other view actions. The policies show who can do what in the deployment. A role with `UserActions` or `ViewerActions` does not see the policies, the Schema browser, or the policies on the pages of a role and of a user, anymore. A policy that names `viewPolicy` does not change. To keep this access for a role, add `Accounts::Action::"viewPolicy"` to one of its policies.

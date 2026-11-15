@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import OIDCAPITokenIssuer
+from accounts.pbac import with_oidc_api_token_issuer_resource_relations
 from accounts.serializers import (
     APITokenWithSecretSerializer,
     OIDCAPITokenIssuerAuthSerializer,
@@ -40,7 +41,7 @@ class OIDCAPITokenIssuerAuth(APIView):
 # read only: a credential is written from a local session, and a superuser writes the issuers in the console
 class OIDCAPITokenIssuerViewList(generics.ListAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
-    queryset = OIDCAPITokenIssuer.objects.all()
+    queryset = with_oidc_api_token_issuer_resource_relations(OIDCAPITokenIssuer.objects.all())
     serializer_class = OIDCAPITokenIssuerSerializer
     ordering_fields = ('created_at',)
     ordering = ['-created_at']
@@ -51,5 +52,5 @@ class OIDCAPITokenIssuerViewList(generics.ListAPIView):
 
 class OIDCAPITokenIssuerViewDetail(generics.RetrieveAPIView):
     permission_classes = [DefaultDjangoModelPermissions]
-    queryset = OIDCAPITokenIssuer.objects.all()
+    queryset = with_oidc_api_token_issuer_resource_relations(OIDCAPITokenIssuer.objects.all())
     serializer_class = OIDCAPITokenIssuerSerializer

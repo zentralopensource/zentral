@@ -362,6 +362,8 @@ class OIDCAPITokenIssuer(models.Model):
             "updated_at": self.updated_at.isoformat(),
         })
         if self.cel_condition:
+            # The audit trail keeps the condition itself, not a hash. A role that reads these events reads it:
+            # other decisions gate them, the probes and the access to the event stores.
             d["cel_condition"] = self.cel_condition
         if self.description:
             d["description"] = self.description

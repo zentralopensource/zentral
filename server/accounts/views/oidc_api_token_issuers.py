@@ -7,6 +7,7 @@ from django.views.generic import DetailView
 
 from accounts.forms import OIDCAPITokenIssuerForm
 from accounts.models import OIDCAPITokenIssuer, User
+from accounts.pbac import issuers_with_visible_condition, with_oidc_api_token_issuer_resource_relations
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, is_local_superuser
 
 logger = logging.getLogger("zentral.accounts.views.oidc_api_token_issuers")
@@ -22,7 +23,7 @@ class OIDCAPITokenIssuerMixin(PermissionRequiredMixin):
         return get_object_or_404(User, pk=self.kwargs["user_pk"], is_service_account=True)
 
     def get_queryset(self):
-        return super().get_queryset().filter(user=self.service_account).select_related("user")
+        return with_oidc_api_token_issuer_resource_relations(super().get_queryset().filter(user=self.service_account))
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -48,6 +49,11 @@ class OIDCAPITokenIssuerFormMixin(OIDCAPITokenIssuerWriteMixin):
 
 class OIDCAPITokenIssuerView(OIDCAPITokenIssuerMixin, DetailView):
     permission_required = "accounts.view_oidcapitokenissuer"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["show_cel_condition"] = self.object.pk in issuers_with_visible_condition(self.request, [self.object])
+        return ctx
 
 
 class CreateOIDCAPITokenIssuerView(OIDCAPITokenIssuerFormMixin, CreateViewWithAudit):
