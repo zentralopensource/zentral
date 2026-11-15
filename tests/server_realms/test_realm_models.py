@@ -71,6 +71,14 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
                 {k: v for k, v in config.items() if k not in backend_class.secret_config_keys}
             )
 
+    def test_realm_changed_secret_config_keys(self):
+        realm = force_realm(backend="openidc")
+        prev_config = dict(realm.config)
+        self.assertEqual(realm.changed_secret_config_keys(prev_config), [])
+        self.assertEqual(realm.changed_secret_config_keys({}), ["client_secret"])
+        realm.config.pop("client_secret")
+        self.assertEqual(realm.changed_secret_config_keys(prev_config), ["client_secret"])
+
     def test_realm_unknown_backend_no_config(self):
         realm = force_realm()
         Realm.objects.filter(pk=realm.pk).update(backend="unknown")

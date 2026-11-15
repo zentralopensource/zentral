@@ -1,4 +1,5 @@
 import html
+import json
 from io import BytesIO
 from unittest.mock import Mock, patch
 
@@ -1537,6 +1538,58 @@ class RealmViewsTestCase(TestCase, LoginCase):
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["objects"], objects)
         self.assertEqual(sorted(metadata["tags"]), ["realms", "zentral"])
+
+    @patch("realms.backends.ldap.forms.get_ldap_connection")
+    def test_create_realm_audit_event(self, get_ldap_connection):
+        get_ldap_connection.return_value = Mock()
+        payload = {
+            k: get_random_string(12)
+            for k in ("name", "username_claim", "host", "bind_dn", "bind_password", "users_base_dn")
+        }
+        self._login_superuser()
+        events = self._post_audit_events(reverse("realms:create", args=("ldap",)), payload)
+        realm = Realm.objects.get(name=payload["name"])
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.payload["action"], "created")
+        self.assertEqual(event.payload["object"]["changed_secrets"], ["bind_password"])
+        self.assertEqual(event.payload["object"]["new_value"], realm.serialize_for_event())
+        self.assertNotIn(payload["bind_password"], json.dumps(event.serialize()))
+        self.assertEqual(event.metadata.serialize()["objects"], {"realms_realm": [str(realm.pk)]})
+
+    @patch("realms.backends.ldap.forms.get_ldap_connection")
+    def test_update_realm_secret_audit_event(self, get_ldap_connection):
+        get_ldap_connection.return_value = Mock()
+        realm = force_realm()
+        prev_value = realm.serialize_for_event()
+        payload = {k: realm.config[k] for k in ("host", "bind_dn", "users_base_dn")}
+        payload.update({"name": realm.name, "username_claim": realm.username_claim,
+                        "bind_password": get_random_string(24)})
+        self._login_superuser()
+        events = self._post_audit_events(reverse("realms:update", args=(realm.pk,)), payload)
+        realm.refresh_from_db()
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event.payload["action"], "updated")
+        self.assertEqual(event.payload["object"]["changed_secrets"], ["bind_password"])
+        self.assertEqual(event.payload["object"]["prev_value"], prev_value)
+        self.assertEqual(event.payload["object"]["new_value"], realm.serialize_for_event())
+        serialized_event = json.dumps(event.serialize())
+        self.assertNotIn(payload["bind_password"], serialized_event)
+        self.assertNotIn('"yolo"', serialized_event)
+
+    @patch("realms.backends.ldap.forms.get_ldap_connection")
+    def test_update_realm_no_secret_change_audit_event(self, get_ldap_connection):
+        get_ldap_connection.return_value = Mock()
+        realm = force_realm()
+        payload = {k: realm.config[k] for k in ("host", "bind_dn", "bind_password", "users_base_dn")}
+        payload.update({"name": get_random_string(12), "username_claim": realm.username_claim})
+        self._login_superuser()
+        events = self._post_audit_events(reverse("realms:update", args=(realm.pk,)), payload)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].payload["action"], "updated")
+        self.assertNotIn("changed_secrets", events[0].payload["object"])
+        self.assertEqual(events[0].payload["object"]["new_value"]["name"], payload["name"])
 
     def test_create_realm_group_audit_event(self):
         realm = force_realm()

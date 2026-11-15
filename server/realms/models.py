@@ -78,6 +78,10 @@ class Realm(models.Model):
         secret_keys = self.backend_instance.secret_config_keys
         return {k: v for k, v in self.config.items() if k not in secret_keys}
 
+    def changed_secret_config_keys(self, prev_config):
+        return sorted(k for k in self.backend_instance.secret_config_keys
+                      if self.config.get(k) != prev_config.get(k))
+
     def get_absolute_url(self):
         return reverse("realms:view", args=(self.uuid,))
 

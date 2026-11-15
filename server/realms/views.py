@@ -52,6 +52,12 @@ class RealmListView(PermissionRequiredMixin, ListView):
         return ctx
 
 
+# The events carry no secret, only the keys of the secrets that the write changed.
+def changed_secrets_object_extra(realm, prev_config):
+    changed_secrets = realm.changed_secret_config_keys(prev_config)
+    return {"changed_secrets": changed_secrets} if changed_secrets else None
+
+
 class CreateRealmView(LocalSuperuserRequiredMixin, CreateView):
     template_name = "realms/realm_form.html"
 
@@ -66,6 +72,8 @@ class CreateRealmView(LocalSuperuserRequiredMixin, CreateView):
         self.object = form.save(commit=False)
         self.object.backend = self.kwargs["backend"]
         self.object.save()
+        post_audit_event(self.request, self.object, AuditEvent.Action.CREATED,
+                         object_extra=changed_secrets_object_extra(self.object, {}))
         return redirect(self.object)
 
 
@@ -126,6 +134,14 @@ class UpdateRealmView(LocalSuperuserRequiredMixin, UpdateView):
         if backend_instance is None:
             raise Http404
         return backend_instance.get_form_class()
+
+    def form_valid(self, form):
+        prev_realm = self.get_object()  # self.object is already updated
+        response = super().form_valid(form)
+        post_audit_event(self.request, self.object, AuditEvent.Action.UPDATED,
+                         prev_value=prev_realm.serialize_for_event(),
+                         object_extra=changed_secrets_object_extra(self.object, prev_realm.config))
+        return response
 
 
 # realm groups
