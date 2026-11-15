@@ -14,6 +14,7 @@ from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.google_workspace.api_client import _AdminSDKClient
 from zentral.core.events.base import AuditEvent
 
@@ -612,7 +613,7 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_connection_group_tag_mapping(self, build):
         self.login("google_workspace.view_connection",
-                   "google_workspace.add_grouptagmapping")
+                   "google_workspace.add_grouptagmapping", tag_any_machine_action)
         connection = self._given_connection()
         group_tag_mapping = self._given_group_tag_mapping(connection)
         build.return_value.groups.return_value.list.return_value.execute.side_effect = HttpError(Mock(status=404), b"")
@@ -720,7 +721,7 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_create_redirect(self, build):
         self.login("google_workspace.view_connection",
-                   "google_workspace.add_grouptagmapping")
+                   "google_workspace.add_grouptagmapping", tag_any_machine_action)
         connection = self._given_connection()
         tag = self._given_tag()
         group_email = f"{connection.name}@zentral.com"
@@ -746,7 +747,7 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_create_redirect_cloud_id(self, build):
         self.login("google_workspace.view_connection",
-                   "google_workspace.add_grouptagmapping")
+                   "google_workspace.add_grouptagmapping", tag_any_machine_action)
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",
@@ -830,7 +831,7 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_update_redirect(self, build):
         self.login("google_workspace.view_connection",
-                   "google_workspace.change_grouptagmapping")
+                   "google_workspace.change_grouptagmapping", tag_any_machine_action)
         connection = self._given_connection()
         tag = self._given_tag()
         group_tag_mapping = self._given_group_tag_mapping(connection, tag)
@@ -852,7 +853,7 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_group_tag_mapping_update_redirect_cloud_id(self, build):
         self.login("google_workspace.view_connection",
-                   "google_workspace.change_grouptagmapping")
+                   "google_workspace.change_grouptagmapping", tag_any_machine_action)
         connection = self._given_connection(
             type=Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY,
             customer_id=f"C{get_random_string(5)}",

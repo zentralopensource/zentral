@@ -878,6 +878,7 @@ Response:
 * method: POST
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"createEnrollment"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the enrollment has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 
 Example:
 
@@ -952,6 +953,7 @@ curl \
 * method: PUT
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"updateEnrollment"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the enrollment has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 * `<int:pk>`: the primary key of the enrollment
 
 Updating an enrollment bumps its version. An enrollment owned by a distributor – another Zentral object that manages it on your behalf – cannot be updated here.
@@ -1092,6 +1094,7 @@ Response:
 * method: POST
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"createScript"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the script has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 
 At least one of `arch_amd64` and `arch_arm64` must be true – a script that runs on no architecture never runs at all.
 
@@ -1166,6 +1169,7 @@ curl \
 * method: PUT
 * Content-Type: application/json
 * PBAC action: `Turbo::Action::"updateScript"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the script has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 * `<uuid:pk>`: the primary key of the script
 
 Changing `source` bumps the version – the agents re-run the script. Changing any other attribute does not.

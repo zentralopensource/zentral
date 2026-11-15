@@ -19,6 +19,7 @@ from .utils import (force_dep_enrollment, force_push_certificate, force_acme_iss
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.core.events.base import AuditEvent
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from datetime import timedelta
 
 
@@ -752,7 +753,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.contrib.mdm.dep_client.DEPClient.add_profile")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_dep_enrollment(self, post_event, add_profile):
-        self.set_permissions("mdm.add_depenrollment")
+        self.set_permissions("mdm.add_depenrollment", tag_any_machine_action)
         tag = self._given_tag()
         request = self._create_dep_enrollment_request(tag=tag)
         profile_uuid = uuid.uuid4()
@@ -846,7 +847,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.contrib.mdm.dep_client.DEPClient.add_profile")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_dep_enrollment(self, post_event, add_profile):
-        self.set_permissions("mdm.change_depenrollment")
+        self.set_permissions("mdm.change_depenrollment", tag_any_machine_action)
         enrollment = force_dep_enrollment(self.mbu)
         prev_value = enrollment.serialize_for_event()
         profile_uuid = uuid.uuid4()

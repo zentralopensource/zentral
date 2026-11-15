@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
-from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer, TagAnyMachineSerializerMixin
 from zentral.utils.drf import FullUpdateSerializerMixin
 
 from .command_backends import get_command_backend_class
@@ -73,7 +73,8 @@ class EnrollmentSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-class ScriptSerializer(serializers.ModelSerializer):
+class ScriptSerializer(TagAnyMachineSerializerMixin, serializers.ModelSerializer):
+    tag_any_machine_fields = ("tag",)
     version = serializers.IntegerField(source="job.version", read_only=True)
     job_id = serializers.UUIDField(read_only=True)
     # declared with the model default so they are always in validated_data — validate() can then check

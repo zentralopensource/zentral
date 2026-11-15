@@ -1,7 +1,7 @@
 from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.urls import reverse_lazy
 from django.views.generic import DetailView
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserFormKwargsMixin
 from ..forms import ScriptForm, ScriptSearchForm
 from ..models import Script
 from .base import JobDetailMixin, JobListView
@@ -13,7 +13,7 @@ class ScriptListView(JobListView):
     search_form_class = ScriptSearchForm
 
 
-class CreateScriptView(PermissionRequiredMixin, CreateViewWithAudit):
+class CreateScriptView(PermissionRequiredMixin, UserFormKwargsMixin, CreateViewWithAudit):
     permission_required = "turbo.add_script"
     model = Script
     form_class = ScriptForm
@@ -26,7 +26,7 @@ class ScriptView(PermissionRequiredMixin, JobDetailMixin, DetailView):
         return Script.objects.select_related("job", "compliance_check", "tag")
 
 
-class UpdateScriptView(PermissionRequiredMixin, UpdateViewWithAudit):
+class UpdateScriptView(PermissionRequiredMixin, UserFormKwargsMixin, UpdateViewWithAudit):
     permission_required = "turbo.change_script"
     model = Script
     form_class = ScriptForm

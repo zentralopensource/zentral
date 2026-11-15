@@ -11,7 +11,8 @@ from zentral.contrib.osquery.models import PackQuery, Query
 from zentral.core.stores.conf import stores
 from zentral.core.stores.views import EventsView, FetchEventsView, EventsStoreRedirectView
 from zentral.utils.text import encode_args
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserPaginationListView
+from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
+                                 UserFormKwargsMixin, UserPaginationListView)
 
 
 logger = logging.getLogger('zentral.contrib.osquery.views.queries')
@@ -40,7 +41,7 @@ class QueryListView(PermissionRequiredMixin, UserPaginationListView):
         return ctx
 
 
-class CreateQueryView(PermissionRequiredMixin, CreateViewWithAudit):
+class CreateQueryView(PermissionRequiredMixin, UserFormKwargsMixin, CreateViewWithAudit):
     permission_required = "osquery.add_query"
     model = Query
     form_class = QueryForm
@@ -94,7 +95,7 @@ class QueryView(PermissionRequiredMixin, DetailView):
         return ctx
 
 
-class UpdateQueryView(PermissionRequiredMixin, UpdateViewWithAudit):
+class UpdateQueryView(PermissionRequiredMixin, UserFormKwargsMixin, UpdateViewWithAudit):
     permission_required = "osquery.change_query"
     model = Query
     form_class = QueryForm

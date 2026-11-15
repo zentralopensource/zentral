@@ -3,6 +3,7 @@ from django.contrib.postgres.forms import SimpleArrayField
 from django.db.models import F, Q, TextField
 from django.db.models.functions import Coalesce
 
+from zentral.contrib.inventory.forms import DecidedChoicesFormMixin, TagAnyMachineChoiceField
 from zentral.contrib.inventory.models import Tag
 from .compliance_checks import sync_mscp_check_compliance_check, sync_script_compliance_check
 from .pbac import CreateOneTimeJobRequest, CreateRecurringJobRequest, offerable_jobs, scheduled_in
@@ -33,7 +34,7 @@ class EnrollmentForm(forms.ModelForm):
             self.fields["configuration"].widget = forms.HiddenInput()
 
 
-class ScriptForm(forms.ModelForm):
+class ScriptForm(DecidedChoicesFormMixin, forms.ModelForm):
     compliance_check = forms.BooleanField(label="Compliance check", required=False)
     # keep the tagging / compliance roles grouped after the definition & compatibility fields
     field_order = ["name", "description", "source",
@@ -41,6 +42,7 @@ class ScriptForm(forms.ModelForm):
                    "tag", "compliance_check"]
 
     class Meta:
+        field_classes = {"tag": TagAnyMachineChoiceField}
         model = Script
         fields = "__all__"
         widgets = {

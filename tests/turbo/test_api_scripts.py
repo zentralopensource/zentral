@@ -5,6 +5,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.turbo.compliance_checks import TurboScript
 from zentral.contrib.turbo.models import Script
 from zentral.core.compliance_checks.models import ComplianceCheck
@@ -47,7 +48,7 @@ class TurboScriptAPITestCase(TurboAPITestCase):
     def test_create_script_compliance_and_tag_are_combinable(self, post_event):
         # unlike osquery, a turbo script can be both a compliance check and a tagging script
         tag = Tag.objects.create(name=get_random_string(12))
-        self.set_permissions("turbo.add_script")
+        self.set_permissions("turbo.add_script", tag_any_machine_action)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.post(reverse("turbo_api:scripts"),
                                  {"name": get_random_string(12), "source": "echo ok",
@@ -147,7 +148,8 @@ class TurboScriptAPITestCase(TurboAPITestCase):
         version = script.job.version
         self.set_permissions("turbo.change_script")
         response = self.put(reverse("turbo_api:script", args=(script.pk,)),
-                            {"name": script.name, "source": "echo changed", "compliance_check_enabled": True})
+                            {"name": script.name, "source": "echo changed", "compliance_check_enabled": True,
+                             "tag": None})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["version"], version + 1)
         script = Script.objects.get(pk=script.pk)
@@ -160,7 +162,8 @@ class TurboScriptAPITestCase(TurboAPITestCase):
         cc_pk = script.compliance_check.pk
         self.set_permissions("turbo.change_script")
         response = self.put(reverse("turbo_api:script", args=(script.pk,)),
-                            {"name": script.name, "source": script.source, "compliance_check_enabled": False})
+                            {"name": script.name, "source": script.source, "compliance_check_enabled": False,
+                             "tag": None})
         self.assertEqual(response.status_code, 200)
         # the response must reflect the disabled state, not the deleted check (SET_NULL leaves the
         # in-memory instance stale unless the sync refreshes it)

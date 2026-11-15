@@ -1,5 +1,6 @@
 import logging
 from rest_framework import serializers
+from zentral.contrib.inventory.serializers import TagAnyMachineSerializerMixin
 from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
 from zentral.contrib.google_workspace.api_client import APIClient, validate_group_in_connection
 
@@ -34,7 +35,7 @@ class ConnectionDetailSerializer(ConnectionSerializer):
         )
 
 
-class GroupTagMappingSerializer(serializers.ModelSerializer):
+class GroupTagMappingSerializer(TagAnyMachineSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = GroupTagMapping
         fields = (

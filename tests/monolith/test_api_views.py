@@ -12,6 +12,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.monolith.events import MonolithSyncCatalogsRequestEvent
 from zentral.contrib.monolith.models import (
@@ -1796,7 +1797,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_enrollment(self, post_event):
-        self.set_permissions("monolith.add_enrollment")
+        self.set_permissions("monolith.add_enrollment", tag_any_machine_action)
         manifest = force_manifest(mbu=self.mbu)
         self.assertEqual(manifest.version, 1)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
@@ -1887,7 +1888,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         secret_data["serial_numbers"] = serial_numbers
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         secret_data["tags"] = [t.id for t in tags]
-        self.set_permissions("monolith.change_enrollment")
+        self.set_permissions("monolith.change_enrollment", tag_any_machine_action)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.put(reverse("monolith_api:enrollment", args=(enrollment.pk,)), data={
                 'manifest': enrollment.manifest.pk,

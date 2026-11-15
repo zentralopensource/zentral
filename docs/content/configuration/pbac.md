@@ -118,6 +118,8 @@ forbid (
 
 A `SET` operation of the mass tagging API removes the other tags of its taxonomy. It needs `tagAnyMachine` on each tag of the taxonomy, so the second policy also refuses a `SET` operation on the taxonomy of the `VIP` tag.
 
+The second policy also keeps the role from putting the `VIP` tag in an object that gives its tags to machines later, for example an enrollment or an Osquery query. See [The objects that give tags later](../apps/inventory.md#the-objects-that-give-tags-later) for the list of these objects, and for what Zentral does not decide.
+
 `Inventory::Action::"createTag"` creates a tag. Its resource is the taxonomy of the new tag. For a tag without taxonomy, its resource is `System::"root"`: this entity means "no container", and no other entity is a member of it. This policy lets a role create tags in one taxonomy (pk 3) only, and no tag without taxonomy:
 
 ```

@@ -12,6 +12,7 @@ from django import forms
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Exists, F, OuterRef, Q
 
+from zentral.contrib.inventory.forms import DecidedChoicesFormMixin, TagAnyMachineChoiceField
 from zentral.contrib.inventory.models import Tag
 from zentral.utils.os_version import (make_comparable_os_version, validate_os_version_bound,
                                       validate_os_version_range)
@@ -56,6 +57,7 @@ from .models import (
     Profile,
     ProvisioningProfile,
     PushCertificate,
+    RealmGroupTagMapping,
     RecoveryPasswordConfig,
     SoftwareUpdateEnforcement,
     StoreApp,
@@ -101,6 +103,13 @@ class UserEnrollmentForm(forms.ModelForm):
         if not cleaned_data.get("realm"):
             self.add_error("realm", "This field is required")
         return cleaned_data
+
+
+class RealmGroupTagMappingForm(DecidedChoicesFormMixin, forms.ModelForm):
+    class Meta:
+        field_classes = {"tag": TagAnyMachineChoiceField}
+        model = RealmGroupTagMapping
+        fields = "__all__"
 
 
 class CreatePushCertificateForm(forms.ModelForm):

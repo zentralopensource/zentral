@@ -263,7 +263,7 @@ This boolean is used to toggle the inclusion of the principal user in the event 
 | `Inventory::Action::"viewTag"` | The tag (`Inventory::Tag`), a member of its taxonomy | The tag in the list of the tags, and its detail |
 | `Inventory::Action::"updateTag"` | The tag (`Inventory::Tag`), a member of its taxonomy | The update of the tag: its name, its colour, and its move out of its taxonomy |
 | `Inventory::Action::"deleteTag"` | The tag (`Inventory::Tag`), a member of its taxonomy | The delete of a tag that nothing uses |
-| `Inventory::Action::"tagAnyMachine"` | The tag (`Inventory::Tag`), a member of its taxonomy | The tag on any machine, and its removal: the mass tagging API |
+| `Inventory::Action::"tagAnyMachine"` | The tag (`Inventory::Tag`), a member of its taxonomy | The tag on any machine, and its removal: the mass tagging API, and the objects that give tags later |
 | `Inventory::Action::"createMachineTag"`, `Inventory::Action::"deleteMachineTag"` | The machine, with the tag in the context | One tag on one machine, on the tags page of the machine |
 
 `createTag`, `updateTag`, `deleteTag` and `tagAnyMachine` are in the `AdminActions` group. `viewTag` is in the `AdminActions`, `UserActions` and `ViewerActions` groups. The `inventory.add_tag`, `inventory.view_tag`, `inventory.change_tag` and `inventory.delete_tag` permissions give nothing. A policy with `resource in Inventory::Taxonomy::"…"` gives `viewTag`, `updateTag`, `deleteTag` and `tagAnyMachine` for the tags of one taxonomy only.
@@ -283,6 +283,41 @@ The list of the tags shows only the tags that the role can see, in the API and o
 A tag that is used cannot be deleted: a tag that a machine has, or that an object names, for example an enrollment, a Santa rule, or an MDM artifact. A delete would remove the tag from the machines and from these objects, and a rule that loses an excluded tag would apply to more machines. Remove the tag from the machines and from the objects first: the *Delete tag* page lists them. Zentral does not find an object that names the tag in a JSON value, as a Monolith option or the filter of a probe.
 
 A taxonomy that has tags cannot be deleted. Delete its tags first: each delete needs `deleteTag`.
+
+### The objects that give tags later
+
+Some objects hold tags, and Zentral gives these tags to machines later, when a device or a task uses the object:
+
+| Object | Module | The tags are written |
+| --- | --- | --- |
+| The tags of an enrollment | Santa, Osquery, Munki, Monolith, Turbo, MDM | when a device enrolls |
+| The tag of a query | Osquery | when a result comes in: added if the query has rows, removed if not |
+| The tag of a script | Turbo | when a result comes in: added on exit code 0, removed on another exit code |
+| A realm group tag mapping | MDM | when a realm user is linked to a device: added and removed |
+| A group tag mapping | Google Workspace | by the tag sync: added and removed |
+
+A save of such an object is a permanent mass tagging. So each create and each update of the object, in the console and with the API, needs `tagAnyMachine` on each tag that the object has after the save. This also applies to an update that does not change the tags: a new SQL statement in a query with a tag changes the machines that get the tag. The import of a standard Osquery pack is the exception: it makes no tag decision. See [Standard pack imports](osquery.md#standard-pack-imports).
+
+- A tag that the role cannot give gets the answer of an unknown tag. The API answers 400, with `Invalid pk "12" - object does not exist.` The console forms do not show the tag.
+- An object keeps a tag that the role cannot give only until the role saves the object. In the console, the save removes the tag from the object. The API refuses a `PUT` that keeps the tag.
+- A `PUT` must carry the tag attribute of the object: `tags` in the secret of an enrollment and in a group tag mapping, `tag` in a query and in a script. A `PUT` without it gets a 400, with `This field is required.` Use an empty list, or `null` for `tag`, for an object without tags.
+- A save that leaves the object without a tag needs no tag decision. A delete needs none.
+- The objects that exist are not examined at the upgrade. Each one is decided at its next save.
+
+### What Zentral does not decide
+
+Zentral makes the decision when the object is saved, with the role of the user who saves it. It makes no decision when a tag is written on a machine. These operations change the machines that get a tag, and need no tag action:
+
+- The launch of a run of an Osquery query that has a tag.
+- The link of a query that has a tag to a pack, and of a pack to a configuration.
+- An import of a standard Osquery pack, which can change the SQL of a query with a tag, and link it to the pack. See [Standard pack imports](osquery.md#standard-pack-imports).
+- A change of the members of a group that a mapping names.
+- An enrollment of a device with a secret that the role can read.
+- A version increment of an enrollment.
+
+To keep a role away from a tag completely, also forbid the write actions of the objects that have the tag.
+
+The objects that use tags to select machines, for example a Santa rule, a blueprint or a sub manifest, write no tag. They need no tag action.
 
 ## HTTP API
 

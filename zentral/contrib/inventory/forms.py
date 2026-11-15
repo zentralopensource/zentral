@@ -27,7 +27,7 @@ from .models import (
     Tag,
     Taxonomy,
 )
-from .pbac import CreateTagRequest, refused_pks, renamed_tag_request, renamed_taxonomy_request
+from .pbac import CreateTagRequest, TagAnyMachineRequest, refused_pks, renamed_tag_request, renamed_taxonomy_request
 from .utils import (
     AndroidAppFilter,
     BundleFilter,
@@ -145,6 +145,26 @@ class DecidedChoicesFormMixin:
         for field in self.fields.values():
             if isinstance(field, DecidedChoicesMixin):
                 field.set_decision(user, request)
+
+
+# The tags of an object that tags later: tagAnyMachine on each tag that the object has after the save. A stored tag
+# that the user cannot give is not a choice, so the save removes it.
+
+
+class TagAnyMachineChoicesMixin:
+    def offered_queryset(self, queryset):
+        return visible_rows(self.user, TagAnyMachineRequest, queryset)
+
+    def refused_pks(self, tags):
+        return refused_pks(self.http_request, self.user, TagAnyMachineRequest, tags)
+
+
+class TagAnyMachineChoiceField(TagAnyMachineChoicesMixin, DecidedModelChoiceField):
+    pass
+
+
+class TagAnyMachineMultipleChoiceField(TagAnyMachineChoicesMixin, DecidedModelMultipleChoiceField):
+    pass
 
 
 # The taxonomy of a tag: createTag on the taxonomy, or on System::"root" for a tag without taxonomy. The taxonomy
@@ -966,10 +986,11 @@ class ProgramsSearchForm(BaseAppSearchForm):
         return query, args
 
 
-class EnrollmentSecretForm(forms.ModelForm):
+class EnrollmentSecretForm(DecidedChoicesFormMixin, forms.ModelForm):
     class Meta:
         model = EnrollmentSecret
         fields = ("meta_business_unit", "tags", "serial_numbers", "udids", "quota")
+        field_classes = {"tags": TagAnyMachineMultipleChoiceField}
 
     def __init__(self, *args, **kwargs):
         self.no_restrictions = kwargs.pop("no_restrictions", False)
@@ -983,7 +1004,10 @@ class EnrollmentSecretForm(forms.ModelForm):
             mbu_field.queryset = mbu_field.queryset.filter(pk=self.meta_business_unit.pk)
             mbu_field.initial = self.meta_business_unit.pk
             mbu_field.widget = forms.HiddenInput()
-            self.fields['tags'].queryset = Tag.objects.available_for_meta_business_unit(self.meta_business_unit)
+            tags_field = self.fields["tags"]
+            tags_field.queryset = tags_field.queryset.filter(
+                pk__in=Tag.objects.available_for_meta_business_unit(self.meta_business_unit).values("pk")
+            )
         if self.no_restrictions:
             for field_name in ("serial_numbers", "udids", "quota"):
                 self.fields[field_name].widget = forms.HiddenInput()
@@ -997,7 +1021,7 @@ class EnrollmentSecretForm(forms.ModelForm):
         super().clean()
         meta_business_unit = self.cleaned_data.get("meta_business_unit") or self.meta_business_unit
         if meta_business_unit:
-            tag_set = set(self.cleaned_data['tags'])
+            tag_set = set(self.cleaned_data.get("tags") or [])
             wrong_tag_set = tag_set - set(Tag.objects.available_for_meta_business_unit(meta_business_unit))
             if wrong_tag_set:
                 raise forms.ValidationError(

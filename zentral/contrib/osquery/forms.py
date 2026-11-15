@@ -6,6 +6,7 @@ from django.utils.text import slugify
 from rest_framework.parsers import JSONParser
 from rest_framework_yaml.parsers import YAMLParser
 
+from zentral.contrib.inventory.forms import DecidedChoicesFormMixin, TagAnyMachineChoiceField
 from zentral.core.events.base import AuditEvent
 from zentral.utils.sql import validate_sql
 from zentral.utils.time import naive_utcnow
@@ -353,7 +354,7 @@ class PackQueryForm(forms.ModelForm):
 
 # Query
 
-class QueryForm(forms.ModelForm):
+class QueryForm(DecidedChoicesFormMixin, forms.ModelForm):
     compliance_check = forms.BooleanField(required=False)
 
     def __init__(self, *args, **kwargs):
@@ -362,6 +363,7 @@ class QueryForm(forms.ModelForm):
             self.fields["compliance_check"].initial = self.instance.compliance_check is not None
 
     class Meta:
+        field_classes = {"tag": TagAnyMachineChoiceField}
         model = Query
         fields = "__all__"
         widgets = {"platforms": PlatformsWidget,

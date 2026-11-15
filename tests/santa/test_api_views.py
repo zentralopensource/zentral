@@ -10,6 +10,7 @@ import yaml
 from accounts.models import User, APIToken, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.conf import settings
 from zentral.contrib.inventory.models import (Certificate, File, EnrollmentSecret, MachineSnapshotCommit,
                                               MetaBusinessUnit, Tag)
@@ -2978,7 +2979,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_enrollment(self, post_event):
         config = self.force_configuration()
-        self.set_permissions("santa.add_enrollment")
+        self.set_permissions("santa.add_enrollment", tag_any_machine_action)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         with self.captureOnCommitCallbacks(execute=True):
             response = self.post(
@@ -3028,7 +3029,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         secret_data["tags"] = [t.id for t in tags]
         data = {"configuration": enrollment.configuration.pk,
                 "secret": secret_data}
-        self.set_permissions("santa.change_enrollment")
+        self.set_permissions("santa.change_enrollment", tag_any_machine_action)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.put(reverse('santa_api:enrollment', args=(enrollment.pk,)), data)
         self.assertEqual(response.status_code, 200)

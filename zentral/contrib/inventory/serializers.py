@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import F
 from rest_framework import serializers
 from rest_framework.relations import MANY_RELATION_KWARGS
@@ -7,7 +8,7 @@ from zentral.core.compliance_checks.models import ComplianceCheck
 from .utils import FULL_EXPORT_FORMATS, FULL_EXPORT_TABLE_NAMES, get_default_snapshot_retention_days
 from .compliance_checks import InventoryJMESPathCheck
 from .models import EnrollmentSecret, JMESPathCheck, MetaBusinessUnit, Tag, Taxonomy
-from .pbac import CreateTagRequest, refused_pks, renamed_tag_request, renamed_taxonomy_request
+from .pbac import CreateTagRequest, TagAnyMachineRequest, refused_pks, renamed_tag_request, renamed_taxonomy_request
 
 
 # The related fields that a write decides. Their keys can be guessed, so a refused object gets the error of an
@@ -57,6 +58,45 @@ class DecidedManyRelatedField(serializers.ManyRelatedField):
             if obj is None or obj.pk in refused:
                 child.fail("does_not_exist", pk_value=item)
         return [obj for _, obj in resolved]
+
+
+# The tags of an object that tags later: tagAnyMachine on each tag that the object has after the save.
+
+
+class TagAnyMachineField(DecidedRelatedFieldMixin, serializers.PrimaryKeyRelatedField):
+    def refused_pks(self, tags):
+        http_request = self.context["request"]
+        return refused_pks(http_request, http_request.user, TagAnyMachineRequest, tags)
+
+
+class TagAnyMachineSerializerMixin:
+    """For the model serializer of an object that tags later.
+
+    The fields of tag_any_machine_fields are TagAnyMachineField fields. An update requires them: DRF keeps the
+    stored value of a field that is not required and not in the body, and the stored tags would then stay on
+    the object with no decision.
+    """
+    tag_any_machine_fields = ("tags",)
+
+    def build_relational_field(self, field_name, relation_info):
+        field_class, field_kwargs = super().build_relational_field(field_name, relation_info)
+        if field_name in self.tag_any_machine_fields:
+            field_class = TagAnyMachineField
+        return field_class, field_kwargs
+
+    def get_fields(self):
+        fields = super().get_fields()
+        # the root has the object of an update, also when this serializer is nested
+        update = getattr(self.root, "instance", None) is not None
+        for field_name in self.tag_any_machine_fields:
+            field = fields[field_name]
+            child = field.child_relation if isinstance(field, serializers.ManyRelatedField) else field
+            if not isinstance(child, TagAnyMachineField):
+                # a declared field skips build_relational_field, and its save would give the tags with no decision
+                raise ImproperlyConfigured(f"{self.__class__.__name__}.{field_name} is not a TagAnyMachineField")
+            if update:
+                field.required = True
+        return fields
 
 
 # Machine mass tagging
@@ -327,7 +367,7 @@ class TaxonomySerializer(serializers.ModelSerializer):
         return data
 
 
-class EnrollmentSecretSerializer(serializers.ModelSerializer):
+class EnrollmentSecretSerializer(TagAnyMachineSerializerMixin, serializers.ModelSerializer):
     class Meta:
         model = EnrollmentSecret
         fields = ("id", "secret", "meta_business_unit", "tags", "serial_numbers", "udids", "quota", "request_count")

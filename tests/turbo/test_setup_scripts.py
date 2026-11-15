@@ -3,6 +3,7 @@ from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.turbo.models import Job, Script
 from zentral.core.compliance_checks.models import ComplianceCheck
 from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSetupTestCase, force_configuration,
@@ -197,7 +198,7 @@ class TurboSetupScriptsTestCase(TurboSetupTestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_script_with_tag(self, post_event):
         tag = Tag.objects.create(name=get_random_string(12))
-        self.login("turbo.add_script", "turbo.view_script")
+        self.login("turbo.add_script", "turbo.view_script", tag_any_machine_action)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(reverse("turbo:create_script"),
                                         {"name": get_random_string(12), "source": "echo ok",

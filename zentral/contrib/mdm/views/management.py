@@ -27,6 +27,7 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        DEPDeviceSearchForm, EnrolledDeviceSearchForm,
                                        FileVaultConfigForm,
                                        OTAEnrollmentForm,
+                                       RealmGroupTagMappingForm,
                                        RecoveryPasswordConfigForm,
                                        SoftwareUpdateEnforcementForm,
                                        UpdateArtifactForm,
@@ -62,7 +63,7 @@ from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.contrib.mdm.tasks import bulk_assign_location_asset_task
 from zentral.core.events.base import AuditEvent
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, PBACViewMixin, post_audit_event,
-                                 UpdateViewWithAudit, UserPaginationListView)
+                                 UpdateViewWithAudit, UserFormKwargsMixin, UserPaginationListView)
 from zentral.utils.storage import file_storage_has_signed_urls, select_dist_storage
 
 
@@ -108,6 +109,8 @@ class CreateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
         enrollment_secret_form = kwargs.get("enrollment_secret_form")
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
+                user=self.request.user,
+                request=self.request,
                 prefix="es"
             )
         context["enrollment_secret_form"] = enrollment_secret_form
@@ -117,6 +120,8 @@ class CreateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
         ota_enrollment_form = OTAEnrollmentForm(request.POST, prefix="oe")
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
+            user=self.request.user,
+            request=self.request,
             prefix="es"
         )
         if ota_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
@@ -222,6 +227,8 @@ class UpdateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
                 instance=self.ota_enrollment.enrollment_secret,
+                user=self.request.user,
+                request=self.request,
                 prefix="es"
             )
         context["enrollment_secret_form"] = enrollment_secret_form
@@ -237,6 +244,8 @@ class UpdateOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
             instance=self.ota_enrollment.enrollment_secret,
+            user=self.request.user,
+            request=self.request,
             prefix="es"
         )
         if ota_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
@@ -269,6 +278,8 @@ class CreateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
         enrollment_secret_form = kwargs.get("enrollment_secret_form")
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
+                user=self.request.user,
+                request=self.request,
                 prefix="es",
                 no_serial_numbers=True,
                 no_udids=True
@@ -280,6 +291,8 @@ class CreateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
         user_enrollment_form = UserEnrollmentForm(request.POST, prefix="ue")
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
+            user=self.request.user,
+            request=self.request,
             prefix="es",
             no_serial_numbers=True,
             no_udids=True
@@ -367,6 +380,8 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
                 instance=self.user_enrollment.enrollment_secret,
+                user=self.request.user,
+                request=self.request,
                 prefix="es",
                 no_serial_numbers=True,
                 no_udids=True
@@ -384,6 +399,8 @@ class UpdateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
             instance=self.user_enrollment.enrollment_secret,
+            user=self.request.user,
+            request=self.request,
             prefix="es",
             no_serial_numbers=True,
             no_udids=True
@@ -424,10 +441,10 @@ class RealmGroupTagMappingListView(PermissionRequiredMixin, UserPaginationListVi
         return ctx
 
 
-class CreateRealmGroupTagMappingView(PermissionRequiredMixin, CreateViewWithAudit):
+class CreateRealmGroupTagMappingView(PermissionRequiredMixin, UserFormKwargsMixin, CreateViewWithAudit):
     permission_required = "mdm.add_realmgrouptagmapping"
     model = RealmGroupTagMapping
-    fields = "__all__"
+    form_class = RealmGroupTagMappingForm
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -435,10 +452,10 @@ class CreateRealmGroupTagMappingView(PermissionRequiredMixin, CreateViewWithAudi
         return response
 
 
-class UpdateRealmGroupTagMappingView(PermissionRequiredMixin, UpdateViewWithAudit):
+class UpdateRealmGroupTagMappingView(PermissionRequiredMixin, UserFormKwargsMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_realmgrouptagmapping"
     model = RealmGroupTagMapping
-    fields = "__all__"
+    form_class = RealmGroupTagMappingForm
 
     def form_valid(self, form):
         old_realm = self.get_object().realm_group.realm  # self.object is already updated

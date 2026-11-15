@@ -44,6 +44,11 @@ The import of a standard pack is deprecated, and off by default. It needs the [`
 
 An import of a standard pack — a `PUT` on `/api/osquery/packs/<slug>/`, or an upload in the web console — changes several objects at once. It publishes one `osquery_pack_update` event that reports the import, and one `zentral_audit` event for each object it changed. They share one event UUID, and the report is the first of them, so a reader can gather the whole import from any one of its events.
 
+These limits are accepted risks until the import is removed. Turn it on only for the roles that you trust with the tags of the queries:
+
+- The import makes no tag decision. It can change the SQL of an existing query with a tag, or link the query to the pack, and the machines of the pack then get the tag. A save of the query with the API or in the console needs `Inventory::Action::"tagAnyMachine"` on the tag, and the import does not. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
+- Two imports of the same pack at the same time are not serialized.
+
 The report answers what the audit events cannot: what the import did as a whole. Its `result` is `created`, `updated`, `present` or `deleted`, and `present` says that the import ran and changed nothing. Its `query_results` counts the pack queries the import created, updated, deleted, or left as they were.
 
 The report does not carry the difference between the two values of an object. The audit event of that object carries the whole value before and after the change.
@@ -1416,6 +1421,7 @@ Response:
 * method: POST
 * Content-Type: application/json
 * PBAC action: `Osquery::Action::"createQuery"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the query has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 
 > **_NOTE:_** `compliance_check_enabled: true` only possible if sql query contains `ztl_status`.
 
@@ -1513,6 +1519,7 @@ Response:
 * method: PUT
 * Content-Type: application/json
 * PBAC action: `Osquery::Action::"updateQuery"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the query has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 * `<int:pk>`: the primary key of the query.
 
 Example

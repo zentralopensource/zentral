@@ -5,6 +5,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.turbo.models import Enrollment
 from .utils import TurboAPITestCase, force_configuration, force_enrollment, make_enrolled_machine
 
@@ -17,7 +18,7 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.post(reverse("turbo_api:enrollments"),
                                  {"configuration": configuration.pk,
-                                  "secret": {"meta_business_unit": self.mbu.pk}})
+                                  "secret": {"meta_business_unit": self.mbu.pk, "tags": []}})
         self.assertEqual(response.status_code, 201)
         enrollment = Enrollment.objects.get(pk=response.json()["id"])
         self.assertEqual(enrollment.configuration, configuration)
@@ -35,7 +36,7 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
     def test_create_enrollment_with_secret_tags(self):
         configuration = force_configuration()
         tag = Tag.objects.create(name=get_random_string(12))
-        self.set_permissions("turbo.add_enrollment")
+        self.set_permissions("turbo.add_enrollment", tag_any_machine_action)
         response = self.post(reverse("turbo_api:enrollments"),
                              {"configuration": configuration.pk,
                               "secret": {"meta_business_unit": self.mbu.pk, "tags": [tag.pk]}})
@@ -48,7 +49,7 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
         self.set_permissions("turbo.change_enrollment")
         response = self.put(reverse("turbo_api:enrollment", args=(enrollment.pk,)),
                             {"configuration": enrollment.configuration.pk,
-                             "secret": {"meta_business_unit": self.mbu.pk}})
+                             "secret": {"meta_business_unit": self.mbu.pk, "tags": []}})
         self.assertEqual(response.status_code, 200)
 
     def test_update_distributor_enrollment(self):
@@ -60,7 +61,7 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
         self.set_permissions("turbo.change_enrollment")
         response = self.put(reverse("turbo_api:enrollment", args=(enrollment.pk,)),
                             {"configuration": enrollment.configuration.pk,
-                             "secret": {"meta_business_unit": self.mbu.pk}})
+                             "secret": {"meta_business_unit": self.mbu.pk, "tags": []}})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), ["This enrollment cannot be updated"])
 

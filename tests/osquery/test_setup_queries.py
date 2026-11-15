@@ -9,6 +9,7 @@ from accounts.models import User
 from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import Pack, PackQuery, Query
 from zentral.core.compliance_checks.models import ComplianceCheck
@@ -159,7 +160,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(query.tables, ["processes"])
 
     def test_create_query_with_compliance_check_and_tag_error(self):
-        self.login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query", tag_any_machine_action)
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.post(reverse("osquery:create_query"),
                                     {"name": get_random_string(12),
@@ -209,7 +210,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_query_with_tag(self, post_event):
-        self.login("osquery.add_query", "osquery.view_query")
+        self.login("osquery.add_query", "osquery.view_query", tag_any_machine_action)
         query_name = get_random_string(12)
         tag = Tag.objects.create(name=get_random_string(12))
         with self.captureOnCommitCallbacks(execute=True):
@@ -320,7 +321,7 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         # add a pack to schedule this query in 'diff' mode
         pack = Pack.objects.create(name=get_random_string(12))
         PackQuery.objects.create(pack=pack, query=query, interval=600)
-        self.login("osquery.change_query", "osquery.view_query")
+        self.login("osquery.change_query", "osquery.view_query", tag_any_machine_action)
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.client.post(reverse("osquery:update_query", args=(query.pk,)),
                                     {"name": query.name,

@@ -6,7 +6,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import DetailView, TemplateView, ListView, View
-from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
+from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit, UserFormKwargsMixin
 from .api_client import APIClient
 from .forms import ConnectionForm, GroupTagMappingForm
 from .models import Connection, GroupTagMapping
@@ -112,7 +112,7 @@ class DeleteConnectionView(PermissionRequiredMixin, DeleteViewWithAudit):
         return Connection.objects.can_be_deleted()
 
 
-class GroupTagMappingFormMixin():
+class GroupTagMappingFormMixin(UserFormKwargsMixin):
     model = GroupTagMapping
     form_class = GroupTagMappingForm
 

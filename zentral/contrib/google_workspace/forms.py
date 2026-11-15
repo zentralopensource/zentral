@@ -1,5 +1,6 @@
 import json
 from django import forms
+from zentral.contrib.inventory.forms import DecidedChoicesFormMixin, TagAnyMachineMultipleChoiceField
 from .models import Connection, GroupTagMapping
 from .api_client import _AdminSDKClient, APIClient, InstalledAppFlow, validate_group_in_connection
 
@@ -47,9 +48,9 @@ class ConnectionForm(forms.ModelForm):
         return data
 
 
-class GroupTagMappingForm(forms.ModelForm):
-
+class GroupTagMappingForm(DecidedChoicesFormMixin, forms.ModelForm):
     class Meta:
+        field_classes = {"tags": TagAnyMachineMultipleChoiceField}
         model = GroupTagMapping
         fields = ("group_email", "tags", )
 

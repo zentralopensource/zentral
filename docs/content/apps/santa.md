@@ -1885,6 +1885,7 @@ Response:
 * method: POST
 * Content-Type: application/json
 * PBAC action: `Santa::Action::"createEnrollment"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the enrollment has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 
 Example
 
@@ -1981,6 +1982,7 @@ Response:
 * method: PUT
 * Content-Type: application/json
 * PBAC action: `Santa::Action::"updateEnrollment"`
+* PBAC action for the tags: `Inventory::Action::"tagAnyMachine"`, on each tag that the enrollment has after the save. A tag that the caller cannot give gets the 400 of an unknown tag. See [The objects that give tags later](inventory.md#the-objects-that-give-tags-later).
 * `<int:pk>`: the primary key of the configuration.
 
 Example

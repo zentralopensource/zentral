@@ -14,6 +14,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
 from zentral.contrib.osquery.models import (
@@ -1609,7 +1610,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_enrollment(self, post_event):
         config = self.force_configuration()
-        self.set_permissions("osquery.add_enrollment")
+        self.set_permissions("osquery.add_enrollment", tag_any_machine_action)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(2)]
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(
@@ -1651,7 +1652,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         data = {"configuration": enrollment.configuration.pk,
                 "osquery_release": new_osquery_release,
                 "secret": secret_data}
-        self.set_permissions("osquery.change_enrollment")
+        self.set_permissions("osquery.change_enrollment", tag_any_machine_action)
         prev_value = enrollment.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.put(reverse('osquery_api:enrollment', args=(enrollment.pk,)), data)
@@ -2909,7 +2910,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         query = self.force_query()
         data = {"name": query.name, "sql": "changed sql line;"}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -3032,7 +3033,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "sql": "select 'OK' ztl_status;",
             "tag": tag.pk,
         }
-        self.set_permissions("osquery.add_query")
+        self.set_permissions("osquery.add_query", tag_any_machine_action)
         response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Query.objects.filter(name='test_query01').count(), 1)
@@ -3093,7 +3094,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "compliance_check_enabled": True,
             "tag": tag.pk,
         }
-        self.set_permissions("osquery.add_query")
+        self.set_permissions("osquery.add_query", tag_any_machine_action)
         response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
@@ -3150,7 +3151,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                 "snapshot_mode": False
             }
         }
-        self.set_permissions("osquery.add_query")
+        self.set_permissions("osquery.add_query", tag_any_machine_action)
         response = self.post(reverse("osquery_api:queries"), data)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(),
@@ -3286,7 +3287,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         query = self.force_query()
         data = {"name": query0.name, "sql": query.sql}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'name': ['query with this name already exists.']})
 
@@ -3298,7 +3299,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.set_permissions("osquery.change_query")
         prev_value = query.serialize_for_event()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
-            response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+            response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 200)
         query.refresh_from_db()
         self.assertEqual(Query.objects.filter(name=new_name).count(), 1)
@@ -3322,7 +3323,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             },
         }
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         query.refresh_from_db()
         self.assertEqual(query.version, 1)  # no sql change
         self.assertEqual(
@@ -3379,7 +3380,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             },
         }
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         query.refresh_from_db()
         self.assertEqual(query.version, 1)  # no sql change
         self.assertEqual(
@@ -3430,7 +3431,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "scheduling": None,
         }
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         query.refresh_from_db()
         self.assertEqual(query.version, 1)  # no sql change
         self.assertEqual(
@@ -3468,7 +3469,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             },
         }
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query2.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query2.pk,)), {"tag": query2.tag_id, **data})
         self.assertEqual(response.status_code, 200)
         self.assertFalse(PackQuery.objects.filter(pack=pack2, query=query2).exists())
         pack_query = PackQuery.objects.get(pack=pack1, query=query2)
@@ -3478,21 +3479,22 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         query = self.force_query()
         new_name = get_random_string(12)
         data = {"name": new_name, "sql": query.sql}
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data, include_token=False)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data},
+                            include_token=False)
         self.assertEqual(response.status_code, 401)
 
     def test_update_query_permission_denied(self):
         query = self.force_query()
         new_name = get_random_string(12)
         data = {"name": new_name, "sql": query.sql}
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 403)
 
     def test_update_query_ztl_status_validate_error(self):
         query = self.force_query()
         data = {"name": query.name, "sql": query.sql, "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'compliance_check_enabled': ['ztl_status not in sql']})
 
@@ -3500,7 +3502,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         query = self.force_query()
         data = {"name": query.name, "sql": "ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         query.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
@@ -3513,7 +3515,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         compliance_check_pk = query.compliance_check.pk
         data = {"name": query.name, "sql": query.sql, "compliance_check_enabled": False}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], False)
         self.assertIsNone(response.json()["compliance_check_id"])
@@ -3527,7 +3529,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         new_sql = "select 1 from processes;"
         data = {"name": query.name, "sql": new_sql}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["version"], 2)
         query.refresh_from_db()
@@ -3539,7 +3541,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         query = self.force_query(pack_query_mode="snapshot", compliance_check=False)
         data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         query.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["compliance_check_enabled"], True)
@@ -3551,7 +3553,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         pack_query = PackQuery.objects.get(slug=slugify(query.name))
         data = {"name": query.name, "sql": "select 'OK' as ztl_status;", "compliance_check_enabled": True}
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -3562,8 +3564,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         pack_query = PackQuery.objects.get(slug=slugify(query.name))
         tag = Tag.objects.create(name=get_random_string(12))
         data = {"name": query.name, "sql": query.sql, "tag": tag.pk}
-        self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        self.set_permissions("osquery.change_query", tag_any_machine_action)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
@@ -3583,7 +3585,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             ]
         }
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 200)
         query.refresh_from_db()
         self.assertEqual(query.platforms, ["darwin", "freebsd", "linux", "posix", "windows"])
@@ -3597,7 +3599,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
             "platforms": ["beOS"]
         }
         self.set_permissions("osquery.change_query")
-        response = self.put(reverse("osquery_api:query", args=(query.pk,)), data)
+        response = self.put(reverse("osquery_api:query", args=(query.pk,)), {"tag": query.tag_id, **data})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {'platforms': {'0': ['"beOS" is not a valid choice.']}})
         query.refresh_from_db()

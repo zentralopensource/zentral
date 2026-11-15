@@ -12,6 +12,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.munki.models import Configuration, Enrollment, ScriptCheck
 from zentral.core.compliance_checks.models import ComplianceCheck
 from zentral.core.events.base import AuditEvent
@@ -565,7 +566,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_enrollment(self, post_event):
         configuration = self.force_configuration()
-        self.set_permissions("munki.add_enrollment")
+        self.set_permissions("munki.add_enrollment", tag_any_machine_action)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         serial_numbers = [get_random_string(12) for _ in range(1)]
         uuids = [str(uuid.uuid4()) for _ in range(1)]
@@ -665,7 +666,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_update_enrollment(self, post_event):
         enrollment = self.force_enrollment()
         prev_value = enrollment.serialize_for_event()
-        self.set_permissions("munki.change_enrollment")
+        self.set_permissions("munki.change_enrollment", tag_any_machine_action)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         serial_numbers = [get_random_string(12) for _ in range(1)]
         uuids = [str(uuid.uuid4()) for _ in range(1)]

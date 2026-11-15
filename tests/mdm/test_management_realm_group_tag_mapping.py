@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.core.events.base import AuditEvent
 from .utils import force_realm_group, force_realm_group_tag_mapping
 
@@ -115,7 +116,7 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
     def test_create_realm_group_tag_mapping_post(self, post_event):
         realm_group = force_realm_group()
         tag = Tag.objects.create(name=get_random_string(12))
-        self.login("mdm.add_realmgrouptagmapping", "mdm.view_realmgrouptagmapping")
+        self.login("mdm.add_realmgrouptagmapping", "mdm.view_realmgrouptagmapping", tag_any_machine_action)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:create_realm_group_tag_mapping"),
                                         {"realm_group": realm_group.pk,
@@ -157,7 +158,7 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         prev_tag = rgtm.tag
         new_realm_group = force_realm_group()
         new_tag = Tag.objects.create(name=get_random_string(12))
-        self.login("mdm.change_realmgrouptagmapping", "mdm.view_realmgrouptagmapping")
+        self.login("mdm.change_realmgrouptagmapping", "mdm.view_realmgrouptagmapping", tag_any_machine_action)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("mdm:update_realm_group_tag_mapping", args=(rgtm.pk,)),
                                         {"realm_group": new_realm_group.pk,

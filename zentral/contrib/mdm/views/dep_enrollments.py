@@ -34,6 +34,8 @@ class CreateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
         enrollment_secret_form = kwargs.get("enrollment_secret_form")
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
+                user=self.request.user,
+                request=self.request,
                 prefix="es",
                 no_restrictions=True,
             )
@@ -44,12 +46,15 @@ class CreateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
         dep_enrollment_form = CreateDEPEnrollmentForm(request.POST, prefix="de")
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
+            user=self.request.user,
+            request=self.request,
             prefix="es",
             no_restrictions=True,
         )
         if dep_enrollment_form.is_valid() and enrollment_secret_form.is_valid():
             dep_enrollment = dep_enrollment_form.save(commit=False)
             dep_enrollment.enrollment_secret = enrollment_secret_form.save()
+            enrollment_secret_form.save_m2m()
             try:
                 define_dep_profile(dep_enrollment)
             except DEPClientError as error:
@@ -122,6 +127,8 @@ class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
         enrollment_secret_form = kwargs.get("enrollment_secret_form")
         if not enrollment_secret_form:
             enrollment_secret_form = EnrollmentSecretForm(
+                user=self.request.user,
+                request=self.request,
                 prefix="es",
                 instance=self.object.enrollment_secret,
                 no_restrictions=True,
@@ -137,6 +144,8 @@ class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):
         )
         enrollment_secret_form = EnrollmentSecretForm(
             request.POST,
+            user=self.request.user,
+            request=self.request,
             prefix="es",
             instance=self.object.enrollment_secret,
             no_restrictions=True,

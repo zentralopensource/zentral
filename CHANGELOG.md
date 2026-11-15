@@ -372,6 +372,17 @@ A taxonomy that has tags cannot be deleted anymore: `DELETE /api/inventory/taxon
 A policy that gives `viewTag`, `updateTag` and `deleteTag` with no condition on the resource needs no change. The policies that Zentral made from the legacy roles are in this case. If you upgrade from a version before 2026.4, the policies that Zentral makes from the legacy roles do not name the three actions: add them to the roles that had the three permissions.
 
 
+#### 🧨 An object that gives tags to machines later needs `tagAnyMachine`
+
+Some objects hold tags that Zentral gives to machines later: the enrollments of Santa, Osquery, Munki, Monolith, Turbo and MDM, the Osquery queries, the Turbo scripts, the MDM realm group tag mappings and the Google Workspace group tag mappings. Each create and each update of such an object, in the console and with the API, needs `Inventory::Action::"tagAnyMachine"` on each tag that the object has after the save, also when the update does not change the tags. Before, the write action of the object was sufficient, so a role could give a tag through an enrollment or a query that it could not give with the mass tagging API. A tag that the caller cannot give gets the answer of an unknown tag: a 400 with `Invalid pk "…" - object does not exist.` in the API, and a tag that is not in the choices in the console. In the console, a save removes such a tag from the object. The import of a standard Osquery pack makes no tag decision: it is deprecated, and off by default.
+
+A `PUT` on one of these objects must carry its tag attribute now: `tags` in the `secret` of an enrollment and in a group tag mapping, `tag` in a query and in a script. A `PUT` without it gets a 400, with "This field is required." Before, the object kept its stored tags. The Terraform provider and goztl send the attribute in each request, and need no change.
+
+A policy that grants the `AdminActions` group of the inventory, or `GlobalAdminActions`, needs no change. A policy that names the write actions of these objects one by one, for example `Osquery::Action::"createEnrollment"`, must also name `tagAnyMachine`, or its role cannot save an object that has tags. The policies that Zentral made from the legacy roles do not name `tagAnyMachine`: examine them before the upgrade. The service account of the Terraform provider saves enrollments with tags, and can save other objects of this list: give it `tagAnyMachine` before the upgrade.
+
+The objects that exist are not examined at the upgrade. Each one is decided at its next save. Zentral makes no decision when a tag is written on a machine. See [The objects that give tags later](https://www.zentral.com/docs/zentral/apps/inventory/#the-objects-that-give-tags-later) for the operations that need no tag action.
+
+
 #### 🧨 The path of tini in the Docker image
 
 The Docker image installs tini from the Debian packages. Its path is `/usr/bin/tini` now, not `/tini`. If your deployment sets its own entrypoint with `/tini`, change it to `/usr/bin/tini`.

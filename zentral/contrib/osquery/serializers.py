@@ -4,7 +4,7 @@ from django.utils.text import slugify
 from rest_framework import serializers
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
-from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer, TagAnyMachineSerializerMixin
 from zentral.utils.sql import SQLParseError, extract_tables, validate_sql
 from .compliance_checks import sync_query_compliance_check
 from .models import (Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory,
@@ -209,7 +209,8 @@ class QuerySchedulingSerializer(serializers.ModelSerializer):
         return data
 
 
-class QuerySerializer(serializers.ModelSerializer):
+class QuerySerializer(TagAnyMachineSerializerMixin, serializers.ModelSerializer):
+    tag_any_machine_fields = ("tag",)
     compliance_check_enabled = serializers.BooleanField(default=False)
     compliance_check_id = serializers.IntegerField(read_only=True, allow_null=True)
     scheduling = QuerySchedulingSerializer(source="packquery", required=False, allow_null=True)

@@ -12,6 +12,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.google_workspace.models import Connection, GroupTagMapping
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.core.events.base import AuditEvent
 
 
@@ -427,7 +428,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @patch('zentral.contrib.google_workspace.api_client.build')
     def test_create_group_tag_mapping_unkown_email(self, build):
-        self.set_permissions("google_workspace.add_grouptagmapping")
+        self.set_permissions("google_workspace.add_grouptagmapping", tag_any_machine_action)
         connection = self._given_connection()
         group_email = self._given_email()
         tag = self._given_tag()
@@ -448,7 +449,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_group_tag_mapping(self, post_event, build):
-        self.set_permissions("google_workspace.add_grouptagmapping")
+        self.set_permissions("google_workspace.add_grouptagmapping", tag_any_machine_action)
         connection = self._given_connection()
         group_email = self._given_email()
         tag = self._given_tag()
@@ -496,7 +497,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_group_tag_mapping_cannot_be_updated(self, post_event, build):
-        self.set_permissions("google_workspace.change_grouptagmapping")
+        self.set_permissions("google_workspace.change_grouptagmapping", tag_any_machine_action)
 
         connection = self._given_connection()
         tag = self._given_tag()
@@ -519,7 +520,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch('zentral.contrib.google_workspace.api_client.build')
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_group_tag_mapping(self, post_event, build):
-        self.set_permissions("google_workspace.change_grouptagmapping")
+        self.set_permissions("google_workspace.change_grouptagmapping", tag_any_machine_action)
 
         connection = self._given_connection()
         tag = self._given_tag()

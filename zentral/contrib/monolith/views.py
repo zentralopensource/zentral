@@ -821,6 +821,8 @@ class AddManifestEnrollmentView(PermissionRequiredMixin, TemplateView):
 
     def get_forms(self):
         secret_form_kwargs = {"prefix": "secret",
+                              "user": self.request.user,
+                              "request": self.request,
                               "meta_business_unit": self.manifest.meta_business_unit,
                               "initial": {"meta_business_unit": self.manifest.meta_business_unit}}
         enrollment_form_kwargs = {"manifest": self.manifest,

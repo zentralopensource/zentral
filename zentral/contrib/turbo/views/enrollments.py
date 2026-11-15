@@ -18,7 +18,7 @@ class CreateEnrollmentView(PermissionRequiredMixin, TemplateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_forms(self):
-        secret_form_kwargs = {"prefix": "secret"}
+        secret_form_kwargs = {"prefix": "secret", "user": self.request.user, "request": self.request}
         enrollment_form_kwargs = {"configuration": self.configuration,
                                   "initial": {"configuration": self.configuration}}
         if self.request.method == "POST":

@@ -8,6 +8,7 @@ from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
+from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.mdm.models import OTAEnrollment
 from zentral.core.events.base import AuditEvent
 from .utils import (force_acme_issuer, force_blueprint, force_ota_enrollment, force_ota_enrollment_session,
@@ -196,7 +197,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_ota_enrollment(self, post_event):
-        self.set_permissions("mdm.add_otaenrollment")
+        self.set_permissions("mdm.add_otaenrollment", tag_any_machine_action)
         name = get_random_string(12)
         blueprint = force_blueprint()
         push_certificate = force_push_certificate()
@@ -306,7 +307,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_update_ota_enrollment(self, post_event):
         oe = force_ota_enrollment()
         prev_value = oe.serialize_for_event()
-        self.set_permissions("mdm.change_otaenrollment")
+        self.set_permissions("mdm.change_otaenrollment", tag_any_machine_action)
         new_name = get_random_string(12)
         new_blueprint = force_blueprint()
         new_push_certificate = force_push_certificate()
