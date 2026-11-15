@@ -11,7 +11,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag, Taxonomy
 from zentral.contrib.inventory.pbac import (TAXONOMY_RESOURCE_TYPE, CreateTagRequest, create_tag_action,
-                                            taxonomies_for_create_tag,
+                                            taxonomies_for_create_tag, taxonomies_for_tag_creation_later,
                                             update_tag_action,
                                             view_tag_action)
 
@@ -133,6 +133,15 @@ class CreateTagActionTestCase(TestCase, LoginCase, RequestCase):
             self._set_policies(self._statement("permit", "createTag"), forbid)
             user = User.objects.get(pk=self.user.pk)
             self.assertEqual(list(taxonomies_for_create_tag(user)), [self.taxonomy])
+
+    def test_taxonomies_for_tag_creation_later(self):
+        tag = Tag.objects.create(taxonomy=self.taxonomy, name=get_random_string(12))
+        Tag.objects.create(taxonomy=self.taxonomy, name=get_random_string(12))
+        Tag.objects.create(name=get_random_string(12))
+        self._set_policies(self._statement("permit", "createTag"), self._statement("permit", "tagAnyMachine"),
+                           self._statement("forbid", "tagAnyMachine", f'resource == Inventory::Tag::"{tag.pk}"'))
+        user = User.objects.get(pk=self.user.pk)
+        self.assertEqual(list(taxonomies_for_tag_creation_later(user)), [self.other_taxonomy])
 
     # API: create
 

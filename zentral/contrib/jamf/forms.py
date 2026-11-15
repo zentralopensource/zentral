@@ -1,6 +1,9 @@
 import re
 from django import forms
+from zentral.contrib.inventory.forms import DecidedChoicesFormMixin, DecidedModelChoiceField
 from zentral.contrib.inventory.models import BusinessUnit
+from zentral.contrib.inventory.pbac import (refused_taxonomies_for_tag_creation_later,
+                                            taxonomies_for_tag_creation_later)
 from .models import JamfInstance, TagConfig
 
 
@@ -73,10 +76,21 @@ class JamfInstanceForm(forms.ModelForm):
         return instance
 
 
-class TagConfigForm(forms.ModelForm):
+class TagConfigTaxonomyChoiceField(DecidedModelChoiceField):
+    # A webhook event sets the tags of the taxonomy on a machine later, and creates the missing ones, with no
+    # decision. So each save needs createTag on the taxonomy, and tagAnyMachine on each tag that it has.
+    def offered_queryset(self, queryset):
+        return taxonomies_for_tag_creation_later(self.user, queryset)
+
+    def refused_pks(self, taxonomies):
+        return refused_taxonomies_for_tag_creation_later(self.http_request, self.user, taxonomies)
+
+
+class TagConfigForm(DecidedChoicesFormMixin, forms.ModelForm):
     class Meta:
         model = TagConfig
         fields = ("source", "taxonomy", "regex", "replacement")
+        field_classes = {"taxonomy": TagConfigTaxonomyChoiceField}
 
     def clean_regex(self):
         regex = self.cleaned_data["regex"]

@@ -7,6 +7,7 @@ from django.urls import reverse_lazy
 from django.views.generic import DetailView, TemplateView, ListView, View
 from django.views.generic.edit import CreateView, UpdateView, DeleteView
 from zentral.utils.api_views import APIAuthError, JSONPostAPIView
+from zentral.utils.views import UserFormKwargsMixin
 from .api_client import APIClient, APIClientError
 from .events import post_jamf_webhook_event
 from .forms import JamfInstanceForm, TagConfigForm
@@ -123,7 +124,7 @@ class DeleteJamfInstanceView(PermissionRequiredMixin, DeleteView):
         return redirect(success_url)
 
 
-class CreateTagConfigView(PermissionRequiredMixin, CreateView):
+class CreateTagConfigView(PermissionRequiredMixin, UserFormKwargsMixin, CreateView):
     permission_required = "jamf.add_tagconfig"
     model = TagConfig
     form_class = TagConfigForm
@@ -145,7 +146,7 @@ class CreateTagConfigView(PermissionRequiredMixin, CreateView):
         return redirect(tc)
 
 
-class UpdateTagConfigView(PermissionRequiredMixin, UpdateView):
+class UpdateTagConfigView(PermissionRequiredMixin, UserFormKwargsMixin, UpdateView):
     permission_required = "jamf.change_tagconfig"
     model = TagConfig
     form_class = TagConfigForm

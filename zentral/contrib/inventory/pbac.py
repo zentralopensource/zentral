@@ -337,6 +337,13 @@ class CreateTagRequest(Request):
 # object has after the save. A refused tag gets the answer of an unknown tag: the primary keys can be guessed.
 
 
+def tags_for_any_machine(user_obj, queryset=None):
+    """The tags of the queryset that the user can give to any machine, as a queryset. One decision for all."""
+    if queryset is None:
+        queryset = Tag.objects.all()
+    return visible_rows(user_obj, TagAnyMachineRequest, queryset)
+
+
 def taxonomies_for_create_tag(user_obj, queryset=None):
     """The taxonomies of the queryset in which the user can create a tag, as a queryset."""
     if queryset is None:
@@ -387,3 +394,39 @@ def renamed_taxonomy_request(user_obj, taxonomy, name):
     The name is an attribute that the createTag policies can match, so a rename can give createTag on the taxonomy.
     """
     return Request(Principal.from_user(user_obj), create_tag_action, _taxonomy_resource(taxonomy, name))
+
+
+def taxonomies_for_tag_creation_later(user_obj, queryset=None):
+    """The taxonomies that the user can give to an object that creates and sets their tags later.
+
+    The object sets the tags of the taxonomy on machines: it gives some and removes the others, and it creates
+    the missing ones. So the user needs createTag on the taxonomy, and tagAnyMachine on each tag that it has.
+    """
+    refused_tags_queryset = Tag.objects.filter(taxonomy__isnull=False).exclude(
+        pk__in=tags_for_any_machine(user_obj).values("pk")
+    )
+    return taxonomies_for_create_tag(user_obj, queryset).exclude(pk__in=refused_tags_queryset.values("taxonomy"))
+
+
+def refused_taxonomies_for_tag_creation_later(http_request, user_obj, taxonomies):
+    """The primary keys of the taxonomies with a refused createTag, or a refused tagAnyMachine on one of its tags.
+
+    The decisions are on the rows read again under a lock, see locked_rows. A taxonomy that a delete removed since
+    it was read is refused too, as an unknown one.
+    """
+    taxonomies = list(taxonomies)
+    current_taxonomies = locked_rows(CreateTagRequest, Taxonomy, [taxonomy.pk for taxonomy in taxonomies])
+    # the tags of all the taxonomies, locked in one batch, and grouped by the taxonomy read again
+    taxonomy_tags = {taxonomy.pk: [] for taxonomy in current_taxonomies}
+    for tag in locked_rows(TagAnyMachineRequest, Tag,
+                           Tag.objects.filter(taxonomy__in=taxonomy_tags).values_list("pk", flat=True)):
+        if tag.taxonomy_id in taxonomy_tags:
+            taxonomy_tags[tag.taxonomy_id].append(tag)
+    decisions = [(taxonomy, [CreateTagRequest(user_obj, taxonomy)]
+                  + [TagAnyMachineRequest(user_obj, tag) for tag in taxonomy_tags[taxonomy.pk]])
+                 for taxonomy in current_taxonomies]
+    refused_requests(http_request, [pbac_request for _, pbac_requests in decisions for pbac_request in pbac_requests])
+    refused = {taxonomy.pk for taxonomy in taxonomies} - {taxonomy.pk for taxonomy in current_taxonomies}
+    refused.update(taxonomy.pk for taxonomy, pbac_requests in decisions
+                   if not all(pbac_request.is_authorized for pbac_request in pbac_requests))
+    return refused

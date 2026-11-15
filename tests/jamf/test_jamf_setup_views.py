@@ -2,13 +2,18 @@ from unittest.mock import patch
 
 import requests
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
-from accounts.models import User
+from accounts.models import Policy, User
+from tests.zentral_test_utils.choices import offered
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.inventory.models import Taxonomy
+from zentral.contrib.inventory.models import Tag, Taxonomy
+from zentral.contrib.inventory.pbac import (create_tag_action, locked_rows, refused_taxonomies_for_tag_creation_later,
+                                            tag_any_machine_action)
 from zentral.contrib.jamf.models import JamfInstance, TagConfig
 from zentral.contrib.jamf.api_client import APIClientError
 
@@ -277,7 +282,8 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
         jamf_instance = self._force_jamf_instance()
         t, _ = Taxonomy.objects.get_or_create(name=get_random_string(34))
         regex = r"^YOLOFOMO: (.*)$"
-        self.login("jamf.add_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.add_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig",
+                   create_tag_action, tag_any_machine_action)
         response = self.client.post(reverse("jamf:create_tag_config", args=(jamf_instance.pk,)),
                                     {"source": "GROUP",
                                      "taxonomy": t.pk,
@@ -313,7 +319,8 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
     def test_update_tag_config(self):
         tag_config = self._force_tag_config()
         jamf_instance = tag_config.instance
-        self.login("jamf.change_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig")
+        self.login("jamf.change_tagconfig", "jamf.view_jamfinstance", "jamf.view_tagconfig",
+                   create_tag_action, tag_any_machine_action)
         response = self.client.post(reverse("jamf:update_tag_config", args=(jamf_instance.pk, tag_config.pk)),
                                     {"source": "GROUP",
                                      "taxonomy": tag_config.taxonomy.pk,
@@ -323,6 +330,167 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "jamf/jamfinstance_detail.html")
         self.assertContains(response, "Tag config (1)")
         self.assertContains(response, "haha")
+
+    # tag config: createTag on the taxonomy, and tagAnyMachine on each of its tags
+
+    def _tag_actions_policy(self, *statements):
+        Policy.objects.update_or_create(
+            name="Tests tag actions",
+            defaults={"source": "".join(
+                f'{effect} (principal in Role::"{self.group.pk}", action == Inventory::Action::"{action_id}", '
+                f'{scope});\n'
+                for effect, action_id, scope in statements
+            )}
+        )
+
+    def _post_tag_config(self, taxonomy_pk, tag_config=None):
+        self.client.force_login(self.user)
+        if tag_config is None:
+            url = reverse("jamf:create_tag_config", args=(self._force_jamf_instance().pk,))
+        else:
+            url = reverse("jamf:update_tag_config", args=(tag_config.instance.pk, tag_config.pk))
+        return self.client.post(url, {"source": "GROUP", "taxonomy": taxonomy_pk,
+                                      "regex": r"^YOLOFOMO: (.*)$", "replacement": r"\1"})
+
+    def _assert_taxonomy_refused(self, response):
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["form"].errors,
+            {"taxonomy": ["Select a valid choice. That choice is not one of the available choices."]}
+        )
+
+    def test_tag_config_taxonomy_without_the_actions(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self.set_permissions("jamf.add_tagconfig")
+        with self.assertLogs("zentral.pbac.utils", level="WARNING") as cm:
+            response = self._post_tag_config(taxonomy.pk)
+        self._assert_taxonomy_refused(response)
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn(f'Inventory::Action::"createTag" Inventory::Taxonomy::"{taxonomy.pk}"', cm.output[0])
+        self.assertEqual(TagConfig.objects.count(), 0)
+
+    def test_tag_config_unknown_taxonomy(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        taxonomy_pk = taxonomy.pk
+        taxonomy.delete()
+        self.set_permissions("jamf.add_tagconfig", create_tag_action, tag_any_machine_action)
+        with self.assertNoLogs("zentral.pbac.utils", level="WARNING"):
+            response = self._post_tag_config(taxonomy_pk)
+        self._assert_taxonomy_refused(response)
+
+    def test_tag_config_taxonomy_without_tags_create_tag_alone(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self.set_permissions("jamf.add_tagconfig", create_tag_action)
+        self.assertEqual(self._post_tag_config(taxonomy.pk).status_code, 302)
+        self.assertEqual(TagConfig.objects.get().taxonomy, taxonomy)
+
+    def test_tag_config_taxonomy_with_tags_create_tag_alone(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        self.set_permissions("jamf.add_tagconfig", create_tag_action)
+        with self.assertLogs("zentral.pbac.utils", level="WARNING") as cm:
+            response = self._post_tag_config(taxonomy.pk)
+        self._assert_taxonomy_refused(response)
+        self.assertEqual(len(cm.output), 1)
+        self.assertIn(f'Inventory::Action::"tagAnyMachine" Inventory::Tag::"{tag.pk}"', cm.output[0])
+
+    def test_tag_config_taxonomy_with_tags_tag_any_machine_alone(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        self.set_permissions("jamf.add_tagconfig", tag_any_machine_action)
+        self._assert_taxonomy_refused(self._post_tag_config(taxonomy.pk))
+
+    def test_tag_config_taxonomy_with_tags_the_two_actions(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        self.set_permissions("jamf.add_tagconfig", create_tag_action, tag_any_machine_action)
+        self.assertEqual(self._post_tag_config(taxonomy.pk).status_code, 302)
+
+    def test_tag_config_taxonomy_with_one_refused_tag(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        tag = Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        other_taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        Tag.objects.create(taxonomy=other_taxonomy, name=get_random_string(12))
+        self.set_permissions("jamf.add_tagconfig", create_tag_action, tag_any_machine_action)
+        self._tag_actions_policy(("forbid", "tagAnyMachine", f'resource == Inventory::Tag::"{tag.pk}"'))
+        self._assert_taxonomy_refused(self._post_tag_config(taxonomy.pk))
+        self.assertEqual(self._post_tag_config(other_taxonomy.pk).status_code, 302)
+
+    def test_tag_config_create_tag_on_another_resource(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        other_taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self.set_permissions("jamf.add_tagconfig")
+        for scope in ('resource == System::"root"', f'resource == Inventory::Taxonomy::"{other_taxonomy.pk}"'):
+            self._tag_actions_policy(("permit", "createTag", scope))
+            self._assert_taxonomy_refused(self._post_tag_config(taxonomy.pk))
+        self.assertEqual(self._post_tag_config(other_taxonomy.pk).status_code, 302)
+
+    def test_tag_config_update_stored_taxonomy_refused(self):
+        tag_config = self._force_tag_config()
+        other_taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self.set_permissions("jamf.change_tagconfig")
+        self._tag_actions_policy(("permit", "createTag", f'resource == Inventory::Taxonomy::"{other_taxonomy.pk}"'))
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("jamf:update_tag_config",
+                                           args=(tag_config.instance.pk, tag_config.pk)))
+        self.assertEqual(offered(response.context["form"].fields["taxonomy"]), [other_taxonomy])
+        # each save is decided, also a save that keeps the taxonomy
+        self._assert_taxonomy_refused(self._post_tag_config(tag_config.taxonomy.pk, tag_config))
+        self.assertEqual(self._post_tag_config(other_taxonomy.pk, tag_config).status_code, 302)
+        tag_config.refresh_from_db()
+        self.assertEqual(tag_config.taxonomy, other_taxonomy)
+
+    def test_tag_config_decision_locks_and_reads_again(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        # a taxonomy that the form read, and that a delete removed since
+        deleted_taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        Taxonomy.objects.filter(pk=deleted_taxonomy.pk).delete()
+        self.set_permissions(create_tag_action, tag_any_machine_action)
+        with CaptureQueriesContext(connection) as ctx:
+            refused = refused_taxonomies_for_tag_creation_later(None, User.objects.get(pk=self.user.pk),
+                                                                [taxonomy, deleted_taxonomy])
+        self.assertEqual(refused, {deleted_taxonomy.pk})
+        lock_queries = [query["sql"] for query in ctx.captured_queries if "FOR " in query["sql"]]
+        self.assertEqual([query.split('"')[3] for query in lock_queries],
+                         ["inventory_taxonomy", "inventory_tag", "inventory_taxonomy"])
+        self.assertTrue(all(query.endswith(" FOR SHARE") for query in lock_queries))
+
+    def test_tag_config_decision_one_batch_for_the_taxonomies(self):
+        taxonomies = []
+        for _ in range(2):
+            taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+            Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+            taxonomies.append(taxonomy)
+        self.set_permissions(create_tag_action, tag_any_machine_action)
+        user = User.objects.get(pk=self.user.pk)
+        refused_taxonomies_for_tag_creation_later(None, user, taxonomies)  # warm up the process-level caches
+        query_counts = []
+        for count in (1, 2):
+            with CaptureQueriesContext(connection) as ctx:
+                self.assertEqual(refused_taxonomies_for_tag_creation_later(None, user, taxonomies[:count]), set())
+            query_counts.append(len(ctx.captured_queries))
+        self.assertEqual(query_counts[0], query_counts[1])
+
+    def test_tag_config_decision_tag_moved_to_another_taxonomy(self):
+        # a tag that a move took out of the taxonomy before the lock is not decided with it
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        other_taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self.set_permissions(create_tag_action, tag_any_machine_action)
+
+        def move_then_lock(request_class, model, pks):
+            if model is Tag:
+                Tag.objects.filter(pk=tag.pk).update(taxonomy=other_taxonomy)
+            return locked_rows(request_class, model, pks)
+
+        with patch("zentral.contrib.inventory.pbac.locked_rows", side_effect=move_then_lock):
+            with patch("zentral.contrib.inventory.pbac.TagAnyMachineRequest") as tag_any_machine_request:
+                refused = refused_taxonomies_for_tag_creation_later(None, User.objects.get(pk=self.user.pk),
+                                                                    [taxonomy])
+        self.assertEqual(refused, set())
+        tag_any_machine_request.assert_not_called()
 
     # delete tag config
 

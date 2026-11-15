@@ -295,6 +295,7 @@ Some objects hold tags, and Zentral gives these tags to machines later, when a d
 | The tag of a script | Turbo | when a result comes in: added on exit code 0, removed on another exit code |
 | A realm group tag mapping | MDM | when a realm user is linked to a device: added and removed |
 | A group tag mapping | Google Workspace | by the tag sync: added and removed |
+| The tag configuration of an instance | Jamf | when a webhook event comes in: the tags of one taxonomy are set from the names of the Jamf groups, and the missing tags are created |
 
 A save of such an object is a permanent mass tagging. So each create and each update of the object, in the console and with the API, needs `tagAnyMachine` on each tag that the object has after the save. This also applies to an update that does not change the tags: a new SQL statement in a query with a tag changes the machines that get the tag. The import of a standard Osquery pack is the exception: it makes no tag decision. See [Standard pack imports](osquery.md#standard-pack-imports).
 
@@ -302,6 +303,7 @@ A save of such an object is a permanent mass tagging. So each create and each up
 - An object keeps a tag that the role cannot give only until the role saves the object. In the console, the save removes the tag from the object. The API refuses a `PUT` that keeps the tag.
 - A `PUT` must carry the tag attribute of the object: `tags` in the secret of an enrollment and in a group tag mapping, `tag` in a query and in a script. A `PUT` without it gets a 400, with `This field is required.` Use an empty list, or `null` for `tag`, for an object without tags.
 - A save that leaves the object without a tag needs no tag decision. A delete needs none.
+- A Jamf tag configuration names a taxonomy, not tags. Its save needs `createTag` on the taxonomy, and `tagAnyMachine` on each tag that the taxonomy has. The form shows only the taxonomies that the role can use.
 - The objects that exist are not examined at the upgrade. Each one is decided at its next save.
 
 ### What Zentral does not decide
@@ -313,6 +315,7 @@ Zentral makes the decision when the object is saved, with the role of the user w
 - An import of a standard Osquery pack, which can change the SQL of a query with a tag, and link it to the pack. See [Standard pack imports](osquery.md#standard-pack-imports).
 - A change of the members of a group that a mapping names.
 - An enrollment of a device with a secret that the role can read.
+- A new group in Jamf with a name that a tag configuration matches: the tag is created, and given to the machines of the group.
 - A version increment of an enrollment.
 
 To keep a role away from a tag completely, also forbid the write actions of the objects that have the tag.

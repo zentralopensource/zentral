@@ -378,6 +378,8 @@ Some objects hold tags that Zentral gives to machines later: the enrollments of 
 
 A `PUT` on one of these objects must carry its tag attribute now: `tags` in the `secret` of an enrollment and in a group tag mapping, `tag` in a query and in a script. A `PUT` without it gets a 400, with "This field is required." Before, the object kept its stored tags. The Terraform provider and goztl send the attribute in each request, and need no change.
 
+A save of a Jamf tag configuration needs `createTag` on its taxonomy, and `tagAnyMachine` on each tag of the taxonomy. The form shows only the taxonomies that the user can use.
+
 A policy that grants the `AdminActions` group of the inventory, or `GlobalAdminActions`, needs no change. A policy that names the write actions of these objects one by one, for example `Osquery::Action::"createEnrollment"`, must also name `tagAnyMachine`, or its role cannot save an object that has tags. The policies that Zentral made from the legacy roles do not name `tagAnyMachine`: examine them before the upgrade. The service account of the Terraform provider saves enrollments with tags, and can save other objects of this list: give it `tagAnyMachine` before the upgrade.
 
 The objects that exist are not examined at the upgrade. Each one is decided at its next save. Zentral makes no decision when a tag is written on a machine. See [The objects that give tags later](https://www.zentral.com/docs/zentral/apps/inventory/#the-objects-that-give-tags-later) for the operations that need no tag action.
