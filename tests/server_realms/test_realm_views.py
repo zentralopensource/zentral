@@ -366,6 +366,94 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("realms:update_role_mapping", args=(rm.pk,)))
         self.assertContains(response, reverse("realms:create_role_mapping"))
 
+    def _iter_realms_with_secrets(self):
+        for backend, backend_class in backend_classes.items():
+            realm = force_realm(backend=backend)
+            secrets = {key: get_random_string(24) for key in backend_class.secret_config_keys}
+            realm.config.update(secrets)
+            realm.save()
+            yield realm, list(secrets.values())
+
+    def test_every_backend_but_saml_has_secrets(self):
+        self.assertEqual(
+            {backend: backend_class.secret_config_keys for backend, backend_class in backend_classes.items()},
+            {"ldap": ("bind_password",), "openidc": ("client_secret",), "saml": ()}
+        )
+
+    def test_view_realm_local_superuser_secrets(self):
+        self._login_superuser()
+        for realm, secrets in self._iter_realms_with_secrets():
+            response = self.client.get(reverse("realms:view", args=(realm.pk,)))
+            self.assertEqual(response.status_code, 200)
+            for secret in secrets:
+                self.assertIn((secret, True), [(v, h) for _, v, h in response.context["backend_attributes"]])
+                self.assertContains(response, secret)
+
+    def _assert_no_secrets(self, response, secrets):
+        self.assertEqual(response.status_code, 200)
+        attributes = response.context["backend_attributes"]
+        for secret in secrets:
+            self.assertNotIn(secret, [v for _, v, _ in attributes])
+            self.assertNotContains(response, secret)
+        self.assertEqual(sum(1 for _, v, _ in attributes if v == "set"), len(secrets))
+
+    @patch("realms.middlewares.get_session")
+    def test_view_realm_remote_session_superuser_no_secrets(self, get_session):
+        session_realm, realm_user = force_realm_user()
+        get_session.return_value = RealmAuthenticationSession.objects.create(
+            realm=session_realm, user=realm_user, callback=""
+        )
+        self._login_superuser()
+        for realm, secrets in self._iter_realms_with_secrets():
+            self._assert_no_secrets(self.client.get(reverse("realms:view", args=(realm.pk,))), secrets)
+
+    def test_view_realm_view_perm_no_secrets(self):
+        self.login("realms.view_realm")
+        for realm, secrets in self._iter_realms_with_secrets():
+            self._assert_no_secrets(self.client.get(reverse("realms:view", args=(realm.pk,))), secrets)
+
+    def test_view_realm_admin_no_secrets(self):
+        self._login_admin()
+        for realm, secrets in self._iter_realms_with_secrets():
+            self._assert_no_secrets(self.client.get(reverse("realms:view", args=(realm.pk,))), secrets)
+
+    def test_view_realm_local_superuser_no_secret_set(self):
+        self._login_superuser()
+        for backend, backend_class in backend_classes.items():
+            if not backend_class.secret_config_keys:
+                continue
+            realm = force_realm(backend=backend)
+            for key in backend_class.secret_config_keys:
+                realm.config.pop(key)
+            realm.save()
+            response = self.client.get(reverse("realms:view", args=(realm.pk,)))
+            self.assertEqual(response.status_code, 200)
+            attributes = response.context["backend_attributes"]
+            self.assertNotIn(None, [v for _, v, _ in attributes])
+            self.assertEqual([h for _, v, h in attributes if v == "-"],
+                             [False] * len(backend_class.secret_config_keys))
+
+    def test_view_realm_unknown_backend(self):
+        realm = force_realm()
+        Realm.objects.filter(pk=realm.pk).update(backend="unknown")
+        self._login_superuser()
+        response = self.client.get(reverse("realms:view", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["backend_attributes"], [])
+        self.assertNotContains(response, "yolo")
+        self.assertNotContains(response, reverse("realms:update", args=(realm.pk,)))
+
+    def test_update_realm_unknown_backend_not_found(self):
+        realm = force_realm()
+        Realm.objects.filter(pk=realm.pk).update(backend="unknown")
+        self._login_superuser()
+        response = self.client.get(reverse("realms:update", args=(realm.pk,)))
+        self.assertEqual(response.status_code, 404)
+        response = self.client.post(reverse("realms:update", args=(realm.pk,)), {"name": get_random_string(12)})
+        self.assertEqual(response.status_code, 404)
+        realm.refresh_from_db()
+        self.assertEqual(realm.backend, "unknown")
+
     # update realm
 
     def test_update_realm_permission_denied(self):

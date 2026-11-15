@@ -3,6 +3,7 @@ from zentral.conf import settings
 
 class BaseBackend:
     can_get_password = False
+    secret_config_keys = ()
 
     def __init__(self, instance):
         self.instance = instance
@@ -22,3 +23,11 @@ class BaseBackend:
             return False
         else:
             return session_state == str(state)
+
+    def secret_attribute_for_display(self, name, key, show_secrets):
+        value = self.instance.config.get(key)
+        if not value:
+            return (name, "-", False)
+        if show_secrets:
+            return (name, value, True)
+        return (name, "set", False)

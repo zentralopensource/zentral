@@ -43,17 +43,18 @@ def get_ldap_connection(host):
 class LDAPRealmBackend(BaseBackend):
     name = "LDAP"
     can_get_password = True
+    secret_config_keys = ("bind_password",)
 
     def __init__(self, instance):
         super().__init__(instance)
         self._conn = None
 
-    def extra_attributes_for_display(self):
+    def extra_attributes_for_display(self, show_secrets):
         config = self.instance.config
         return [
             ("Host", config.get("host"), False),
             ("Bind DN", config.get("bind_dn"), False),
-            ("Bind password", config.get("bind_password"), True),
+            self.secret_attribute_for_display("Bind password", "bind_password", show_secrets),
             ("Users base DN", config.get("users_base_dn"), False),
         ]
 

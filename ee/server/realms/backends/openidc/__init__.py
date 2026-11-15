@@ -12,6 +12,7 @@ logger = logging.getLogger("zentral.realms.backends.openidc")
 
 class OpenIDConnectRealmBackend(BaseBackend):
     name = "OpenID Connect"
+    secret_config_keys = ("client_secret",)
 
     def ac_redirect_uri(self):
         "Authorization code flow redirect URI"
@@ -23,12 +24,12 @@ class OpenIDConnectRealmBackend(BaseBackend):
     def idp_initiated_login_uri(self):
         return f'{api_base_url()}{reverse("realms_public:login", args=(self.instance.uuid,))}'
 
-    def extra_attributes_for_display(self):
+    def extra_attributes_for_display(self, show_secrets):
         config = self.instance.config
         return [
             ("Discovery URL", config.get("discovery_url"), False),
             ("Client ID", config.get("client_id"), False),
-            ("Client secret", config.get("client_secret"), True),
+            self.secret_attribute_for_display("Client secret", "client_secret", show_secrets),
             ("Authorization code flow redirect URI", self.ac_redirect_uri(), False),
             ("IdP-initiated login URI", self.idp_initiated_login_uri(), False),
         ]

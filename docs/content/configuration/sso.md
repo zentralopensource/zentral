@@ -23,6 +23,8 @@ Your IdP provides user information to authenticate and log in to Zentral with SS
 
 Only a superuser logged in without a Realm can create or change a Realm.
 
+A Realm can store a secret: the bind password of an LDAP Realm, or the client secret of an OpenID Connect Realm. Zentral uses the secret to connect to the IdP. The secret is not in the HTTP API, for any user. On the Realm page, only a superuser logged in without a Realm sees the secret. The other users see `set` when the Realm has a secret. To change a secret, update the Realm in the console. The update form shows the current secret, and keeps it if you do not change the field.
+
 A superuser cannot log in with a Realm: through a Realm, the IdP would control the superuser account. A superuser logs in with a password. A Realm login that finds a superuser fails, and a Realm session stops when its user becomes a superuser. A user that a Realm login made has no password, so it cannot be a superuser.
 
 It is good practice to separate users that will have access to the Zentral Web Console from users that will only “consume” the services (enrollment in MDM, the User Portal). You would end up with end-users that could log in to Zentral otherwise, whether or not they have permissions to change or view any settings. To do this, you can, and should, configure multiple Realms: One for Zentral Administration, one for MDM Enrollment and the User Portal.

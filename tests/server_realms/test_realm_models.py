@@ -1,6 +1,8 @@
 from django.test import TestCase
+from django.utils.crypto import get_random_string
 from tests.zentral_test_utils.assertions.serialization_assertions import SerializeForEventAssertions
-from realms.models import RealmUserGroupMembership, RoleMapping
+from realms.backends.registry import backend_classes
+from realms.models import Realm, RealmUserGroupMembership, RoleMapping
 from .utils import (force_group, force_realm, force_realm_group, force_realm_group_mapping, force_realm_user,
                     force_role_mapping)
 
@@ -39,7 +41,6 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
             {'backend': 'ldap',
              'config': {
                  'bind_dn': 'uid=zentral,ou=Users,o=yolo,dc=example,dc=com',
-                 'bind_password': 'yolo',
                  'host': 'ldap.example.com',
                  'users_base_dn': 'ou=Users,o=yolo,dc=example,dc=com'
              },
@@ -58,6 +59,23 @@ class RealmModelsTestCase(TestCase, SerializeForEventAssertions):
              'updated_at': realm.updated_at.isoformat(),
              'username_claim': 'username'}
         )
+
+    def test_realm_serialize_for_event_no_secrets(self):
+        for backend, backend_class in backend_classes.items():
+            realm = force_realm(backend=backend)
+            config = realm.config
+            config.update({key: get_random_string(24) for key in backend_class.secret_config_keys})
+            realm.save()
+            self.assertEqual(
+                realm.serialize_for_event()["config"],
+                {k: v for k, v in config.items() if k not in backend_class.secret_config_keys}
+            )
+
+    def test_realm_unknown_backend_no_config(self):
+        realm = force_realm()
+        Realm.objects.filter(pk=realm.pk).update(backend="unknown")
+        realm = Realm.objects.get(pk=realm.pk)
+        self.assertEqual(realm.serialize_for_event()["config"], {})
 
     def test_realm_group_serialize_for_event(self):
         parent_realm_group = force_realm_group()

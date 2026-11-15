@@ -26,7 +26,7 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">Realm</h3>
         <div class="ms-auto">
-            {% if request.user.is_superuser and not request.realm_authentication_session.is_remote %}
+            {% if request.user.is_superuser and not request.realm_authentication_session.is_remote and object.backend_instance %}
               {% url 'realms:update' object.uuid as url %}
               {% button 'UPDATE' url "Edit Realm" %}
             {% endif %}
@@ -127,7 +127,7 @@
                 {% endif %}
               </td>
             </tr>
-            {% for name, value, hidden in object.backend_instance.extra_attributes_for_display %}
+            {% for name, value, hidden in backend_attributes %}
             <tr>
                 <td>{{ name }}</td>
                 <td>

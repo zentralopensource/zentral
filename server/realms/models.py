@@ -64,13 +64,19 @@ class Realm(models.Model):
 
     def _get_BACKEND_config(self, backend):
         if self.backend == backend:
-            return self.config
+            return self.config_without_secrets()
 
     def __getattr__(self, name):
         for backend in backend_classes:
             if name == f"get_{backend}_config":
                 return partial(self._get_BACKEND_config, backend)
         raise AttributeError
+
+    def config_without_secrets(self):
+        if self.backend_instance is None:
+            return {}
+        secret_keys = self.backend_instance.secret_config_keys
+        return {k: v for k, v in self.config.items() if k not in secret_keys}
 
     def get_absolute_url(self):
         return reverse("realms:view", args=(self.uuid,))
@@ -90,7 +96,7 @@ class Realm(models.Model):
             "enabled_for_login": self.enabled_for_login,
             "login_session_expiry": self.login_session_expiry,
             "backend": self.backend,
-            "config": self.config,
+            "config": self.config_without_secrets(),
             "username_claim": self.username_claim,
             "email_claim": self.email_claim,
             "first_name_claim": self.first_name_claim,

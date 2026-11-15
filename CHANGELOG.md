@@ -301,6 +301,11 @@ Before, a user with the permission did these operations within a ceiling: they g
 Only a superuser can change a superuser, as each user (see above). Nobody deletes a superuser: remove the superuser status first. Only a superuser logged in without a realm can give or remove the superuser status, as before.
 
 
+#### 🧨 The realm secrets are not in the API
+
+The realms API endpoints do not return the realm secrets anymore: the `bind_password` attribute of `ldap_config`, and the `client_secret` attribute of `openidc_config`. The realm page shows them to a superuser logged in without a realm only, and shows `set` to the other users. A client that reads these attributes from the API must get the secrets from another source. The realms API is read-only: to change a secret, update the realm in the web console.
+
+
 #### 🧨 Privilege escalation hardening — realms
 
 Only a superuser logged in without a realm can create or change a realm. The `Realms::Action::"createRealm"` and `Realms::Action::"updateRealm"` PBAC actions do not give these pages anymore.

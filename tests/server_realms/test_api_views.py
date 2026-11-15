@@ -4,6 +4,7 @@ from django.utils.crypto import get_random_string
 from django.test import TestCase
 
 from accounts.models import APIToken, User
+from realms.backends.registry import backend_classes
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from .utils import force_realm
@@ -64,7 +65,6 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
               'ldap_config': {
                   "host": "ldap.example.com",
                   "bind_dn": "uid=zentral,ou=Users,o=yolo,dc=example,dc=com",
-                  "bind_password": "yolo",
                   "users_base_dn": 'ou=Users,o=yolo,dc=example,dc=com',
               },
               'openidc_config': None,
@@ -141,7 +141,6 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'ldap_config': None,
              'openidc_config': {
                  "client_id": "yolo",
-                 "client_secret": "fomo",
                  "discovery_url": "https://zentral.example.com/.well-known/openid-configuration",
                  "extra_scopes": ["profile"],
              },
@@ -160,6 +159,24 @@ class RealmsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'created_at': realm.created_at.isoformat(),
              'updated_at': realm.updated_at.isoformat()}
         )
+
+    def test_realm_secrets_never_returned(self):
+        self.set_permissions("realms.view_realm")
+        for backend, backend_class in backend_classes.items():
+            realm = force_realm(backend=backend)
+            secrets = {key: get_random_string(24) for key in backend_class.secret_config_keys}
+            realm.config.update(secrets)
+            realm.save()
+            config_attr = f"{backend}_config"
+            detail_response = self.get(reverse("realms_api:realm", args=(realm.pk,)))
+            self.assertEqual(detail_response.status_code, 200)
+            list_response = self.get(reverse("realms_api:realms"), data={"name": realm.name})
+            self.assertEqual(list_response.status_code, 200)
+            for response, realm_d in ((detail_response, detail_response.json()),
+                                      (list_response, list_response.json()[0])):
+                for key, secret in secrets.items():
+                    self.assertNotIn(key, realm_d[config_attr])
+                    self.assertNotContains(response, secret)
 
     # create realm
 

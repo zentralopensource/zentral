@@ -86,7 +86,7 @@ class SAMLRealmBackend(BaseBackend):
     def get_saml2_client(self):
         return Saml2Client(config=self.get_saml2_config())
 
-    def extra_attributes_for_display(self):
+    def extra_attributes_for_display(self, show_secrets):
         attributes = [
             ("Entity ID", self.entity_id(), False),
             ("Assertion Consumer Service URL", self.acs_url(), False),

@@ -81,6 +81,11 @@ class RealmView(PermissionRequiredMixin, DetailView):
                                      .order_by("claim", "value", "realm_group__display_name")
         )
         ctx["realm"] = self.object
+        backend_instance = self.object.backend_instance
+        ctx["backend_attributes"] = (
+            backend_instance.extra_attributes_for_display(show_secrets=is_local_superuser(self.request))
+            if backend_instance else []
+        )
         if self.object.scim_enabled:
             scim_root_path = reverse(
                 "realms_public:scim_resource_types", args=(self.object.pk,)
@@ -117,7 +122,10 @@ class UpdateRealmView(LocalSuperuserRequiredMixin, UpdateView):
     fields = ("name",)
 
     def get_form_class(self):
-        return self.object.backend_instance.get_form_class()
+        backend_instance = self.object.backend_instance
+        if backend_instance is None:
+            raise Http404
+        return backend_instance.get_form_class()
 
 
 # realm groups
