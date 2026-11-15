@@ -360,6 +360,11 @@ Review the rules and the entries that combine two fields before the upgrade: the
 A Santa configuration has one `Monitor` and one `Lockdown` scoped client mode at most, and one scoped path regex per pattern and policy. Two entries in scope for a machine then always differ on the mode, or on the policy, and the name is not a tiebreak anymore. A leading `^` is removed from a path regex when the entry is saved, so `^/tmp/` and `/tmp/` are one pattern, and a pattern has at most 512 characters. The migration refuses a configuration with two entries of the same mode, or two entries with the same pattern and policy: merge them first.
 
 
+#### 🧨 The Santa ruleset update API is deprecated, and off by default
+
+`POST /api/santa/rulesets/update/` is deprecated, and a later version removes it. It is off by default now: Zentral does not mount its route, and the URL is unknown (404). To keep it until you move your rulesets to Terraform with `zentral_santa_rule`, set the `enable_ruleset_update_api` option of the `zentral.contrib.santa` app to `true` in `base.json`, before you upgrade. The rulesets and their rules stay, and the rules API and Terraform manage them.
+
+
 #### 🧨 A Santa ruleset rule is keyed by its target and its policy
 
 A rule whose policy changes in a ruleset is a new rule now, and the old one is deleted, with a `created` and a `deleted` audit event instead of an `updated` one. Two rules on the same target with different policies are accepted in one ruleset, and a conflict with a rule outside the ruleset is per policy. The rule form and the rule API refuse a second rule with the same policy on a target, and any rule on a target that has a voting rule.
@@ -395,6 +400,11 @@ Santa adds a `^` to a pattern that does not have one when it reads its state fro
 Each machine removes its decision caches one time, when it receives the new pattern.
 
 A pattern that Python cannot compile keeps being distributed alone, without the scoped entries, and Zentral logs an error. Some ICU syntax is not Python syntax – `\p{…}`, `\X`, `\R`, `\Q…\E` – so a configuration can have a pattern that works in Santa and cannot be combined. Zentral validates a path regex of a configuration when it changes now, so a new pattern is refused at the form and in the API.
+
+#### 🧨 The Osquery standard pack import is deprecated, and off by default
+
+The import of a standard pack is deprecated, and a later version removes it: `PUT` and `DELETE` on `/api/osquery/packs/<slug>/`, and the pack upload in the web console. It is off by default now: Zentral does not mount the routes of the endpoint and of the upload page, their URLs are unknown (404), and the pack page does not show the upload button. To keep it until you move your packs to Terraform, set the `enable_standard_pack_import` option of the `zentral.contrib.osquery` app to `true` in `base.json`, before you upgrade. The packs, their queries and their pack queries stay, and `/api/osquery/packs/<int:pk>/`, the other Osquery endpoints and Terraform manage them.
+
 
 #### 🧨 Osquery pack import events
 

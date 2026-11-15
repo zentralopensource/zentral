@@ -9,6 +9,12 @@ weight: 230
 
 To activate the osquery module, you need to add a `zentral.contrib.osquery` section to the `apps` section in `base.json`.
 
+### `enable_standard_pack_import`
+
+**OPTIONAL**, **DEPRECATED**
+
+The import of a standard pack is deprecated, and a later version removes it. It is off by default: Zentral does not mount the routes of `/api/osquery/packs/<slug>/` and of the pack upload page, their URLs are unknown (404), and the pack page does not show the upload button. To turn it on, set this boolean option to `true`, and restart Zentral. Use it only while you move your packs to Terraform, with the `zentral_osquery_pack` and `zentral_osquery_query` resources: the `scheduling` attribute of a query puts it in a pack. See [Standard pack imports](#standard-pack-imports).
+
 ## Query tables
 
 Zentral parses the SQL of a query to find the osquery tables that the query reads. The names are in lower case, and sorted. A query that reads no table, a compliance check that only returns a status, has an empty list of tables.
@@ -33,6 +39,8 @@ Two effects of a change have no event of their own:
 The "Halt current runs" option of a new run stops the other runs of the same query. Each stopped run has its own event.
 
 ### Standard pack imports
+
+The import of a standard pack is deprecated, and off by default. It needs the [`enable_standard_pack_import`](#enable_standard_pack_import) option.
 
 An import of a standard pack — a `PUT` on `/api/osquery/packs/<slug>/`, or an upload in the web console — changes several objects at once. It publishes one `osquery_pack_update` event that reports the import, and one `zentral_audit` event for each object it changed. They share one event UUID, and the report is the first of them, so a reader can gather the whole import from any one of its events.
 
@@ -1151,6 +1159,8 @@ Response (204 No Content)
 ### /api/osquery/packs/`<slug:slug>`/
 
 #### Create or update a standard Osquery pack.
+
+> **_DEPRECATED:_** This endpoint is deprecated, and a later version removes it. Zentral mounts it only when the [`enable_standard_pack_import`](#enable_standard_pack_import) option is `true`.
 
 * method: `PUT`, `DELETE`
 

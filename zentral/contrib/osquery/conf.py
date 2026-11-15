@@ -1,9 +1,15 @@
 import logging
 from zentral.contrib.inventory.conf import LINUX, MACOS, WINDOWS
 from django.db.models import Q
+from zentral.conf import app_option_enabled
 
 
 logger = logging.getLogger('zentral.contrib.osquery.conf')
+
+
+def standard_pack_import_enabled():
+    # deprecated, see the docs of the option. The URL modules read it once, when they are imported.
+    return app_option_enabled("zentral.contrib.osquery", "enable_standard_pack_import")
 
 
 INVENTORY_QUERY_NAME = "ztl-inv"

@@ -1,4 +1,5 @@
 from django.urls import path
+from .conf import standard_pack_import_enabled
 from .api_views import (ConfigurationDetail, ConfigurationList,
                         EnrollmentDetail, EnrollmentList,
                         EnrollmentPackage, EnrollmentPowershellScript, EnrollmentScript,
@@ -28,9 +29,11 @@ urlpatterns = [
     path('file_categories/<int:pk>/', FileCategoryDetail.as_view(), name="file_category"),
     path('packs/', PackList.as_view(), name="packs"),
     path('packs/<int:pk>/', PackDetail.as_view(), name="pack"),
-    path('packs/<slug:slug>/', PackView.as_view(), name="pack"),
     path('queries/', QueryList.as_view(), name="queries"),
     path('queries/<int:pk>/', QueryDetail.as_view(), name="query"),
     path('runs/<int:pk>/results/export/',
          ExportDistributedQueryResults.as_view(), name="export_distributed_query_results"),
 ]
+
+if standard_pack_import_enabled():
+    urlpatterns.append(path('packs/<slug:slug>/', PackView.as_view(), name="pack"))

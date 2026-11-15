@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .conf import standard_pack_import_enabled
 
 app_name = "osquery"
 urlpatterns = [
@@ -40,7 +41,6 @@ urlpatterns = [
     path('packs/create/', views.CreatePackView.as_view(), name="create_pack"),
     path('packs/<int:pk>/', views.PackView.as_view(), name="pack"),
     path('packs/<int:pk>/update/', views.UpdatePackView.as_view(), name="update_pack"),
-    path('packs/<int:pk>/upload/', views.UploadPackView.as_view(), name="upload_pack"),
     path('packs/<int:pk>/delete/', views.DeletePackView.as_view(), name="delete_pack"),
     path('packs/<int:pk>/queries/add/', views.AddPackQueryView.as_view(), name="add_pack_query"),
     path('packs/<int:pk>/queries/<int:pq_pk>/update/', views.UpdatePackQueryView.as_view(), name="update_pack_query"),
@@ -87,6 +87,9 @@ urlpatterns = [
          views.EnrollmentBumpVersionView.as_view(),
          name='bump_enrollment_version'),
 ]
+
+if standard_pack_import_enabled():
+    urlpatterns.append(path('packs/<int:pk>/upload/', views.UploadPackView.as_view(), name="upload_pack"))
 
 
 modules_menu_cfg = {

@@ -156,7 +156,9 @@
         }
       }
     },
-    "zentral.contrib.osquery": {},
+    "zentral.contrib.osquery": {
+      "enable_standard_pack_import": true
+    },
     "zentral.contrib.turbo": {},
     "zentral.contrib.puppet": {
       "instances": [
@@ -176,6 +178,7 @@
       ]
     },
     "zentral.contrib.santa": {
+      "enable_ruleset_update_api": true,
       "metrics": true,
       "user_portal": true
     },

@@ -2,11 +2,12 @@ from io import BytesIO
 from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.urls import reverse
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils.crypto import get_random_string
 
 from accounts.models import User
 from tests.osquery.utils import assert_audit_event
+from tests.zentral_test_utils.app_option import load_root_urlconf
 from tests.zentral_test_utils.login_case import LoginCase
 from django.utils.text import slugify
 from zentral.contrib.osquery.compliance_checks import sync_query_compliance_check
@@ -308,6 +309,23 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.login()
         response = self.client.get(pack.get_absolute_url())
         self.assertEqual(response.status_code, 403)
+
+    def test_pack_detail_upload_link(self):
+        pack = self._force_pack()
+        self.login("osquery.view_pack", "osquery.change_pack")
+        upload_url = reverse("osquery:upload_pack", args=(pack.pk,))
+        response = self.client.get(pack.get_absolute_url())
+        self.assertContains(response, upload_url)
+        # the default: the option is missing, and the upload route is not mounted
+        root_urlconf = load_root_urlconf("zentral.contrib.osquery", "enable_standard_pack_import")
+        with override_settings(ROOT_URLCONF=root_urlconf):
+            response = self.client.get(pack.get_absolute_url())
+            self.assertEqual(response.status_code, 200)
+            self.assertIsNone(response.context["upload_pack_url"])
+            self.assertNotContains(response, upload_url)
+            self.assertEqual(self.client.get(upload_url).status_code, 404)
+        response = self.client.get(pack.get_absolute_url())
+        self.assertContains(response, upload_url)
 
     def test_pack_detail(self):
         pack = self._force_pack()

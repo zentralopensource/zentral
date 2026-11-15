@@ -180,6 +180,20 @@ def get_retention_days(app, key):
 
 
 #
+# App options
+#
+
+
+def app_option_enabled(app, key):
+    # only a JSON true turns the option on: a string such as "false" is truthy
+    try:
+        value = settings["apps"][app][key]
+    except KeyError:
+        return False
+    return value is True
+
+
+#
 # User templates
 #
 # The user can override the default templates by putting

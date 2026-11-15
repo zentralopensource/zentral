@@ -5,7 +5,7 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
-from django.urls import reverse_lazy
+from django.urls import NoReverseMatch, reverse, reverse_lazy
 from django.views.generic import DetailView, ListView, UpdateView
 
 from zentral.contrib.osquery.forms import PackForm, PackQueryForm, UploadPackForm
@@ -55,6 +55,11 @@ class PackView(PermissionRequiredMixin, DetailView):
                                      .order_by("query__name", "slug", "pk")
         )
         ctx["pack_query_count"] = ctx["pack_queries"].count()
+        try:
+            ctx["upload_pack_url"] = reverse("osquery:upload_pack", args=(self.object.pk,))
+        except NoReverseMatch:
+            # deprecated, mounted only with the enable_standard_pack_import option
+            ctx["upload_pack_url"] = None
         ctx["can_add_pack_query"] = (
             self.request.user.has_perm("osquery.add_packquery")
             and Query.objects.filter(packquery__isnull=True).count() > 0

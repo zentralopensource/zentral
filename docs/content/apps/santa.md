@@ -29,6 +29,12 @@ To stop the updates of the counters, set this boolean option to `false`. The def
 * The Targets page and the targets export do not show the counters and the last seen time. The Targets page does not show the `Last seen` filter and the sort orders on these values.
 * With a configuration filter, the Targets page finds a new target only when the target has a state in this configuration.
 
+### `enable_ruleset_update_api`
+
+**OPTIONAL**, **DEPRECATED**
+
+The [ruleset update API](#apisantarulesetsupdate) is deprecated, and a later version removes it. It is off by default: Zentral does not mount the route of `/api/santa/rulesets/update/`, and the URL is unknown (404). To turn it on, set this boolean option to `true`, and restart Zentral. Use it only while you move your rulesets to Terraform, with the `zentral_santa_rule` resource.
+
 ## Santa deployment
 
 ### Create a Santa agent configuration
@@ -1067,6 +1073,8 @@ This operation is idempotent. The second time you run the command, and if the ap
 ```
 
 ### /api/santa/rulesets/update/
+
+> **_DEPRECATED:_** This endpoint is deprecated, and a later version removes it. Zentral mounts it only when the [`enable_ruleset_update_api`](#enable_ruleset_update_api) option is `true`.
 
 * method: POST
 * Content-Type: application/json or application/yaml
