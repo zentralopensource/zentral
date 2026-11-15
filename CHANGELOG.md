@@ -244,6 +244,17 @@ The CEL condition of an OIDC API token issuer names the workloads that get an AP
 The API names the fields of an issuer one by one: a new field of the model is not returned until it is added to the list.
 
 
+#### 🧨 A refusal on an integer id gives the answer of an unknown id
+
+These endpoints name their objects with integer ids, which a caller can guess. A refusal gives the same answer as an id that does not exist now, so a caller cannot learn which objects exist. The refusal is still logged.
+
+- `/api/santa/scoped_client_modes/<id>/`, `/api/santa/scoped_path_regexes/<id>/` and `/api/santa/enrolled_machines/<id>/force_clean_sync/`: a refusal is a 404, not a 403. The body of a `force_clean_sync` request is validated before the enrolled machine is read: an unknown `sync_type` is always a 400.
+- The `POST` of `/api/santa/scoped_client_modes/` and `/api/santa/scoped_path_regexes/`: a refusal is a 400 on the `configuration` attribute, the error of a configuration that does not exist, not a 403.
+- The `configuration_id` parameter of the two lists does not load the configuration anymore: an unknown configuration gives an empty list, like a configuration without visible entries, not a 400. A value that is not a number is still a 400.
+- `/api/mdm/devices/<id>/block/`, `/api/mdm/devices/<id>/unblock/`, and the `force_install/` endpoints of `/api/mdm/devices/<id>/artifacts/` and `/api/mdm/users/<id>/artifacts/`: a refusal is a 404, not a 403.
+- In the console, a refusal is a 404, not a 403, on the machine tag buttons, the create, update and delete pages of the Santa scoped client modes and scoped path regexes, the Santa clean sync actions of a machine, and the MDM block, unblock and force install pages. These 404 pages do not show the name of a model anymore.
+
+
 #### 🧨 Only the `AdminActions` groups give `viewPolicy`
 
 `Accounts::Action::"viewPolicy"` is a member of `Accounts::Action::"AdminActions"` and `Action::"GlobalAdminActions"` only now. Before, it was also a member of the `UserActions` and `ViewerActions` groups, like the other view actions. The policies show who can do what in the deployment. A role with `UserActions` or `ViewerActions` does not see the policies, the Schema browser, or the policies on the pages of a role and of a user, anymore. A policy that names `viewPolicy` does not change. To keep this access for a role, add `Accounts::Action::"viewPolicy"` to one of its policies.
