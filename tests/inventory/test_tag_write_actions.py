@@ -586,14 +586,16 @@ class TagWriteActionsTestCase(TestCase, LoginCase, RequestCase):
         self._set_policies(permissions=(view_tag_action,))
         self.client.force_login(self.user)
         with self.assertLogs("zentral.pbac.utils", level="WARNING") as cm:
-            self.assertEqual(self.client.get(reverse("inventory:update_tag", args=(self.tag.pk,))).status_code, 404)
+            refused = self.client.get(reverse("inventory:update_tag", args=(self.tag.pk,)))
+        self.assertEqual(refused.status_code, 404)
         self.assertIn(f'Inventory::Action::"updateTag" Inventory::Tag::"{self.tag.pk}"', cm.output[0])
         # not a valid body
         response = self.client.post(reverse("inventory:update_tag", args=(self.tag.pk,)),
                                     {"name": self.other_tag.name})
         self.assertEqual(response.status_code, 404)
-        response = self.client.get(reverse("inventory:update_tag", args=(self._unknown_tag_pk(),)))
-        self.assertEqual(response.status_code, 404)
+        unknown = self.client.get(reverse("inventory:update_tag", args=(self._unknown_tag_pk(),)))
+        self.assertEqual(unknown.status_code, 404)
+        self.assertEqual(refused.content, unknown.content)
 
     def test_console_update_the_action_alone(self):
         self._set_policies(self._statement("permit", "updateTag"), self._statement("forbid", "deleteTag"))
@@ -634,10 +636,12 @@ class TagWriteActionsTestCase(TestCase, LoginCase, RequestCase):
         with self.assertLogs("zentral.pbac.utils", level="WARNING") as cm:
             self.assertEqual(self.client.get(reverse("inventory:delete_tag", args=(self.tag.pk,))).status_code, 404)
         self.assertIn(f'Inventory::Action::"deleteTag" Inventory::Tag::"{self.tag.pk}"', cm.output[0])
-        self.assertEqual(self.client.post(reverse("inventory:delete_tag", args=(self.tag.pk,))).status_code, 404)
+        refused = self.client.post(reverse("inventory:delete_tag", args=(self.tag.pk,)))
+        self.assertEqual(refused.status_code, 404)
         self.assertTrue(Tag.objects.filter(pk=self.tag.pk).exists())
-        response = self.client.post(reverse("inventory:delete_tag", args=(self._unknown_tag_pk(),)))
-        self.assertEqual(response.status_code, 404)
+        unknown = self.client.post(reverse("inventory:delete_tag", args=(self._unknown_tag_pk(),)))
+        self.assertEqual(unknown.status_code, 404)
+        self.assertEqual(refused.content, unknown.content)
 
     def test_console_delete_the_action_alone(self):
         self._set_policies(self._statement("permit", "deleteTag"), self._statement("forbid", "updateTag"))

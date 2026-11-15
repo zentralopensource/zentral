@@ -1243,7 +1243,7 @@ class CreateTagView(AccessMixin, UserFormKwargsMixin, CreateViewWithAudit):
 
 
 class TagWriteViewMixin(PBACViewMixin):
-    pbac_not_found_model = Tag
+    refusal_as_not_found = True
 
     def get_pbac_request_kwargs(self, kwargs):
         self.tag = get_object_or_404(Tag.objects.select_related("taxonomy"), pk=kwargs["pk"])

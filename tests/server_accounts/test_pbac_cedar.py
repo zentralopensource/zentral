@@ -410,6 +410,24 @@ class PBACGateTestCase(TestCase):
             View().dispatch(request)
         self.assertIn("cannot gate a view", cm.exception.args[0])
 
+    def test_view_mixin_refuses_a_preview_when_a_refusal_is_a_404(self):
+        test_case = self
+
+        class View(PBACViewMixin):
+            refusal_as_not_found = True
+
+            def get_pbac_request_kwargs(self, kwargs):
+                return {}
+
+            def pbac_request_class(self, user_obj, **kwargs):
+                return test_case._preview_request(user_obj)
+
+        request = RequestFactory().get("/")
+        request.user = self.user
+        with self.assertRaises(ValueError) as cm:
+            View().dispatch(request)
+        self.assertIn("cannot gate a view", cm.exception.args[0])
+
     def test_view_mixin_denies_a_full_request_without_a_policy(self):
         test_case = self
 

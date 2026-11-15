@@ -3,7 +3,7 @@ import json
 from django.contrib.auth.mixins import AccessMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.http import HttpResponseServerError
+from django.http import Http404, HttpResponseServerError
 from django.views.defaults import server_error as django_server_error
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
@@ -200,18 +200,24 @@ class UserFormKwargsMixin:
 
 class PBACViewMixin(AccessMixin):
     pbac_request_class = None
-    # a decision on a guessable id: a refusal gets the 404 of an unknown id (rule 13)
-    pbac_not_found_model = None
+    # True when the URL names the resource with a guessable id: a refusal gives the answer of an unknown id
+    refusal_as_not_found = False
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        pbac_request = self.pbac_request_class(
-            request.user,
-            **self.get_pbac_request_kwargs(kwargs),
-        )
-        if pbac_request.unknown_context:
-            # a preview is not a decision
-            raise ValueError(f"{pbac_request} cannot gate a view")
-        check_request(request, pbac_request, not_found_model=self.pbac_not_found_model)
+        try:
+            pbac_request = self.pbac_request_class(
+                request.user,
+                **self.get_pbac_request_kwargs(kwargs),
+            )
+            if pbac_request.unknown_context:
+                # a preview is not a decision
+                raise ValueError(f"{pbac_request} cannot gate a view")
+            check_request(request, pbac_request)
+        except (Http404, PermissionDenied):
+            if self.refusal_as_not_found:
+                # no message: the 404 page shows it, and the one of get_object_or_404 names the model
+                raise Http404
+            raise
         return super().dispatch(request, *args, **kwargs)

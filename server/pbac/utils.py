@@ -1,7 +1,6 @@
 import logging
 
 from django.core.exceptions import PermissionDenied
-from django.http import Http404
 
 from base.notifier import notifier
 from .engine import engine
@@ -49,14 +48,10 @@ def permitted_pks(user_obj, request_class, objects):
     return {obj.pk for obj, pbac_request in zip(objects, pbac_requests) if pbac_request.is_authorized}
 
 
-def check_request(request, pbac_request, not_found_model=None):
+def check_request(request, pbac_request):
     # A preview is accepted: its Deny is final. A caller that gates a view must refuse a preview
     # first, because its Allow only means "could be permitted".
-    # With not_found_model, a refusal on a guessable id gets the answer of an unknown id (rule 13): the 404 of
-    # get_object_or_404(), with the same message.
     if refused_requests(request, [pbac_request]):
-        if not_found_model is not None:
-            raise Http404(f"No {not_found_model._meta.object_name} matches the given query.")
         raise PermissionDenied
 
 

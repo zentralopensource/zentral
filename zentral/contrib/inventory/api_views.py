@@ -19,7 +19,8 @@ from pbac.scoping import visible_rows
 from pbac.utils import could_be_permitted, refused_requests
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
-                               PBACRetrieveUpdateDestroyAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+                               PBACRetrieveUpdateDestroyAPIViewWithAudit, RefusalAsNotFoundMixin,
+                               RetrieveUpdateDestroyAPIViewWithAudit)
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .models import (JMESPathCheck,
                      MachineSnapshot,
@@ -556,7 +557,7 @@ class TagList(ListCreateAPIViewWithAudit):
         return visible_rows(self.request.user, ViewTagRequest, super().get_queryset())
 
 
-class TagDetail(PBACRetrieveUpdateDestroyAPIViewWithAudit):
+class TagDetail(RefusalAsNotFoundMixin, PBACRetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a tag.
     """
@@ -565,7 +566,6 @@ class TagDetail(PBACRetrieveUpdateDestroyAPIViewWithAudit):
     view_pbac_request_class = ViewTagRequest
     update_pbac_request_class = UpdateTagRequest
     delete_pbac_request_class = DeleteTagRequest
-    pbac_not_found_model = Tag
 
     def perform_destroy(self, instance):
         if not instance.can_be_deleted(lock=True):

@@ -348,13 +348,7 @@ class PkgInfoDataView(PBACViewMixin, DetailView):
     pbac_request_class = ViewPkgInfoDataRequest
     template_name = "monolith/pkginfo_data.html"
     context_object_name = "pkg_info"
-
-    def dispatch(self, request, *args, **kwargs):
-        # the pk is guessable, so a refusal gives the same answer as an unknown pk
-        try:
-            return super().dispatch(request, *args, **kwargs)
-        except PermissionDenied:
-            raise Http404
+    refusal_as_not_found = True
 
     def get_pbac_request_kwargs(self, kwargs):
         try:
