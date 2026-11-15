@@ -10,7 +10,7 @@ from rest_framework import serializers
 
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret, Tag, share_lock_rows
-from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.inventory.serializers import EnrolledMachinesCountSerializerMixin, EnrollmentSecretSerializer
 
 from .events import post_santa_rule_update_event
 from .forms import cleanup_target_identifier
@@ -122,18 +122,14 @@ class ScopedPathRegexUpdateSerializer(ScopedConfigurationItemUpdateSerializerMix
     pass
 
 
-class EnrollmentSerializer(serializers.ModelSerializer):
+class EnrollmentSerializer(EnrolledMachinesCountSerializerMixin, serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
-    enrolled_machines_count = serializers.SerializerMethodField()
     plist_download_url = serializers.SerializerMethodField()
     configuration_profile_download_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Enrollment
         exclude = ('distributor_content_type', 'distributor_pk',)
-
-    def get_enrolled_machines_count(self, obj):
-        return obj.enrolledmachine_set.count()
 
     def get_artifact_download_url(self, view_name, obj):
         path = reverse(f"santa_api:{view_name}", args=(obj.pk,))

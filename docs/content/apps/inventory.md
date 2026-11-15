@@ -322,6 +322,35 @@ To keep a role away from a tag completely, also forbid the write actions of the 
 
 The objects that use tags to select machines, for example a Santa rule, a blueprint or a sub manifest, write no tag. They need no tag action.
 
+## Enrollment secrets and PBAC
+
+An enrollment holds a secret: a device that knows it enrolls. The secret is in the API, in the downloads of the agents, and on some MDM pages. Its read has its own PBAC action, one for each enrollment model, at the user level:
+
+| Action | Module | The secret in |
+| --- | --- | --- |
+| `Santa::Action::"viewEnrollmentSecret"` | Santa | the API, the plist, the configuration profile |
+| `Osquery::Action::"viewEnrollmentSecret"` | Osquery | the API, the macOS package, the Linux script, the PowerShell script |
+| `Munki::Action::"viewEnrollmentSecret"` | Munki | the API, the package |
+| `Monolith::Action::"viewEnrollmentSecret"` | Monolith | the API, the plist, the configuration profile |
+| `Turbo::Action::"viewEnrollmentSecret"` | Turbo | the API, the plist, the configuration profile |
+| `MDM::Action::"viewOTAEnrollmentSecret"` | MDM | the API, the profile download of the console |
+| `MDM::Action::"viewDEPEnrollmentSecret"` | MDM | the API, the check page, which prints the profile that Apple holds |
+| `MDM::Action::"viewUserEnrollmentSecret"` | MDM | the service discovery URL of the user enrollment page |
+
+The resource of each action is the enrollment, for example `Santa::Enrollment`. The enrollment is a member of the meta business unit of its secret, so a policy with `resource in Inventory::MetaBusinessUnit::"…"` gives the secrets of one business unit. The actions are in the `AdminActions` and `UserActions` groups, not in the `ViewerActions` group. No legacy permission maps to them.
+
+The action gives the secret only. The view permission of the enrollment, for example `santa.view_enrollment`, opens the enrollment, and the action decides its secret:
+
+- The list and the detail of the enrollments in the API need the view permission. The secret of each enrollment is decided with the action, in one batch for a list. An enrollment without the action has a `null` secret.
+- The response of a create and of an update decides the secret as a read: it has the secret with the action, and a `null` secret without it. The add and change permissions do not read a secret that a policy refuses.
+- A download that holds the secret, and the DEP check page, need the view permission and the action: a 403 without one of them. The console shows a download link only with the action. The user enrollment page needs the view permission, and shows its service discovery URL with the action only.
+
+Each response that returns a secret sends one `enrollment_secret_viewed` event: a list, a detail, a create or an update, a download and a page. The event names the enrollments of the response, the meta business unit of each secret, where the secrets were read, and the user or the service account who read them. The event of a create or an update is sent once the write is committed, and the event of a download once the file is built. A Terraform plan reads each enrollment, so it sends one event for each enrollment.
+
+A download or a page refused for the secret is a 403, logged at the `WARNING` level. A `null` secret in an API response is not a refusal: it is not logged.
+
+The service account of the Terraform provider needs these actions: it reads the secrets to build the configurations of the agents.
+
 ## HTTP API
 
 ### Requests

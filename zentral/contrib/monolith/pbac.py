@@ -4,9 +4,10 @@ from pbac.engine import ActionGroupBasename, engine
 from pbac.entities import Namespace, Principal, Request, Resource
 from pbac.types import LEGACY_PERM_APPLIES_TO, USER, AppliesTo, ResourceType
 
-from zentral.contrib.inventory.pbac import MBU_RESOURCE_TYPE, get_mbu_resource_from_pk
+from zentral.contrib.inventory.pbac import (MBU_RESOURCE_TYPE, get_mbu_resource_from_pk,
+                                            register_view_enrollment_secret)
 
-from .models import Catalog, PkgInfo, Repository
+from .models import Catalog, Enrollment, PkgInfo, Repository
 
 # namespace
 
@@ -122,3 +123,12 @@ class ViewPkgInfoDataRequest(Request):
             view_pkg_info_data_action,
             get_pkg_info_resource(pkg_info, catalogs),
         )
+
+
+# The secret of an enrollment, see zentral.contrib.inventory.enrollment_secrets
+
+
+ViewEnrollmentSecretRequest = register_view_enrollment_secret(
+    get_namespace(), Enrollment, "viewEnrollmentSecret", "Enrollment",
+)
+view_enrollment_secret_action = ViewEnrollmentSecretRequest.pbac_action

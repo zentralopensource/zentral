@@ -4,6 +4,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from zentral.contrib.turbo.pbac import view_enrollment_secret_action
 from zentral.contrib.inventory.models import Tag
 from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.turbo.models import Enrollment
@@ -79,7 +80,7 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
 
     def test_get_enrollment_plist_accept_content_type(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.set_permissions("turbo.view_enrollment")
+        self.set_permissions("turbo.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("turbo_api:enrollment_plist", args=(enrollment.pk,)),
                             accept="application/x-plist")
         self.assertEqual(response.status_code, 200)
@@ -89,7 +90,7 @@ class TurboEnrollmentAPITestCase(TurboAPITestCase):
 
     def test_get_enrollment_configuration_profile_accept_content_type(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.set_permissions("turbo.view_enrollment")
+        self.set_permissions("turbo.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("turbo_api:enrollment_configuration_profile", args=(enrollment.pk,)),
                             accept="application/octet-stream")
         self.assertEqual(response.status_code, 200)

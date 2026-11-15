@@ -10,9 +10,10 @@ from pbac.types import (
 )
 
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
+from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, get_meta_machine_resource,
+                                            register_view_enrollment_secret)
 
-from .models import EnrolledMachine, ScopedClientMode, ScopedPathRegex
+from .models import EnrolledMachine, Enrollment, ScopedClientMode, ScopedPathRegex
 
 
 # namespace
@@ -324,3 +325,12 @@ class UpdateScopedPathRegexRequest(BaseScopedPathRegexRequest):
 
 class DeleteScopedPathRegexRequest(BaseScopedPathRegexRequest):
     action = delete_scoped_path_regex_action
+
+
+# The secret of an enrollment, see zentral.contrib.inventory.enrollment_secrets
+
+
+ViewEnrollmentSecretRequest = register_view_enrollment_secret(
+    get_namespace(), Enrollment, "viewEnrollmentSecret", "Enrollment",
+)
+view_enrollment_secret_action = ViewEnrollmentSecretRequest.pbac_action

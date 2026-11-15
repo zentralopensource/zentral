@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Count, F
 from django.http import HttpResponse
 from django_filters import rest_framework as filters
 from django.shortcuts import get_object_or_404
@@ -23,6 +23,10 @@ from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRe
                                ListCreateAPIViewWithAudit, MaxLimitOffsetPagination,
                                PBACPermission, PBACRetrieveUpdateDestroyAPIViewWithAudit,
                                RetrieveUpdateDestroyAPIViewWithAudit)
+from zentral.contrib.inventory.enrollment_secrets import (EnrollmentSecretDetailMixin,
+                                                          EnrollmentSecretListMixin,
+                                                          enrollment_secret_download)
+from .pbac import ViewEnrollmentSecretRequest
 from .events import post_santa_ruleset_update_events, post_santa_rule_update_event
 from .models import (Configuration, EnrolledMachine, Rule, RuleSet, ScopedClientMode,
                      ScopedPathRegex, Target, Enrollment)
@@ -64,19 +68,21 @@ class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
             return super().perform_destroy(instance)
 
 
-class EnrollmentList(ListCreateAPIViewWithAudit):
+class EnrollmentList(EnrollmentSecretListMixin, ListCreateAPIViewWithAudit):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    secret_request_class = ViewEnrollmentSecretRequest
+    queryset = Enrollment.objects.annotate(enrolled_machines_count=Count("enrolledmachine"))
     serializer_class = EnrollmentSerializer
     filterset_fields = ('configuration_id',)
 
 
-class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class EnrollmentDetail(EnrollmentSecretDetailMixin, RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete an Enrollment instance.
     """
+    secret_request_class = ViewEnrollmentSecretRequest
     queryset = Enrollment.objects.all()
     serializer_class = EnrollmentSerializer
 
@@ -100,6 +106,10 @@ class EnrollmentConfiguration(FileDownloadAPIView):
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
+        return enrollment_secret_download(request, ViewEnrollmentSecretRequest, enrollment,
+                                          lambda: self.build_response(enrollment))
+
+    def build_response(self, enrollment):
         filename, content_type, content = self.get_content(enrollment)
         response = HttpResponse(content, content_type=content_type)
         response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)

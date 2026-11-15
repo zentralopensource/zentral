@@ -4,6 +4,8 @@ from django.db.models.functions import Coalesce
 from django.urls import reverse_lazy
 from django.views.generic import DetailView
 from pbac.scoping import visible_rows
+from zentral.contrib.inventory.enrollment_secrets import enrollment_pks_with_secret
+from zentral.contrib.turbo.pbac import ViewEnrollmentSecretRequest
 from zentral.utils.views import (CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit,
                                  UserPaginationListView)
 from ..forms import ConfigurationForm
@@ -40,6 +42,8 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         if self.request.user.has_perm("turbo.view_enrollment"):
             enrollments = []
             enrollment_count = 0
+            with_secret = enrollment_pks_with_secret(self.request.user, ViewEnrollmentSecretRequest,
+                                                     self.object.enrollment_set.all())
             for enrollment in (self.object.enrollment_set
                                .select_related("secret", "distributor_content_type").order_by("pk")):
                 enrollment_count += 1
@@ -50,6 +54,7 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
                     distributor = enrollment.distributor
                     if self.request.user.has_perm(f"{dct.app_label}.view_{dct.model}"):
                         distributor_link = True
+                enrollment.can_download = enrollment.pk in with_secret
                 enrollments.append((enrollment, distributor, distributor_link))
             ctx["enrollments"] = enrollments
             ctx["enrollment_count"] = enrollment_count

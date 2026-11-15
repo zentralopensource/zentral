@@ -12,6 +12,7 @@ from django.utils.text import slugify
 from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.osquery.pbac import view_enrollment_secret_action
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.pbac import tag_any_machine_action
@@ -1309,7 +1310,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollments(self):
         enrollment, tags = self.force_enrollment(tag_count=1)
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('osquery_api:enrollments'))
         self.assertEqual(response.status_code, 200)
         fqdn = settings["api"]["fqdn"]
@@ -1354,7 +1355,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_get_enrollment(self):
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         enrollment, _ = self.force_enrollment()
         response = self.get(reverse("osquery_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1410,7 +1411,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_package_token(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
@@ -1420,7 +1421,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_package_user(self):
         enrollment, _ = self.force_enrollment()
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
@@ -1430,7 +1431,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_package_accept_content_type(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)),
                             accept="application/octet-stream")
         self.assertEqual(response.status_code, 200)
@@ -1441,7 +1442,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_NONE_MATCH": etag}
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 304)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -1452,7 +1453,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 304)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -1464,7 +1465,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_NONE_MATCH": etag,
                        "HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 304)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -1475,7 +1476,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_NONE_MATCH": "YOLO"}
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -1486,7 +1487,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"osquery.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(datetime(2001, 1, 1).timestamp())}
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -1519,7 +1520,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_powershell_script_token(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("osquery_api:enrollment_powershell_script", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "text/plain")
@@ -1527,7 +1528,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_powershell_script_user(self):
         enrollment, _ = self.force_enrollment()
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_powershell_script", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "text/plain")
@@ -1535,7 +1536,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_powershell_script_accept_content_type(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("osquery_api:enrollment_powershell_script", args=(enrollment.pk,)),
                             accept="text/plain")
         self.assertEqual(response.status_code, 200)
@@ -1543,7 +1544,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_powershell_script_accept_other_content_type(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("osquery_api:enrollment_powershell_script", args=(enrollment.pk,)),
                             accept="text/csv")
         self.assertEqual(response.status_code, 200)
@@ -1583,7 +1584,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_script_token(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("osquery_api:enrollment_script", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "text/x-shellscript")
@@ -1591,7 +1592,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_script_user(self):
         enrollment, _ = self.force_enrollment()
-        self.login("osquery.view_enrollment")
+        self.login("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("osquery_api:enrollment_script", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "text/x-shellscript")
@@ -1599,7 +1600,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_script_accept_content_type(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("osquery.view_enrollment")
+        self.set_permissions("osquery.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("osquery_api:enrollment_script", args=(enrollment.pk,)),
                             accept="text/x-shellscript")
         self.assertEqual(response.status_code, 200)

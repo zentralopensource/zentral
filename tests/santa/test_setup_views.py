@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.santa.pbac import view_enrollment_secret_action
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, File, MetaBusinessUnit, Tag
 from zentral.contrib.santa.events import SantaRuleUpdateEvent
@@ -619,7 +620,8 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
     def test_post_create_enrollment_view(self, post_event):
         configuration = force_configuration()
         self.mbu.create_enrollment_business_unit()
-        self.login("santa.add_enrollment", "santa.view_enrollment", "santa.view_configuration")
+        self.login("santa.add_enrollment", "santa.view_enrollment", view_enrollment_secret_action,
+                   "santa.view_configuration")
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("santa:create_enrollment", args=(configuration.pk,)),
                                         {"secret-meta_business_unit": self.mbu.pk,
@@ -651,7 +653,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_enrollment_plist(self):
         configuration, enrollment = self._force_enrollment()
-        self.login("santa.view_enrollment")
+        self.login("santa.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/x-plist")
@@ -669,7 +671,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         configuration, enrollment = self._force_enrollment()
         configuration.client_certificate_auth = True
         configuration.save()
-        self.login("santa.view_enrollment")
+        self.login("santa.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         plist_config = plistlib.loads(response.content)
@@ -688,7 +690,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
             voting_realm=realm,
             event_detail_source=Configuration.EventDetailSource.VOTING_PORTAL,
         )
-        self.login("santa.view_enrollment")
+        self.login("santa.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("santa_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/x-plist")
@@ -714,7 +716,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     def test_enrollment_configuration_profile(self):
         _, enrollment = self._force_enrollment()
-        self.login("santa.view_enrollment")
+        self.login("santa.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("santa_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")

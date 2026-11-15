@@ -15,6 +15,7 @@ from django.utils.text import slugify
 
 from tests.utils.packages import build_dummy_package
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.monolith.pbac import view_enrollment_secret_action
 from zentral.contrib.inventory.models import EnrollmentSecret, MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.monolith.models import (
     Catalog,
@@ -2765,7 +2766,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
             response, reverse("monolith_api:enrollment_configuration_profile", args=(self.enrollment.pk,)))
 
     def test_manifest_with_enrollments(self):
-        self.login("monolith.view_manifest", "monolith.view_enrollment")
+        self.login("monolith.view_manifest", "monolith.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("monolith:manifest", args=(self.manifest.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/manifest.html")

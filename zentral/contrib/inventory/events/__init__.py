@@ -3,8 +3,9 @@ import uuid
 from enum import Enum
 
 from zentral.core.events import event_cls_from_type, register_event_type
-from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest
+from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, linked_objects_key
 from zentral.core.queues import queues
+from zentral.contrib.inventory.models import MetaBusinessUnit
 
 logger = logging.getLogger('zentral.contrib.inventory.events')
 
@@ -228,3 +229,45 @@ def post_cleanup_finished_event(payload, serialized_event_request):
 
 def post_machine_snapshot_raw_event(ms_tree):
     queues.post_raw_event("inventory_machine_snapshot", {"ms_tree": ms_tree})
+
+
+# The read of the enrollment secrets that one response holds: in the API, in a download, or on a page. The
+# request of the event names the reader.
+
+
+class EnrollmentSecretViewedEvent(BaseEvent):
+    event_type = "enrollment_secret_viewed"
+    tags = ["zentral", "enrollment_secret"]
+
+
+register_event_type(EnrollmentSecretViewedEvent)
+
+
+def post_enrollment_secret_viewed_event(request, enrollments, secret_field, where):
+    """One event for the secrets that one response holds."""
+    if not enrollments:
+        return
+    payload_enrollments = []
+    # linked, so that the events of the enrollments and of their business units show the read. Built here, not
+    # with EventMetadata.add_objects(), which checks each new key against a list: quadratic for a large list
+    enrollment_keys = {}
+    mbu_pks = {}
+    for enrollment in enrollments:
+        payload_enrollment = {
+            "module": enrollment._meta.app_label,
+            "model": enrollment._meta.model_name,
+            "pk": enrollment.pk,
+        }
+        enrollment_keys.setdefault(linked_objects_key(enrollment), {})[(enrollment.pk,)] = None
+        secret = getattr(enrollment, secret_field)
+        if secret.meta_business_unit_id:
+            payload_enrollment["meta_business_unit"] = {"pk": secret.meta_business_unit_id}
+            mbu_pks[(secret.meta_business_unit_id,)] = None
+        payload_enrollments.append(payload_enrollment)
+    objects = {key: list(pks) for key, pks in enrollment_keys.items()}
+    if mbu_pks:
+        objects[linked_objects_key(MetaBusinessUnit)] = list(mbu_pks)
+    EnrollmentSecretViewedEvent(
+        EventMetadata(request=EventRequest.build_from_request(request), objects=objects),
+        {"enrollments": payload_enrollments, "where": where},
+    ).post()

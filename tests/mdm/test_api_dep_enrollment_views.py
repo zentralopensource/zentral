@@ -11,6 +11,8 @@ from accounts.models import User, APIToken
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from realms.models import Realm
+from zentral.contrib.inventory.events import EnrollmentSecretViewedEvent
+from zentral.contrib.mdm.pbac import view_dep_enrollment_secret_action
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.models import (DEPEnrollment, DEPEnrollmentCustomView, DEPEnrollmentSession,
                                         DEPVirtualServer, EnrollmentCustomView)
@@ -269,8 +271,8 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         }
 
     def _assert_audit_event_send(self, instance, post_event, callbacks,
-                                 action: AuditEvent.Action, prev_value: dict[str, str] = None):
-        self.assertEqual(len(callbacks), 1)
+                                 action: AuditEvent.Action, prev_value: dict[str, str] = None, callbacks_count=1):
+        self.assertEqual(len(callbacks), callbacks_count)
         event = post_event.call_args_list[0].args[0]
 
         if isinstance(instance, DEPEnrollment):
@@ -409,7 +411,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_list_dep_enrollments(self):
-        self.set_permissions("mdm.view_depenrollment")
+        self.set_permissions("mdm.view_depenrollment", view_dep_enrollment_secret_action)
         enrollment = force_dep_enrollment(self.mbu)
         response = self.get(reverse("mdm_api:dep_enrollments"))
         self.assertEqual(response.status_code, 200)
@@ -424,7 +426,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.json(), self._dep_enrollment_to_list())
 
     def test_list_dep_enrollments_by_name(self):
-        self.set_permissions("mdm.view_depenrollment")
+        self.set_permissions("mdm.view_depenrollment", view_dep_enrollment_secret_action)
         enrollment = force_dep_enrollment(self.mbu)
         response = self.get(reverse("mdm_api:dep_enrollments") + f"?name={enrollment.name}")
         self.assertEqual(response.status_code, 200)
@@ -433,7 +435,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
             self._dep_enrollment_to_list(enrollment, 1))
 
     def test_list_dep_enrollments_ordering(self):
-        self.set_permissions("mdm.view_depenrollment")
+        self.set_permissions("mdm.view_depenrollment", view_dep_enrollment_secret_action)
 
         enrollment = self._given_ordered_entity_list(lambda: force_dep_enrollment(self.mbu))
 
@@ -469,7 +471,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_dep_enrollment(self):
-        self.set_permissions("mdm.view_depenrollment")
+        self.set_permissions("mdm.view_depenrollment", view_dep_enrollment_secret_action)
         enrollment = force_dep_enrollment(self.mbu, language="en")
 
         response = self.get(reverse("mdm_api:dep_enrollment", args=(enrollment.id, )))
@@ -753,7 +755,7 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.contrib.mdm.dep_client.DEPClient.add_profile")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_dep_enrollment(self, post_event, add_profile):
-        self.set_permissions("mdm.add_depenrollment", tag_any_machine_action)
+        self.set_permissions("mdm.add_depenrollment", view_dep_enrollment_secret_action, tag_any_machine_action)
         tag = self._given_tag()
         request = self._create_dep_enrollment_request(tag=tag)
         profile_uuid = uuid.uuid4()
@@ -776,7 +778,9 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
         )
         self.assertIsNotNone(enrollment.enrollment_secret.tags.get(id=tag.id))
 
-        self._assert_audit_event_send(enrollment, post_event, callbacks, AuditEvent.Action.CREATED)
+        # the response reads the secret: its event comes after the audit event, both sent on commit
+        self.assertIsInstance(post_event.call_args_list[1].args[0], EnrollmentSecretViewedEvent)
+        self._assert_audit_event_send(enrollment, post_event, callbacks, AuditEvent.Action.CREATED, callbacks_count=2)
 
     # Update DEP enrollment
 
@@ -847,7 +851,8 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.contrib.mdm.dep_client.DEPClient.add_profile")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_dep_enrollment(self, post_event, add_profile):
-        self.set_permissions("mdm.change_depenrollment", tag_any_machine_action)
+        self.set_permissions("mdm.change_depenrollment", view_dep_enrollment_secret_action,
+                             tag_any_machine_action)
         enrollment = force_dep_enrollment(self.mbu)
         prev_value = enrollment.serialize_for_event()
         profile_uuid = uuid.uuid4()
@@ -878,7 +883,10 @@ class ApiViewsTestCase(TestCase, LoginCase, RequestCase):
             self._dep_enrollment_to_dict(enrollment)
         )
 
-        self._assert_audit_event_send(enrollment, post_event, callbacks, AuditEvent.Action.UPDATED, prev_value)
+        # the response reads the secret: its event comes after the audit event, both sent on commit
+        self.assertIsInstance(post_event.call_args_list[1].args[0], EnrollmentSecretViewedEvent)
+        self._assert_audit_event_send(enrollment, post_event, callbacks, AuditEvent.Action.UPDATED, prev_value,
+                                      callbacks_count=2)
 
     # Delete DEP enrollment
 

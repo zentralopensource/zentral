@@ -10,6 +10,8 @@ from django.utils.crypto import get_random_string
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.inventory.events import EnrollmentSecretViewedEvent
+from zentral.contrib.monolith.pbac import view_enrollment_secret_action
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.pbac import tag_any_machine_action
@@ -1667,7 +1669,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollments_filter_by_manifest_id(self):
         enrollment, tags = force_enrollment(mbu=self.mbu, tag_count=1)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("monolith_api:enrollments"), {"manifest_id": enrollment.manifest.pk})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -1699,7 +1701,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollments(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("monolith_api:enrollments"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), [{
@@ -1746,7 +1748,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("monolith_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
@@ -1797,7 +1799,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_enrollment(self, post_event):
-        self.set_permissions("monolith.add_enrollment", tag_any_machine_action)
+        self.set_permissions("monolith.add_enrollment", view_enrollment_secret_action, tag_any_machine_action)
         manifest = force_manifest(mbu=self.mbu)
         self.assertEqual(manifest.version, 1)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
@@ -1839,6 +1841,8 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
         })
         manifest.refresh_from_db()
         self.assertEqual(manifest.version, 2)
+        # the response reads the secret: its event comes after the audit event, both sent on commit
+        self.assertIsInstance(post_event.call_args_list[1].args[0], EnrollmentSecretViewedEvent)
         assert_audit_event(self, post_event, "created", enrollment)
 
     def test_create_enrollment_mbu_conflict(self):
@@ -1964,7 +1968,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_plist(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/x-plist')
@@ -1986,7 +1990,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_plist_user(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -1998,7 +2002,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_plist_accept_content_type(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("monolith_api:enrollment_plist", args=(enrollment.pk,)),
                             accept="application/x-plist")
         self.assertEqual(response.status_code, 200)
@@ -2025,7 +2029,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_configuration_profile(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
@@ -2049,7 +2053,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_configuration_profile_user(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         self.client.force_login(self.user)
         response = self.client.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -2062,7 +2066,7 @@ class MonolithAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_configuration_profile_accept_content_type(self):
         enrollment, _ = force_enrollment(mbu=self.mbu)
-        self.set_permissions("monolith.view_enrollment")
+        self.set_permissions("monolith.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("monolith_api:enrollment_configuration_profile", args=(enrollment.pk,)),
                             accept="application/octet-stream")
         self.assertEqual(response.status_code, 200)

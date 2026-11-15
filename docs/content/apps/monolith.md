@@ -715,7 +715,7 @@ Response (204 No Content)
 #### List all enrollments
 
 * method: GET
-* PBAC action: `Monolith::Action::"viewEnrollment"`
+* PBAC actions: `Monolith::Action::"viewEnrollment"`, and `Monolith::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * Optional filter parameter:
     * `manifest_id`: primary key of the manifest
 
@@ -820,7 +820,7 @@ Response:
 #### Get an enrollment
 
 * method: GET
-* PBAC action: `Monolith::Action::"viewEnrollment"`
+* PBAC actions: `Monolith::Action::"viewEnrollment"`, and `Monolith::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the enrollment
 
 Example:

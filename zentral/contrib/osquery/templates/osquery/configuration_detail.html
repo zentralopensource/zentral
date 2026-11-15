@@ -230,6 +230,7 @@
                 {% url 'osquery:delete_enrollment' configuration.pk enrollment.pk as url %}
                 {% button 'DELETE' url "Delete Enrollment" %}
             {% endif %}
+            {% if enrollment.can_download %}
             <a class="btn btn-link"
                 aria-label="Download macOS enrollment package"
                 title="macOS enrollment package"
@@ -248,6 +249,7 @@
                 href="{% url 'osquery_api:enrollment_powershell_script' enrollment.id %}">
                 <span class="bi bi-windows" aria-hidden="true"></span>
             </a>
+            {% endif %}
             {% endif %}
             {% endif %}
         </td>

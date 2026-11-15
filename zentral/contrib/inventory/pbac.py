@@ -430,3 +430,53 @@ def refused_taxonomies_for_tag_creation_later(http_request, user_obj, taxonomies
     refused.update(taxonomy.pk for taxonomy, pbac_requests in decisions
                    if not all(pbac_request.is_authorized for pbac_request in pbac_requests))
     return refused
+
+
+# The secret of an enrollment. Each module registers one action for each enrollment model, on the enrollment, so
+# a tenant gives the secrets of one kind of enrollment without the others. The enrollment is a member of the meta
+# business unit of its secret, so a policy can give the secrets of one business unit. The action gives the secret
+# only: the view permission of the enrollment opens it.
+
+
+class BaseEnrollmentSecretRequest(Request):
+    pbac_action = None
+    namespace = None
+    resource_name = None
+    secret_field = None
+
+    def __init__(self, user_obj, enrollment) -> None:
+        secret = getattr(enrollment, self.secret_field)
+        parents = []
+        if secret.meta_business_unit_id:
+            parents.append(get_mbu_resource_from_pk(secret.meta_business_unit_id))
+        super().__init__(Principal.from_user(user_obj), self.pbac_action,
+                         Resource(self.resource_name, str(enrollment.pk), self.namespace, parents))
+
+    @classmethod
+    def requests_for_rows(cls, user_obj, enrollments):
+        return [cls(user_obj, enrollment) for enrollment in enrollments]
+
+
+def register_view_enrollment_secret(namespace, model, action_name, resource_name, secret_field="secret"):
+    """Register the action, the resource type of the enrollment model, and return the request class."""
+    resource_type = ResourceType(resource_name, namespace, parents=(MBU_RESOURCE_TYPE,))
+    action = engine.register_action(
+        action_name,
+        namespace,
+        [ActionGroupBasename.ADMIN, ActionGroupBasename.USER],
+        applies_to=AppliesTo(principals=(USER, SERVICE_ACCOUNT), resources=(resource_type,)),
+        help_text="Read the secret of the enrollment: in the API, and in each download and page that holds it. "
+                  "The view permission of the enrollment opens it.",
+    )
+    return type(f"{action_name[0].upper()}{action_name[1:]}Request", (BaseEnrollmentSecretRequest,), {
+        "pbac_action": action,
+        "namespace": namespace,
+        "resource_name": resource_name,
+        "secret_field": secret_field,
+        "row_relations": (secret_field,),
+        "sql_map": SQLMap(
+            model, resource_type,
+            entities={resource_type: "pk", MBU_RESOURCE_TYPE: f"{secret_field}__meta_business_unit"},
+            attributes={},
+        ),
+    })

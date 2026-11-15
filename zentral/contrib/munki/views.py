@@ -8,6 +8,8 @@ from django.db.models import F, Count
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, ListView, TemplateView
+from zentral.contrib.inventory.enrollment_secrets import enrollment_pks_with_secret
+from zentral.contrib.munki.pbac import ViewEnrollmentSecretRequest
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.core.compliance_checks.forms import ComplianceCheckForm
@@ -73,6 +75,8 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         # enrollments
         enrollments = []
         enrollment_count = 0
+        with_secret = enrollment_pks_with_secret(self.request.user, ViewEnrollmentSecretRequest,
+                                                 self.object.enrollment_set.all())
         for enrollment in self.object.enrollment_set.select_related("secret").all().order_by("pk"):
             enrollment_count += 1
             distributor = None
@@ -82,6 +86,7 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
                 distributor = enrollment.distributor
                 if self.request.user.has_perm(f"{dct.app_label}.view_{dct.model}"):
                     distributor_link = True
+            enrollment.can_download = enrollment.pk in with_secret
             enrollments.append((enrollment, distributor, distributor_link))
         ctx["enrollments"] = enrollments
         ctx["enrollment_count"] = enrollment_count

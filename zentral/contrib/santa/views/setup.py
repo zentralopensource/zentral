@@ -10,6 +10,8 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, TemplateView
 from django.views.generic.edit import DeleteView, FormView, UpdateView
 from pbac.engine import engine
+from zentral.contrib.inventory.enrollment_secrets import enrollment_pks_with_secret
+from zentral.contrib.santa.pbac import ViewEnrollmentSecretRequest
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import Certificate, File
 from zentral.contrib.santa.events import post_santa_rule_update_event
@@ -156,6 +158,10 @@ class ConfigurationView(PermissionRequiredMixin, ConfigurationTabMixin, DetailVi
         )
         if self.request.user.has_perm("santa.view_enrollment"):
             enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("id"))
+            with_secret = enrollment_pks_with_secret(self.request.user, ViewEnrollmentSecretRequest,
+                                                     self.object.enrollment_set.all())
+            for enrollment in enrollments:
+                enrollment.can_download = enrollment.pk in with_secret
             ctx["enrollments"] = enrollments
             ctx["enrollments_count"] = len(enrollments)
         return ctx

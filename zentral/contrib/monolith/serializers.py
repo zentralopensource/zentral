@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework import serializers
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret, Tag
-from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
+from zentral.contrib.inventory.serializers import EnrolledMachinesCountSerializerMixin, EnrollmentSecretSerializer
 from .conf import monolith_conf
 from .models import (Catalog, Condition, Enrollment, Manifest, ManifestCatalog, ManifestSubManifest,
                      ManifestEnrollmentPackage, PkgInfoName, Repository, RepositoryBackend,
@@ -113,9 +113,8 @@ class ConditionSerializer(serializers.ModelSerializer):
         return condition
 
 
-class EnrollmentSerializer(serializers.ModelSerializer):
+class EnrollmentSerializer(EnrolledMachinesCountSerializerMixin, serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
-    enrolled_machines_count = serializers.SerializerMethodField()
     configuration_profile_download_url = serializers.SerializerMethodField()
     plist_download_url = serializers.SerializerMethodField()
 
@@ -126,9 +125,6 @@ class EnrollmentSerializer(serializers.ModelSerializer):
                   "enrolled_machines_count",
                   "configuration_profile_download_url", "plist_download_url",
                   "created_at", "updated_at")
-
-    def get_enrolled_machines_count(self, obj):
-        return obj.enrolledmachine_set.count()
 
     def get_download_url(self, fmt, obj):
         path = reverse(f"monolith_api:enrollment_{fmt}", args=(obj.pk,))

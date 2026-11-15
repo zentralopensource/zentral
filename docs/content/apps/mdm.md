@@ -781,6 +781,16 @@ The enrollment secret itself is never included — only its metadata, such as it
 
 For Automated Device Enrollment, the enrollment only exists once Apple has accepted the profile, so a failed call to Apple records nothing either.
 
+## Enrollment secrets
+
+The view permission of an enrollment opens it. Its secret has one PBAC action for each kind of enrollment, on the enrollment:
+
+* `MDM::Action::"viewOTAEnrollmentSecret"`: the secret in `/api/mdm/ota_enrollments/`, and the profile download of the console.
+* `MDM::Action::"viewDEPEnrollmentSecret"`: the secret in `/api/mdm/dep_enrollments/`, and the check page, which prints the profile that Apple holds for the enrollment.
+* `MDM::Action::"viewUserEnrollmentSecret"`: the service discovery URL on the page of the user enrollment.
+
+Without the action, the API gives a `null` secret, the profile download and the check page are a 403, and the user enrollment page has no service discovery URL. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
+
 ## HTTP API
 
 ### Requests

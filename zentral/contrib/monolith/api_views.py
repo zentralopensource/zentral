@@ -1,3 +1,4 @@
+from django.db.models import Count
 import logging
 
 from accounts.api_authentication import APITokenAuthentication
@@ -25,6 +26,10 @@ from zentral.utils.drf import (
 )
 from zentral.utils.http import user_agent_and_ip_address_from_request
 
+from zentral.contrib.inventory.enrollment_secrets import (EnrollmentSecretDetailMixin,
+                                                          EnrollmentSecretListMixin,
+                                                          enrollment_secret_download)
+from .pbac import ViewEnrollmentSecretRequest
 from .events import post_monolith_cache_server_update_request, post_monolith_sync_catalogs_request
 from .models import (
     CacheServer,
@@ -179,19 +184,21 @@ class ConditionDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # enrollments
 
 
-class EnrollmentList(ListCreateAPIViewWithAudit):
+class EnrollmentList(EnrollmentSecretListMixin, ListCreateAPIViewWithAudit):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all()
+    secret_request_class = ViewEnrollmentSecretRequest
+    queryset = Enrollment.objects.annotate(enrolled_machines_count=Count("enrolledmachine"))
     serializer_class = EnrollmentSerializer
     filterset_fields = ('manifest_id',)
 
 
-class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class EnrollmentDetail(EnrollmentSecretDetailMixin, RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete an Enrollment
     """
+    secret_request_class = ViewEnrollmentSecretRequest
     queryset = Enrollment.objects.all()
     serializer_class = EnrollmentSerializer
 
@@ -217,6 +224,10 @@ class EnrollmentConfiguration(FileDownloadAPIView):
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
+        return enrollment_secret_download(request, ViewEnrollmentSecretRequest, enrollment,
+                                          lambda: self.build_response(enrollment))
+
+    def build_response(self, enrollment):
         filename, content_type, content = self.get_content(enrollment)
         response = HttpResponse(content, content_type=content_type)
         response["Content-Disposition"] = 'attachment; filename="{}"'.format(filename)

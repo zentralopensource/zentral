@@ -826,7 +826,7 @@ Terraform resource: [`zentral_turbo_enrollment`](https://registry.terraform.io/p
 #### List all enrollments
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewEnrollment"`
+* PBAC actions: `Turbo::Action::"viewEnrollment"`, and `Turbo::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * Optional filter parameter:
     * `configuration`: primary key of the Turbo configuration
 
@@ -936,7 +936,7 @@ Response:
 #### Get an enrollment
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewEnrollment"`
+* PBAC actions: `Turbo::Action::"viewEnrollment"`, and `Turbo::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the enrollment
 
 Example:
@@ -1006,7 +1006,7 @@ The [`zentral_turbo_enrollment`](https://registry.terraform.io/providers/zentral
 #### Download the enrollment plist file
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewEnrollment"`
+* PBAC actions: `Turbo::Action::"viewEnrollment"`, and `Turbo::Action::"viewEnrollmentSecret"` on the enrollment: the file holds the secret. A 403 without one of them. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the enrollment
 
 Example:
@@ -1025,7 +1025,7 @@ The [`zentral_turbo_enrollment`](https://registry.terraform.io/providers/zentral
 #### Download the enrollment configuration profile
 
 * method: GET
-* PBAC action: `Turbo::Action::"viewEnrollment"`
+* PBAC actions: `Turbo::Action::"viewEnrollment"`, and `Turbo::Action::"viewEnrollmentSecret"` on the enrollment: the file holds the secret. A 403 without one of them. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the enrollment
 
 Example:

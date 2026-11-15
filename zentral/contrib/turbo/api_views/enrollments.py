@@ -8,19 +8,25 @@ from rest_framework.exceptions import ValidationError
 from accounts.api_authentication import APITokenAuthentication
 from zentral.utils.drf import (DjangoPermissionRequired, FileDownloadAPIView, ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
+from zentral.contrib.inventory.enrollment_secrets import (EnrollmentSecretDetailMixin,
+                                                          EnrollmentSecretListMixin,
+                                                          enrollment_secret_download)
+from ..pbac import ViewEnrollmentSecretRequest
 from ..models import Enrollment
 from ..serializers import EnrollmentSerializer
 from ..utils import build_configuration_plist, build_configuration_profile
 
 
-class EnrollmentList(ListCreateAPIViewWithAudit):
+class EnrollmentList(EnrollmentSecretListMixin, ListCreateAPIViewWithAudit):
+    secret_request_class = ViewEnrollmentSecretRequest
     queryset = Enrollment.objects.annotate(enrolled_machines_count=Count("enrolledmachine")).order_by("pk")
     serializer_class = EnrollmentSerializer
     pagination_class = MaxLimitOffsetPagination
     filterset_fields = ("configuration",)
 
 
-class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class EnrollmentDetail(EnrollmentSecretDetailMixin, RetrieveUpdateDestroyAPIViewWithAudit):
+    secret_request_class = ViewEnrollmentSecretRequest
     queryset = Enrollment.objects.annotate(enrolled_machines_count=Count("enrolledmachine"))
     serializer_class = EnrollmentSerializer
 
@@ -48,6 +54,10 @@ class EnrollmentConfiguration(FileDownloadAPIView):
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=kwargs["pk"])
+        return enrollment_secret_download(request, ViewEnrollmentSecretRequest, enrollment,
+                                          lambda: self.build_response(enrollment))
+
+    def build_response(self, enrollment):
         filename, content_type, content = self.get_content(enrollment)
         return FileResponse(io.BytesIO(content), as_attachment=True,
                             filename=filename, content_type=content_type)

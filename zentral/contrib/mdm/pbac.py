@@ -9,9 +9,10 @@ from pbac.types import (
 )
 
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.contrib.inventory.pbac import MACHINE_RESOURCE_TYPE, get_meta_machine_resource
+from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, get_meta_machine_resource,
+                                            register_view_enrollment_secret)
 
-from .models import Artifact, Channel
+from .models import Artifact, Channel, DEPEnrollment, OTAEnrollment, UserEnrollment
 
 
 # namespace
@@ -180,3 +181,21 @@ class BlockEnrolledDeviceRequest(BaseEnrolledDeviceBlockRequest):
 
 class UnblockEnrolledDeviceRequest(BaseEnrolledDeviceBlockRequest):
     action = unblock_enrolled_device_action
+
+
+# The secret of an enrollment, see zentral.contrib.inventory.enrollment_secrets. One action for each
+# enrollment model: a tenant can give one kind of enrollment without the others.
+
+
+ViewOTAEnrollmentSecretRequest = register_view_enrollment_secret(
+    get_namespace(), OTAEnrollment, "viewOTAEnrollmentSecret", "OTAEnrollment", "enrollment_secret",
+)
+ViewDEPEnrollmentSecretRequest = register_view_enrollment_secret(
+    get_namespace(), DEPEnrollment, "viewDEPEnrollmentSecret", "DEPEnrollment", "enrollment_secret",
+)
+ViewUserEnrollmentSecretRequest = register_view_enrollment_secret(
+    get_namespace(), UserEnrollment, "viewUserEnrollmentSecret", "UserEnrollment", "enrollment_secret",
+)
+view_ota_enrollment_secret_action = ViewOTAEnrollmentSecretRequest.pbac_action
+view_dep_enrollment_secret_action = ViewDEPEnrollmentSecretRequest.pbac_action
+view_user_enrollment_secret_action = ViewUserEnrollmentSecretRequest.pbac_action

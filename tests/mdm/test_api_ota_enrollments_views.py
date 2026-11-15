@@ -7,6 +7,8 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.inventory.events import EnrollmentSecretViewedEvent
+from zentral.contrib.mdm.pbac import view_ota_enrollment_secret_action
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag
 from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.contrib.mdm.models import OTAEnrollment
@@ -62,7 +64,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_list_ota_enrollments(self):
         realm = force_realm()
         oe = force_ota_enrollment(realm=realm)
-        self.set_permissions("mdm.view_otaenrollment")
+        self.set_permissions("mdm.view_otaenrollment", view_ota_enrollment_secret_action)
         response = self.get(reverse("mdm_api:ota_enrollments"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -97,7 +99,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_list_ota_enrollments_name_filter(self):
         force_ota_enrollment()
         oe = force_ota_enrollment()
-        self.set_permissions("mdm.view_otaenrollment")
+        self.set_permissions("mdm.view_otaenrollment", view_ota_enrollment_secret_action)
         response = self.get(reverse("mdm_api:ota_enrollments"), data={"name": oe.name})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -144,7 +146,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_get_ota_enrollment(self):
         force_ota_enrollment()
         oe = force_ota_enrollment()
-        self.set_permissions("mdm.view_otaenrollment")
+        self.set_permissions("mdm.view_otaenrollment", view_ota_enrollment_secret_action)
         response = self.get(reverse("mdm_api:ota_enrollment", args=(oe.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -197,7 +199,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_ota_enrollment(self, post_event):
-        self.set_permissions("mdm.add_otaenrollment", tag_any_machine_action)
+        self.set_permissions("mdm.add_otaenrollment", view_ota_enrollment_secret_action, tag_any_machine_action)
         name = get_random_string(12)
         blueprint = force_blueprint()
         push_certificate = force_push_certificate()
@@ -218,7 +220,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                   "acme_issuer": str(acme_issuer.pk),
                                   "scep_issuer": str(scep_issuer.pk)})
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(callbacks), 2)  # the audit event and the read of the secret
         oe = OTAEnrollment.objects.get(name=name)
         self.assertEqual(oe.blueprint, blueprint)
         self.assertEqual(oe.enrollment_secret.meta_business_unit, self.mbu)
@@ -255,6 +257,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'scep_issuer': str(scep_issuer.pk),
              'updated_at': oe.updated_at.isoformat()}
         )
+        # the response reads the secret: its event comes after the audit event, both sent on commit
+        self.assertIsInstance(post_event.call_args_list[1].args[0], EnrollmentSecretViewedEvent)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         event.payload["object"]["new_value"]["enrollment_secret"]["tags"].sort(key=lambda t: t["pk"])
@@ -307,7 +311,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_update_ota_enrollment(self, post_event):
         oe = force_ota_enrollment()
         prev_value = oe.serialize_for_event()
-        self.set_permissions("mdm.change_otaenrollment", tag_any_machine_action)
+        self.set_permissions("mdm.change_otaenrollment", view_ota_enrollment_secret_action,
+                             tag_any_machine_action)
         new_name = get_random_string(12)
         new_blueprint = force_blueprint()
         new_push_certificate = force_push_certificate()
@@ -326,7 +331,7 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
                                  "acme_issuer": str(new_acme_issuer.pk),
                                  "scep_issuer": str(new_scep_issuer.pk)})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(callbacks), 2)  # the audit event and the read of the secret
         oe.refresh_from_db()
         self.assertEqual(oe.blueprint, new_blueprint)
         self.assertEqual(oe.enrollment_secret.meta_business_unit, self.mbu)
@@ -363,6 +368,8 @@ class MDMOTAEnrollmentsAPIViewsTestCase(TestCase, LoginCase, RequestCase):
              'scep_issuer': str(new_scep_issuer.pk),
              'updated_at': oe.updated_at.isoformat()}
         )
+        # the response reads the secret: its event comes after the audit event, both sent on commit
+        self.assertIsInstance(post_event.call_args_list[1].args[0], EnrollmentSecretViewedEvent)
         event = post_event.call_args_list[0].args[0]
         self.assertIsInstance(event, AuditEvent)
         event.payload["object"]["new_value"]["enrollment_secret"]["tags"].sort(key=lambda t: t["pk"])

@@ -3,6 +3,8 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django.views.generic import DetailView, ListView
+from zentral.contrib.inventory.enrollment_secrets import enrollment_pks_with_secret
+from zentral.contrib.osquery.pbac import ViewEnrollmentSecretRequest
 from zentral.utils.views import CreateViewWithAudit, DeleteViewWithAudit, UpdateViewWithAudit
 from zentral.contrib.osquery.forms import ConfigurationForm, ConfigurationPackForm
 from zentral.contrib.osquery.models import Configuration, ConfigurationPack, Pack
@@ -37,8 +39,13 @@ class ConfigurationView(PermissionRequiredMixin, DetailView):
         ctx["atc_count"] = ctx["atcs"].count()
         ctx["file_categories"] = self.object.file_categories.all().order_by("name", "pk")
         ctx["file_category_count"] = ctx["file_categories"].count()
-        ctx["enrollments"] = self.object.enrollment_set.select_related("secret").all().order_by("pk")
-        ctx["enrollments_count"] = ctx["enrollments"].count()
+        enrollments = list(self.object.enrollment_set.select_related("secret").all().order_by("pk"))
+        with_secret = enrollment_pks_with_secret(self.request.user, ViewEnrollmentSecretRequest,
+                                                 self.object.enrollment_set.all())
+        for enrollment in enrollments:
+            enrollment.can_download = enrollment.pk in with_secret
+        ctx["enrollments"] = enrollments
+        ctx["enrollments_count"] = len(enrollments)
         ctx["configuration_packs"] = (
             self.object.configurationpack_set
                        .select_related("pack")

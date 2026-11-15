@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.mdm.pbac import view_dep_enrollment_secret_action
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.dep_client import DEVICE_BATCH_SIZE
 from zentral.contrib.mdm.models import DEPDevice, DEPEnrollment
@@ -401,7 +402,7 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         client.get_profile.return_value = {"yolo": "fomo"}
         from_dep_token.return_value = client
         enrollment = force_dep_enrollment(self.mbu)
-        self.login("mdm.view_depenrollment")
+        self.login("mdm.view_depenrollment", view_dep_enrollment_secret_action)
         response = self.client.get(reverse("mdm:check_dep_enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/depenrollment_check.html")

@@ -6,6 +6,7 @@ from django.utils.crypto import get_random_string
 
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.mdm.pbac import view_ota_enrollment_secret_action
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
 from .utils import force_acme_issuer, force_ota_enrollment, force_push_certificate, force_realm, force_scep_issuer
@@ -121,7 +122,7 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     def test_download_profile_service_payload(self):
         enrollment = force_ota_enrollment(self.mbu)
-        self.login("mdm.view_otaenrollment")
+        self.login("mdm.view_otaenrollment", view_ota_enrollment_secret_action)
         response = self.client.get(reverse("mdm:download_profile_service_payload", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-apple-aspen-config")

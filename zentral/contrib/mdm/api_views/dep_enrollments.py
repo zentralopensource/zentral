@@ -4,7 +4,9 @@ from rest_framework.generics import ListAPIView, RetrieveAPIView
 from django_filters.rest_framework import DjangoFilterBackend
 from zentral.utils.drf import (ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit,
                                MaxLimitOffsetPagination)
+from zentral.contrib.inventory.enrollment_secrets import EnrollmentSecretDetailMixin, EnrollmentSecretListMixin
 from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentCustomView, DEPVirtualServer, EnrollmentCustomView
+from zentral.contrib.mdm.pbac import ViewDEPEnrollmentSecretRequest
 from zentral.contrib.mdm.serializers import (EnrollmentCustomViewSerializer, DEPEnrollmentCustomViewSerializer,
                                              DEPEnrollmentSerializer, DEPVirtualServerSerializer)
 from zentral.utils.drf import DefaultDjangoModelPermissions
@@ -27,7 +29,8 @@ class DEPVirtualServerDetail(RetrieveAPIView):
     serializer_class = DEPVirtualServerSerializer
 
 
-class DEPEnrollmentList(ListCreateAPIViewWithAudit):
+class DEPEnrollmentList(EnrollmentSecretListMixin, ListCreateAPIViewWithAudit):
+    secret_request_class = ViewDEPEnrollmentSecretRequest
     queryset = DEPEnrollment.objects.all()
     serializer_class = DEPEnrollmentSerializer
     filterset_fields = ('name', )
@@ -37,7 +40,8 @@ class DEPEnrollmentList(ListCreateAPIViewWithAudit):
     pagination_class = MaxLimitOffsetPagination
 
 
-class DEPEnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class DEPEnrollmentDetail(EnrollmentSecretDetailMixin, RetrieveUpdateDestroyAPIViewWithAudit):
+    secret_request_class = ViewDEPEnrollmentSecretRequest
     queryset = DEPEnrollment.objects.all()
     serializer_class = DEPEnrollmentSerializer
 

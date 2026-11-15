@@ -1,3 +1,4 @@
+from django.db.models import Count
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django_filters import rest_framework as filters
@@ -14,6 +15,10 @@ from accounts.api_authentication import APITokenAuthentication
 from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DjangoPermissionRequired, FileDownloadAPIView, ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination, RetrieveUpdateDestroyAPIViewWithAudit)
+from zentral.contrib.inventory.enrollment_secrets import (EnrollmentSecretDetailMixin,
+                                                          EnrollmentSecretListMixin,
+                                                          enrollment_secret_download)
+from .pbac import ViewEnrollmentSecretRequest
 from .events import post_osquery_pack_update_events
 from .models import Configuration, ConfigurationPack, Enrollment, Pack, Query, AutomaticTableConstruction, FileCategory
 from .linux_script.builder import OsqueryZentralEnrollScriptBuilder
@@ -73,19 +78,21 @@ class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
             return super().perform_destroy(instance)
 
 
-class EnrollmentList(ListCreateAPIViewWithAudit):
+class EnrollmentList(EnrollmentSecretListMixin, ListCreateAPIViewWithAudit):
     """
     List all Enrollments or create a new Enrollment
     """
-    queryset = Enrollment.objects.all().order_by("pk")
+    secret_request_class = ViewEnrollmentSecretRequest
+    queryset = Enrollment.objects.annotate(enrolled_machines_count=Count("enrolledmachine")).order_by("pk")
     serializer_class = EnrollmentSerializer
     pagination_class = MaxLimitOffsetPagination
 
 
-class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class EnrollmentDetail(EnrollmentSecretDetailMixin, RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete an Enrollment instance.
     """
+    secret_request_class = ViewEnrollmentSecretRequest
     queryset = Enrollment.objects.all()
     serializer_class = EnrollmentSerializer
 
@@ -107,8 +114,9 @@ class EnrollmentArtifact(FileDownloadAPIView):
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])
-        self.builder = self.builder_class(enrollment)
-        return self.do_get()
+        # the package builder makes a build directory: after the decision
+        return enrollment_secret_download(request, ViewEnrollmentSecretRequest, enrollment,
+                                          lambda: self.do_get(self.builder_class(enrollment)))
 
 
 class EnrollmentPackage(EnrollmentArtifact):
@@ -117,8 +125,8 @@ class EnrollmentPackage(EnrollmentArtifact):
     """
     builder_class = OsqueryZentralEnrollPkgBuilder
 
-    def do_get(self):
-        return self.builder.get_conditional_response(self.request)
+    def do_get(self, builder):
+        return builder.get_conditional_response(self.request)
 
 
 class EnrollmentPowershellScript(EnrollmentArtifact):
@@ -127,8 +135,8 @@ class EnrollmentPowershellScript(EnrollmentArtifact):
     """
     builder_class = OsqueryZentralEnrollPowershellScriptBuilder
 
-    def do_get(self):
-        return self.builder.build_and_make_response()
+    def do_get(self, builder):
+        return builder.build_and_make_response()
 
 
 class EnrollmentScript(EnrollmentArtifact):
@@ -137,8 +145,8 @@ class EnrollmentScript(EnrollmentArtifact):
     """
     builder_class = OsqueryZentralEnrollScriptBuilder
 
-    def do_get(self):
-        return self.builder.build_and_make_response()
+    def do_get(self, builder):
+        return builder.build_and_make_response()
 
 
 # File categories

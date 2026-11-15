@@ -159,12 +159,14 @@
                 {% url 'munki:delete_enrollment' configuration.pk enrollment.pk as url %}
                 {% button 'DELETE' url "Delete Enrollment" %}
             {% endif %}
+            {% if enrollment.can_download %}
             <a class="btn btn-link"
                 aria-label="Download macOS enrollment package"
                 title="macOS enrollment package"
                 href="{% url 'munki_api:enrollment_package' enrollment.pk %}">
                 <span class="bi bi-apple" aria-hidden="true"></span>
             </a>
+            {% endif %}
             {% endif %}
             {% endif %}
         </td>

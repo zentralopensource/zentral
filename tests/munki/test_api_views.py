@@ -10,6 +10,8 @@ from django.test import TestCase
 from accounts.models import APIToken, User
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.inventory.events import EnrollmentSecretViewedEvent
+from zentral.contrib.munki.pbac import view_enrollment_secret_action
 from zentral.conf import settings
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag
 from zentral.contrib.inventory.pbac import tag_any_machine_action
@@ -491,7 +493,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_get_enrollment_by_configuration_id(self):
         self.force_enrollment()
         enrollment = self.force_enrollment()
-        self.set_permissions("munki.view_enrollment")
+        self.set_permissions("munki.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('munki_api:enrollments'), {"configuration_id": enrollment.configuration.id})
         self.assertEqual(response.status_code, 200)
         fqdn = settings["api"]["fqdn"]
@@ -519,7 +521,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollments(self):
         enrollment = self.force_enrollment()
-        self.set_permissions("munki.view_enrollment")
+        self.set_permissions("munki.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('munki_api:enrollments'))
         self.assertEqual(response.status_code, 200)
         fqdn = settings["api"]["fqdn"]
@@ -566,7 +568,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_enrollment(self, post_event):
         configuration = self.force_configuration()
-        self.set_permissions("munki.add_enrollment", tag_any_machine_action)
+        self.set_permissions("munki.add_enrollment", view_enrollment_secret_action, tag_any_machine_action)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         serial_numbers = [get_random_string(12) for _ in range(1)]
         uuids = [str(uuid.uuid4()) for _ in range(1)]
@@ -604,6 +606,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'updated_at': enrollment.updated_at.isoformat()},
             {}
         )
+        # the response reads the secret: its event comes after the audit event, both sent on commit
+        self.assertIsInstance(post_event.call_args_list[1].args[0], EnrollmentSecretViewedEvent)
         assert_audit_event(self, post_event, "created", enrollment)
 
     # get enrollment
@@ -624,7 +628,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_get_enrollment(self):
-        self.set_permissions("munki.view_enrollment")
+        self.set_permissions("munki.view_enrollment", view_enrollment_secret_action)
         enrollment = self.force_enrollment()
         response = self.get(reverse("munki_api:enrollment", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
@@ -666,7 +670,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_update_enrollment(self, post_event):
         enrollment = self.force_enrollment()
         prev_value = enrollment.serialize_for_event()
-        self.set_permissions("munki.change_enrollment", tag_any_machine_action)
+        self.set_permissions("munki.change_enrollment", view_enrollment_secret_action, tag_any_machine_action)
         tags = [Tag.objects.create(name=get_random_string(12)) for _ in range(1)]
         serial_numbers = [get_random_string(12) for _ in range(1)]
         uuids = [str(uuid.uuid4()) for _ in range(1)]
@@ -704,6 +708,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
              'updated_at': enrollment.updated_at.isoformat()},
             {}
         )
+        # the response reads the secret: its event comes after the audit event, both sent on commit
+        self.assertIsInstance(post_event.call_args_list[1].args[0], EnrollmentSecretViewedEvent)
         payload, _ = assert_audit_event(self, post_event, "updated", enrollment, prev_value=prev_value)
         # the version is in the payload of the base enrollment, so the event shows the bump
         self.assertEqual(payload["object"]["prev_value"]["version"], 1)
@@ -765,7 +771,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_package_token(self):
         enrollment = self.force_enrollment()
-        self.set_permissions("munki.view_enrollment")
+        self.set_permissions("munki.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
@@ -775,7 +781,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_package_user(self):
         enrollment = self.force_enrollment()
-        self.login("munki.view_enrollment")
+        self.login("munki.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], "application/octet-stream")
@@ -785,7 +791,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_package_accept_content_type(self):
         enrollment = self.force_enrollment()
-        self.set_permissions("munki.view_enrollment")
+        self.set_permissions("munki.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)),
                             accept="application/octet-stream")
         self.assertEqual(response.status_code, 200)
@@ -796,7 +802,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_NONE_MATCH": etag}
-        self.login("munki.view_enrollment")
+        self.login("munki.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 304)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -807,7 +813,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
-        self.login("munki.view_enrollment")
+        self.login("munki.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 304)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -819,7 +825,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_NONE_MATCH": etag,
                        "HTTP_IF_MODIFIED_SINCE": http_date(enrollment.updated_at.timestamp())}
-        self.login("munki.view_enrollment")
+        self.login("munki.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 304)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -830,7 +836,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_NONE_MATCH": "YOLO"}
-        self.login("munki.view_enrollment")
+        self.login("munki.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Last-Modified'], last_modified)
@@ -841,7 +847,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         etag = f'W/"munki.enrollment-{enrollment.pk}-1"'
         last_modified = http_date(enrollment.updated_at.timestamp())
         req_headers = {"HTTP_IF_MODIFIED_SINCE": http_date(datetime(2001, 1, 1).timestamp())}
-        self.login("munki.view_enrollment")
+        self.login("munki.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("munki_api:enrollment_package", args=(enrollment.pk,)), **req_headers)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Last-Modified'], last_modified)

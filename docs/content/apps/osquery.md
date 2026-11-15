@@ -53,6 +53,10 @@ The report answers what the audit events cannot: what the import did as a whole.
 
 The report does not carry the difference between the two values of an object. The audit event of that object carries the whole value before and after the change.
 
+## Enrollment secrets
+
+The secret of an enrollment is in the API, in the macOS package, in the Linux script and in the PowerShell script. `Osquery::Action::"viewEnrollment"` opens the enrollment, and `Osquery::Action::"viewEnrollmentSecret"`, on the enrollment, gives its secret: a `null` secret in `/api/osquery/enrollments/` without it, and a 403 on each download. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
+
 ## HTTP API
 
 ### Requests

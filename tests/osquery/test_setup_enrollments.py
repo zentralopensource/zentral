@@ -8,6 +8,7 @@ from django.test import TestCase
 from accounts.models import User
 from tests.osquery.utils import assert_audit_event
 from tests.zentral_test_utils.login_case import LoginCase
+from zentral.contrib.osquery.pbac import view_enrollment_secret_action
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.osquery.models import Configuration, Enrollment
 
@@ -66,7 +67,8 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
     @patch("zentral.contrib.osquery.forms.get_osquery_versions")
     def test_create_enrollment_view_post(self, get_osquery_versions, post_event):
         get_osquery_versions.returns = []
-        self.login("osquery.add_enrollment", "osquery.view_configuration", "osquery.view_enrollment")
+        self.login("osquery.add_enrollment", "osquery.view_configuration", "osquery.view_enrollment",
+                   view_enrollment_secret_action)
         configuration = self._force_configuration()
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.client.post(reverse("osquery:create_enrollment", args=(configuration.pk,)),
@@ -93,7 +95,8 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
     @patch("zentral.contrib.osquery.releases.requests.get")
     def test_create_enrollment_view_get_osquery_versions_error_post(self, requests_get):
         requests_get.side_effect = RuntimeError("YOLO")
-        self.login("osquery.add_enrollment", "osquery.view_configuration", "osquery.view_enrollment")
+        self.login("osquery.add_enrollment", "osquery.view_configuration", "osquery.view_enrollment",
+                   view_enrollment_secret_action)
         configuration = self._force_configuration()
         response = self.client.post(reverse("osquery:create_enrollment", args=(configuration.pk,)),
                                     {"secret-meta_business_unit": self.mbu.pk,

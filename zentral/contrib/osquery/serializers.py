@@ -4,7 +4,8 @@ from django.utils.text import slugify
 from rest_framework import serializers
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
-from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer, TagAnyMachineSerializerMixin
+from zentral.contrib.inventory.serializers import (EnrolledMachinesCountSerializerMixin, EnrollmentSecretSerializer,
+                                                   TagAnyMachineSerializerMixin)
 from zentral.utils.sql import SQLParseError, extract_tables, validate_sql
 from .compliance_checks import sync_query_compliance_check
 from .models import (Configuration, Enrollment, Pack, Platform, Query, AutomaticTableConstruction, FileCategory,
@@ -23,9 +24,8 @@ class ConfigurationSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class EnrollmentSerializer(serializers.ModelSerializer):
+class EnrollmentSerializer(EnrolledMachinesCountSerializerMixin, serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
-    enrolled_machines_count = serializers.SerializerMethodField()
     package_download_url = serializers.SerializerMethodField()
     script_download_url = serializers.SerializerMethodField()
     powershell_script_download_url = serializers.SerializerMethodField()
@@ -38,9 +38,6 @@ class EnrollmentSerializer(serializers.ModelSerializer):
                   "enrolled_machines_count",
                   "package_download_url", "powershell_script_download_url", "script_download_url",
                   "created_at", "updated_at")
-
-    def get_enrolled_machines_count(self, obj):
-        return obj.enrolledmachine_set.count()
 
     def get_artifact_download_url(self, view_name, obj):
         path = reverse(f"osquery_api:{view_name}", args=(obj.pk,))

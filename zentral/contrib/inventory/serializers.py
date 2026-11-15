@@ -371,3 +371,24 @@ class EnrollmentSecretSerializer(TagAnyMachineSerializerMixin, serializers.Model
     class Meta:
         model = EnrollmentSecret
         fields = ("id", "secret", "meta_business_unit", "tags", "serial_numbers", "udids", "quota", "request_count")
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # the secrets that the read or the write decided, see .enrollment_secrets. No decision, no secret
+        if instance.pk not in self.context.get("enrollment_secret_pks", ()):
+            ret["secret"] = None
+        return ret
+
+
+class EnrolledMachinesCountSerializerMixin(serializers.Serializer):
+    """The number of machines enrolled with an enrollment.
+
+    A list annotates its rows with enrolled_machines_count. The other responses count.
+    """
+    enrolled_machines_count = serializers.SerializerMethodField()
+
+    def get_enrolled_machines_count(self, obj):
+        count = getattr(obj, "enrolled_machines_count", None)
+        if count is None:
+            count = obj.enrolledmachine_set.count()
+        return count

@@ -540,12 +540,20 @@ class PBACEngineTestCase(TestCase):
             ("forceInstallArtifact", "MDM"),
             ("unblockEnrolledDevice", "MDM"),
             ("viewAdminPassword", "MDM"),
+            ("viewDEPEnrollmentSecret", "MDM"),
             ("viewDeviceLockPIN", "MDM"),
             ("viewFileVaultPRK", "MDM"),
+            ("viewOTAEnrollmentSecret", "MDM"),
             ("viewRecoveryPassword", "MDM"),
+            ("viewUserEnrollmentSecret", "MDM"),
             ("syncRepository", "Monolith"),
+            ("viewEnrollmentSecret", "Monolith"),
+            ("viewEnrollmentSecret", "Munki"),
+            ("viewEnrollmentSecret", "Osquery"),
             ("forceCleanSync", "Santa"),
+            ("viewEnrollmentSecret", "Santa"),
             ("downloadJobUpload", "Turbo"),
+            ("viewEnrollmentSecret", "Turbo"),
         )
         found_user_only_actions = 0
         global_user_action_group = engine.get_action_group(ActionGroupBasename.USER)

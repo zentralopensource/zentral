@@ -2,25 +2,29 @@ from rest_framework.exceptions import ValidationError
 from zentral.utils.drf import (ListCreateAPIViewWithAudit,
                                MaxLimitOffsetPagination,
                                RetrieveUpdateDestroyAPIViewWithAudit)
+from zentral.contrib.inventory.enrollment_secrets import EnrollmentSecretDetailMixin, EnrollmentSecretListMixin
 from zentral.contrib.mdm.models import OTAEnrollment
+from zentral.contrib.mdm.pbac import ViewOTAEnrollmentSecretRequest
 from zentral.contrib.mdm.serializers import OTAEnrollmentSerializer
 
 
-class OTAEnrollmentList(ListCreateAPIViewWithAudit):
+class OTAEnrollmentList(EnrollmentSecretListMixin, ListCreateAPIViewWithAudit):
     """
     List all OTAEnrollment, search OTAEnrollment by name,
     or create a new OTAEnrollment.
     """
+    secret_request_class = ViewOTAEnrollmentSecretRequest
     queryset = OTAEnrollment.objects.all()
     serializer_class = OTAEnrollmentSerializer
     filterset_fields = ('name',)
     pagination_class = MaxLimitOffsetPagination
 
 
-class OTAEnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class OTAEnrollmentDetail(EnrollmentSecretDetailMixin, RetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a OTAEnrollment instance.
     """
+    secret_request_class = ViewOTAEnrollmentSecretRequest
     queryset = OTAEnrollment.objects.all()
     serializer_class = OTAEnrollmentSerializer
 

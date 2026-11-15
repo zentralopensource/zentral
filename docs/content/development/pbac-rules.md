@@ -72,6 +72,8 @@ A view that only a legacy permission protects is not in the scope of these rules
     - Why: you cannot change what you cannot see. Without this rule, each write path is a leak to close: the values in the form, the response of the PUT, a "This field cannot be changed" error.
     - Reviewers do not add a view decision to a write path, and do not hide its values. Pentesters rate it as accepted.
     - Cost: a policy cannot make a write-only role. A `forbid` on the view action alone does not hide a resource from a user who can write it. The ADMIN action groups give the view actions and the write actions together.
+    - Exception: a secret that the write does not carry, because Zentral generates it, or keeps it when the body leaves it out. The response of the write decides it as a read, with the secret action, so a write permission does not read a secret that a policy refuses. Example: the secret of an enrollment, which Zentral generates, and `viewEnrollmentSecret`. A secret that the body of the write must carry needs no decision: the response gives back what the caller sent.
+
 9. **A PUT carries every attribute.** PATCH is a 405. The update serializer requires every writable field (`FullUpdateSerializerMixin`).
     - A check that reads two fields reads the body only, never the stored value.
     - With rule 8, this rule is about correct writes, not about secrets.

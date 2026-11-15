@@ -8,10 +8,10 @@ from pbac.types import SERVICE_ACCOUNT, USER, AppliesTo, AttrSpec, ResourceType
 from pbac.utils import check_request
 
 from zentral.contrib.inventory.models import MetaMachine
-from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, get_machine_sql_entities,
-                                            get_meta_machine_resource)
+from zentral.contrib.inventory.pbac import (MACHINE_RESOURCE_TYPE, get_machine_sql_entities, get_meta_machine_resource,
+                                            register_view_enrollment_secret)
 
-from .models import (Job, OneTimeJob, OneTimeJobMachine, RecurringJob, RecurringJobMachine,
+from .models import (Enrollment, Job, OneTimeJob, OneTimeJobMachine, RecurringJob, RecurringJobMachine,
                      resolve_upload_schedules)
 
 
@@ -610,3 +610,12 @@ def authorize_one_time_job_rows(user_obj, one_time_jobs):
 def authorize_recurring_job_rows(user_obj, recurring_jobs):
     return _authorize_schedule_rows(user_obj, UpdateRecurringJobRequest, DeleteRecurringJobRequest,
                                     recurring_jobs)
+
+
+# The secret of an enrollment, see zentral.contrib.inventory.enrollment_secrets
+
+
+ViewEnrollmentSecretRequest = register_view_enrollment_secret(
+    get_namespace(), Enrollment, "viewEnrollmentSecret", "Enrollment",
+)
+view_enrollment_secret_action = ViewEnrollmentSecretRequest.pbac_action

@@ -212,6 +212,16 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 
 ### Backward incompatibilities
 
+#### 🧨 The enrollment secrets have their own PBAC actions
+
+The secret of an enrollment is read with a typed PBAC action on the enrollment, at the user level: `viewEnrollmentSecret` in Santa, Osquery, Munki, Monolith and Turbo, and `viewOTAEnrollmentSecret`, `viewDEPEnrollmentSecret` and `viewUserEnrollmentSecret` in MDM. The enrollment is a member of the meta business unit of its secret. The read-only roles do not get these actions: the `ViewerActions` groups do not have them.
+
+- The action gives the secret only. The view permission of an enrollment, for example `santa.view_enrollment`, still opens it, and gives a `null` secret in the API without the action. The response of a create and of an update has the secret with the action only: the add and change permissions do not read the secret.
+- The downloads that hold the secret need the view permission and the action: the Santa, Monolith and Turbo plist and configuration profile, the Osquery package and scripts, the Munki package, and the MDM OTA profile. So does the MDM DEP check page. A 403 without one of them. The user enrollment page shows its service discovery URL with the action only. The console shows a download link only with the action.
+- Each response that returns a secret sends an `enrollment_secret_viewed` event. A download refused for the secret is logged.
+
+A policy that grants the `AdminActions` or the `UserActions` group of a module needs no change. A policy that names the actions one by one must name the new one. The service account of the Terraform provider needs these actions before the upgrade: it reads the secrets to build the configurations of the agents.
+
 #### 🧨 PBAC refusals are logged at the `WARNING` level, by `zentral.pbac.utils`
 
 A PBAC refusal is logged at the `WARNING` level now, not `ERROR`: it is an answer of the policies, not a fault of Zentral. The refusals of the API permission classes are logged by `zentral.pbac.utils` now, like the others, not by `zentral.utils.drf`. The SCIM refusal of a caller that is not a service account stays with `zentral.realms.scim_views`, at the `WARNING` level too. The line names the request that was decided, for example `Permission denied Request <User::"12" Inventory::Action::"updateTag" Inventory::Tag::"34"> Denied`. An unknown resource is `?`, and a request with an unknown context ends with `(preview)`. An alert on the refusals must match these loggers at the `WARNING` level, or the `Permission denied` message. A list, a select or a hidden control that Zentral filters logs nothing.

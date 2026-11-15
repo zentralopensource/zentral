@@ -132,7 +132,7 @@
         <td class="text-center text-nowrap">
             {% if secret.is_used_up %}
             <span class="text-danger">Enrollment used up.</span>
-            {% elif enrollment.can_be_updated %}
+            {% elif enrollment.can_download and enrollment.can_be_updated %}
             <a type="button" class="btn btn-link"
                 aria-label="Download Turbo configuration plist"
                 title="Download Turbo configuration plist"

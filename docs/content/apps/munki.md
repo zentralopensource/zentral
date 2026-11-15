@@ -301,7 +301,7 @@ Response (204 No Content)
 #### List all enrollments
 
 * method: GET
-* PBAC action: `Munki::Action::"viewEnrollment"`
+* PBAC actions: `Munki::Action::"viewEnrollment"`, and `Munki::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * Optional filter parameter:
     * `configuration_id`: primary key of the configuration
 
@@ -406,7 +406,7 @@ Response:
 #### Get an enrollment
 
 * method: GET
-* PBAC action: `Munki::Action::"viewEnrollment"`
+* PBAC actions: `Munki::Action::"viewEnrollment"`, and `Munki::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the enrollment
 
 ```bash
@@ -516,7 +516,7 @@ Response (204 No Content)
 #### Download a Zentral enrollment package
 
 * method: GET
-* PBAC action: `Munki::Action::"viewEnrollment"`
+* PBAC actions: `Munki::Action::"viewEnrollment"`, and `Munki::Action::"viewEnrollmentSecret"` on the enrollment: the file holds the secret. A 403 without one of them. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 
 Example:
 

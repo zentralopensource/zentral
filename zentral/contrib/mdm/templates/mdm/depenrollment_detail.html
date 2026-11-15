@@ -16,10 +16,12 @@
     <div class="d-flex align-items-center mb-3">
         <h3 class="m-0 fs-5 text-secondary">[DEP]</h3>
         <div class="ms-auto">
+            {% if can_check %}
             <a href="{% url 'mdm:check_dep_enrollment' object.pk %}" class="btn btn-link"
                 data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-title="Download from ABM">
                 <i class="bi bi-cloud-arrow-down" aria-hidden="true"></i>
               </a>
+            {% endif %}
               {% if perms.mdm.change_depenrollment %}
                 {% url 'mdm:update_dep_enrollment' object.pk as url %}
                 {% button 'UPDATE' url "Edit DEP Enrollment" %}

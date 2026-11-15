@@ -12,6 +12,9 @@ from django.urls import reverse, reverse_lazy
 from django.utils.functional import cached_property
 from django.views.generic import DetailView, FormView, ListView, TemplateView, UpdateView, View
 from pbac.engine import engine
+from zentral.contrib.inventory.enrollment_secrets import (can_read_enrollment_secret, check_enrollment_secret,
+                                                          post_enrollment_secret_viewed_event_on_render)
+from zentral.contrib.inventory.events import post_enrollment_secret_viewed_event
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import MetaMachine
 from zentral.contrib.mdm.apns import send_enrolled_device_notification, send_enrolled_user_notification
@@ -58,7 +61,8 @@ from zentral.contrib.mdm.models import (Artifact, ArtifactVersion,
 from zentral.contrib.mdm.payloads import (build_configuration_profile_response,
                                           build_profile_service_configuration_profile)
 from zentral.contrib.mdm.pbac import (BlockEnrolledDeviceRequest, ForceInstallArtifactRequest,
-                                      UnblockEnrolledDeviceRequest)
+                                      UnblockEnrolledDeviceRequest, ViewOTAEnrollmentSecretRequest,
+                                      ViewUserEnrollmentSecretRequest)
 from zentral.contrib.mdm.software_updates import best_available_software_updates
 from zentral.contrib.mdm.tasks import bulk_assign_location_asset_task
 from zentral.core.events.base import AuditEvent
@@ -146,6 +150,10 @@ class OTAEnrollmentView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         ota_enrollment = ctx["object"]
         ctx["meta_business_unit"] = ota_enrollment.enrollment_secret.meta_business_unit
+        # the profile of an enrollment with a realm is not downloaded
+        ctx["can_download_profile"] = not ota_enrollment.realm and can_read_enrollment_secret(
+            self.request.user, ViewOTAEnrollmentSecretRequest, ota_enrollment
+        )
         ctx["enroll_url"] = ota_enrollment.get_enroll_full_url()
         # TODO: pagination, separate view
         ctx["ota_enrollment_sessions"] = (ctx["object"].otaenrollmentsession_set.all()
@@ -165,13 +173,16 @@ class DownloadProfileServicePayloadView(PermissionRequiredMixin, View):
             pk=kwargs["pk"],
             realm__isnull=True
         )
+        check_enrollment_secret(request, ViewOTAEnrollmentSecretRequest, ota_enrollment)
         if not ota_enrollment.enrollment_secret.is_valid():
             # should not happen
             raise SuspiciousOperation
-        return build_configuration_profile_response(
+        response = build_configuration_profile_response(
             build_profile_service_configuration_profile(ota_enrollment),
             "zentral_profile_service"
         )
+        post_enrollment_secret_viewed_event(request, [ota_enrollment], "enrollment_secret", "ota_profile_download")
+        return response
 
 
 class RevokeOTAEnrollmentView(PermissionRequiredMixin, TemplateView):
@@ -312,6 +323,7 @@ class CreateUserEnrollmentView(PermissionRequiredMixin, TemplateView):
 
 
 class UserEnrollmentView(PermissionRequiredMixin, DetailView):
+    # the service discovery URL holds the secret: the page shows it with the secret action only
     permission_required = "mdm.view_userenrollment"
     model = UserEnrollment
 
@@ -319,13 +331,24 @@ class UserEnrollmentView(PermissionRequiredMixin, DetailView):
         ctx = super().get_context_data(**kwargs)
         user_enrollment = ctx["object"]
         ctx["meta_business_unit"] = user_enrollment.enrollment_secret.meta_business_unit
-        ctx["service_discovery_url"] = user_enrollment.get_service_discovery_full_url()
+        # without a realm, there is no URL, and no secret on the page
+        service_discovery_url = user_enrollment.get_service_discovery_full_url()
+        if service_discovery_url and can_read_enrollment_secret(self.request.user, ViewUserEnrollmentSecretRequest,
+                                                                user_enrollment):
+            ctx["service_discovery_url"] = service_discovery_url
         # TODO: pagination, separate view
         ctx["user_enrollment_sessions"] = (ctx["object"].userenrollmentsession_set.all()
                                                         .select_related("enrollment_secret")
                                                         .order_by("-created_at"))
         ctx["user_enrollment_sessions_count"] = ctx["user_enrollment_sessions"].count()
         return ctx
+
+    def render_to_response(self, context, **response_kwargs):
+        response = super().render_to_response(context, **response_kwargs)
+        if context.get("service_discovery_url"):
+            post_enrollment_secret_viewed_event_on_render(response, self.request, [self.object],
+                                                          "enrollment_secret", "user_enrollment_page")
+        return response
 
 
 class RevokeUserEnrollmentView(PermissionRequiredMixin, TemplateView):

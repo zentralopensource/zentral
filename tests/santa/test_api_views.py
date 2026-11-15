@@ -12,6 +12,7 @@ import yaml
 from accounts.models import User, APIToken, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.santa.pbac import view_enrollment_secret_action
 from zentral.contrib.inventory.pbac import tag_any_machine_action
 from zentral.conf import settings
 from zentral.contrib.inventory.models import (Certificate, File, EnrollmentSecret, MachineSnapshotCommit,
@@ -2785,7 +2786,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollments(self):
         enrollment, tags = self.force_enrollment(tag_count=1)
-        self.set_permissions("santa.view_enrollment")
+        self.set_permissions("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollments'))
         self.assertEqual(response.status_code, 200)
         self.assertIn(
@@ -2867,7 +2868,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("santa.view_enrollment")
+        self.set_permissions("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollment', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -2929,7 +2930,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_plist(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("santa.view_enrollment")
+        self.set_permissions("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollment_plist', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/x-plist')
@@ -2939,7 +2940,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_plist_login(self):
         enrollment, _ = self.force_enrollment()
-        self.login("santa.view_enrollment")
+        self.login("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollment_plist', args=(enrollment.pk,)),
                             include_token=False)
         self.assertEqual(response.status_code, 200)
@@ -2950,7 +2951,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_plist_accept_content_type(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("santa.view_enrollment")
+        self.set_permissions("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollment_plist', args=(enrollment.pk,)),
                             accept="application/x-plist")
         self.assertEqual(response.status_code, 200)
@@ -2983,7 +2984,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_get_enrollment_configuration_profile(self):
         identifier = get_payload_identifier("santa_configuration")
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("santa.view_enrollment")
+        self.set_permissions("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollment_configuration_profile', args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/octet-stream')
@@ -2993,7 +2994,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
     def test_get_enrollment_configuration_profile_login(self):
         identifier = get_payload_identifier("santa_configuration")
         enrollment, _ = self.force_enrollment()
-        self.login("santa.view_enrollment")
+        self.login("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollment_configuration_profile', args=(enrollment.pk,)),
                             include_token=False)
         self.assertEqual(response.status_code, 200)
@@ -3003,7 +3004,7 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
 
     def test_get_enrollment_configuration_profile_accept_content_type(self):
         enrollment, _ = self.force_enrollment()
-        self.set_permissions("santa.view_enrollment")
+        self.set_permissions("santa.view_enrollment", view_enrollment_secret_action)
         response = self.get(reverse('santa_api:enrollment_configuration_profile', args=(enrollment.pk,)),
                             accept="application/octet-stream")
         self.assertEqual(response.status_code, 200)

@@ -3,7 +3,8 @@ from rest_framework import serializers
 
 from zentral.conf import api_base_url
 from zentral.contrib.inventory.models import EnrollmentSecret
-from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer, TagAnyMachineSerializerMixin
+from zentral.contrib.inventory.serializers import (EnrolledMachinesCountSerializerMixin, EnrollmentSecretSerializer,
+                                                   TagAnyMachineSerializerMixin)
 from zentral.utils.drf import FullUpdateSerializerMixin
 
 from .command_backends import get_command_backend_class
@@ -27,9 +28,8 @@ class EnrollmentInfoSerializer(serializers.ModelSerializer):
         read_only_fields = ("pk", "version")
 
 
-class EnrollmentSerializer(serializers.ModelSerializer):
+class EnrollmentSerializer(EnrolledMachinesCountSerializerMixin, serializers.ModelSerializer):
     secret = EnrollmentSecretSerializer(many=False)
-    enrolled_machines_count = serializers.SerializerMethodField()
     configuration_profile_download_url = serializers.SerializerMethodField()
     plist_download_url = serializers.SerializerMethodField()
 
@@ -39,13 +39,6 @@ class EnrollmentSerializer(serializers.ModelSerializer):
                   "enrolled_machines_count",
                   "configuration_profile_download_url", "plist_download_url",
                   "created_at", "updated_at")
-
-    def get_enrolled_machines_count(self, obj):
-        # the list/detail querysets annotate this; fall back to a count for freshly created/updated instances
-        count = getattr(obj, "enrolled_machines_count", None)
-        if count is None:
-            count = obj.enrolledmachine_set.count()
-        return count
 
     def get_artifact_download_url(self, view_name, obj):
         path = reverse(f"turbo_api:{view_name}", args=(obj.pk,))

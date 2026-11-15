@@ -1,9 +1,14 @@
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from rest_framework.authentication import SessionAuthentication
 from accounts.api_authentication import APITokenAuthentication
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired, FileDownloadAPIView,
                                ListCreateAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
+from zentral.contrib.inventory.enrollment_secrets import (EnrollmentSecretDetailMixin,
+                                                          EnrollmentSecretListMixin,
+                                                          enrollment_secret_download)
+from .pbac import ViewEnrollmentSecretRequest
 from .models import Configuration, Enrollment, ScriptCheck
 from .osx_package.builder import MunkiZentralEnrollPkgBuilder
 from .serializers import ConfigurationSerializer, EnrollmentSerializer, ScriptCheckSerializer
@@ -29,13 +34,15 @@ class ConfigurationDetail(RetrieveUpdateDestroyAPIViewWithAudit):
 # enrollments
 
 
-class EnrollmentList(ListCreateAPIViewWithAudit):
-    queryset = Enrollment.objects.all()
+class EnrollmentList(EnrollmentSecretListMixin, ListCreateAPIViewWithAudit):
+    secret_request_class = ViewEnrollmentSecretRequest
+    queryset = Enrollment.objects.annotate(enrolled_machines_count=Count("enrolledmachine"))
     serializer_class = EnrollmentSerializer
     filterset_fields = ("configuration_id",)
 
 
-class EnrollmentDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+class EnrollmentDetail(EnrollmentSecretDetailMixin, RetrieveUpdateDestroyAPIViewWithAudit):
+    secret_request_class = ViewEnrollmentSecretRequest
     queryset = Enrollment.objects.all()
     serializer_class = EnrollmentSerializer
 
@@ -50,8 +57,11 @@ class EnrollmentPackage(FileDownloadAPIView):
 
     def get(self, request, *args, **kwargs):
         enrollment = get_object_or_404(Enrollment, pk=self.kwargs["pk"])
-        builder = MunkiZentralEnrollPkgBuilder(enrollment)
-        return builder.get_conditional_response(self.request)
+        # the builder makes a build directory: after the decision
+        return enrollment_secret_download(
+            request, ViewEnrollmentSecretRequest, enrollment,
+            lambda: MunkiZentralEnrollPkgBuilder(enrollment).get_conditional_response(self.request)
+        )
 
 
 # script checks

@@ -314,7 +314,7 @@
                 {% endif %}
             </td>
             <td class="text-center">
-                {% if not distributor and not secret.is_used_up %}
+                {% if not distributor and not secret.is_used_up and enrollment.can_download %}
                     <a type="button" class="btn btn-link"
                     aria-label="Download Santa configuration plist"
                     title="Download Santa configuration plist"

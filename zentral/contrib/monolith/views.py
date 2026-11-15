@@ -13,6 +13,8 @@ from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import DeleteView, FormView
 from base.notifier import notifier
 from pbac.engine import engine
+from zentral.contrib.inventory.enrollment_secrets import enrollment_pks_with_secret
+from zentral.contrib.monolith.pbac import ViewEnrollmentSecretRequest
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaMachine, Tag
 from zentral.core.events.base import AuditEvent
@@ -785,6 +787,10 @@ class ManifestView(PermissionRequiredMixin, DetailView):
         context = super(ManifestView, self).get_context_data(**kwargs)
         manifest = context["object"]
         context['enrollments'] = list(manifest.enrollment_set.all())
+        with_secret = enrollment_pks_with_secret(self.request.user, ViewEnrollmentSecretRequest,
+                                                 manifest.enrollment_set.all())
+        for enrollment in context['enrollments']:
+            enrollment.can_download = enrollment.pk in with_secret
         context['manifest_enrollment_packages'] = list(manifest.manifestenrollmentpackage_set.all())
         context['manifest_enrollment_packages'].sort(key=lambda mep: (mep.get_name(), mep.id))
         context['manifest_cache_servers'] = list(manifest.cacheserver_set.all().order_by("name"))

@@ -2,6 +2,7 @@ import plistlib
 from unittest.mock import patch
 from django.contrib.contenttypes.models import ContentType
 from django.urls import reverse
+from zentral.contrib.turbo.pbac import view_enrollment_secret_action
 from zentral.conf import settings
 from zentral.contrib.turbo.models import Enrollment
 from zentral.contrib.turbo.utils import build_configuration_profile
@@ -191,7 +192,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
 
     def test_enrollment_plist(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.login("turbo.view_enrollment")
+        self.login("turbo.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("turbo_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-plist")
@@ -210,7 +211,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         # FileResponse escapes a " in the filename instead of letting it break the header
         build_plist.return_value = ('weird".plist', b"<plist/>")
         enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.login("turbo.view_enrollment")
+        self.login("turbo.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("turbo_api:enrollment_plist", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Disposition"], 'attachment; filename="weird\\".plist"')
@@ -223,7 +224,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
 
     def test_enrollment_configuration_profile(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.login("turbo.view_enrollment")
+        self.login("turbo.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(reverse("turbo_api:enrollment_configuration_profile", args=(enrollment.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/octet-stream")
@@ -248,7 +249,7 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
     def test_configuration_detail_download_links(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
         configuration = enrollment.configuration
-        self.login("turbo.view_configuration", "turbo.view_enrollment")
+        self.login("turbo.view_configuration", "turbo.view_enrollment", view_enrollment_secret_action)
         response = self.client.get(configuration.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("turbo_api:enrollment_plist", args=(enrollment.pk,)))

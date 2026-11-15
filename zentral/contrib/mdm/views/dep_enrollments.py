@@ -3,11 +3,14 @@ from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import DetailView, TemplateView
+from zentral.contrib.inventory.enrollment_secrets import (can_read_enrollment_secret, check_enrollment_secret,
+                                                          post_enrollment_secret_viewed_event_on_render)
 from zentral.contrib.inventory.forms import EnrollmentSecretForm
 from zentral.contrib.mdm.dep import define_dep_profile, serialize_dep_profile
 from zentral.contrib.mdm.dep_client import DEPClient, DEPClientError
 from zentral.contrib.mdm.forms import CreateDEPEnrollmentForm, DEPEnrollmentCustomViewForm, UpdateDEPEnrollmentForm
 from zentral.contrib.mdm.models import DEPEnrollment, DEPEnrollmentCustomView
+from zentral.contrib.mdm.pbac import ViewDEPEnrollmentSecretRequest
 from zentral.contrib.mdm.skip_keys import skippable_setup_panes
 from zentral.contrib.mdm.tasks import define_dep_profile_task
 from zentral.core.events.base import AuditEvent
@@ -92,19 +95,32 @@ class DEPEnrollmentView(PermissionRequiredMixin, DetailView):
         ctx["enrollment_sessions_count"] = ctx[
             "object"
         ].depenrollmentsession_set.count()
+        ctx["can_check"] = can_read_enrollment_secret(self.request.user, ViewDEPEnrollmentSecretRequest,
+                                                      ctx["object"])
         return ctx
 
 
 class CheckDEPEnrollmentView(PermissionRequiredMixin, DetailView):
+    # the profile that Apple holds has the secret in its URLs: the page needs the secret action too
     permission_required = "mdm.view_depenrollment"
     model = DEPEnrollment
     template_name = "mdm/depenrollment_check.html"
+
+    def get_object(self, queryset=None):
+        dep_enrollment = super().get_object(queryset)
+        check_enrollment_secret(self.request, ViewDEPEnrollmentSecretRequest, dep_enrollment)
+        return dep_enrollment
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         dep_client = DEPClient.from_dep_virtual_server(self.object.virtual_server)
         ctx["fetched_profile"] = dep_client.get_profile(self.object.uuid)
         return ctx
+
+    def render_to_response(self, context, **response_kwargs):
+        response = super().render_to_response(context, **response_kwargs)
+        return post_enrollment_secret_viewed_event_on_render(response, self.request, [self.object],
+                                                             "enrollment_secret", "dep_check_page")
 
 
 class UpdateDEPEnrollmentView(PermissionRequiredMixin, TemplateView):

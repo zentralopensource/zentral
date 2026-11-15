@@ -92,7 +92,7 @@
             {% endif %}
         </td>
         <td class="text-end py-0">
-            {% if not distributor and not secret.is_used_up %}
+            {% if not distributor and not secret.is_used_up and enrollment.can_download %}
                 {% url 'monolith_api:enrollment_plist' enrollment.id as url %}
                 {% button 'DOWNLOAD' url "Download .plist" %}
                 {% url 'monolith_api:enrollment_configuration_profile' enrollment.id as url %}

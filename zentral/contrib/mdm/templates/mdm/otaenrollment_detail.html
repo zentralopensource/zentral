@@ -21,7 +21,7 @@
                     {% url 'mdm:update_ota_enrollment' object.pk as url %}
                     {% button 'UPDATE' url "Edit OTA Enrollment" %}
                 {% endif %}
-                {% if not object.realm %}
+                {% if not object.realm and can_download_profile %}
                     {% url 'mdm:download_profile_service_payload' object.pk as url %}
                     {% button 'DOWNLOAD' url "Download Profile" %}
                 {% endif %}

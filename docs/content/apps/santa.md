@@ -1836,7 +1836,7 @@ $ curl -X DELETE \
 
 * method: GET
 * Content-Type: application/json
-* PBAC action: `Santa::Action::"viewEnrollment"`
+* PBAC actions: `Santa::Action::"viewEnrollment"`, and `Santa::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * Optional filter parameter:
     * `configuration_id`: the id of the configuration target.
 
@@ -1945,7 +1945,7 @@ Response:
 
 * method: GET
 * Content-Type: application/json
-* PBAC action: `Santa::Action::"viewEnrollment"`
+* PBAC actions: `Santa::Action::"viewEnrollment"`, and `Santa::Action::"viewEnrollmentSecret"` on the enrollment for its secret: a `null` secret without it. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the enrollments.
 
 Example
@@ -2055,7 +2055,7 @@ $ curl -X DELETE \
 #### Download Santa enrollment plist file.
 
 * method: GET
-* PBAC action: `Santa::Action::"viewEnrollment"`
+* PBAC actions: `Santa::Action::"viewEnrollment"`, and `Santa::Action::"viewEnrollmentSecret"` on the enrollment: the file holds the secret. A 403 without one of them. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the configuration.
 
 Example
@@ -2071,7 +2071,7 @@ $ curl -H "Authorization: Token $ZTL_API_TOKEN" \
 #### Download Santa enrollment configuration profile file.
 
 * method: GET
-* PBAC action: `Santa::Action::"viewEnrollment"`
+* PBAC actions: `Santa::Action::"viewEnrollment"`, and `Santa::Action::"viewEnrollmentSecret"` on the enrollment: the file holds the secret. A 403 without one of them. See [Enrollment secrets and PBAC](inventory.md#enrollment-secrets-and-pbac).
 * `<int:pk>`: the primary key of the enrollment.
 
 Example
