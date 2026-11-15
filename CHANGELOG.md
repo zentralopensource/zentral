@@ -222,6 +222,10 @@ The secret of an enrollment is read with a typed PBAC action on the enrollment, 
 
 A policy that grants the `AdminActions` or the `UserActions` group of a module needs no change. A policy that names the actions one by one must name the new one. The service account of the Terraform provider needs these actions before the upgrade: it reads the secrets to build the configurations of the agents.
 
+#### 🧨 Only the `AdminActions` groups read the Terraform state
+
+`Terraform::Action::"viewState"` is in the `AdminActions` groups only: the state holds each secret that the Terraform provider wrote. A read-only or a user role does not read it anymore.
+
 #### 🧨 PBAC refusals are logged at the `WARNING` level, by `zentral.pbac.utils`
 
 A PBAC refusal is logged at the `WARNING` level now, not `ERROR`: it is an answer of the policies, not a fault of Zentral. The refusals of the API permission classes are logged by `zentral.pbac.utils` now, like the others, not by `zentral.utils.drf`. The SCIM refusal of a caller that is not a service account stays with `zentral.realms.scim_views`, at the `WARNING` level too. The line names the request that was decided, for example `Permission denied Request <User::"12" Inventory::Action::"updateTag" Inventory::Tag::"34"> Denied`. An unknown resource is `?`, and a request with an unknown context ends with `(preview)`. An alert on the refusals must match these loggers at the `WARNING` level, or the `Permission denied` message. A list, a select or a hidden control that Zentral filters logs nothing.

@@ -4,6 +4,7 @@ from cryptography.fernet import Fernet
 from django.db import models
 from django.urls import reverse
 from accounts.models import User
+from pbac.engine import ActionGroupBasename
 from zentral.core.secret_engines import decrypt, encrypt, rewrap
 from zentral.utils.ssl import ensure_bytes
 
@@ -16,6 +17,9 @@ class State(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, editable=False)
     created_by_username = models.TextField(editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # the state holds each secret that the Terraform provider wrote: only the Admin groups read it
+    pbac_default_permission_groups = {"view": (ActionGroupBasename.ADMIN,)}
 
     def __str__(self):
         return self.slug
