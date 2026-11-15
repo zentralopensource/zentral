@@ -917,7 +917,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.client.force_login(self.user)
         urlsafe_serial_number = MetaMachine(serial_number).get_urlsafe_serial_number()
         response = self.client.post(reverse("inventory:create_machine_tag", args=(urlsafe_serial_number, tag.pk)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
         response = self.client.post(reverse("inventory:delete_machine_tag",
                                             args=(urlsafe_serial_number, other_tag.pk)))
         self.assertEqual(response.status_code, 302)

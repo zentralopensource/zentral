@@ -883,8 +883,8 @@ class MachineTagsView(PermissionRequiredMixin, TemplateView):
         return context
 
 
-class CreateMachineTagView(PBACViewMixin, View):
-    pbac_request_class = CreateMachineTagRequest
+class BaseMachineTagView(PBACViewMixin, View):
+    refusal_as_not_found = True
 
     def get_pbac_request_kwargs(self, kwargs):
         self.tag = get_object_or_404(Tag, pk=kwargs['tag_id'])
@@ -893,30 +893,27 @@ class CreateMachineTagView(PBACViewMixin, View):
             "machine": self.machine,
             "tag": self.tag,
         }
+
+    def redirect_to_machine_tags(self):
+        return HttpResponseRedirect(
+            reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
+        )
+
+
+class CreateMachineTagView(BaseMachineTagView):
+    pbac_request_class = CreateMachineTagRequest
 
     def post(self, request, *args, **kwargs):
         add_machine_tags(self.machine.serial_number, [self.tag], request)
-        return HttpResponseRedirect(
-            reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
-        )
+        return self.redirect_to_machine_tags()
 
 
-class DeleteMachineTagView(PBACViewMixin, View):
+class DeleteMachineTagView(BaseMachineTagView):
     pbac_request_class = DeleteMachineTagRequest
-
-    def get_pbac_request_kwargs(self, kwargs):
-        self.tag = get_object_or_404(Tag, pk=kwargs['tag_id'])
-        self.machine = MetaMachine.from_urlsafe_serial_number(kwargs["urlsafe_serial_number"])
-        return {
-            "machine": self.machine,
-            "tag": self.tag,
-        }
 
     def post(self, request, *args, **kwargs):
         remove_machine_tags(self.machine.serial_number, [self.tag], request)
-        return HttpResponseRedirect(
-            reverse('inventory:machine_tags', args=(self.machine.get_urlsafe_serial_number(),))
-        )
+        return self.redirect_to_machine_tags()
 
 
 # compliance checks

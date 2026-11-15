@@ -121,8 +121,21 @@ class MachineTagsViewsTestCase(TestCase, LoginCase):
             f' context has tagName && context.tagName == "yolo"\n'
             "};\n"
         )
-        response = self.client.post(reverse("inventory:create_machine_tag", args=("1111", tag.pk)))
-        self.assertEqual(response.status_code, 403)
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            response = self.client.post(reverse("inventory:create_machine_tag", args=("1111", tag.pk)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_create_tag_no_policy_same_answer_for_existing_and_unknown_tag(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        self.login()
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            existing_response = self.client.post(reverse("inventory:create_machine_tag", args=("1111", tag.pk)))
+        self.assertEqual(existing_response.status_code, 404)
+        unknown_response = self.client.post(reverse("inventory:create_machine_tag", args=("1111", tag.pk + 1)))
+        self.assertEqual(unknown_response.status_code, 404)
+        # the 404 page shows the message of the exception
+        self.assertEqual(existing_response.content, unknown_response.content)
+        self.assertFalse(MachineTag.objects.filter(serial_number="1111").exists())
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_tag(self, post_event):
@@ -205,8 +218,22 @@ class MachineTagsViewsTestCase(TestCase, LoginCase):
             "};\n"
         )
         tag = Tag.objects.create(name=get_random_string(12))
-        response = self.client.post(reverse("inventory:delete_machine_tag", args=("1111", tag.pk)))
-        self.assertEqual(response.status_code, 403)
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            response = self.client.post(reverse("inventory:delete_machine_tag", args=("1111", tag.pk)))
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_tag_no_policy_same_answer_for_existing_and_unknown_tag(self):
+        tag = Tag.objects.create(name=get_random_string(12))
+        MachineTag.objects.create(serial_number="1111", tag=tag)
+        self.login()
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            existing_response = self.client.post(reverse("inventory:delete_machine_tag", args=("1111", tag.pk)))
+        self.assertEqual(existing_response.status_code, 404)
+        unknown_response = self.client.post(reverse("inventory:delete_machine_tag", args=("1111", tag.pk + 1)))
+        self.assertEqual(unknown_response.status_code, 404)
+        # the 404 page shows the message of the exception
+        self.assertEqual(existing_response.content, unknown_response.content)
+        self.assertTrue(MachineTag.objects.filter(serial_number="1111", tag=tag).exists())
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_tag(self, post_event):
