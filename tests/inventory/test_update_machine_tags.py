@@ -2,6 +2,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import Group
 from django.db import IntegrityError, OperationalError, connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from psycopg2.errors import DeadlockDetected
@@ -12,6 +13,7 @@ from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
 from zentral.contrib.inventory.api_views import UpdateMachineTags
 from zentral.contrib.inventory.events import MachineTagEvent
+from zentral.contrib.inventory.pbac import locked_rows
 from zentral.contrib.inventory.models import (MachineSnapshotCommit, MachineTag, MetaBusinessUnit,
                                               MetaMachine, Tag, Taxonomy)
 
@@ -616,6 +618,62 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), expected_response)
         self.assertFalse(Tag.objects.filter(name=unknown_tag_name).exists())
+        self.assertFalse(MachineTag.objects.filter(serial_number=serial_number).exists())
+
+    # the decisions are on the rows read again under a share lock
+
+    def test_post_locks_the_rows(self):
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        set_tag = Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+        tag = Tag.objects.create(taxonomy=Taxonomy.objects.create(name=get_random_string(12)),
+                                 name=get_random_string(12))
+        self.set_required_permission()
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.post({"operations": [{"kind": "SET", "taxonomy": taxonomy.name, "names": [set_tag.name]},
+                                                 {"kind": "ADD", "names": [tag.name]}],
+                                  "serial_numbers": [get_random_string(12)]})
+        self.assertEqual(response.status_code, 200)
+        lock_queries = [query["sql"] for query in ctx.captured_queries if query["sql"].endswith(" FOR SHARE")]
+        self.assertEqual([query.split(" FROM ")[1].split(" ")[0] for query in lock_queries],
+                         ['"inventory_taxonomy"', '"inventory_tag"', '"inventory_taxonomy"'])
+
+    def test_post_decides_on_the_current_row(self):
+        # a move of the tag to a refused taxonomy commits between the first read and the lock
+        tag = Tag.objects.create(name=get_random_string(12))
+        refused_taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        serial_number = get_random_string(12)
+        self.set_required_permission(
+            self._policy("forbid", "tagAnyMachine", scope=f'resource in Inventory::Taxonomy::"{refused_taxonomy.pk}"')
+        )
+
+        def move_then_lock(*args, **kwargs):
+            Tag.objects.filter(pk=tag.pk).update(taxonomy=refused_taxonomy)
+            return locked_rows(*args, **kwargs)
+
+        with patch("zentral.contrib.inventory.api_views.locked_rows", side_effect=move_then_lock):
+            with self.assertLogs("zentral.pbac.utils", "WARNING") as cm:
+                response = self.post({"operations": [{"kind": "ADD", "names": [tag.name]}],
+                                      "serial_numbers": [serial_number]})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"operations": {"0": {"names": {"0": ["Unknown tag."]}}}})
+        self.assertIn(f'Inventory::Action::"tagAnyMachine" Inventory::Tag::"{tag.pk}"> Denied', cm.output[0])
+        self.assertFalse(MachineTag.objects.filter(serial_number=serial_number).exists())
+
+    def test_post_tag_renamed_before_the_lock(self):
+        # a rename commits between the first read and the lock: the tag is not the one that the operation names
+        tag = Tag.objects.create(name=get_random_string(12))
+        serial_number = get_random_string(12)
+        self.set_required_permission()
+
+        def rename_then_lock(*args, **kwargs):
+            Tag.objects.filter(pk=tag.pk).update(name=get_random_string(12))
+            return locked_rows(*args, **kwargs)
+
+        with patch("zentral.contrib.inventory.api_views.locked_rows", side_effect=rename_then_lock):
+            response = self.post({"operations": [{"kind": "ADD", "names": [tag.name]}],
+                                  "serial_numbers": [serial_number]})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"operations": {"0": {"names": {"0": ["Unknown tag."]}}}})
         self.assertFalse(MachineTag.objects.filter(serial_number=serial_number).exists())
 
     def test_post_add_forbid_on_other_actions(self):

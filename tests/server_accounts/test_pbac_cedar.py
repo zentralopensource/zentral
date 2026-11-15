@@ -197,7 +197,7 @@ class SerializeRequestsEntitiesTestCase(SerializeMixin, TestCase):
         principal = Principal.from_user(self.user)
         _, entities = self.serialize([
             Request(principal, engine.legacy_perm_actions[perm], engine.system_any_resource)
-            for perm in ("accounts.view_user", "inventory.add_tag")
+            for perm in ("accounts.view_user", "inventory.add_taxonomy")
         ])
         # every namespace registers its own action groups, under the same ids
         self.assertIn(("Accounts::Action", "AdminActions"), entities)

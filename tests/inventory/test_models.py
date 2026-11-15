@@ -276,5 +276,5 @@ class InventoryModelsTestCase(TestCase):
             sorted(tag.links()),
             [('1 enrollment secret', None),
              ('1 machine', f'/inventory/?tag={tag.id}'),
-             ('1 softwareupdateenforcement', None)]
+             ('1 software update enforcement', None)]
         )

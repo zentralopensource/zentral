@@ -6,6 +6,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import Tag
+from zentral.contrib.inventory.pbac import create_tag_action, update_tag_action, view_tag_action
 
 
 class MacOSAppsViewsTestCase(TestCase, LoginCase):
@@ -34,14 +35,16 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
 
     # tags
 
-    def test_tags_permission_denied(self):
+    def test_tags_no_policy(self):
+        tag = self._force_tag()
         self.login()
         response = self.client.get(reverse("inventory:tags"))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, tag.name)
 
     def test_tags(self):
         tag = self._force_tag()
-        self.login("inventory.view_tag")
+        self.login(view_tag_action)
         response = self.client.get(reverse("inventory:tags"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, tag.name)
@@ -55,14 +58,14 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_create_tag_get(self):
-        self.login("inventory.add_tag")
+        self.login(create_tag_action)
         response = self.client.get(reverse("inventory:create_tag"))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/tag_form.html")
 
     def test_create_tag_post_name_exists(self):
         tag = self._force_tag()
-        self.login("inventory.add_tag")
+        self.login(create_tag_action)
         response = self.client.post(reverse("inventory:create_tag"),
                                     {"name": tag.name})
         self.assertEqual(response.status_code, 200)
@@ -71,7 +74,7 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
 
     def test_create_tag_post_conflicting_slug(self):
         tag = self._force_tag(get_random_string(12) + " " + get_random_string(12))
-        self.login("inventory.add_tag")
+        self.login(create_tag_action)
         response = self.client.post(reverse("inventory:create_tag"),
                                     {"name": tag.name.replace(" ", "-")})
         self.assertEqual(response.status_code, 200)
@@ -79,7 +82,7 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["form"], "name", "A tag with a conflicting slug already exists.")
 
     def test_create_tag_post(self):
-        self.login("inventory.add_tag", "inventory.view_tag")
+        self.login(create_tag_action, view_tag_action)
         name = get_random_string(12)
         color = get_random_string(6, "abcedf0123456789")
         response = self.client.post(reverse("inventory:create_tag"),
@@ -96,11 +99,11 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
         tag = self._force_tag()
         self.login()
         response = self.client.get(reverse("inventory:update_tag", args=(tag.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_update_tag_get(self):
         tag = self._force_tag()
-        self.login("inventory.change_tag")
+        self.login(update_tag_action)
         response = self.client.get(reverse("inventory:update_tag", args=(tag.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/tag_form.html")
@@ -109,7 +112,7 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
     def test_update_tag_post_name_exists(self):
         tag0 = self._force_tag()
         tag = self._force_tag()
-        self.login("inventory.change_tag")
+        self.login(update_tag_action)
         response = self.client.post(reverse("inventory:update_tag", args=(tag.pk,)),
                                     {"name": tag0.name})
         self.assertEqual(response.status_code, 200)
@@ -119,7 +122,7 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
     def test_update_tag_post_conflicting_slug(self):
         tag0 = self._force_tag(get_random_string(12) + " " + get_random_string(12))
         tag = self._force_tag()
-        self.login("inventory.change_tag")
+        self.login(update_tag_action)
         response = self.client.post(reverse("inventory:update_tag", args=(tag.pk,)),
                                     {"name": tag0.name.replace(" ", "-")})
         self.assertEqual(response.status_code, 200)
@@ -130,7 +133,7 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
         tag = self._force_tag()
         name = get_random_string(12)
         color = get_random_string(6, "abcedf0123456789")
-        self.login("inventory.change_tag", "inventory.view_tag")
+        self.login(update_tag_action, view_tag_action)
         response = self.client.post(reverse("inventory:update_tag", args=(tag.pk,)),
                                     {"name": name,
                                      "color": color}, follow=True)

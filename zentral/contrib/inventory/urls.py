@@ -116,6 +116,7 @@ pinned_menu_cfg = {
         ('macos_apps', 'macOS apps', False, ("inventory.view_osxapp", "inventory.view_osxappinstance")),
         ('programs', 'Programs', False, ("inventory.view_program", "inventory.view_programinstance")),
         ('compliance_checks', 'Compliance checks', False, ("inventory.view_jmespathcheck",)),
-        ('tags', 'Tags', False, ("inventory.view_tag",)),
+        # each tag has its own decision, so the list only needs the module
+        ('tags', 'Tags', False, ("inventory",)),
     )
 }

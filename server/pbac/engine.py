@@ -114,7 +114,11 @@ class Engine:
         self.entity_types = {}
         self.module_legacy_perm_actions = {}
         self.legacy_perm_actions = {}
+        # Two System entities, and each has one use. A legacy permission is decided on "any": it is the
+        # stand-in for a resource that the decision does not know. A typed action is decided on "root": it
+        # means that the object has no container, and no entity is its child.
         self.system_any_resource = Resource("System", "any")
+        self.system_root_resource = Resource("System", "root")
         # Register built-in entity types so the schema generator sees
         # User/ServiceAccount/Role/System without anyone having to call
         # register_entity_type explicitly.

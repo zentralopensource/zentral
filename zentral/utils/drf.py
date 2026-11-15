@@ -1,7 +1,7 @@
 from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
 from django_filters import rest_framework as filters
-from pbac.utils import refused_requests
+from pbac.utils import check_request, refused_requests
 from rest_framework import generics
 from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.pagination import LimitOffsetPagination
@@ -55,7 +55,8 @@ class PBACPermission(BasePermission):
     """Authorize the PBAC request the view builds, the DRF counterpart of PBACViewMixin.
 
     The view is asked for the request instead of declaring an action, so it can carry the
-    resource and the context the policies are written against.
+    resource and the context the policies are written against. A view with a pbac_not_found_model decides on a
+    guessable id: a refusal gets the 404 of an unknown id (rule 13).
     """
 
     def has_permission(self, request, view):
@@ -67,6 +68,10 @@ class PBACPermission(BasePermission):
         if pbac_request.unknown_context:
             # a preview is not a decision
             raise ValueError(f"{pbac_request} cannot gate a view")
+        not_found_model = getattr(view, "pbac_not_found_model", None)
+        if not_found_model is not None:
+            check_request(request, pbac_request, not_found_model=not_found_model)
+            return True
         return not refused_requests(request, [pbac_request])
 
 
@@ -183,6 +188,7 @@ class PBACRetrieveUpdateDestroyAPIViewWithAudit(RetrieveUpdateDestroyAPIViewWith
     view_pbac_request_class = None
     update_pbac_request_class = None
     delete_pbac_request_class = None
+    pbac_not_found_model = None
 
     def get_object(self):
         # read once: the permission resolves it to build the request, the handler uses it

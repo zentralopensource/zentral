@@ -189,8 +189,19 @@ class LocalSuperuserRequiredMixin(AccessMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
+class UserFormKwargsMixin:
+    # for a form that narrows its choices to what the user can use
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        kwargs["request"] = self.request
+        return kwargs
+
+
 class PBACViewMixin(AccessMixin):
     pbac_request_class = None
+    # a decision on a guessable id: a refusal gets the 404 of an unknown id (rule 13)
+    pbac_not_found_model = None
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -202,5 +213,5 @@ class PBACViewMixin(AccessMixin):
         if pbac_request.unknown_context:
             # a preview is not a decision
             raise ValueError(f"{pbac_request} cannot gate a view")
-        check_request(request, pbac_request)
+        check_request(request, pbac_request, not_found_model=self.pbac_not_found_model)
         return super().dispatch(request, *args, **kwargs)

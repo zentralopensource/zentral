@@ -15,17 +15,20 @@ from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from accounts.api_authentication import APITokenAuthentication
+from pbac.scoping import visible_rows
 from pbac.utils import could_be_permitted, refused_requests
 from zentral.core.events.base import EventRequest
 from zentral.utils.drf import (DjangoPermissionRequired, ListCreateAPIViewWithAudit,
-                               RetrieveUpdateDestroyAPIViewWithAudit)
+                               PBACRetrieveUpdateDestroyAPIViewWithAudit, RetrieveUpdateDestroyAPIViewWithAudit)
 from .forms import AndroidAppSearchForm, DebPackageSearchForm, IOSAppSearchForm, MacOSAppSearchForm, ProgramsSearchForm
 from .models import (JMESPathCheck,
                      MachineSnapshot,
                      MetaBusinessUnit,
                      MetaMachine,
-                     Tag, Taxonomy)
-from .pbac import TagAnyMachineRequest, tag_any_machine_action
+                     Tag, Taxonomy,
+                     share_lock_rows)
+from .pbac import (DeleteTagRequest, TagAnyMachineRequest, UpdateTagRequest, ViewTagRequest, create_tag_action,
+                   locked_rows, tag_any_machine_action)
 from .serializers import (CleanupInventorySerializer,
                           FullExportSerializer,
                           JMESPathCheckSerializer,
@@ -70,19 +73,25 @@ class UpdateMachineTags(APIView):
 
     def _resolve_tags(self):
         operations = self.data["operations"]
+        # The decisions are on the rows read again under a share lock, see locked_rows: a rename or a move of a
+        # tag or of a taxonomy cannot commit between the decisions and the write. The rows are matched again
+        # after the lock, because a rename or a move can commit between the first read and the lock.
+        taxonomy_names = {operation["taxonomy"] for operation in operations if operation["kind"] == "SET"}
+        taxonomy_pks = share_lock_rows(Taxonomy, Taxonomy.objects.filter(name__in=taxonomy_names)
+                                                                 .values_list("pk", flat=True))
         taxonomies = {taxonomy.name: taxonomy
-                      for taxonomy in Taxonomy.objects.filter(
-                          name__in={operation["taxonomy"] for operation in operations if operation["kind"] == "SET"}
-                      )}
+                      for taxonomy in Taxonomy.objects.filter(pk__in=taxonomy_pks, name__in=taxonomy_names)}
         names = set(itertools.chain.from_iterable(operation["names"] for operation in operations
                                                   if operation["kind"] != "SET"))
         tags = {}
         taxonomy_tags = {taxonomy: [] for taxonomy in taxonomies.values()}
-        for tag in (Tag.objects.select_related("taxonomy")
-                               .filter(Q(name__in=names) | Q(taxonomy__in=taxonomy_tags))
-                               .order_by("pk")):
+        tag_pks = (Tag.objects.filter(Q(name__in=names) | Q(taxonomy__in=taxonomy_tags))
+                              .values_list("pk", flat=True))
+        for tag in locked_rows(TagAnyMachineRequest, Tag, tag_pks):
             if tag.taxonomy in taxonomy_tags:
                 taxonomy_tags[tag.taxonomy].append(tag)
+            elif tag.name not in names:
+                continue
             tags[tag.name] = tag
         pbac_requests = {tag.pk: TagAnyMachineRequest(self.request.user, tag) for tag in tags.values()}
         refused_requests(self.request, pbac_requests.values())
@@ -522,21 +531,46 @@ class MetaBusinessUnitDetail(RetrieveUpdateDestroyAPIViewWithAudit):
             return super().perform_destroy(instance)
 
 
+class TagListPermission(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.method != "POST":
+            # the list filters its rows: no gate
+            return True
+        # A preview on all the taxonomies, before the validation of the body. The serializer decides on the
+        # taxonomy of the new tag.
+        return could_be_permitted(request, create_tag_action)
+
+
 class TagList(ListCreateAPIViewWithAudit):
     """
-    List all tags, search tag by name, or create a new tag.
+    List the tags, search a tag by name, or create a new tag.
     """
+    permission_classes = [TagListPermission]
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     filterset_fields = ('name',)
 
+    def get_queryset(self):
+        return visible_rows(self.request.user, ViewTagRequest, super().get_queryset())
 
-class TagDetail(RetrieveUpdateDestroyAPIViewWithAudit):
+
+class TagDetail(PBACRetrieveUpdateDestroyAPIViewWithAudit):
     """
     Retrieve, update or delete a tag.
     """
-    queryset = Tag.objects.all()
+    queryset = Tag.objects.select_related("taxonomy")
     serializer_class = TagSerializer
+    view_pbac_request_class = ViewTagRequest
+    update_pbac_request_class = UpdateTagRequest
+    delete_pbac_request_class = DeleteTagRequest
+    pbac_not_found_model = Tag
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted(lock=True):
+            raise ValidationError('This tag cannot be deleted')
+        return super().perform_destroy(instance)
 
 
 class TaxonomyList(ListCreateAPIViewWithAudit):
@@ -554,3 +588,8 @@ class TaxonomyDetail(RetrieveUpdateDestroyAPIViewWithAudit):
     """
     queryset = Taxonomy.objects.all()
     serializer_class = TaxonomySerializer
+
+    def perform_destroy(self, instance):
+        if not instance.can_be_deleted(lock=True):
+            raise ValidationError('This taxonomy cannot be deleted')
+        return super().perform_destroy(instance)

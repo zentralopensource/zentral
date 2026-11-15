@@ -218,9 +218,10 @@ SERVICE_ACCOUNT = PrincipalType(
     parents=(ROLE,),
 )
 
-# The catch-all resource used by every auto-registered legacy-perm action.
-# Backed at the instance level by ``Resource("System", "any")``; the type
-# itself carries no attributes.
+# The resource type of the tenant itself. It has two instances, see the engine:
+# ``Resource("System", "any")`` for every legacy-perm action, and
+# ``Resource("System", "root")`` for a typed action on an object with no
+# container. The type itself carries no attributes.
 SYSTEM = ResourceType("System")
 
 

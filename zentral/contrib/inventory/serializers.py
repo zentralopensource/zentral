@@ -1,9 +1,62 @@
+from collections.abc import Mapping
 from django.db.models import F
 from rest_framework import serializers
+from rest_framework.relations import MANY_RELATION_KWARGS
+from pbac.utils import check_request
 from zentral.core.compliance_checks.models import ComplianceCheck
 from .utils import FULL_EXPORT_FORMATS, FULL_EXPORT_TABLE_NAMES, get_default_snapshot_retention_days
 from .compliance_checks import InventoryJMESPathCheck
 from .models import EnrollmentSecret, JMESPathCheck, MetaBusinessUnit, Tag, Taxonomy
+from .pbac import CreateTagRequest, refused_pks, renamed_tag_request, renamed_taxonomy_request
+
+
+# The related fields that a write decides. Their keys can be guessed, so a refused object gets the error of an
+# unknown one (rule 13), and the refusal is logged.
+
+
+class DecidedRelatedFieldMixin:
+    def refused_pks(self, objects):
+        raise NotImplementedError
+
+    def resolve(self, data):
+        # the object, or None for an unknown key. The other errors are raised.
+        try:
+            return super().to_internal_value(data)
+        except serializers.ValidationError as error:
+            if error.get_codes() == ["does_not_exist"]:
+                return None
+            raise
+
+    def to_internal_value(self, data):
+        obj = self.resolve(data)
+        if obj is None or obj.pk in self.refused_pks([obj]):
+            self.fail("does_not_exist", pk_value=data)
+        return obj
+
+    @classmethod
+    def many_init(cls, *args, **kwargs):
+        # the many_init of DRF, with a field that decides all the objects at once
+        list_kwargs = {"child_relation": cls(*args, **kwargs)}
+        for key in kwargs:
+            if key in MANY_RELATION_KWARGS:
+                list_kwargs[key] = kwargs[key]
+        return DecidedManyRelatedField(**list_kwargs)
+
+
+class DecidedManyRelatedField(serializers.ManyRelatedField):
+    def to_internal_value(self, data):
+        if isinstance(data, str) or not hasattr(data, "__iter__"):
+            self.fail("not_a_list", input_type=type(data).__name__)
+        if not self.allow_empty and len(data) == 0:
+            self.fail("empty")
+        child = self.child_relation
+        resolved = [(item, child.resolve(item)) for item in data]
+        refused = child.refused_pks([obj for _, obj in resolved if obj is not None])
+        for item, obj in resolved:
+            # in the order of the body: an unknown key and a refused one get the same error
+            if obj is None or obj.pk in refused:
+                child.fail("does_not_exist", pk_value=item)
+        return [obj for _, obj in resolved]
 
 
 # Machine mass tagging
@@ -219,16 +272,59 @@ class MetaBusinessUnitSerializer(serializers.ModelSerializer):
         return mbu
 
 
+class CreateTagTaxonomyField(DecidedRelatedFieldMixin, serializers.PrimaryKeyRelatedField):
+    """The taxonomy of a tag: createTag on it, except for the taxonomy that the tag has."""
+
+    def refused_pks(self, taxonomies):
+        tag = self.parent.instance
+        kept_pk = tag.taxonomy_id if tag is not None else None
+        http_request = self.context["request"]
+        return refused_pks(http_request, http_request.user, CreateTagRequest,
+                           [taxonomy for taxonomy in taxonomies if taxonomy.pk != kept_pk])
+
+
 class TagSerializer(serializers.ModelSerializer):
+    taxonomy = CreateTagTaxonomyField(queryset=Taxonomy.objects.all(), allow_null=True, required=False)
+
     class Meta:
         model = Tag
         fields = ("id", "taxonomy", "meta_business_unit", "name", "slug", "color")
+
+    def to_internal_value(self, data):
+        # A tag without taxonomy is created on System::"root". It is decided before the validation: nothing in
+        # this refusal can be guessed, so it is a 403.
+        if isinstance(data, Mapping):
+            no_taxonomy = data.get("taxonomy") in (None, "")
+            if self.instance is not None:
+                no_taxonomy = no_taxonomy and "taxonomy" in data and self.instance.taxonomy_id is not None
+            if no_taxonomy:
+                http_request = self.context["request"]
+                check_request(http_request, CreateTagRequest(http_request.user, None))
+        return super().to_internal_value(data)
+
+    def validate(self, data):
+        data = super().validate(data)
+        # A rename is decided on the tag with its new name: the name is an attribute that the policies can match.
+        # The caller can update the tag, so nothing in this refusal can be guessed: a 403.
+        if self.instance is not None and "name" in data and data["name"] != self.instance.name:
+            http_request = self.context["request"]
+            taxonomy = data["taxonomy"] if "taxonomy" in data else self.instance.taxonomy
+            check_request(http_request, renamed_tag_request(http_request.user, self.instance, data["name"], taxonomy))
+        return data
 
 
 class TaxonomySerializer(serializers.ModelSerializer):
     class Meta:
         model = Taxonomy
         fields = ("id", "meta_business_unit", "name", "created_at", "updated_at")
+
+    def validate(self, data):
+        data = super().validate(data)
+        # A rename is decided like the tag rename: the caller can update the taxonomy, so a 403.
+        if self.instance is not None and "name" in data and data["name"] != self.instance.name:
+            http_request = self.context["request"]
+            check_request(http_request, renamed_taxonomy_request(http_request.user, self.instance, data["name"]))
+        return data
 
 
 class EnrollmentSecretSerializer(serializers.ModelSerializer):

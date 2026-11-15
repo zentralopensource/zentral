@@ -7,12 +7,11 @@
   <li  class="breadcrumb-item active">Inventory tags</li>
 </ol>
 
-{% if perms.inventory.view_tag %}
 
 <div class="d-flex justify-content-between mb-3">
     <h2 class="mb-0">Tag{{ tag_list|length|pluralize }} ({{ tag_list|length }})</h2>
 
-    {% if perms.inventory.add_tag %}
+    {% if can_create_tag %}
     <div class="ms-auto">
         {% url 'inventory:create_tag' as url %}
         {% button 'CREATE' url "Add new Tag" %}
@@ -27,7 +26,7 @@
                 <th class="col-md-3">Taxonomy</th>
                 <th>Meta Business Unit</th>
                 <th>Tag</th>
-                {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
+                {% if show_tag_controls %}
                 <th></th>
                 {% endif %}
             </tr>
@@ -38,13 +37,13 @@
             <td class="col-md-3">{{ tag.taxonomy|default:"-" }}</td>
             <td>{{ tag.meta_business_unit|default:"-" }}</td>
             <td>{% inventory_tag tag %}</td>
-            {% if perms.inventory.change_tag or perms.inventory.delete_tag %}
+            {% if show_tag_controls %}
             <td class="text-end py-0">
-            {% if perms.inventory.change_tag %}
+            {% if tag.show_update_control %}
                 {% url 'inventory:update_tag' tag.id as url %}
                 {% button 'UPDATE' url "Edit Tag" %}
             {% endif %}
-            {% if perms.inventory.delete_tag %}
+            {% if tag.show_delete_control %}
                 {% url 'inventory:delete_tag' tag.id as url %}
                 {% button 'DELETE' url "Delete Tag" %}
             {% endif %}
@@ -55,7 +54,6 @@
         </tbody>
     </table>
 </div>
-{% endif %}
 
 {% if perms.inventory.view_taxonomy %}
 <div class="d-flex justify-content-between mb-3">
@@ -93,7 +91,7 @@
             {% url 'inventory:update_taxonomy' taxonomy.id as url %}
             {% button 'UPDATE' url "Edit Taxonomy" %}
           {% endif %}
-          {% if perms.inventory.delete_taxonomy %}
+          {% if perms.inventory.delete_taxonomy and not taxonomy.tag_count %}
               {% url 'inventory:delete_taxonomy' taxonomy.id as url %}
               {% button 'DELETE' url "Delete Taxonomy" %}
           {% endif %}

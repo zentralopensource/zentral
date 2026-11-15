@@ -3,12 +3,17 @@ from datetime import timedelta
 
 import jmespath
 from django import forms
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import connection
+from django.db.models import Q
+from django.forms.models import ModelChoiceIterator
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
 
+from pbac.engine import engine
+from pbac.scoping import visible_rows
+from pbac.utils import refused_requests
 from zentral.utils.text import get_version_sort_key
 from zentral.utils.time import naive_utcnow
 
@@ -20,7 +25,9 @@ from .models import (
     MetaBusinessUnit,
     Source,
     Tag,
+    Taxonomy,
 )
+from .pbac import CreateTagRequest, refused_pks, renamed_tag_request, renamed_taxonomy_request
 from .utils import (
     AndroidAppFilter,
     BundleFilter,
@@ -31,6 +38,155 @@ from .utils import (
     ProgramFilter,
     SourceFilter,
 )
+
+
+# The write pickers (rule 7): the choices are the objects that the user can pick, a filter that logs nothing. The
+# validation keeps every object, so a forged post reaches the decision on the posted value, which is logged. The keys
+# of a tag and of a taxonomy can be guessed, so a refused value gets the error of an unknown choice (rule 13).
+
+
+class OfferedChoiceIterator(ModelChoiceIterator):
+    # Built with the field, before set_decision, and built again for each new queryset. Only the use of the choices
+    # needs the user: the list, the count, and the test that there is a choice.
+    def __init__(self, field):
+        super().__init__(field)
+        self.queryset = field.offered_choices
+
+    def _offered(self):
+        if self.queryset is None:
+            self.field.decided_queryset()
+
+    def __iter__(self):
+        self._offered()
+        return super().__iter__()
+
+    def __len__(self):
+        self._offered()
+        return super().__len__()
+
+    def __bool__(self):
+        self._offered()
+        return super().__bool__()
+
+
+class DecidedChoicesMixin:
+    iterator = OfferedChoiceIterator
+    user = None
+    http_request = None
+    # the queryset of the choices, filtered once for the user and the queryset of the field
+    offered_choices = None
+
+    def offered_queryset(self, queryset):
+        raise NotImplementedError
+
+    def refused_pks(self, objects):
+        raise NotImplementedError
+
+    def _set_queryset(self, queryset):
+        if self.user is None or queryset is None:
+            self.offered_choices = None
+        else:
+            self.offered_choices = self.offered_queryset(queryset.all())
+        super()._set_queryset(queryset)
+
+    queryset = property(forms.ModelChoiceField._get_queryset, _set_queryset)
+
+    def set_decision(self, user, http_request):
+        self.user = user
+        self.http_request = http_request
+        self.queryset = self.queryset
+
+    def decided_queryset(self):
+        # fail closed: a field with no user would offer and accept every object, with no decision
+        if self.user is None:
+            raise ImproperlyConfigured(f"{self.__class__.__name__} has no user: see DecidedChoicesFormMixin")
+        return self.queryset
+
+
+class DecidedModelChoiceField(DecidedChoicesMixin, forms.ModelChoiceField):
+    def to_python(self, value):
+        self.decided_queryset()
+        obj = super().to_python(value)
+        if obj is not None and obj.pk in self.refused_pks([obj]):
+            raise ValidationError(self.error_messages["invalid_choice"], code="invalid_choice")
+        return obj
+
+
+class DecidedModelMultipleChoiceField(DecidedChoicesMixin, forms.ModelMultipleChoiceField):
+    def _check_values(self, value):
+        queryset = self.decided_queryset()
+        if not isinstance(value, (list, tuple)):
+            return super()._check_values(value)
+        try:
+            # each value that the queryset resolves is decided, whatever its type
+            candidates = list(queryset.filter(pk__in=list(value)))
+        except (TypeError, ValueError, ValidationError):
+            # not a list of keys: the checks of the parent refuse it
+            return super()._check_values(value)
+        refused = self.refused_pks(candidates)
+        if not refused:
+            return super()._check_values(value)
+        # The refused values are missing from the queryset that validates, as the unknown ones. Set without the
+        # setter: the choices stay as they are.
+        self._queryset = queryset.exclude(pk__in=refused)
+        try:
+            return super()._check_values(value)
+        finally:
+            self._queryset = queryset
+
+
+class DecidedChoicesFormMixin:
+    """For a model form with write pickers, declared in Meta.field_classes."""
+
+    def __init__(self, *args, user, request=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        self.http_request = request
+        for field in self.fields.values():
+            if isinstance(field, DecidedChoicesMixin):
+                field.set_decision(user, request)
+
+
+# The taxonomy of a tag: createTag on the taxonomy, or on System::"root" for a tag without taxonomy. The taxonomy
+# that the tag has stays a choice, with no decision.
+
+
+class CreateTagTaxonomyChoiceField(DecidedModelChoiceField):
+    kept_pk = None
+    decide_root = True
+
+    def offered_queryset(self, queryset):
+        return queryset.filter(
+            Q(pk__in=visible_rows(self.user, CreateTagRequest, queryset).values("pk")) | Q(pk=self.kept_pk)
+        )
+
+    def refused_pks(self, taxonomies):
+        return refused_pks(self.http_request, self.user, CreateTagRequest,
+                           [taxonomy for taxonomy in taxonomies if taxonomy.pk != self.kept_pk])
+
+    def validate(self, value):
+        super().validate(value)
+        if value is None and self.decide_root:
+            if refused_requests(self.http_request, [CreateTagRequest(self.user, None)]):
+                raise ValidationError(self.error_messages["required"], code="required")
+
+
+class CreateTagTaxonomyFormMixin(DecidedChoicesFormMixin):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        field = self.fields["taxonomy"]
+        if self.instance.pk:
+            field.kept_pk = self.instance.taxonomy_id
+            # a tag that stays without taxonomy needs no decision on System::"root"
+            field.decide_root = self.instance.taxonomy_id is not None
+            # the kept taxonomy is a choice: the choices are filtered again
+            field.set_decision(self.user, self.http_request)
+        if field.decide_root:
+            # the display only: no empty choice when the user cannot create a tag without taxonomy
+            root_request = CreateTagRequest(self.user, None)
+            engine.authorize_request(root_request)
+            if not root_request.is_authorized:
+                field.empty_label = None
 
 
 class MachineGroupSearchForm(forms.Form):
@@ -98,10 +254,11 @@ class MergeMBUForm(forms.Form):
         return dest_mbu
 
 
-class CreateTagForm(forms.ModelForm):
+class CreateTagForm(CreateTagTaxonomyFormMixin, forms.ModelForm):
     class Meta:
         model = Tag
         fields = ("meta_business_unit", "taxonomy", "name", "color")
+        field_classes = {"taxonomy": CreateTagTaxonomyChoiceField}
 
     def clean_name(self):
         name = self.cleaned_data.get("name")
@@ -115,18 +272,19 @@ class CreateTagForm(forms.ModelForm):
 
     def clean(self):
         super().clean()
-        taxonomy = self.cleaned_data["taxonomy"]
-        meta_business_unit = self.cleaned_data["meta_business_unit"]
+        taxonomy = self.cleaned_data.get("taxonomy")
+        meta_business_unit = self.cleaned_data.get("meta_business_unit")
         if taxonomy and taxonomy.meta_business_unit and meta_business_unit \
            and taxonomy.meta_business_unit != meta_business_unit:
             self.add_error("meta_business_unit", "Should be either the taxonomy business unit or left empty")
         return self.cleaned_data
 
 
-class UpdateTagForm(forms.ModelForm):
+class UpdateTagForm(CreateTagTaxonomyFormMixin, forms.ModelForm):
     class Meta:
         model = Tag
         fields = ("meta_business_unit", "taxonomy", "name", "color")
+        field_classes = {"taxonomy": CreateTagTaxonomyChoiceField}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -135,6 +293,15 @@ class UpdateTagForm(forms.ModelForm):
             self.fields["taxonomy"].queryset = self.fields["taxonomy"].queryset.filter(
                 meta_business_unit=self.instance.meta_business_unit
             )
+
+    def clean(self):
+        super().clean()
+        name = self.cleaned_data.get("name")
+        if name and name != self.instance.name and "taxonomy" not in self.errors:
+            pbac_request = renamed_tag_request(self.user, self.instance, name, self.cleaned_data.get("taxonomy"))
+            if refused_requests(self.http_request, [pbac_request]):
+                self.add_error("name", "You cannot give this name to the tag.")
+        return self.cleaned_data
 
     def clean_name(self):
         name = self.cleaned_data.get("name")
@@ -148,6 +315,25 @@ class UpdateTagForm(forms.ModelForm):
             if qs.filter(slug=slug).exists():
                 raise ValidationError("A tag with a conflicting slug already exists.")
         return name
+
+
+class UpdateTaxonomyForm(forms.ModelForm):
+    class Meta:
+        model = Taxonomy
+        fields = ("name",)
+
+    def __init__(self, *args, user, request=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        self.http_request = request
+
+    def clean(self):
+        super().clean()
+        name = self.cleaned_data.get("name")
+        if name and name != self.instance.name:
+            if refused_requests(self.http_request, [renamed_taxonomy_request(self.user, self.instance, name)]):
+                self.add_error("name", "You cannot give this name to the taxonomy.")
+        return self.cleaned_data
 
 
 class BaseAppSearchForm(forms.Form):

@@ -118,6 +118,20 @@ forbid (
 
 A `SET` operation of the mass tagging API removes the other tags of its taxonomy. It needs `tagAnyMachine` on each tag of the taxonomy, so the second policy also refuses a `SET` operation on the taxonomy of the `VIP` tag.
 
+`Inventory::Action::"createTag"` creates a tag. Its resource is the taxonomy of the new tag. For a tag without taxonomy, its resource is `System::"root"`: this entity means "no container", and no other entity is a member of it. This policy lets a role create tags in one taxonomy (pk 3) only, and no tag without taxonomy:
+
+```
+permit (
+  principal in Role::"6", // Support
+  action == Inventory::Action::"createTag",
+  resource == Inventory::Taxonomy::"3"
+);
+```
+
+`Inventory::Action::"viewTag"`, `Inventory::Action::"updateTag"` and `Inventory::Action::"deleteTag"` take the tag, as `tagAnyMachine` does. With `resource in Inventory::Taxonomy::"3"`, a policy gives them for the tags of one taxonomy. `viewTag` limits the list of the tags only: the forms that use tags as a condition show every tag. A move of a tag needs `updateTag` on the tag and `createTag` on the taxonomy that it joins.
+
+A policy with `resource == System::"root"` gives the tags without taxonomy only. `System::"any"` is a different entity: Zentral uses it for the actions that have no resource of their own, and a policy does not need to name it.
+
 Three features worth pointing out:
 
 * **Comments.** `//` opens a single-line Cedar comment — useful for naming the role inline since policies otherwise only carry the numeric pk.

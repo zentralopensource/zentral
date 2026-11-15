@@ -13,7 +13,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import IntegrityError, connection, models, transaction
-from django.db.models import Count, F, Max, Q
+from django.db.models import Count, Exists, F, Max, OuterRef, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -803,6 +803,32 @@ class CurrentMachineSnapshot(models.Model):
         unique_together = ('serial_number', 'source')
 
 
+def lock_row(instance):
+    # Before a check that a delete depends on. A new row that references this one takes a key share lock on it,
+    # so it waits until the delete is committed, instead of being removed by the cascade. A decided write takes
+    # a share lock first, see share_lock_rows, so it waits too, and then answers as for an unknown row.
+    # no ordering: the default ordering of the model can join a nullable relation, which FOR UPDATE refuses
+    list(type(instance)._base_manager.select_for_update(of=("self",)).filter(pk=instance.pk)
+         .order_by().values_list("pk"))
+
+
+def share_lock_rows(model, pks):
+    """Take a share lock on the rows, and return the primary keys of the ones that exist.
+
+    For a write that references the rows and decides on them. The delete of a row (FOR UPDATE, see lock_row) and
+    an update, such as a rename or a move, wait until the write is committed. Two writes that reference the same
+    rows do not wait for each other. Django has no FOR SHARE.
+    """
+    pks = list(pks)
+    if not pks:
+        return set()
+    table = connection.ops.quote_name(model._meta.db_table)
+    column = connection.ops.quote_name(model._meta.pk.column)
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT {column} FROM {table} WHERE {column} = ANY(%s) ORDER BY {column} FOR SHARE", [pks])
+        return {row[0] for row in cursor.fetchall()}
+
+
 class Taxonomy(models.Model):
     """A bag of tags, can be restricted to a MBU"""
     meta_business_unit = models.ForeignKey(MetaBusinessUnit, on_delete=models.CASCADE, blank=True, null=True)
@@ -818,6 +844,12 @@ class Taxonomy(models.Model):
 
     class Meta:
         ordering = ("meta_business_unit__name", "name")
+
+    def can_be_deleted(self, lock=False):
+        # the delete would cascade to the tags, without a deleteTag decision on each of them
+        if lock:
+            lock_row(self)
+        return not self.tag_set.exists()
 
     def links(self):
         known_models = {
@@ -876,6 +908,9 @@ class Tag(models.Model):
 
     objects = TagManager()
 
+    # the tag actions are typed actions: see .pbac
+    pbac_default_permission_groups = {"add": None, "change": None, "delete": None, "view": None}
+
     def __str__(self):
         if self.taxonomy:
             return "{}: {}".format(self.taxonomy, self.name)
@@ -891,6 +926,46 @@ class Tag(models.Model):
         self.slug = slugify(self.name)
         super(Tag, self).save(*args, **kwargs)
 
+    @classmethod
+    def use_relations(cls):
+        """Each model and field of the objects that use a tag: the machine tags, and the objects of the modules.
+
+        A relation without a reverse accessor is in the list too. An object that names the tag in a JSON value,
+        as a Monolith option or a probe filter, is not.
+        """
+        for relation in cls._meta.get_fields(include_hidden=True):
+            if not relation.auto_created or relation.concrete:
+                continue
+            model = relation.related_model
+            if model._meta.auto_created:
+                # the through model of a many-to-many relation that is in the list itself
+                continue
+            yield model, relation.field.name
+
+    @classmethod
+    def used_q(cls):
+        """A filter on the tags that a machine or an object uses: one EXISTS for each relation of use_relations.
+
+        The base manager, because a default manager can hide rows that the delete cascade reaches.
+        """
+        q = Q()
+        for model, field_name in cls.use_relations():
+            q |= Q(Exists(model._base_manager.filter(**{field_name: OuterRef("pk")})))
+        return q
+
+    def use_counts(self):
+        for model, field_name in self.use_relations():
+            count = model._base_manager.filter(**{field_name: self}).count()
+            if count:
+                yield model, field_name, count
+
+    def can_be_deleted(self, lock=False):
+        # A delete would remove the tag from the machines and from these objects, with no decision on them. A rule
+        # that loses an excluded tag gets more machines.
+        if lock:
+            lock_row(self)
+        return not Tag._base_manager.filter(Tag.used_q(), pk=self.pk).exists()
+
     def links(self):
         known_models = {
             EnrollmentSecret: ("enrollment secret", "enrollment secrets", None),
@@ -898,19 +973,14 @@ class Tag(models.Model):
                          "{}?tag={}".format(reverse("inventory:index"), self.id)),
         }
         link_list = []
-        for related_objects in find_all_related_objects(self):
-            if related_objects.name in ("taxonomy", "meta_business_unit"):
-                continue
-            if related_objects.objects_count:
-                if related_objects.to_model in known_models:
-                    label, label_plural, url = known_models[related_objects.to_model]
-                    link_list.append(("{} {}".format(related_objects.objects_count,
-                                                     label if related_objects.objects_count == 1 else label_plural),
-                                      url))
-                else:
-                    link_list.append(("{} {}".format(related_objects.objects_count,
-                                                     related_objects.name),
-                                      None))
+        for model, field_name, objects_count in self.use_counts():
+            label, label_plural, url = known_models.get(
+                model, (model._meta.verbose_name, model._meta.verbose_name_plural, None)
+            )
+            label = "{} {}".format(objects_count, label if objects_count == 1 else label_plural)
+            if field_name == "excluded_tags":
+                label += ", as an excluded tag"
+            link_list.append((label, url))
         return link_list
 
     def serialize_for_event(self, keys_only=False):

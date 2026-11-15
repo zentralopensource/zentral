@@ -5,9 +5,9 @@ from math import ceil
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import F
+from django.contrib.auth.mixins import AccessMixin, LoginRequiredMixin, PermissionRequiredMixin
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.db.models import Count, F
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -16,6 +16,8 @@ from django.utils.functional import SimpleLazyObject
 from django.views.generic import DetailView, FormView, ListView, TemplateView, View
 
 from pbac.engine import engine
+from pbac.scoping import visible_rows
+from pbac.utils import could_be_permitted
 from zentral.core.events.base import AuditEvent, EventRequest
 from zentral.conf import settings
 from zentral.core.compliance_checks import compliance_check_class_from_model
@@ -31,6 +33,7 @@ from zentral.utils.views import (
     DeleteViewWithAudit,
     PBACViewMixin,
     UpdateViewWithAudit,
+    UserFormKwargsMixin,
     UserPaginationListView,
     UserPaginationMixin,
     post_audit_event,
@@ -52,6 +55,7 @@ from .forms import (
     ProgramsSearchForm,
     Source,
     UpdateTagForm,
+    UpdateTaxonomyForm,
 )
 from .models import (
     BusinessUnit,
@@ -62,7 +66,8 @@ from .models import (
     Tag,
     Taxonomy,
 )
-from .pbac import CreateMachineTagRequest, DeleteMachineTagRequest
+from .pbac import (CreateMachineTagRequest, DeleteMachineTagRequest, DeleteTagRequest, UpdateTagRequest,
+                   ViewTagRequest, create_tag_action)
 from .utils import (
     AndroidAppFilter,
     AndroidAppFilterForm,
@@ -1194,22 +1199,42 @@ TAG_COLOR_PRESETS = {
 }
 
 
-class TagsView(PermissionRequiredMixin, TemplateView):
-    permission_required = "inventory.view_tag"
+class TagsView(LoginRequiredMixin, TemplateView):
+    # no permission: each tag has its own decision, and the list has only the visible ones
     template_name = "inventory/tag_index.html"
 
     def get_context_data(self, **kwargs):
         ctx = super(TagsView, self).get_context_data(**kwargs)
-        ctx['tag_list'] = list(Tag.objects.all())
-        ctx['taxonomy_list'] = list(Taxonomy.objects.all())
+        visible_tags = visible_rows(self.request.user, ViewTagRequest, Tag.objects.all())
+        tag_list = list(visible_tags.select_related("taxonomy", "meta_business_unit"))
+        # one decision for all the rows of each control, on the rows of the list only, as a subquery
+        rows = Tag.objects.filter(pk__in=visible_tags.values("pk"))
+        update_pks = set(visible_rows(self.request.user, UpdateTagRequest, rows).values_list("pk", flat=True))
+        delete_pks = set(visible_rows(self.request.user, DeleteTagRequest, rows)
+                         .exclude(Tag.used_q()).values_list("pk", flat=True))
+        for tag in tag_list:
+            tag.show_update_control = tag.pk in update_pks
+            tag.show_delete_control = tag.pk in delete_pks
+        ctx['tag_list'] = tag_list
+        ctx['show_tag_controls'] = bool(update_pks or delete_pks)
+        ctx['can_create_tag'] = could_be_permitted(self.request, create_tag_action, log=False)
+        ctx['taxonomy_list'] = list(Taxonomy.objects.annotate(tag_count=Count("tag")))
         return ctx
 
 
-class CreateTagView(PermissionRequiredMixin, CreateViewWithAudit):
-    permission_required = "inventory.add_tag"
+class CreateTagView(AccessMixin, UserFormKwargsMixin, CreateViewWithAudit):
     model = Tag
     form_class = CreateTagForm
     success_url = reverse_lazy("inventory:tags")
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        # A preview on all the taxonomies. The form decides: its taxonomy choices are those where the user
+        # can create a tag.
+        if not could_be_permitted(request, create_tag_action):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -1217,8 +1242,16 @@ class CreateTagView(PermissionRequiredMixin, CreateViewWithAudit):
         return ctx
 
 
-class UpdateTagView(PermissionRequiredMixin, UpdateViewWithAudit):
-    permission_required = "inventory.change_tag"
+class TagWriteViewMixin(PBACViewMixin):
+    pbac_not_found_model = Tag
+
+    def get_pbac_request_kwargs(self, kwargs):
+        self.tag = get_object_or_404(Tag.objects.select_related("taxonomy"), pk=kwargs["pk"])
+        return {"tag": self.tag}
+
+
+class UpdateTagView(TagWriteViewMixin, UserFormKwargsMixin, UpdateViewWithAudit):
+    pbac_request_class = UpdateTagRequest
     model = Tag
     form_class = UpdateTagForm
     success_url = reverse_lazy("inventory:tags")
@@ -1229,8 +1262,8 @@ class UpdateTagView(PermissionRequiredMixin, UpdateViewWithAudit):
         return ctx
 
 
-class DeleteTagView(PermissionRequiredMixin, DeleteViewWithAudit):
-    permission_required = "inventory.delete_tag"
+class DeleteTagView(TagWriteViewMixin, DeleteViewWithAudit):
+    pbac_request_class = DeleteTagRequest
     model = Tag
     success_url = reverse_lazy("inventory:tags")
 
@@ -1238,6 +1271,16 @@ class DeleteTagView(PermissionRequiredMixin, DeleteViewWithAudit):
         ctx = super(DeleteTagView, self).get_context_data(**kwargs)
         ctx['links'] = self.object.links()
         return ctx
+
+    def get_object(self, queryset=None):
+        # the tag of the decision. Not for the update: its audit event reads the stored tag again.
+        return self.tag
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if not self.object.can_be_deleted(lock=True):
+            return self.render_to_response(self.get_context_data(), status=400)
+        return super().post(request, *args, **kwargs)
 
 
 class CreateTaxonomyView(PermissionRequiredMixin, CreateViewWithAudit):
@@ -1247,10 +1290,10 @@ class CreateTaxonomyView(PermissionRequiredMixin, CreateViewWithAudit):
     success_url = reverse_lazy("inventory:tags")
 
 
-class UpdateTaxonomyView(PermissionRequiredMixin, UpdateViewWithAudit):
+class UpdateTaxonomyView(PermissionRequiredMixin, UserFormKwargsMixin, UpdateViewWithAudit):
     permission_required = "inventory.change_taxonomy"
     model = Taxonomy
-    fields = ('name',)
+    form_class = UpdateTaxonomyForm
     success_url = reverse_lazy("inventory:tags")
 
 
@@ -1259,10 +1302,21 @@ class DeleteTaxonomyView(PermissionRequiredMixin, DeleteViewWithAudit):
     model = Taxonomy
     success_url = reverse_lazy("inventory:tags")
 
+    def get_queryset(self):
+        # a taxonomy with tags cannot be deleted
+        return Taxonomy.objects.filter(tag__isnull=True)
+
     def get_context_data(self, **kwargs):
         ctx = super(DeleteTaxonomyView, self).get_context_data(**kwargs)
         ctx['links'] = self.object.links()
         return ctx
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if not self.object.can_be_deleted(lock=True):
+            # a tag was created in the taxonomy since the queryset was read
+            raise Http404
+        return super().post(request, *args, **kwargs)
 
 
 # Apps

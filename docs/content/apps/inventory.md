@@ -253,6 +253,37 @@ This boolean is used to toggle the inclusion of the machine groups in the event 
 
 This boolean is used to toggle the inclusion of the principal user in the event metadata. `true` by default.
 
+## Tags and PBAC
+
+### The actions
+
+| Action | Resource | What it gives |
+| --- | --- | --- |
+| `Inventory::Action::"createTag"` | The taxonomy of the tag (`Inventory::Taxonomy`), or `System::"root"` for a tag without taxonomy | The creation of a tag, and the move of a tag to this taxonomy |
+| `Inventory::Action::"viewTag"` | The tag (`Inventory::Tag`), a member of its taxonomy | The tag in the list of the tags, and its detail |
+| `Inventory::Action::"updateTag"` | The tag (`Inventory::Tag`), a member of its taxonomy | The update of the tag: its name, its colour, and its move out of its taxonomy |
+| `Inventory::Action::"deleteTag"` | The tag (`Inventory::Tag`), a member of its taxonomy | The delete of a tag that nothing uses |
+| `Inventory::Action::"tagAnyMachine"` | The tag (`Inventory::Tag`), a member of its taxonomy | The tag on any machine, and its removal: the mass tagging API |
+| `Inventory::Action::"createMachineTag"`, `Inventory::Action::"deleteMachineTag"` | The machine, with the tag in the context | One tag on one machine, on the tags page of the machine |
+
+`createTag`, `updateTag`, `deleteTag` and `tagAnyMachine` are in the `AdminActions` group. `viewTag` is in the `AdminActions`, `UserActions` and `ViewerActions` groups. The `inventory.add_tag`, `inventory.view_tag`, `inventory.change_tag` and `inventory.delete_tag` permissions give nothing. A policy with `resource in Inventory::Taxonomy::"…"` gives `viewTag`, `updateTag`, `deleteTag` and `tagAnyMachine` for the tags of one taxonomy only.
+
+A move of a tag acts on two resources, so it makes two decisions: `updateTag` on the tag, as a member of the taxonomy that it leaves, and `createTag` on the taxonomy that it joins, or on `System::"root"` if the tag leaves its taxonomy. A role that has the two actions for one taxonomy only cannot take a tag from another taxonomy.
+
+A rename is decided twice too: `updateTag` on the tag with its current name, and `updateTag` on the tag with its new name, in the taxonomy where it ends. A policy can match the name of a tag, for `tagAnyMachine` or for another action, so a role must not give a tag a name that its policies do not allow. A refused rename is a 403 in the API: the role can write the tag, so nothing in the answer can be guessed. In the console, it is an error on the name.
+
+A rename of a taxonomy needs `createTag` on the taxonomy with its new name, in addition to the `inventory.change_taxonomy` permission. A policy can match the name of a taxonomy for `createTag`, so a role must not give a taxonomy a name that gives it `createTag` in this taxonomy. A refused rename is a 403 in the API, and an error on the name in the console.
+
+The primary key of a tag can be guessed. So an update or a delete of a tag that the role cannot write gets the answer of an unknown tag: a 404, in the API and in the console.
+
+The list of the tags shows only the tags that the role can see, in the API and on the *Tags* page. It never refuses: a role without a policy gets an empty list. The detail of a tag that the role cannot see is a 404. `updateTag` and `deleteTag` show the tag that they write, but they do not put it in the list: give `viewTag` with them.
+
+`viewTag` does not make the name of a tag a secret. A form of another module that uses tags as a condition shows every tag: the scope of a Santa rule, of a Monolith manifest, of an MDM artifact, of a Turbo job, the filter of a probe. The tags of a machine are shown with `viewMachineTag`.
+
+A tag that is used cannot be deleted: a tag that a machine has, or that an object names, for example an enrollment, a Santa rule, or an MDM artifact. A delete would remove the tag from the machines and from these objects, and a rule that loses an excluded tag would apply to more machines. Remove the tag from the machines and from the objects first: the *Delete tag* page lists them. Zentral does not find an object that names the tag in a JSON value, as a Monolith option or the filter of a probe.
+
+A taxonomy that has tags cannot be deleted. Delete its tags first: each delete needs `deleteTag`.
+
 ## HTTP API
 
 ### Requests
@@ -384,6 +415,25 @@ The response format is:
            "removed": 1}
 }
 ```
+
+### `/api/inventory/tags/`
+
+* method: GET, POST
+* PBAC actions:
+    * GET: `Inventory::Action::"viewTag"`, on each tag. The list has only the tags that the caller can see.
+    * POST: `Inventory::Action::"createTag"`, on the taxonomy of the new tag, or on `System::"root"` for a tag without taxonomy
+
+A `POST` gets a 403 when no policy gives `createTag` to the caller, and when the tag has no taxonomy and the caller cannot create one on `System::"root"`. A taxonomy where the caller cannot create a tag gets the 400 of an unknown taxonomy.
+
+### `/api/inventory/tags/<id>/`
+
+* method: GET, PUT, DELETE
+* PBAC actions:
+    * GET: `Inventory::Action::"viewTag"`, on the tag
+    * PUT: `Inventory::Action::"updateTag"`, on the tag. A `PUT` that changes the taxonomy also needs `Inventory::Action::"createTag"` on the new taxonomy, or on `System::"root"` if the tag leaves its taxonomy. A `PUT` that changes the name also needs `Inventory::Action::"updateTag"` on the tag with its new name: a 403 without it.
+    * DELETE: `Inventory::Action::"deleteTag"`, on the tag
+
+A `GET` on a tag that the caller cannot see, and a `PUT` or a `DELETE` on a tag that the caller cannot write, get a 404, as for an unknown tag. A `DELETE` on a tag that is used gets a 400.
 
 ### `/api/inventory/cleanup/`
 

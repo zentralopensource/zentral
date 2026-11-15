@@ -6,7 +6,7 @@ weight: 305
 
 A view or an endpoint that a typed [PBAC](../configuration/pbac.md) action protects follows these rules. Developers apply them, reviewers check them, and pentesters rate what they find with the [leak classes](#leak-classes).
 
-A view that only a legacy permission protects is not in the scope of these rules. A legacy permission is a decision on `System::"any"`.
+A view that only a legacy permission protects is not in the scope of these rules. A legacy permission is a decision on `System::"any"`, with no context.
 
 ## Terms
 
@@ -24,7 +24,7 @@ A view that only a legacy permission protects is not in the scope of these rules
 
 1. **One action for each decision.** A decision has one action and one resource. Do not add a decision on another action of the same resource, or of one of its containers, to restrict the first decision.
     - Why: the resource carries its containers and its attributes. A policy on the one action can already say `resource in Turbo::OneTimeJob::"…"` or `resource.job.kind == "file_export"`. A second action makes an admin grant two actions for one operation.
-    - Exception: an operation that acts on two resources makes one decision for each resource, with the action that it does to that resource. Cedar calls this compound authorization. Example: a move removes from one container and adds to another.
+    - Exception: an operation that acts on two resources makes one decision for each resource, with the action that it does to that resource. Cedar calls this compound authorization. Example: a move removes from one container and adds to another. The move of a tag decides `updateTag` on the tag, which is a member of the taxonomy that it leaves, and `createTag` on the taxonomy that it joins.
     - Not an exception: the download of an artifact does not act on its schedule. It needs `downloadJobUpload` only.
 2. **Each element of a response has its own decision, with the action of its own resource.** A page is a page gate, rows and controls.
     - The page gate decides the main resource of the page.
@@ -47,7 +47,7 @@ A view that only a legacy permission protects is not in the scope of these rules
     - Allow, or "it depends on the job": at least one job could be permitted. Zentral opens the form, but it has permitted nothing yet.
     - The write: on the submit, Zentral asks again, with the job that the operator picked. Example: a policy permits `sysdiagnose` jobs only. The preview opens the page, and the submit of a `file_export` job gets a 403.
     - In the code: a request with `unknown_context=True`. `PBACViewMixin` and `PBACPermission` refuse a preview as a gate, because its Allow is not a decision. `check_request()` accepts a preview only where Zentral uses its Deny alone.
-    - A request without a resource is a preview too, with `engine.undecided_policies()` (`pbac.utils.could_be_permitted()`). Example: the mass tagging API answers 403 before it reads the body when no tag can be permitted.
+    - A request without a resource is a preview too, with `engine.undecided_policies()` (`pbac.utils.could_be_permitted()`). Example: the mass tagging API answers 403 before it reads the body when no tag can be permitted. The tag API and the *Create tag* page do the same for `createTag`, before the taxonomy is known.
 
 ## Lists and filters
 
@@ -80,10 +80,14 @@ A view that only a legacy permission protects is not in the scope of these rules
 
 10. **Use a context only for what does not exist yet.** An action on a stored resource has no context. The facts about the resource are its attributes or its containers.
     - A create takes the container as its resource and the new object in its context. `createOneTimeJob` takes the configuration, with the job in `context.job`.
+    - A create of an object with no container takes `System::"root"` (rule 11). `createTag` takes the taxonomy of the new tag, or `System::"root"` for a tag without taxonomy.
+    - A create action has no context when an object that is saved today creates the rows later. `createTag` is such an action: a Jamf tag configuration does not know the names of the tags that it will create. One action has one context shape, so `createTag` has none, and its policies limit the taxonomy.
     - Why: the answer for a row then does not change with the request, and `visible_rows()` can write the policies as SQL. Cedar keeps the context for information that is unique to one request.
 11. **A typed action is never reachable through `has_perm()`.** A legacy permission maps only to an action on `System`.
     - `register_action()` refuses a legacy permission on an action that takes another resource than `System`.
     - The Django permissions of a model with typed actions map to no action (`None` in `pbac_default_permission_groups`).
+    - `System` has two entities, and each has one use. A legacy permission is decided on `System::"any"` (`engine.system_any_resource`): it is the stand-in for a resource that the decision does not know. A typed action is decided on `System::"root"` (`engine.system_root_resource`), and only when its resource has no container: no entity is a child of `System::"root"`.
+    - A typed action never uses `System::"any"`, and `has_perm()` never uses `System::"root"`. So a policy with `resource == System::"root"` gives a typed action for the objects without container only, and it gives no legacy permission.
 12. **Fail closed.** Cedar skips a policy that errors, so a `forbid` that errors allows.
     - Declare the attributes as required in the schema. Validate each policy when it is saved.
     - The SQL filter writes only the expressions that cannot error. A policy with another expression gets one decision for each row.
@@ -132,6 +136,7 @@ Rate each finding with this table. A defect breaks a rule. An accepted leak is w
 | Existence of a resource with a UUID | A 404 or a 403 on `/api/turbo/one_time_jobs/<uuid>/` | Accepted |
 | Existence of hidden rows, through a database constraint | A second recurring job for the same job and configuration. A configuration that cannot be deleted because of its schedules | Accepted, in the docs |
 | What a write action shows about its own resource | The edit form, the PUT response | Accepted (rule 8) |
+| The name of a tag, in a form that uses tags as a condition | The tags in the scope of a Santa rule, for a role without `viewTag` on them | Accepted, in the docs |
 
 Test with four roles: no policy; one action for each role; all the actions with a forbid on one container, for example one configuration; all the actions with a forbid on one attribute value, for example one job kind. Test each endpoint with each role, and never with a superuser.
 

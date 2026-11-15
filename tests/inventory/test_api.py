@@ -13,6 +13,7 @@ from rest_framework import status
 from accounts.models import APIToken, User, UserTask
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
+from zentral.contrib.inventory.pbac import create_tag_action, delete_tag_action, update_tag_action, view_tag_action
 from zentral.contrib.inventory.models import (CurrentMachineSnapshot, MachineSnapshot,
                                               MachineSnapshotCommit, MachineTag,
                                               MetaBusinessUnit, Tag, Taxonomy)
@@ -94,7 +95,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_get_meta_machine_wrong_permissions(self):
-        self.set_permissions("inventory.view_tag")
+        self.set_permissions(view_tag_action)
         response = self.get(reverse('inventory_api:meta_machine', args=("YOLO",)))
         self.assertEqual(response.status_code, 403)
 
@@ -849,7 +850,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         meta_business_unit = MetaBusinessUnit.objects.create(name=mbu_name)
         name = get_random_string(12)
         data = {'meta_business_unit': meta_business_unit.pk, 'name': name, 'color': 'ff0000'}
-        self.set_permissions("inventory.add_tag")
+        self.set_permissions(create_tag_action)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.post(reverse('inventory_api:tags'), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -917,12 +918,12 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
     def test_get_tag_unauthorized(self):
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.get(reverse('inventory_api:tag', args=(tag.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_get_tag(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
         tag = Tag.objects.create(meta_business_unit=meta_business_unit, name=get_random_string(12))
-        self.set_permissions("inventory.view_tag")
+        self.set_permissions(view_tag_action)
         response = self.get(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
@@ -940,14 +941,14 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
     def test_update_tag_unauthorized(self):
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.put(reverse('inventory_api:tag', args=(tag.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_tag(self, post_event):
         name = get_random_string(12)
         tag = Tag.objects.create(name=name)
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self.set_permissions("inventory.change_tag")
+        self.set_permissions(update_tag_action, create_tag_action)
         url = reverse('inventory_api:tag', args=(tag.pk,))
         updated_name = get_random_string(12)
         data = {'name': updated_name, 'taxonomy': taxonomy.pk}
@@ -1012,7 +1013,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         name = get_random_string(12)
         Tag.objects.create(name=name)
         tag = Tag.objects.create(name=get_random_string(12))
-        self.set_permissions("inventory.change_tag")
+        self.set_permissions(update_tag_action)
         url = reverse('inventory_api:tag', args=(tag.pk,))
         data = {'name': name}
         response = self.put(url, data)
@@ -1024,13 +1025,13 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
     def test_delete_tag_unauthorized(self):
         tag = Tag.objects.create(name=get_random_string(12))
         response = self.delete(reverse('inventory_api:tag', args=(tag.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_tag(self, post_event):
         tag = Tag.objects.create(name=get_random_string(12))
         prev_pk = tag.pk
-        self.set_permissions("inventory.delete_tag")
+        self.set_permissions(delete_tag_action)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
             response = self.delete(reverse('inventory_api:tag', args=(tag.pk,)))
         self.assertEqual(response.status_code, 204)
@@ -1083,8 +1084,10 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
     # list tag
 
     def test_list_tag_unauthorized(self):
+        Tag.objects.create(name=get_random_string(12))
         response = self.get(reverse('inventory_api:tags'))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
 
     def test_list_tag(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
@@ -1094,7 +1097,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
             meta_business_unit=meta_business_unit,
             name=get_random_string(12)
         )
-        self.set_permissions("inventory.view_tag")
+        self.set_permissions(view_tag_action)
         response = self.get(reverse('inventory_api:tags'), {"name": tag.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
@@ -1215,7 +1218,7 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
         name = get_random_string(12)
         taxonomy = Taxonomy.objects.create(name=name)
         prev_updated_at = taxonomy.updated_at
-        self.set_permissions("inventory.change_taxonomy")
+        self.set_permissions("inventory.change_taxonomy", create_tag_action)
         url = reverse('inventory_api:taxonomy', args=(taxonomy.pk,))
         updated_name = get_random_string(12)
         data = {'name': updated_name}

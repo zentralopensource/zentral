@@ -348,6 +348,30 @@ A policy scoped to machines, for example with `resource in Inventory::MetaBusine
 The tags of a `REMOVE` operation, and the taxonomy of a `SET` operation without names, must exist now. A missing one gets a 400, and the request changes nothing. Before, Zentral ignored it. A refused one gets the same 400, so that the answer does not tell which tags exist. A `SET` operation on a taxonomy without tags gets the same 400: before, it changed nothing and answered 200.
 
 
+#### 🧨 `createTag` is a typed PBAC action, on the taxonomy of the tag
+
+`Inventory::Action::"createTag"` takes a resource now: the taxonomy of the new tag, or `System::"root"` for a tag without taxonomy. `System::"root"` is a new entity. It means "no container", and no entity is a member of it. The `inventory.add_tag` legacy permission does not map to the action anymore, and gives nothing. `POST /api/inventory/tags/` and the *Create tag* page decide `createTag` on the taxonomy. A taxonomy where the caller cannot create a tag gets the answer of an unknown taxonomy.
+
+A policy that gives `createTag` with no condition on the resource needs no change. The policies that Zentral made from the legacy roles are in this case. If you upgrade from a version before 2026.4, the policies that Zentral makes from the legacy roles do not name `createTag`: add it to the roles that had the `inventory.add_tag` permission. The service account of the Terraform provider creates tags: it needs `createTag` before the upgrade.
+
+A rename of a taxonomy needs `createTag` on the taxonomy with its new name now, in the console and with `PUT /api/inventory/taxonomies/<id>/`. A refused rename is a 403 in the API, and an error on the name in the console. Before, the `inventory.change_taxonomy` permission was sufficient, so a role could rename a taxonomy to a name that its `createTag` policies match, and create tags in it.
+
+
+#### 🧨 `viewTag`, `updateTag` and `deleteTag` are typed PBAC actions, on the tag
+
+`Inventory::Action::"viewTag"`, `Inventory::Action::"updateTag"` and `Inventory::Action::"deleteTag"` take the tag as their resource now. A tag is a member of its taxonomy, so a policy with `resource in Inventory::Taxonomy::"…"` limits them to the tags of one taxonomy. The `inventory.view_tag`, `inventory.change_tag` and `inventory.delete_tag` legacy permissions do not map to the actions anymore, and give nothing. A move of a tag needs `updateTag` on the tag and `createTag` on the new taxonomy. A rename also needs `updateTag` on the tag with its new name, because a policy can match the name: a refused rename is a 403 in the API, and an error on the name in the console. Before, `updateTag` had no resource, so a role with `createTag` on one taxonomy could take any tag into it.
+
+`GET /api/inventory/tags/` and the *Tags* page show only the tags that the caller can see, and never refuse: a caller without a policy gets an empty list, not a 403. The *Tags* entry of the menu needs a permission of the inventory module. `viewTag` limits these two lists and the detail of a tag only. The forms of the other modules that use tags as a condition still show every tag.
+
+The read of a tag that the caller cannot see, and an update or a delete of a tag that the caller cannot write, get a 404 now, the answer of an unknown tag, in the API and in the console. Before, it was a 403.
+
+A tag that is used cannot be deleted anymore: `DELETE /api/inventory/tags/<id>/` answers 400, and the *Delete tag* page lists the uses and has no control. A tag is used when a machine has it, or when an object names it, for example an enrollment, a Santa rule or an MDM artifact. Before, the delete removed the tag from the machines and from these objects, so a rule that lost an excluded tag applied to more machines. Remove the tag from the machines and from the objects first. Terraform destroys the objects that reference a tag before the tag.
+
+A taxonomy that has tags cannot be deleted anymore: `DELETE /api/inventory/taxonomies/<id>/` answers 400, and the console does not show the control. Before, the delete of the taxonomy deleted its tags, with the `inventory.delete_taxonomy` permission only. Delete the tags first. Terraform already destroys the tags before their taxonomy.
+
+A policy that gives `viewTag`, `updateTag` and `deleteTag` with no condition on the resource needs no change. The policies that Zentral made from the legacy roles are in this case. If you upgrade from a version before 2026.4, the policies that Zentral makes from the legacy roles do not name the three actions: add them to the roles that had the three permissions.
+
+
 #### 🧨 The path of tini in the Docker image
 
 The Docker image installs tini from the Debian packages. Its path is `/usr/bin/tini` now, not `/tini`. If your deployment sets its own entrypoint with `/tini`, change it to `/usr/bin/tini`.

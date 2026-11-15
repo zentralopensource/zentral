@@ -12,7 +12,7 @@ from django.utils.http import urlencode
 from accounts.models import Policy
 from accounts.models import User
 from pbac.engine import engine
-from pbac.entities import Entity
+from pbac.entities import Action, Entity
 from realms.backends.views import finalize_session
 from realms.models import Realm, RealmAuthenticationSession, RealmUser
 
@@ -43,15 +43,16 @@ class LoginCase(ABC):
         )
 
     def set_permissions(self, *permissions):
+        # a permission is a legacy permission, or a typed action
         if permissions:
             serialized_role = str(Entity("Role", str(self._get_group().pk)))
             actions = [
-                engine.legacy_perm_actions[permission]
+                permission if isinstance(permission, Action) else engine.legacy_perm_actions[permission]
                 for permission in permissions
             ]
             actions.extend(
                 engine.module_legacy_perm_actions[app_label]
-                for app_label in set(p.split(".")[0] for p in permissions)
+                for app_label in set(p.split(".")[0] for p in permissions if not isinstance(p, Action))
             )
             serialized_actions = ", ".join(str(a) for a in actions)
             policy = (

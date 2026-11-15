@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.inventory.models import MetaBusinessUnit, Tag, Taxonomy
+from zentral.contrib.inventory.pbac import create_tag_action, delete_tag_action, update_tag_action, view_tag_action
 from zentral.core.events.base import AuditEvent
 
 
@@ -315,8 +316,8 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_tag(self, post_event):
         self.login(
-            "inventory.add_tag",
-            "inventory.view_tag",
+            create_tag_action,
+            view_tag_action,
         )
         name = get_random_string(12)
         with self.captureOnCommitCallbacks(execute=True) as callbacks:
@@ -381,8 +382,8 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_tag(self, post_event):
         self.login(
-            "inventory.change_tag",
-            "inventory.view_tag",
+            update_tag_action,
+            view_tag_action,
         )
         name = get_random_string(12)
         tag = Tag.objects.create(name=name)
@@ -457,13 +458,13 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         tag = Tag.objects.create(name=get_random_string(12))
         self.login()
         response = self.client.get(reverse("inventory:delete_tag", args=(tag.pk,)))
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_tag(self, post_event):
         self.login(
-            "inventory.delete_tag",
-            "inventory.view_tag",
+            delete_tag_action,
+            view_tag_action,
         )
         tag = Tag.objects.create(name=get_random_string(12))
         prev_pk = tag.pk
@@ -532,7 +533,7 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
     def test_create_taxonomy(self, post_event):
         self.login(
             "inventory.add_taxonomy",
-            "inventory.view_tag",
+            view_tag_action,
             "inventory.view_taxonomy",
         )
         name = get_random_string(12)
@@ -605,7 +606,8 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
     def test_update_taxonomy(self, post_event):
         self.login(
             "inventory.change_taxonomy",
-            "inventory.view_tag",
+            view_tag_action,
+            create_tag_action,
             "inventory.view_taxonomy",
         )
         name = get_random_string(12)
@@ -687,7 +689,7 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
     def test_delete_taxonomy(self, post_event):
         self.login(
             "inventory.delete_taxonomy",
-            "inventory.view_tag",
+            view_tag_action,
         )
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
         prev_pk = taxonomy.pk
