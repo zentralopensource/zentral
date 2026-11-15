@@ -9,7 +9,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from zentral.conf import api_base_url
-from zentral.contrib.inventory.models import EnrollmentSecret
+from zentral.contrib.inventory.models import EnrollmentSecret, Tag, share_lock_rows
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 
 from .events import post_santa_rule_update_event
@@ -468,12 +468,23 @@ class RuleSetUpdateSerializer(serializers.Serializer):
                 rule_errors[str(rule_id)] = {
                     "non_field_errors": ["{rule_type}/{identifier}: conflict".format(**rule)]
                 }
+        # The ruleset uses the tags that exist. It creates none: a tag is created with createTag, by the tag
+        # API or the tag form. The rows are locked, so a delete or a rename of one of these tags waits for the
+        # update. A tag renamed before the lock is read again, and its old name is unknown.
+        tag_names = set(n for r in data.get("rules", []) for n in chain(r.get("tags", []), r.get("excluded_tags", [])))
+        tag_pks = share_lock_rows(Tag, Tag.objects.filter(name__in=tag_names).values_list("pk", flat=True))
+        self.tags = {tag.name: tag for tag in Tag.objects.filter(pk__in=tag_pks, name__in=tag_names)}
+        for rule_id, rule in enumerate(data.get("rules", [])):
+            for field_name in ("tags", "excluded_tags"):
+                unknown_tag_names = [n for n in rule.get(field_name, []) if n not in self.tags]
+                if unknown_tag_names:
+                    rule_errors.setdefault(str(rule_id), {})[field_name] = [
+                        "Unknown tag{}: {}".format("" if len(unknown_tag_names) == 1 else "s",
+                                                   ", ".join(unknown_tag_names))
+                    ]
         if rule_errors:
             raise serializers.ValidationError({"rules": rule_errors})
         return data
-
-    def all_tag_names(self):
-        return set(n for r in self.data["rules"] for n in chain(r.get("tags", []), r.get("excluded_tags", [])))
 
 
 # Santa fileinfo

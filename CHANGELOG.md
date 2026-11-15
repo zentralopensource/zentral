@@ -385,6 +385,11 @@ A policy that grants the `AdminActions` group of the inventory, or `GlobalAdminA
 The objects that exist are not examined at the upgrade. Each one is decided at its next save. Zentral makes no decision when a tag is written on a machine. See [The objects that give tags later](https://www.zentral.com/docs/zentral/apps/inventory/#the-objects-that-give-tags-later) for the operations that need no tag action.
 
 
+#### 🧨 The Santa ruleset update API uses existing tags only
+
+`POST /api/santa/rulesets/update/` does not create tags anymore. A tag name in the `tags` or the `excluded_tags` of a rule must be the name of a tag that exists. An unknown name gets a 400 with `Unknown tag: …`, and the request changes nothing. Before, the endpoint created each missing tag, without taxonomy, and it did not ask for `createTag`. Create the tags first, with `/api/inventory/tags/`, in the console, or with Terraform. The endpoint is deprecated, and off by default: this change applies only when the `enable_ruleset_update_api` option is `true`.
+
+
 #### 🧨 The path of tini in the Docker image
 
 The Docker image installs tini from the Debian packages. Its path is `/usr/bin/tini` now, not `/tini`. If your deployment sets its own entrypoint with `/tini`, change it to `/usr/bin/tini`.

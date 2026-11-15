@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from rest_framework_yaml.parsers import YAMLParser
 from accounts.api_authentication import APITokenAuthentication
 from pbac.engine import engine
-from zentral.contrib.inventory.models import File, MetaMachine, Tag
+from zentral.contrib.inventory.models import File, MetaMachine
 from zentral.contrib.santa.utils import build_configuration_plist, build_configuration_profile
 from zentral.core.events.base import AuditEvent
 from zentral.utils.drf import (DefaultDjangoModelPermissions, DjangoPermissionRequired, FileDownloadAPIView,
@@ -426,8 +426,7 @@ class RuleSetUpdate(APIView):
         }
         RuleSet.objects.select_for_update().filter(pk=ruleset.pk)
         rule_update_events = []
-        all_tags = {tag_name: Tag.objects.get_or_create(name=tag_name)[0]
-                    for tag_name in serializer.all_tag_names()}
+        all_tags = serializer.tags
         for configuration in serializer.configurations:
             rules_created = rules_deleted = rules_present = rules_updated = 0
             found_rule_pks = []

@@ -1087,6 +1087,10 @@ This operation is idempotent. The second time you run the command, and if the ap
 
 The policies must permit all five actions.
 
+The `tags` and the `excluded_tags` of a rule are tag names. The tags must exist: the endpoint does not create them. An unknown name gets a 400, and the request changes nothing. Create the tags first, with `POST /api/inventory/tags/`, in the console, or with Terraform.
+
+Two requests on the same ruleset at the same time are not serialized: they can conflict, or leave a mix of the rules of both. This is an accepted risk until the endpoint is removed. Send one request at a time for a ruleset.
+
 This endpoint is designed to help automatically maintain Zentral Santa configuration rulesets. It can be used in a CI/CD workflow.
 
 To make a dry-run request, use `?dryRun` or `?dryRun=All` as query string.

@@ -1,7 +1,9 @@
 import uuid
 from unittest.mock import patch
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework import status
@@ -516,6 +518,27 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         response = self.post(url, {}, include_token=True)
         self.assertEqual(response.status_code, 403)
 
+    def test_ruleset_update_locks_the_tags(self):
+        self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
+                             "santa.add_rule", "santa.change_rule", "santa.delete_rule")
+        self.force_configuration()
+        tag = self.force_tags(1)[0]
+        data = {"name": get_random_string(12),
+                "rules": [{"rule_type": "BINARY",
+                           "identifier": get_random_string(64, "0123456789abcdef"),
+                           "policy": "BLOCKLIST",
+                           "tags": [tag.name]}]}
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.post(reverse("santa_api:ruleset_update"), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(query["sql"].startswith('SELECT "id" FROM "inventory_tag" ')
+                            and query["sql"].endswith(" FOR SHARE")
+                            for query in ctx.captured_queries))
+        rules = Rule.objects.filter(ruleset__name=data["name"])
+        self.assertTrue(rules.exists())
+        for rule in rules:
+            self.assertEqual(list(rule.tags.all()), [tag])
+
     def test_ruleset_update_rule(self):
         self.set_permissions("santa.add_ruleset", "santa.change_ruleset",
                              "santa.add_rule", "santa.change_rule", "santa.delete_rule")
@@ -533,8 +556,8 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
                  "excluded_primary_users": [get_random_string(32)],
                  "serial_numbers": [get_random_string(32)],
                  "excluded_serial_numbers": [get_random_string(32)],
-                 "tags": [get_random_string(32)],
-                 "excluded_tags": [get_random_string(32)]}
+                 "tags": [self.force_tags(1)[0].name],
+                 "excluded_tags": [self.force_tags(1)[0].name]}
             ]
         }
         first_result_configurations = [
@@ -656,7 +679,19 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase):
         data["rules"][0]["primary_users"] = [get_random_string(12)]
         data["rules"][0]["excluded_primary_users"].append(get_random_string(12))
         data["rules"][0]["tags"].insert(0, get_random_string(12))
-        data["rules"][0]["excluded_tags"] = [get_random_string(12)]
+        data["rules"][0]["excluded_tags"] = [get_random_string(12), get_random_string(12)]
+        # the ruleset uses the tags that exist, and creates none
+        tag_count = Tag.objects.count()
+        response = self.post(url, data)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"rules": {"0": {"tags": [f'Unknown tag: {data["rules"][0]["tags"][0]}'],
+                             "excluded_tags": ["Unknown tags: " + ", ".join(data["rules"][0]["excluded_tags"])]}}}
+        )
+        self.assertEqual(Tag.objects.count(), tag_count)
+        data["rules"][0]["tags"][0] = self.force_tags(1)[0].name
+        data["rules"][0]["excluded_tags"] = [self.force_tags(1)[0].name]
         response = self.post(url, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
