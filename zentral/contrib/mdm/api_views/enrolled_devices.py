@@ -42,6 +42,7 @@ from zentral.utils.drf import (
     DjangoPermissionRequired,
     MaxLimitOffsetPagination,
     PBACPermission,
+    RefusalAsNotFoundMixin,
 )
 
 
@@ -156,7 +157,7 @@ class EnrolledDeviceList(ListAPIView):
     pagination_class = MaxLimitOffsetPagination
 
 
-class UpdateEnrolledDeviceBlockView(APIView):
+class UpdateEnrolledDeviceBlockView(RefusalAsNotFoundMixin, APIView):
     permission_classes = [PBACPermission]
 
     def get_pbac_request(self, request):

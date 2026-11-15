@@ -1162,6 +1162,8 @@ Response:
 
 Use this endpoint to force the install of an artifact on an enrolled device. See [Force artifact install](#force-artifact-install). The updated target artifact is returned, with the number of stale commands that were deleted.
 
+A refused request is a 404, like an ID that names no enrolled device. A caller cannot learn which IDs exist.
+
 Example:
 
 ```bash
@@ -1202,6 +1204,8 @@ Response:
  * PBAC action: `MDM::Action::"blockEnrolledDevice"`
 
 Blocks an enrolled device. Releases it from the MDM and denies further MDM enrollments. The device is notified, so that it connects and is released straight away instead of staying managed until its next check-in. A serialized device is returned.
+
+A refused request is a 404, like an ID that names no enrolled device. A caller cannot learn which IDs exist.
 
 Example:
 
@@ -1272,6 +1276,8 @@ Response:
  * PBAC action: `MDM::Action::"unblockEnrolledDevice"`
 
 Unblocks an enrolled device. The device can enroll again. A serialized device is returned.
+
+A refused request is a 404, like an ID that names no enrolled device.
 
 Example:
 
@@ -1844,7 +1850,7 @@ Use this endpoint to list the target artifacts of the enrolled users. Same respo
  * method: `POST`
  * PBAC action: `MDM::Action::"forceInstallArtifact"`
 
-Use this endpoint to force the install of an artifact on an enrolled user. Same behavior and response format as the [enrolled device endpoint](#apimdmdevicesintpkartifactsuuidartifact_pkforce_install).
+Use this endpoint to force the install of an artifact on an enrolled user. Same behavior, refusals included, and response format as the [enrolled device endpoint](#apimdmdevicesintpkartifactsuuidartifact_pkforce_install).
 
 ### `/api/mdm/users/commands/`
 

@@ -198,13 +198,17 @@ class APITargetArtifactsViewsTestCase(TestCase, RequestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    def assert_same_404(self, url_name, existing_pk, artifact):
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            existing_response = self.post(reverse(url_name, args=(existing_pk, artifact.pk)))
+        unknown_response = self.post(reverse(url_name, args=(existing_pk + 100, artifact.pk)))
+        for response in (existing_response, unknown_response):
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json(), {"detail": "Not found."})
+
     def test_force_install_enrolled_device_artifact_permission_denied(self):
         artifact, _, _ = self._force_target_artifact()
-        response = self.post(
-            reverse("mdm_api:force_install_enrolled_device_artifact",
-                    args=(self.enrolled_device.pk, artifact.pk)),
-        )
-        self.assertEqual(response.status_code, 403)
+        self.assert_same_404("mdm_api:force_install_enrolled_device_artifact", self.enrolled_device.pk, artifact)
 
     def test_force_install_enrolled_device_artifact_unknown_device(self):
         artifact, _, _ = self._force_target_artifact()
@@ -276,11 +280,7 @@ class APITargetArtifactsViewsTestCase(TestCase, RequestCase):
 
     def test_force_install_enrolled_user_artifact_permission_denied(self):
         artifact, _, _ = self._force_target_artifact(self.enrolled_user)
-        response = self.post(
-            reverse("mdm_api:force_install_enrolled_user_artifact",
-                    args=(self.enrolled_user.pk, artifact.pk)),
-        )
-        self.assertEqual(response.status_code, 403)
+        self.assert_same_404("mdm_api:force_install_enrolled_user_artifact", self.enrolled_user.pk, artifact)
 
     def test_force_install_enrolled_user_artifact_unknown_user(self):
         artifact, _, _ = self._force_target_artifact(self.enrolled_user)

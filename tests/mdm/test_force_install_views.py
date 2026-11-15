@@ -174,12 +174,20 @@ class MDMForceInstallViewsTestCase(TestCase, LoginCase):
 
     # force install device artifact
 
+    def assert_same_404(self, url_name, existing_args, unknown_args):
+        with self.assertLogs("zentral.pbac.utils", "WARNING"):
+            existing_response = self.client.get(reverse(url_name, args=existing_args))
+        unknown_response = self.client.get(reverse(url_name, args=unknown_args))
+        self.assertEqual(existing_response.status_code, 404)
+        self.assertEqual(unknown_response.status_code, 404)
+        self.assertEqual(existing_response.content, unknown_response.content)
+
     def test_force_install_device_artifact_permission_denied(self):
         enrolled_device = self._force_enrolled_device()
         artifact, _, _ = self._force_target_artifact(enrolled_device)
         self.login()
-        response = self.client.get(self.device_url(enrolled_device, artifact))
-        self.assertEqual(response.status_code, 403)
+        self.assert_same_404("mdm:force_install_device_artifact",
+                             (enrolled_device.pk, artifact.pk), (enrolled_device.pk + 100, artifact.pk))
 
     def test_force_install_device_artifact_unknown_device(self):
         enrolled_device = self._force_enrolled_device()
@@ -295,8 +303,9 @@ class MDMForceInstallViewsTestCase(TestCase, LoginCase):
         enrolled_user = force_enrolled_user(enrolled_device)
         artifact, _, _ = self._force_target_artifact(enrolled_device, enrolled_user)
         self.login()
-        response = self.client.get(self.user_url(enrolled_user, artifact))
-        self.assertEqual(response.status_code, 403)
+        self.assert_same_404("mdm:force_install_user_artifact",
+                             (enrolled_device.pk, enrolled_user.pk, artifact.pk),
+                             (enrolled_device.pk, enrolled_user.pk + 100, artifact.pk))
 
     def test_force_install_user_artifact_unknown_user(self):
         enrolled_device = self._force_enrolled_device()

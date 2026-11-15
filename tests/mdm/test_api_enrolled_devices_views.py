@@ -500,17 +500,29 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     def test_block_enrolled_device_permission_denied(self):
         self.set_permissions("mdm.view_enrolleddevice")
         response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_block_enrolled_device_change_permission_denied(self):
         self.set_permissions("mdm.change_enrolleddevice")
         response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_block_enrolled_device_unblock_policy_permission_denied(self):
         self.set_block_state_policy("unblockEnrolledDevice")
         response = self.post(reverse("mdm_api:block_enrolled_device", args=(self.enrolled_device.pk,)), None)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
+
+    def test_block_and_unblock_without_a_policy_same_answer_for_existing_and_unknown_device(self):
+        for url_name in ("mdm_api:block_enrolled_device", "mdm_api:unblock_enrolled_device"):
+            with self.assertLogs("zentral.pbac.utils", "WARNING"):
+                existing_response = self.post(reverse(url_name, args=(self.enrolled_device.pk,)), None)
+            unknown_response = self.post(reverse(url_name, args=(self.enrolled_device.pk + 1000,)), None)
+            self.assertEqual(existing_response.status_code, 404)
+            self.assertEqual(unknown_response.status_code, 404)
+            self.assertEqual(existing_response.json(), {"detail": "Not found."})
+            self.assertEqual(unknown_response.json(), {"detail": "Not found."})
+        self.enrolled_device.refresh_from_db()
+        self.assertIsNone(self.enrolled_device.blocked_at)
 
     def test_block_enrolled_device_not_found(self):
         self.set_block_state_policy("blockEnrolledDevice")
@@ -660,19 +672,19 @@ class APIViewsTestCase(TestCase, LoginCase, RequestCase, ListOrderingCase):
     def test_unblock_enrolled_device_permission_denied(self):
         self.set_permissions("mdm.view_enrolleddevice")
         response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_unblock_enrolled_device_change_permission_denied(self):
         self.enrolled_device.block()
         self.set_permissions("mdm.change_enrolleddevice")
         response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_unblock_enrolled_device_block_policy_permission_denied(self):
         self.enrolled_device.block()
         self.set_block_state_policy("blockEnrolledDevice")
         response = self.post(reverse("mdm_api:unblock_enrolled_device", args=(self.enrolled_device.pk,)), None)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_unblock_enrolled_device_already_unblocked(self):
         self.enrolled_device.unblock()

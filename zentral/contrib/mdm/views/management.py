@@ -1524,6 +1524,8 @@ class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateViewWithA
 
 
 class UpdateEnrolledDeviceBlockView(PBACViewMixin, TemplateView):
+    refusal_as_not_found = True
+
     def get_pbac_request_kwargs(self, kwargs):
         self.enrolled_device = get_object_or_404(self.get_queryset(), pk=kwargs["pk"])
         return {"machine": MetaMachine(self.enrolled_device.serial_number)}
@@ -1658,6 +1660,7 @@ class PokeEnrolledUserView(PermissionRequiredMixin, View):
 class BaseForceInstallArtifactView(PBACViewMixin, TemplateView):
     template_name = "mdm/targetartifact_confirm_force_install.html"
     pbac_request_class = ForceInstallArtifactRequest
+    refusal_as_not_found = True
 
     def get_pbac_request_kwargs(self, kwargs):
         self.load_target_objects(kwargs)

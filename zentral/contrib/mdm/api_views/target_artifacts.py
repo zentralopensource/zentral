@@ -20,7 +20,8 @@ from zentral.contrib.mdm.models import (
 )
 from zentral.contrib.mdm.pbac import ForceInstallArtifactRequest
 from zentral.contrib.mdm.serializers import DeviceArtifactSerializer, UserArtifactSerializer
-from zentral.utils.drf import DefaultDjangoModelPermissions, MaxLimitOffsetPagination, PBACPermission
+from zentral.utils.drf import (DefaultDjangoModelPermissions, MaxLimitOffsetPagination, PBACPermission,
+                               RefusalAsNotFoundMixin)
 
 
 class BaseTargetArtifactFilter(filters.FilterSet):
@@ -72,7 +73,7 @@ class EnrolledUserArtifactList(BaseTargetArtifactList):
     filterset_class = UserArtifactFilter
 
 
-class BaseForceInstallArtifact(APIView):
+class BaseForceInstallArtifact(RefusalAsNotFoundMixin, APIView):
     permission_classes = [PBACPermission]
 
     def get_pbac_request(self, request):
