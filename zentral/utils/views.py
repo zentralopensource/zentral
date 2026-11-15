@@ -31,7 +31,7 @@ class UserPaginationListView(UserPaginationMixin, ListView):
         return ctx
 
 
-def post_audit_event(request, instance, action, prev_value=None, machine_serial_number=None):
+def post_audit_event(request, instance, action, prev_value=None, machine_serial_number=None, object_extra=None):
     """Post an audit event once the surrounding transaction has committed.
 
     For the views that cannot use the mixins below, typically because they drive more than
@@ -40,12 +40,15 @@ def post_audit_event(request, instance, action, prev_value=None, machine_serial_
     onto its instance during validation, not in save().
     """
     def on_commit_callback():
-        AuditEvent.build_from_request_and_instance(
+        event = AuditEvent.build_from_request_and_instance(
             request, instance,
             action=action,
             prev_value=prev_value,
             machine_serial_number=machine_serial_number,
-        ).post()
+        )
+        if object_extra:
+            event.payload["object"].update(object_extra)
+        event.post()
 
     transaction.on_commit(on_commit_callback)
 
