@@ -32,14 +32,16 @@ def build_file_carving_session_archive(session_id):
     archive_size = 0
     tmp_fh, tmp_path = tempfile.mkstemp(suffix="_osquery_file_carving_archive.tar")
     logger.info("Start building archive %s %s", session_id, tmp_path)
-    with os.fdopen(tmp_fh, "wb") as f:
-        for file_carving_block in file_carving_session.filecarvingblock_set.all().order_by("block_id"):
-            for chunk in file_carving_block.file.chunks():
-                f.write(chunk)
-                archive_size += len(chunk)
-    with open(tmp_path, "rb") as f:
-        file_carving_session.archive.save("archive.tar", File(f))
-    os.unlink(tmp_path)
+    try:
+        with os.fdopen(tmp_fh, "wb") as f:
+            for file_carving_block in file_carving_session.filecarvingblock_set.all().order_by("block_id"):
+                for chunk in file_carving_block.file.chunks():
+                    f.write(chunk)
+                    archive_size += len(chunk)
+        with open(tmp_path, "rb") as f:
+            file_carving_session.archive.save("archive.tar", File(f))
+    finally:
+        os.unlink(tmp_path)
 
     # post osquery file carve event
     event_cls = event_cls_from_type("osquery_file_carving")

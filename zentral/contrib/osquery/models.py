@@ -8,7 +8,7 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
-from zentral.conf import settings
+from zentral.conf import api_base_url, settings
 from zentral.contrib.inventory.models import BaseEnrollment, Tag
 from zentral.utils.sql import extract_tables_or_empty, format_sql
 from zentral.utils.text import shard
@@ -880,6 +880,9 @@ class FileCarvingSession(models.Model):
 
     def get_archive_name(self):
         return f"{self}.tar"
+
+    def get_archive_url(self):
+        return f'{api_base_url()}{reverse("osquery:download_file_carving_session_archive", args=(self.pk,))}'
 
 
 def file_carving_block_path(instance, filename):

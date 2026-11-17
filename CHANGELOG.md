@@ -621,6 +621,8 @@ Munki installs the Osquery enrollment package again when `osqueryd` moves, and w
 
 Munki installs the Osquery enrollment package on a machine that has the Turbo agent now. The installcheck script of every enrollment package stopped the installation if `/opt/zentral/lib/Turbo.app` was present. Only the Munki enrollment package makes this test now, because the Turbo agent runs the Zentral preflight and the postflight itself.
 
+Fixed the Osquery file carving archive task, which stopped after it saved the archive: it read the archive URL from a method that the model did not have anymore. The `osquery_file_carving` event with the `archive` action was never posted. The event has the URL of the archive download page of the console again. The sessions that have an archive from before the fix get no event: the task does not build an archive again. The task also deletes its temporary file when it cannot read a block or save the archive now.
+
 The `rebuild_manifest_enrollment_packages` command takes a `--manifest` option with one or more manifest IDs now, to rebuild the enrollment packages of a part of the manifests only. It also takes a `--new-version` option, which increases the version of each enrollment package that it rebuilds, and gives it a new filename. The enrollment versions do not change with it, so the machines that are up to date do not install the packages again.
 
 Fixed the links of the Santa cdhash event store redirect, which had the Signing ID target type. The view sends the user back to the events page of the target when the store gives no event URL. It sent them to the Signing ID events page instead, with a cdhash identifier that this page cannot find. The events the view read were the correct ones.
