@@ -1,8 +1,8 @@
 import pprint
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.urls import URLPattern, URLResolver
 import xlsxwriter
+from base.utils import iter_url_patterns
 from zentral.utils.xlsx import add_worksheet
 
 
@@ -47,24 +47,9 @@ class Command(BaseCommand):
         if workbook:
             workbook.close()
 
-    def iter_views(self, urlpatterns, base='', namespace=None):
-        for p in urlpatterns:
-            pattern_desc = base + str(p.pattern)
-            if isinstance(p, URLPattern):
-                name = p.name
-                if namespace:
-                    name = f'{namespace}:{name}'
-                yield p.callback, pattern_desc, name
-            elif isinstance(p, URLResolver):
-                if namespace and p.namespace:
-                    _namespace = f'{namespace}:{p.namespace}'
-                else:
-                    _namespace = p.namespace or namespace
-                yield from self.iter_views(p.url_patterns, pattern_desc, namespace=_namespace)
-            elif hasattr(p, '_get_callback'):
-                yield p._get_callback(), pattern_desc, p.name
-            elif hasattr(p, 'url_patterns') or hasattr(p, '_get_url_patterns'):
-                yield from self.iter_views(p.url_patterns, pattern_desc, namespace=namespace)
+    def iter_views(self, urlpatterns):
+        for route, name, pattern in iter_url_patterns(urlpatterns):
+            yield pattern.callback, route, name
 
     def prepare_view_info(self, func, pattern, url_name):
         api_view = pattern.startswith("api/")

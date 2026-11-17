@@ -1,4 +1,5 @@
 import platform
+from django.urls import URLPattern, URLResolver, get_resolver
 from django.utils.functional import SimpleLazyObject
 
 
@@ -47,3 +48,20 @@ class DeploymentInfo:
 
 
 deployment_info = SimpleLazyObject(lambda: DeploymentInfo())
+
+
+def iter_url_patterns(urlpatterns=None, prefix="", namespace=None):
+    if urlpatterns is None:
+        urlpatterns = get_resolver().url_patterns
+    for p in urlpatterns:
+        route = prefix + str(p.pattern)
+        if isinstance(p, URLPattern):
+            name = p.name
+            if name and namespace:
+                name = f"{namespace}:{name}"
+            yield route, name, p
+        elif isinstance(p, URLResolver):
+            sub_namespace = namespace
+            if p.namespace:
+                sub_namespace = f"{namespace}:{p.namespace}" if namespace else p.namespace
+            yield from iter_url_patterns(p.url_patterns, route, sub_namespace)
