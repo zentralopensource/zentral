@@ -13,11 +13,13 @@ If Zentral is served with a TLS certificate signed with a public CA (like Let's 
 
 ### SCEP CA issuer chain
 
-To authenticate the OTA enrollments, Zentral needs the SCEP CA issuer certificate chain in PEM form in the `scep_ca_fullchain` key of the `zentral.contrib.mdm` section. It is possible to use the `{{ file:PATH_TO_PEM_CHAIN }}` substitution to load the chain from a file on disk.
+Zentral needs the SCEP CA issuer certificate chain in PEM form in the `scep_ca_fullchain` key of the `zentral.contrib.mdm` section. Zentral uses this chain to authenticate the OTA enrollments. Zentral also uses this chain to verify the issuer of the certificate that signs the payload of a request with a signature header (see [mTLS proxy](#mtls-proxy)). It is possible to use the `{{ file:PATH_TO_PEM_CHAIN }}` substitution to load the chain from a file on disk.
 
 ### mTLS proxy
 
 Zentral is expecting the client certificate in PEM form in the `X-SSL-Client-Cert` header, and the client certificate subject DN in the `X-SSL-Client-S-DN` header. If this is not possible, you can set `mtls_proxy` to `false` in the `zentral.contrib.mdm` section. In that case, the Apple devices will be configured to add a header containing the payload signature in each HTTP request. See the [Apple documentation](https://developer.apple.com/documentation/devicemanagement/implementing_device_management/managing_certificates_for_mdm_servers_and_devices#3677960). This adds approximately 2KB of data to each message.
+
+Zentral verifies that the SCEP CA issuer chain in `scep_ca_fullchain` issued the certificate that signs the payload. If the verification fails, Zentral rejects the request. Zentral accepts a request with a signature header also when `mtls_proxy` is `true`. Thus, devices that use the signature header can continue to connect while you move a deployment to mTLS.
 
 ### `status_report_retention_days`
 

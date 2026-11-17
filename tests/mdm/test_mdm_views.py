@@ -19,6 +19,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
+from OpenSSL import crypto
 from realms.models import RealmGroup, RealmUserGroupMembership
 
 from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
@@ -93,6 +94,27 @@ class MDMViewsTestCase(TestCase):
     def setUpTestData(cls):
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
         cls.mbu.create_enrollment_business_unit()
+        cls.scep_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        scep_ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, get_random_string(12))])
+        cls.scep_ca_cert = (
+            x509.CertificateBuilder()
+            .subject_name(scep_ca_name)
+            .issuer_name(scep_ca_name)
+            .not_valid_before(datetime.today() - timedelta(days=1))
+            .not_valid_after(datetime(2034, 5, 7))
+            .serial_number(x509.random_serial_number())
+            .public_key(cls.scep_ca_key.public_key())
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(private_key=cls.scep_ca_key, algorithm=hashes.SHA256())
+        )
+
+    def setUp(self):
+        super().setUp()
+        scep_ca_store = crypto.X509Store()
+        scep_ca_store.add_cert(crypto.X509.from_cryptography(self.scep_ca_cert))
+        patcher = patch("zentral.contrib.mdm.crypto.SCEP_CA_STORE", scep_ca_store)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     # utility methods
 
@@ -107,6 +129,7 @@ class MDMViewsTestCase(TestCase):
         att_udid=None,
         sign_message=False,
         bad_signature=False,
+        self_signed=False,
     ):
         kwargs = {}
         if payload:
@@ -153,21 +176,26 @@ class MDMViewsTestCase(TestCase):
                     )
                 )
             builder = builder.subject_name(x509.Name(subj_name_attrs))
-            builder = builder.issuer_name(
-                x509.Name(
-                    [
-                        x509.NameAttribute(NameOID.COMMON_NAME, cn),
-                        x509.NameAttribute(NameOID.ORGANIZATION_NAME, o),
-                        x509.NameAttribute(NameOID.SERIAL_NUMBER, serial_number),
-                    ]
+            if sign_message and not self_signed:
+                builder = builder.issuer_name(self.scep_ca_cert.subject)
+                signing_key = self.scep_ca_key
+            else:
+                builder = builder.issuer_name(
+                    x509.Name(
+                        [
+                            x509.NameAttribute(NameOID.COMMON_NAME, cn),
+                            x509.NameAttribute(NameOID.ORGANIZATION_NAME, o),
+                            x509.NameAttribute(NameOID.SERIAL_NUMBER, serial_number),
+                        ]
+                    )
                 )
-            )
+                signing_key = privkey
             builder = builder.not_valid_before(datetime.today() - timedelta(days=1))
             builder = builder.not_valid_after(datetime(2034, 5, 6))
             builder = builder.serial_number(x509.random_serial_number())
             builder = builder.public_key(privkey.public_key())
             cert = builder.sign(
-                private_key=privkey,
+                private_key=signing_key,
                 algorithm=hashes.SHA256(),
             )
             if not sign_message:
@@ -234,6 +262,7 @@ class MDMViewsTestCase(TestCase):
         att_udid=None,
         sign_message=False,
         bad_signature=False,
+        self_signed=False,
     ):
         return self._call(
             self.client.put,
@@ -245,6 +274,7 @@ class MDMViewsTestCase(TestCase):
             att_udid,
             sign_message,
             bad_signature,
+            self_signed,
         )
 
     def _get(self, url, session, sign_message=False):
@@ -553,6 +583,57 @@ class MDMViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "Invalid header signature")
+
+    def test_authenticate_dep_enrollment_session_macos_self_signed_mdm_signature_header(
+        self, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(12),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            payload,
+            session,
+            sign_message=True,
+            self_signed=True,
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(post_event, "Unknown header signature certificate issuer")
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
+        self.assertIsNone(session.enrolled_device)
+
+    @patch("zentral.contrib.mdm.public_views.mdm.verify_zentral_scep_ca_issuer")
+    def test_authenticate_dep_enrollment_session_macos_mtls_headers_no_issuer_check(
+        self, verify_zentral_scep_ca_issuer, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(12),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(reverse("mdm_public:checkin"), payload, session)
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        verify_zentral_scep_ca_issuer.assert_not_called()
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
 
     def test_authenticate_dep_enrollment_session_ios(self, post_event):
         enrollment_tag = Tag.objects.create(name=get_random_string(12))
@@ -2966,6 +3047,37 @@ class MDMViewsTestCase(TestCase):
         self.assertIsNotNone(enrolled_device.checkout_at)
 
     # connect
+
+    def test_device_channel_connect_mdm_signature_header(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        now = naive_utcnow()
+        enrolled_device = EnrolledDevice.objects.get(udid=udid)
+        enrolled_device.device_information_updated_at = now
+        enrolled_device.security_info_updated_at = now
+        enrolled_device.save()
+        payload = {"UDID": udid, "Status": "Idle"}
+        response = self._put(reverse("mdm_public:connect"), payload, session, sign_message=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"")
+        enrolled_device.refresh_from_db()
+        self.assertTrue(enrolled_device.last_seen_at > now)
+
+    def test_device_channel_connect_self_signed_mdm_signature_header(self, post_event):
+        session, udid, serial_number = force_dep_enrollment_session(
+            self.mbu, authenticated=True, completed=True
+        )
+        enrolled_device = EnrolledDevice.objects.get(udid=udid)
+        self.assertIsNone(enrolled_device.last_seen_at)
+        payload = {"UDID": udid, "Status": "Idle"}
+        response = self._put(
+            reverse("mdm_public:connect"), payload, session, sign_message=True, self_signed=True
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(post_event, "Unknown header signature certificate issuer")
+        enrolled_device.refresh_from_db()
+        self.assertIsNone(enrolled_device.last_seen_at)
 
     def test_device_channel_connect_missing_status(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(

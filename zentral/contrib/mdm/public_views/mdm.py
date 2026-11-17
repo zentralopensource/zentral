@@ -34,6 +34,7 @@ from zentral.contrib.mdm.commands.scheduling import get_next_command_response
 from zentral.contrib.mdm.crypto import (
     build_enrolled_device_cert_defaults,
     verify_signed_payload,
+    verify_zentral_scep_ca_issuer,
 )
 from zentral.contrib.mdm.declarations import (
     DeclarationError,
@@ -106,11 +107,13 @@ class MDMView(PostEventMixin, View):
                 certs, raw_payload = verify_signed_payload(request.body, base64.b64decode(header_signature))
             except Exception:
                 self.abort("Invalid header signature")
+            _, certificate_bytes, self.certificate = certs[0]
+            if not verify_zentral_scep_ca_issuer(certificate_bytes):
+                self.abort("Unknown header signature certificate issuer")
             try:
                 self.payload = plistlib.loads(raw_payload)
             except plistlib.InvalidFileException:
                 self.payload = {}
-            _, _, self.certificate = certs[0]
             subject = self.certificate.subject
             cert_cn = subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
             cert_o = subject.get_attributes_for_oid(NameOID.ORGANIZATION_NAME)[0].value
