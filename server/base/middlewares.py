@@ -1,6 +1,7 @@
 # adapted from https://github.com/mozilla/django-csp
 from functools import partial
 from django.conf import settings
+from django.contrib.auth.mixins import AccessMixin
 from django.utils.cache import add_never_cache_headers
 from django.utils.crypto import get_random_string
 from django.utils.functional import SimpleLazyObject
@@ -72,4 +73,26 @@ def never_cache_middleware(get_response):
         add_never_cache_headers(response)
         return response
 
+    return middleware
+
+
+def access_mixin_login_middleware(get_response):
+    def middleware(request):
+        return get_response(request)
+
+    # The access mixins check the user in their dispatch(), and a view that overrides dispatch() runs its own code
+    # first. This refuses an anonymous request before any code of the view runs, with the answer of the view.
+    def process_view(request, view_func, view_args, view_kwargs):
+        view_class = getattr(view_func, "view_class", None)
+        if (
+            view_class is None
+            or not issubclass(view_class, AccessMixin)
+            or request.user.is_authenticated
+        ):
+            return
+        view = view_class(**view_func.view_initkwargs)
+        view.setup(request, *view_args, **view_kwargs)
+        return view.handle_no_permission()
+
+    middleware.process_view = process_view
     return middleware

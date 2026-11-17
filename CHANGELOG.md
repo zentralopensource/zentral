@@ -627,6 +627,8 @@ The Turbo results endpoint records the run of an entry that it sets aside now. I
 
 A machine whose serial number holds a character that Cedar cannot read is authorized now. The machine resource used the raw serial number, so a serial with a quote, a control character or an invisible space made an entity reference that Cedar refused to parse. The request was denied before Cedar read a policy, and the machine could not be tagged. A policy that named such a machine could not be saved either. The resource uses the url safe serial number now, the form that the machine URL and the links to it already use. A serial number that needs no encoding does not change, which covers every Apple serial number. A policy that names a machine whose serial number does need encoding must use the new id, which you can read in the URL of the machine page.
 
+An anonymous request to a page of the web console goes to the login page before the view runs now. Some views looked up an object of the URL before they checked the user, so an anonymous client could find which objects exist from the answer, a 404 error or a redirect to the login page, and could cause 500 errors with a malformed URL. A middleware checks each view that requires a user, and answers as the view does for an anonymous request. The public, API and agent endpoints are not changed.
+
 
 ## 2026.5
 
