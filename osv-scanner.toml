@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "GHSA-fc5q-39xc-vjpf"
+ignoreUntil = 2026-11-24
+reason = "picomatch is an optional development dependency, through sass and @parcel/watcher, and the webpack build gives it no untrusted glob. No patched version is available yet."
