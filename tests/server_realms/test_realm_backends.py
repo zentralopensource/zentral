@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils.crypto import get_random_string
 from realms.models import Realm, RealmAuthenticationSession
 import requests
+import responses
 
 from zentral.conf import settings
 
@@ -122,29 +123,27 @@ class RealmBackendsTestCase(TestCase):
         self.assertNotIn("code_challenge_method", query)
         self.assertNotIn("code_challenge", query)
 
-    def _openidc_redirect(self, backend_state, id_token_claims):
+    def _openidc_redirect(self, backend_state, id_token_claims, userinfo=True):
         username = get_random_string(12)
         with patch("realms.backends.openidc.lib.get_openid_configuration") as get_openid_configuration, \
-             patch("requests.Session.post") as token_request, \
              patch("realms.backends.openidc.lib.verify_jws") as verify_jws, \
-             patch("requests.Session.get") as userinfo_request:
-            userinfo_request.return_value.status_code = 200
-            token_request.return_value.status_code = 200
-            userinfo_request.return_value.json.return_value = {
-                "sub": username,
-                "username": username,
-                "email": f"{username}@example.com",
-            }
+             responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.post("https://issuer.example.com/token", json={
+                "id_token": "bla",
+                "access_token": "hoho",
+                "issuer": "https://issuer.example.com",
+            })
+            if userinfo:
+                rsps.get("https://issuer.example.com/user-info", json={
+                    "sub": username,
+                    "username": username,
+                    "email": f"{username}@example.com",
+                })
             verify_jws.return_value = {
                 "iss": "https://issuer.example.com",
                 "aud": self.openidc_realm.config["client_id"],
                 "sub": username,
                 **id_token_claims,
-            }
-            token_request.return_value.json.return_value = {
-                "id_token": "bla",
-                "access_token": "hoho",
-                "issuer": "https://issuer.example.com",
             }
             get_openid_configuration.return_value = {
                 "issuer": "https://issuer.example.com",
@@ -165,6 +164,7 @@ class RealmBackendsTestCase(TestCase):
                 reverse("realms_public:openidc_ac_redirect", args=(self.openidc_realm.pk,)) + f"?{params}",
                 follow=True,
             )
+            token_request = rsps.calls[0].request
         ras.refresh_from_db()
         return response, ras, username, token_request
 
@@ -177,7 +177,8 @@ class RealmBackendsTestCase(TestCase):
         self.assertEqual(response.context["user"].username, username)
         self.assertEqual(response.context["user"].email, f"{username}@example.com")
         self.assertTemplateUsed(response, "base/index.html")
-        self.assertEqual(token_request.call_args.kwargs["data"]["code_verifier"], "the-verifier")
+        self.assertEqual(token_request.url, "https://issuer.example.com/token")
+        self.assertEqual(parse_qs(token_request.body)["code_verifier"], ["the-verifier"])
 
     def test_openidc_redirect_invalid_nonce(self):
         for backend_state, id_token_claims in (
@@ -190,7 +191,7 @@ class RealmBackendsTestCase(TestCase):
             ({"code_verifier": "the-verifier"}, {"nonce": "the-nonce"}),
             (None, {}),
         ):
-            response, ras, _, _ = self._openidc_redirect(backend_state, id_token_claims)
+            response, ras, _, _ = self._openidc_redirect(backend_state, id_token_claims, userinfo=False)
             self.assertEqual(response.status_code, 400)
             self.assertIsNone(ras.user)
 

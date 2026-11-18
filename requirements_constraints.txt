@@ -137,6 +137,7 @@ PyYAML==6.0.3
 redis==6.2.0
 requests==2.33.0
 requests-oauthlib==2.0.0
+responses==0.26.3
 rsa==4.9.1
 s3transfer==0.19.3
 six==1.17.0

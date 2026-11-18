@@ -5,6 +5,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
+import responses
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 
@@ -20,6 +21,7 @@ from .utils import (
     force_dep_enrollment_session,
     force_realm_user,
     force_software_update,
+    register_microsoft_ca_challenge,
 )
 
 
@@ -381,13 +383,11 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertFalse(any(p["PayloadType"] == "com.apple.security.acme" for p in payload["PayloadContent"]))
         self.assertTrue(any(p["PayloadType"] == "com.apple.security.scep" for p in payload["PayloadContent"]))
 
-    @patch("requests.Session.get")
-    def test_dep_enroll_acme(self, requests_get, vicsp, post_event):
-        response = Mock()
-        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
-        requests_get.return_value = response
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_dep_enroll_acme(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         enrollment = force_dep_enrollment(self.mbu, acme_issuer=True)
+        register_microsoft_ca_challenge(enrollment.acme_issuer)
         response = self.client.post(reverse("mdm_public:dep_enroll", args=(enrollment.enrollment_secret.secret,)),
                                     data=plistlib.dumps({"PRODUCT": "Macmini9,1",
                                                          "SERIAL": get_random_string(10),
@@ -476,11 +476,8 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(last_event.payload["status"], "warning")
         self.assertEqual(last_event.payload["reason"], "OS update to version 17.1 (b) required")
 
-    @patch("requests.Session.get")
-    def test_dep_web_enroll_no_custom_views(self, requests_get, vicsp, post_event):
-        response = Mock()
-        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
-        requests_get.return_value = response
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_dep_web_enroll_no_custom_views(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         display_name = get_random_string(12)
         session, _, _ = force_dep_enrollment_session(
@@ -490,6 +487,7 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
             acme_issuer=True
         )
         enrollment = session.dep_enrollment
+        register_microsoft_ca_challenge(enrollment.acme_issuer)
         serial_number = get_random_string(10)
         udid = str(uuid.uuid4()).upper()
         payload = {"PRODUCT": "Macmini9,1", "SERIAL": serial_number, "UDID": udid, "OS_VERSION": "15.6.1"}
@@ -565,17 +563,15 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
         ras = realm.realmauthenticationsession_set.order_by("-created_at").first()
         self.assertEqual(response.url, f"/public/realms/{realm.pk}/ldap/{ras.pk}/login/")
 
-    @patch("requests.Session.get")
-    def test_dep_web_enroll_custom_views(self, requests_get, vicsp, post_event):
-        response = Mock()
-        response.content.decode.return_value = "challenge password is: <B> 1000000000000002 </B>"
-        requests_get.return_value = response
+    @responses.activate(assert_all_requests_are_fired=True)
+    def test_dep_web_enroll_custom_views(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         display_name = get_random_string(12)
         session, _, _ = force_dep_enrollment_session(
             self.mbu, realm_user=True, enrollment_display_name=display_name, acme_issuer=True
         )
         enrollment = session.dep_enrollment
+        register_microsoft_ca_challenge(enrollment.acme_issuer)
         cv1 = force_dep_enrollment_custom_view(enrollment, 100, requires_authentication=False, extra="CV1")
         cv2 = force_dep_enrollment_custom_view(enrollment, 200, requires_authentication=False, extra="CV2")
         cv3 = force_dep_enrollment_custom_view(enrollment, 10, requires_authentication=True, extra="CV3")

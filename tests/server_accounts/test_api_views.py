@@ -8,10 +8,12 @@ from accounts.models import APIToken, OIDCAPITokenIssuer, User
 from django.urls import reverse
 from django.utils.crypto import get_random_string
 from rest_framework import serializers
+import responses
 
 from tests.server_accounts.utils import GOOGLE_OPENID_CONFIGURATION
 from tests.zentral_test_utils.zentral_api_test_case import ZentralAPITestCase
 from zentral.core.events.base import AuditEvent
+from zentral.utils.oidc import get_discovery_uri_from_issuer_uri
 
 
 class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
@@ -43,35 +45,34 @@ class OIDCAPITokenExchangeViewTestCase(ZentralAPITestCase):
 
     # OIDC API token auth
 
-    @patch("requests.Session.get")
-    def test_auth_errors(self, requests_get):
-        requests_get.return_value.status_code = 200
-        requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
-        response = self.post(
-            url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(self.issuer.pk,)),
-            data={"jwt": "yolo", "validity": self.issuer.max_validity * 2},
-            include_token=False,
-        )
+    def test_auth_errors(self):
+        with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+            rsps.get(get_discovery_uri_from_issuer_uri(self.issuer.issuer_uri), json=GOOGLE_OPENID_CONFIGURATION)
+            response = self.post(
+                url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(self.issuer.pk,)),
+                data={"jwt": "yolo", "validity": self.issuer.max_validity * 2},
+                include_token=False,
+            )
         self.assertEqual(
             response.json(),
             {"jwt": ["Invalid token"],
              "validity": ["Must be ≤ 60s"]},
         )
 
-    @patch("requests.Session.get")
-    def test_auth_discovery_errors(self, requests_get):
-        for side_effect, status_code in ((requests.Timeout("Boom!!!"), None),
-                                         (None, 302),
-                                         (None, 500)):
-            requests_get.reset_mock()
-            requests_get.side_effect = side_effect
-            requests_get.return_value.status_code = status_code
-            requests_get.return_value.json.return_value = GOOGLE_OPENID_CONFIGURATION
-            response = self.post(
-                url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(self.issuer.pk,)),
-                data={"jwt": "yolo"},
-                include_token=False,
-            )
+    def test_auth_discovery_errors(self):
+        discovery_uri = get_discovery_uri_from_issuer_uri(self.issuer.issuer_uri)
+        for response_kwargs in ({"body": requests.Timeout("Boom!!!")},
+                                # the target is not registered: following the redirect would raise a ConnectionError
+                                {"status": 302, "headers": {"Location": "http://169.254.169.254/latest/meta-data/"},
+                                 "json": GOOGLE_OPENID_CONFIGURATION},
+                                {"status": 500, "json": GOOGLE_OPENID_CONFIGURATION}):
+            with responses.RequestsMock(assert_all_requests_are_fired=True) as rsps:
+                rsps.get(discovery_uri, **response_kwargs)
+                response = self.post(
+                    url=reverse("accounts_api:oidc_api_token_issuer_exchange", args=(self.issuer.pk,)),
+                    data={"jwt": "yolo"},
+                    include_token=False,
+                )
             self.assertEqual(response.status_code, 400)
             self.assertEqual(response.json(), {"jwt": ["Could not get the OpenID configuration"]})
 
