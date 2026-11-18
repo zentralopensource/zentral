@@ -14,6 +14,7 @@ import asn1crypto.util
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.serialization import pkcs7
 from cryptography.x509.oid import NameOID
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -130,6 +131,8 @@ class MDMViewsTestCase(TestCase):
         sign_message=False,
         bad_signature=False,
         self_signed=False,
+        signed_attributes=False,
+        forged_payload=None,
     ):
         kwargs = {}
         if payload:
@@ -206,6 +209,14 @@ class MDMViewsTestCase(TestCase):
                 kwargs["HTTP_X_SSL_CLIENT_CERT"] = quote(
                     cert.public_bytes(encoding=serialization.Encoding.PEM)
                 )
+            elif signed_attributes:
+                kwargs["HTTP_MDM_SIGNATURE"] = base64.b64encode(
+                    pkcs7.PKCS7SignatureBuilder()
+                    .set_data(kwargs.get("data", b""))
+                    .add_signer(cert, privkey, hashes.SHA256())
+                    .sign(serialization.Encoding.DER,
+                          [pkcs7.PKCS7Options.DetachedSignature, pkcs7.PKCS7Options.Binary])
+                )
             else:
                 # include the signature of the payload as MDM-Signature header
                 sd = asn1crypto.cms.SignedData()
@@ -250,6 +261,8 @@ class MDMViewsTestCase(TestCase):
                 sig["content_type"] = "signed_data"
                 sig["content"] = sd
                 kwargs["HTTP_MDM_SIGNATURE"] = base64.b64encode(sig.dump())
+        if forged_payload:
+            kwargs["data"] = plistlib.dumps(forged_payload)
         return method(url, **kwargs)
 
     def _put(
@@ -263,6 +276,8 @@ class MDMViewsTestCase(TestCase):
         sign_message=False,
         bad_signature=False,
         self_signed=False,
+        signed_attributes=False,
+        forged_payload=None,
     ):
         return self._call(
             self.client.put,
@@ -275,6 +290,8 @@ class MDMViewsTestCase(TestCase):
             sign_message,
             bad_signature,
             self_signed,
+            signed_attributes,
+            forged_payload,
         )
 
     def _get(self, url, session, sign_message=False):
@@ -583,6 +600,62 @@ class MDMViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self._assertAbort(post_event, "Invalid header signature")
+
+    def test_authenticate_dep_enrollment_session_macos_mdm_signature_header_signed_attributes(
+        self, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(12),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            payload,
+            session,
+            sign_message=True,
+            signed_attributes=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self._assertSuccess(post_event, new_enrolled_device=True, reenrollment=False)
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.AUTHENTICATED)
+
+    def test_authenticate_dep_enrollment_session_macos_mdm_signature_header_forged_payload(
+        self, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(12),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        response = self._put(
+            reverse("mdm_public:checkin"),
+            payload,
+            session,
+            sign_message=True,
+            signed_attributes=True,
+            forged_payload=dict(payload, DeviceName=get_random_string(12)),
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(post_event, "Invalid header signature")
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
+        self.assertIsNone(session.enrolled_device)
 
     def test_authenticate_dep_enrollment_session_macos_self_signed_mdm_signature_header(
         self, post_event

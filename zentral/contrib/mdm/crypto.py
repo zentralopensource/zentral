@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import hmac
 import os
 import subprocess
 from tempfile import NamedTemporaryFile
@@ -98,7 +99,30 @@ def get_cryptography_hash_algorithm(signer):
         raise ValueError("Unknown hash {}".format(hash_name))
 
 
-def verify_certificate_signature(certificate, signer, payload):
+def get_single_signed_attribute_value(signed_attrs, attr_type):
+    values = [value for attr in signed_attrs if attr["type"].native == attr_type for value in attr["values"]]
+    if not values:
+        return None
+    if len(values) > 1:
+        raise ValueError(f"Multiple {attr_type} signed attributes")
+    return values[0].native
+
+
+def verify_signed_attributes(signer, payload, content_type):
+    signed_attrs = signer["signed_attrs"]
+    signed_content_type = get_single_signed_attribute_value(signed_attrs, "content_type")
+    if signed_content_type is not None and signed_content_type != content_type:
+        raise ValueError("Content type mismatch")
+    message_digest = get_single_signed_attribute_value(signed_attrs, "message_digest")
+    if message_digest is None:
+        raise ValueError("Missing message digest")
+    digest = hashes.Hash(get_cryptography_hash_algorithm(signer)())
+    digest.update(payload)
+    if not hmac.compare_digest(digest.finalize(), message_digest):
+        raise ValueError("Message digest mismatch")
+
+
+def verify_certificate_signature(certificate, signer, payload, content_type):
     signature = signer['signature'].native
     if "signed_attrs" in signer and signer["signed_attrs"]:
         # Seen with the iPhone simulator for example
@@ -107,6 +131,7 @@ def verify_certificate_signature(certificate, signer, payload):
             # TODO: WTF!!!
             # see https://stackoverflow.com/questions/24567623/how-to-see-what-attributes-are-signed-inside-pkcs7#24581628  # NOQA
             signed_string = b'\x31' + signed_string[1:]
+        verify_signed_attributes(signer, payload, content_type)
     else:
         signed_string = payload
     public_key = certificate.public_key()
@@ -137,14 +162,18 @@ def verify_signed_payload(payload, detached_signature=None):
     if content_info["content_type"].native != "signed_data":
         raise ValueError("Not signed data")
     content = content_info["content"]
+    encap_content_info = content["encap_content_info"]
     if not detached_signature:
-        payload = content['encap_content_info']['content'].native
+        payload = encap_content_info["content"].native
+    if payload is None:
+        raise ValueError("No content")
     if not content["signer_infos"]:
         raise ValueError("No signer")
+    content_type = encap_content_info["content_type"].native
     certificates = []
     for signer in content["signer_infos"]:
         certificate_i, certificate_bytes, certificate = get_signer_certificate(content, signer)
-        if not verify_certificate_signature(certificate, signer, payload):
+        if not verify_certificate_signature(certificate, signer, payload, content_type):
             raise ValueError("Invalid signature")
         certificates.append((certificate_i, certificate_bytes, certificate))
     return certificates, payload

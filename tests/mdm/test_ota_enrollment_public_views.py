@@ -1,6 +1,7 @@
 import os.path
 import plistlib
 from unittest.mock import Mock, patch
+from asn1crypto import cms
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils.crypto import get_random_string
@@ -10,6 +11,7 @@ from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
 from zentral.contrib.mdm.models import OTAEnrollmentSession
 from zentral.contrib.mdm.public_views.ota import ota_enroll_callback
+from zentral.utils.payloads import sign_payload
 from .utils import (build_signed_data_with_unknown_signer, build_signed_data_without_signer,
                     force_ota_enrollment, force_ota_enrollment_session,
                     force_realm, force_realm_user)
@@ -106,6 +108,15 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         response = self.client.post(reverse("mdm_public:ota_enroll"),
                                     data=build_signed_data_with_unknown_signer(plistlib.dumps({"SERIAL": "yolo"}),
                                                                                subject_key_identifier=True),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        self.assertAbort(post_event, "posted data is not signed")
+
+    def test_ota_enroll_forged_payload(self, post_event):
+        content_info = cms.ContentInfo.load(sign_payload(plistlib.dumps({"SERIAL": get_random_string(12)})))
+        content_info["content"]["encap_content_info"]["content"] = plistlib.dumps({"SERIAL": get_random_string(12)})
+        response = self.client.post(reverse("mdm_public:ota_enroll"),
+                                    data=content_info.dump(force=True),
                                     content_type="application/octet-stream")
         self.assertEqual(response.status_code, 400)
         self.assertAbort(post_event, "posted data is not signed")
