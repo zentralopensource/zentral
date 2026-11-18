@@ -11,6 +11,9 @@ from datetime import date, datetime, time, timedelta
 from functools import lru_cache
 from unittest.mock import patch
 
+import asn1crypto.cms
+import asn1crypto.x509
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -1201,3 +1204,39 @@ def force_package(name=None, description="", sha256=None):
         bundles=pkg_data["bundles"],
         manifest=pkg_data["manifest"],
     )
+
+
+def build_signed_data_without_signer(content=None):
+    signed_data = asn1crypto.cms.SignedData({
+        "version": "v1",
+        "digest_algorithms": [],
+        "encap_content_info": {"content_type": "data", "content": content},
+        "signer_infos": [],
+    })
+    return asn1crypto.cms.ContentInfo({"content_type": "signed_data", "content": signed_data}).dump()
+
+
+def build_signed_data_with_unknown_signer(content=None, subject_key_identifier=False):
+    if subject_key_identifier:
+        signer_identifier = {"subject_key_identifier": b"yolo"}
+    else:
+        signer_identifier = {
+            "issuer_and_serial_number": {
+                "issuer": asn1crypto.x509.Name.build({"common_name": get_random_string(12)}),
+                "serial_number": 1,
+            }
+        }
+    signer_info = asn1crypto.cms.SignerInfo({
+        "version": "v1",
+        "sid": asn1crypto.cms.SignerIdentifier(signer_identifier),
+        "digest_algorithm": {"algorithm": "sha256"},
+        "signature_algorithm": {"algorithm": "rsassa_pkcs1v15"},
+        "signature": b"yolo",
+    })
+    signed_data = asn1crypto.cms.SignedData({
+        "version": "v1",
+        "digest_algorithms": [],
+        "encap_content_info": {"content_type": "data", "content": content},
+        "signer_infos": [signer_info],
+    })
+    return asn1crypto.cms.ContentInfo({"content_type": "signed_data", "content": signed_data}).dump()

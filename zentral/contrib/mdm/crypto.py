@@ -74,6 +74,8 @@ def verify_apple_iphone_device_ca_issuer(certificate_bytes):
 def get_signer_certificate(content, signer):
     certificates = content["certificates"]
     signer_id = signer["sid"]
+    if signer_id.name != "issuer_and_serial_number":
+        raise ValueError(f"Unsupported signer identifier: {signer_id.name}")
     for certificate in certificates:
         if certificate.chosen.serial_number == signer_id.chosen["serial_number"].native and \
            certificate.chosen.issuer == signer_id.chosen["issuer"]:
@@ -81,6 +83,7 @@ def get_signer_certificate(content, signer):
             certificate = x509.load_der_x509_certificate(certificate_bytes)
             certificate_i = certificate.issuer.rfc4514_string()
             return certificate_i, certificate_bytes, certificate
+    raise ValueError("Signer certificate not found")
 
 
 def get_cryptography_hash_algorithm(signer):
@@ -136,6 +139,8 @@ def verify_signed_payload(payload, detached_signature=None):
     content = content_info["content"]
     if not detached_signature:
         payload = content['encap_content_info']['content'].native
+    if not content["signer_infos"]:
+        raise ValueError("No signer")
     certificates = []
     for signer in content["signer_infos"]:
         certificate_i, certificate_bytes, certificate = get_signer_certificate(content, signer)

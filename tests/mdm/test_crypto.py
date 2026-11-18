@@ -1,7 +1,8 @@
 import os.path
 import plistlib
 from django.test import SimpleTestCase
-from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload
+from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload, verify_signed_payload
+from .utils import build_signed_data_with_unknown_signer, build_signed_data_without_signer
 
 
 class MDMCryptoTestCase(SimpleTestCase):
@@ -28,3 +29,23 @@ class MDMCryptoTestCase(SimpleTestCase):
                 "VERSION": "22A380",
             },
         )
+
+    def test_verify_signed_payload_without_signer(self):
+        with self.assertRaises(ValueError) as cm:
+            verify_signed_payload(build_signed_data_without_signer(b"yolo"))
+        self.assertEqual(str(cm.exception), "No signer")
+
+    def test_verify_detached_signature_without_signer(self):
+        with self.assertRaises(ValueError) as cm:
+            verify_signed_payload(b"yolo", build_signed_data_without_signer())
+        self.assertEqual(str(cm.exception), "No signer")
+
+    def test_verify_signed_payload_unknown_signer_certificate(self):
+        with self.assertRaises(ValueError) as cm:
+            verify_signed_payload(build_signed_data_with_unknown_signer(b"yolo"))
+        self.assertEqual(str(cm.exception), "Signer certificate not found")
+
+    def test_verify_signed_payload_subject_key_identifier(self):
+        with self.assertRaises(ValueError) as cm:
+            verify_signed_payload(build_signed_data_with_unknown_signer(b"yolo", subject_key_identifier=True))
+        self.assertEqual(str(cm.exception), "Unsupported signer identifier: subject_key_identifier")

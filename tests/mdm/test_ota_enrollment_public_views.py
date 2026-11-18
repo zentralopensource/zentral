@@ -10,7 +10,9 @@ from zentral.contrib.mdm.crypto import verify_signed_payload
 from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
 from zentral.contrib.mdm.models import OTAEnrollmentSession
 from zentral.contrib.mdm.public_views.ota import ota_enroll_callback
-from .utils import force_ota_enrollment, force_ota_enrollment_session, force_realm, force_realm_user
+from .utils import (build_signed_data_with_unknown_signer, build_signed_data_without_signer,
+                    force_ota_enrollment, force_ota_enrollment_session,
+                    force_realm, force_realm_user)
 
 
 @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
@@ -85,6 +87,28 @@ class MDMOTAEnrollmentPublicViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         verify_signed_payload.assert_not_called()
         post_event.assert_not_called()
+
+    def test_ota_enroll_signed_data_without_signer(self, post_event):
+        response = self.client.post(reverse("mdm_public:ota_enroll"),
+                                    data=build_signed_data_without_signer(plistlib.dumps({"SERIAL": "yolo"})),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        self.assertAbort(post_event, "posted data is not signed")
+
+    def test_ota_enroll_unknown_signer_certificate(self, post_event):
+        response = self.client.post(reverse("mdm_public:ota_enroll"),
+                                    data=build_signed_data_with_unknown_signer(plistlib.dumps({"SERIAL": "yolo"})),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        self.assertAbort(post_event, "posted data is not signed")
+
+    def test_ota_enroll_subject_key_identifier_signer(self, post_event):
+        response = self.client.post(reverse("mdm_public:ota_enroll"),
+                                    data=build_signed_data_with_unknown_signer(plistlib.dumps({"SERIAL": "yolo"}),
+                                                                               subject_key_identifier=True),
+                                    content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        self.assertAbort(post_event, "posted data is not signed")
 
     def test_ota_enroll_no_realm_phase_2_bad_secret(self, post_event):
         force_ota_enrollment(self.mbu)

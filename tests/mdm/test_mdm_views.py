@@ -68,6 +68,7 @@ from zentral.utils.time import naive_utcnow
 
 from .utils import (
     MACOS_14_CLIENT_CAPABILITIES,
+    build_signed_data_without_signer,
     build_status_report,
     force_artifact,
     force_blueprint_artifact,
@@ -515,6 +516,15 @@ class MDMViewsTestCase(TestCase):
         self.assertTrue(session.enrolled_device.user_enrollment is False)
         self.assertTrue(session.enrolled_device.user_approved_enrollment)
         self.assertTrue(session.enrolled_device.supervised)
+
+    def test_mdm_signature_header_without_signer(self, post_event):
+        response = self.client.put(
+            reverse("mdm_public:checkin"),
+            data=plistlib.dumps({"MessageType": "Authenticate"}),
+            HTTP_MDM_SIGNATURE=base64.b64encode(build_signed_data_without_signer()),
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(post_event, "Invalid header signature")
 
     def test_authenticate_dep_enrollment_session_macos_bad_mdm_signature_header(
         self, post_event
