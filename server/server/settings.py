@@ -167,6 +167,8 @@ if MAX_PASSWORD_AGE_DAYS:
 
 ROOT_URLCONF = 'server.urls'
 
+TEST_RUNNER = 'tests.runner.ZentralTestRunner'
+
 FORM_RENDERER = 'zentral.utils.forms.ZentralFormRenderer'
 
 TEMPLATES = [

@@ -41,7 +41,7 @@ class RunWorkersBaseManagementCommandsTest(TestCase):
         )
 
     @patch("base.management.commands.runworkers.Command.watch_workers")
-    @patch("base.management.commands.runworkers.Process.start")
+    @patch("multiprocessing.context.ForkServerProcess.start")
     def test_start_worker_prometheus(self, start, watch_workers):
         call_command('runworkers', 'enrich worker', '--prometheus', '--prometheus-base-port', '9910')
         # TODO: better tests

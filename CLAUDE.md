@@ -78,6 +78,8 @@ docker compose -f docker-compose.yml -f docker-compose.tests.yml run --rm \
 
 `--keepdb` reuses the test database across runs and skips the (slow) migration replay — the first invocation is unchanged, subsequent ones start in seconds. If migrations are renamed/squashed or the DB ends up wedged, drop the flag for one run to rebuild from scratch.
 
+The `tests` and `tests_with_coverage` entrypoint commands run the tests in parallel (`--parallel auto`, one process for each CPU). Add `--parallel auto` to a subset run for the same behaviour. [tests/runner.py](tests/runner.py) is the test runner: it starts the processes with `fork`, clears the event stores cache before each test class, and with `--keepdb` makes new clones of the test database, because Django does not migrate a clone that exists. Each process gets its own clone, but the processes share Elasticsearch, ClickHouse, RabbitMQ and `/var/zentral`, and the test classes that run before a class in its process change from run to run. So a test must set the global state it needs itself, and must not rely on a test that ran before it. `tests_with_coverage` writes one coverage data file for each process; run `coverage_combine` before `coverage_lcov`.
+
 ## Docs
 
 User-facing docs live in [docs/](docs/), which is a **Hugo** site (config: [docs/hugo.yaml](docs/hugo.yaml), pages in `docs/content/`). They are published at https://www.zentral.com/docs/zentral/: the website build clones this repository and mounts `docs/content/` and `docs/layouts/` into its own Hugo site.

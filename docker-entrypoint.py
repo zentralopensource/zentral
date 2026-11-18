@@ -97,8 +97,10 @@ KNOWN_COMMANDS = {
     "celery": ["celery", "-A", "server", "worker"],
     # extras
     "shell": ["python", 'server/manage.py', 'shell'],
-    "tests": ["python", 'server/manage.py', 'test', 'tests/'],
-    "tests_with_coverage": ["coverage", "run", 'server/manage.py', 'test', 'tests/'],
+    "tests": ["python", 'server/manage.py', 'test', '--parallel', 'auto', 'tests/'],
+    "tests_with_coverage": ["coverage", "run", "--concurrency=multiprocessing", "--parallel-mode",
+                            'server/manage.py', 'test', '--parallel', 'auto', 'tests/'],
+    "coverage_combine": ["coverage", "combine"],
     "coverage_lcov": ["coverage", "lcov"],
     "createuser": ["python", 'server/manage.py', 'create_zentral_user'],
 }
@@ -135,7 +137,7 @@ if __name__ == '__main__':
         if cmd in ("tests", "tests_with_coverage"):
             env.update(TESTS_EXTRA_ENV)
             wait_for_db(env)
-        elif cmd not in ("coverage_lcov",):
+        elif cmd not in ("coverage_combine", "coverage_lcov"):
             wait_for_db_migration()
             wait_for_provisioning()
             create_zentral_superuser()

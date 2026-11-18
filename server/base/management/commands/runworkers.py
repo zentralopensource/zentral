@@ -1,7 +1,6 @@
 import json
 import logging
 import multiprocessing
-from multiprocessing import Process
 import random
 import time
 
@@ -23,8 +22,8 @@ class Command(BaseCommand):
         self.processes = {}
         self.prometheus_targets = {}
         self.processes_to_restart = {}
-        multiprocessing.set_start_method('forkserver')
-        multiprocessing.set_forkserver_preload(["server.multiprocessing_preload"])
+        self.mp_context = multiprocessing.get_context('forkserver')
+        self.mp_context.set_forkserver_preload(["server.multiprocessing_preload"])
 
     def add_arguments(self, parser):
         parser.add_argument('--list-workers', action='store_true', dest='list_workers', default=False,
@@ -56,9 +55,9 @@ class Command(BaseCommand):
         elif self.statsd:
             from zentral.utils.statsd import StatsdMetricsExporter
             metrics_exporter = StatsdMetricsExporter(self.statsd_host, self.statsd_port, self.statsd_prefix)
-        p = Process(target=worker.run,
-                    kwargs={"metrics_exporter": metrics_exporter},
-                    name=worker.name)
+        p = self.mp_context.Process(target=worker.run,
+                                    kwargs={"metrics_exporter": metrics_exporter},
+                                    name=worker.name)
         p.daemon = 1
         p.start()
         self.processes[idx] = (worker, p)

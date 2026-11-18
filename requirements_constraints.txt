@@ -147,6 +147,7 @@ sqlglot==30.17.0
 sqlparse==0.6.0
 stack-data==0.6.3
 std-uritemplate==2.0.8
+tblib==3.2.2
 tomlkit==0.14.0
 tqdm==4.66.6
 traitlets==5.14.3
