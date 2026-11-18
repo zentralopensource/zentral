@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
@@ -31,7 +33,7 @@ class NginxAuthRequestViewTestCase(TestCase):
              "url": "/eltest4/un/deux/trois",
              "authorized_groups": [cls.group2.name]},
         ]
-        settings._collection["extra_links"] = cls.extra_links
+        cls.enterClassContext(patch.dict(settings._collection, {"extra_links": cls.extra_links}))
 
     # utility method
 

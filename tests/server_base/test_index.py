@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.apps import apps
 from django.contrib.auth.models import Group
 from django.test import TestCase
@@ -35,7 +37,7 @@ class BaseViewsTestCase(TestCase, LoginCase):
              "url": "/eltest4/un/deux/trois",
              "authorized_groups": [cls.group2.name]},
         ]
-        settings._collection["extra_links"] = cls.extra_links
+        cls.enterClassContext(patch.dict(settings._collection, {"extra_links": cls.extra_links}))
 
     # LoginCase implementation
 
@@ -125,43 +127,46 @@ class BaseViewsTestCase(TestCase, LoginCase):
 
     # extra links
 
+    def _assert_extra_links(self, response, *anchor_texts):
+        expected_links = [link for link in self.extra_links if link["anchor_text"] in anchor_texts]
+        self.assertEqual(len(expected_links), len(anchor_texts))
+        self.assertEqual(response.context.get("zentral_extra_links", []), expected_links)
+        # the user menu is rendered twice, in the navbar and in the offcanvas sidebar
+        self.assertContains(response, "bi-box-arrow-up-right", count=2 * len(expected_links))
+        for link in self.extra_links:
+            if link in expected_links:
+                self.assertContains(response, link["anchor_text"])
+                self.assertContains(response, link["url"])
+            else:
+                self.assertNotContains(response, link["anchor_text"])
+                self.assertNotContains(response, link["url"])
+
     def test_index_not_logged_in_no_extra_links(self):
         response = self.client.get(reverse("base:index"), follow=True)
         self.assertNotIn("zentral_extra_links", response.context)
-        self.assertNotContains(response, "_ELTEST1_")
-        self.assertNotContains(response, "https://eltest1.example.com")
-        self.assertNotContains(response, "_ELTEST2_")
-        self.assertNotContains(response, "/eltest2/un/")
-        self.assertNotContains(response, "_ELTEST3_")
-        self.assertNotContains(response, "/eltest3/un/deux/")
-        self.assertNotContains(response, "_ELTEST4_")
-        self.assertNotContains(response, "/eltest4/un/deux/trois")
+        self._assert_extra_links(response)
 
     def test_index_users_extra_links(self):
         self.login()
         response = self.client.get(reverse("base:index"))
-        filtered_links = [link for link in self.extra_links
-                          if not link.get("authorized_groups") or self.group.name in link["authorized_groups"]]
-        self.assertEqual(response.context["zentral_extra_links"], filtered_links)
-        self.assertContains(response, "_ELTEST1_")
-        self.assertContains(response, "https://eltest1.example.com")
-        self.assertContains(response, "_ELTEST2_")
-        self.assertContains(response, "/eltest2/un/")
-        self.assertContains(response, "_ELTEST3_")
-        self.assertContains(response, "/eltest3/un/deux/")
-        self.assertNotContains(response, "_ELTEST4_")
-        self.assertNotContains(response, "/eltest4/un/deux/trois")
+        self._assert_extra_links(response, "_ELTEST1_", "_ELTEST2_", "_ELTEST3_")
+
+    def test_index_user_without_group_extra_links(self):
+        self.user.groups.clear()
+        self.login()
+        response = self.client.get(reverse("base:index"))
+        self._assert_extra_links(response, "_ELTEST1_", "_ELTEST3_")
 
     def test_index_users_all_extra_links(self):
         self.login()
         self.user.groups.add(self.group2)
         response = self.client.get(reverse("base:index"))
-        self.assertEqual(response.context["zentral_extra_links"], self.extra_links)
-        self.assertContains(response, "_ELTEST1_")
-        self.assertContains(response, "https://eltest1.example.com")
-        self.assertContains(response, "_ELTEST2_")
-        self.assertContains(response, "/eltest2/un/")
-        self.assertContains(response, "_ELTEST3_")
-        self.assertContains(response, "/eltest3/un/deux/")
-        self.assertContains(response, "_ELTEST4_")
-        self.assertContains(response, "/eltest4/un/deux/trois")
+        self._assert_extra_links(response, "_ELTEST1_", "_ELTEST2_", "_ELTEST3_", "_ELTEST4_")
+
+    def test_index_superuser_without_group_all_extra_links(self):
+        self.user.groups.clear()
+        self.user.is_superuser = True
+        self.user.save()
+        self.login()
+        response = self.client.get(reverse("base:index"))
+        self._assert_extra_links(response, "_ELTEST1_", "_ELTEST2_", "_ELTEST3_", "_ELTEST4_")
