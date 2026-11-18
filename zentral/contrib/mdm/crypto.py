@@ -125,12 +125,8 @@ def verify_signed_attributes(signer, payload, content_type):
 def verify_certificate_signature(certificate, signer, payload, content_type):
     signature = signer['signature'].native
     if "signed_attrs" in signer and signer["signed_attrs"]:
-        # Seen with the iPhone simulator for example
-        signed_string = signer["signed_attrs"].dump()
-        if signed_string.startswith(b'\xa0'):
-            # TODO: WTF!!!
-            # see https://stackoverflow.com/questions/24567623/how-to-see-what-attributes-are-signed-inside-pkcs7#24581628  # NOQA
-            signed_string = b'\x31' + signed_string[1:]
+        # RFC 5652 5.4: the signature covers the attributes as a SET OF, not as the [0] IMPLICIT field
+        signed_string = signer["signed_attrs"].untag().dump()
         verify_signed_attributes(signer, payload, content_type)
     else:
         signed_string = payload
