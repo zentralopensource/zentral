@@ -64,7 +64,7 @@ def open_incident(incident_update):
 
 
 def close_open_incident(incident_update):
-    assert(incident_update.severity == Severity.NONE)
+    assert incident_update.severity == Severity.NONE
     # close the incident if status == Status.OPEN
     # do not automatically close it if open but not Status.OPEN
     try:

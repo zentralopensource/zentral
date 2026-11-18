@@ -23,11 +23,33 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='deviceartifact',
             name='status',
-            field=models.CharField(choices=[('Acknowledged', 'Acknowledged'), ('AwaitingConfirmation', 'Awaiting Confirmation'), ('Installed', 'Installed'), ('Uninstalled', 'Uninstalled'), ('Failed', 'Failed'), ('RemovalFailed', 'Removal Failed')], default='Acknowledged', max_length=64),
+            field=models.CharField(
+                choices=[
+                    ('Acknowledged', 'Acknowledged'),
+                    ('AwaitingConfirmation', 'Awaiting Confirmation'),
+                    ('Installed', 'Installed'),
+                    ('Uninstalled', 'Uninstalled'),
+                    ('Failed', 'Failed'),
+                    ('RemovalFailed', 'Removal Failed'),
+                ],
+                default='Acknowledged',
+                max_length=64,
+            ),
         ),
         migrations.AlterField(
             model_name='userartifact',
             name='status',
-            field=models.CharField(choices=[('Acknowledged', 'Acknowledged'), ('AwaitingConfirmation', 'Awaiting Confirmation'), ('Installed', 'Installed'), ('Uninstalled', 'Uninstalled'), ('Failed', 'Failed'), ('RemovalFailed', 'Removal Failed')], default='Acknowledged', max_length=64),
+            field=models.CharField(
+                choices=[
+                    ('Acknowledged', 'Acknowledged'),
+                    ('AwaitingConfirmation', 'Awaiting Confirmation'),
+                    ('Installed', 'Installed'),
+                    ('Uninstalled', 'Uninstalled'),
+                    ('Failed', 'Failed'),
+                    ('RemovalFailed', 'Removal Failed'),
+                ],
+                default='Acknowledged',
+                max_length=64,
+            ),
         ),
     ]

@@ -21,7 +21,18 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='recoverypasswordconfig',
             name='reveal_rotation_delay',
-            field=models.IntegerField(default=60, help_text='When a recovery password is read, delay in minutes after which a command to rotate the password on the device will be scheduled. 60 min by default, 5 min min., 1 day max (1440 min). If 0, no automatic password rotation will be scheduled.', validators=[django.core.validators.MinValueValidator(0), django.core.validators.MaxValueValidator(1440), zentral.contrib.mdm.models.validate_reveal_rotation_delay], verbose_name='Rotation delay after reveal (min)'),
+            field=models.IntegerField(
+                default=60,
+                help_text='When a recovery password is read, delay in minutes after which a command to rotate the '
+                          'password on the device will be scheduled. 60 min by default, 5 min min., 1 day max (1440 '
+                          'min). If 0, no automatic password rotation will be scheduled.',
+                validators=[
+                    django.core.validators.MinValueValidator(0),
+                    django.core.validators.MaxValueValidator(1440),
+                    zentral.contrib.mdm.models.validate_reveal_rotation_delay,
+                ],
+                verbose_name='Rotation delay after reveal (min)',
+            ),
         ),
         migrations.RunPython(disable_reveal_rotation, migrations.RunPython.noop),
     ]

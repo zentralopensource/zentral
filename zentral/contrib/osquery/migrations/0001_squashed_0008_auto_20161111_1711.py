@@ -23,7 +23,10 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('machine_serial_number', models.CharField(db_index=True, max_length=255)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('probe_source', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='probes.ProbeSource')),
+                (
+                    'probe_source',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='probes.ProbeSource'),
+                ),
             ],
         ),
     ]

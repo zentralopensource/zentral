@@ -13,6 +13,10 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='enable_bad_signature_protection',
-            field=models.BooleanField(default=False, help_text='When enabled, a binary that is signed but has a bad signature (cert revoked, binary tampered with, etc.) will be blocked regardless of client-mode unless a binary whitelist.'),
+            field=models.BooleanField(
+                default=False,
+                help_text='When enabled, a binary that is signed but has a bad signature (cert revoked, binary '
+                          'tampered with, etc.) will be blocked regardless of client-mode unless a binary whitelist.',
+            ),
         ),
     ]

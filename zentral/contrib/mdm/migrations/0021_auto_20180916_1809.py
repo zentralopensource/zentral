@@ -27,13 +27,21 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('trashed_at', models.DateTimeField(editable=False, null=True)),
-                ('meta_business_unit', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
+                (
+                    'meta_business_unit',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit'),
+                ),
             ],
         ),
         migrations.AlterField(
             model_name='kernelextensionpolicy',
             name='meta_business_unit',
-            field=models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='kernel_extension_policy', to='inventory.MetaBusinessUnit'),
+            field=models.OneToOneField(
+                editable=False,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='kernel_extension_policy',
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AlterUniqueTogether(
             name='configurationprofile',

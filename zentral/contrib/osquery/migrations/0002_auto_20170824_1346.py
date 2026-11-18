@@ -36,7 +36,10 @@ class Migration(migrations.Migration):
                 ('block_size', models.IntegerField()),
                 ('block_count', models.IntegerField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('probe_source', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='probes.ProbeSource')),
+                (
+                    'probe_source',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='probes.ProbeSource'),
+                ),
             ],
         ),
         migrations.AddField(

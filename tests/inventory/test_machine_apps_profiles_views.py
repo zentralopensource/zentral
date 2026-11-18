@@ -94,7 +94,7 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "inventory/machine_macos_app_instances.html")
         self.assertContains(response, "apps", status_code=200)
         self.assertContains(response, "Baller.app")
-        self.assertContains(response, "Baller_path") # executable_path
+        self.assertContains(response, "Baller_path")  # executable_path
         self.assertContains(response, "io.zentral.baller")
         # code signing fields
         self.assertContains(response, "ABCDE12345")  # team_id

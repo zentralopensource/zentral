@@ -21,7 +21,8 @@ class ZentralGoogleCloudStorage(GoogleCloudStorage):
         for many use cases.
 
         Overridden to force the use of the IAM signBlob API.
-        See https://github.com/googleapis/python-storage/blob/519074112775c19742522158f612b467cf590219/google/cloud/storage/_signing.py#L628  # NOQA
+        See:
+        https://github.com/googleapis/python-storage/blob/519074112775c19742522158f612b467cf590219/google/cloud/storage/_signing.py#L628
         """
         name = self._normalize_name(clean_name(name))
         blob = self.bucket.blob(name)

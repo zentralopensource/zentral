@@ -30,7 +30,7 @@ class ConnectionForm(forms.ModelForm):
                         self.instance.set_client_config(content)
                         self.reauthorization_required = True
                 elif not self.instance.name:
-                    self.add_error("serialized_client_config", 
+                    self.add_error("serialized_client_config",
                                    f"Required for {Connection.Type.OAUTH_ADMIN_SDK.label} connection.")
 
             case Connection.Type.SERVICE_ACCOUNT_CLOUD_IDENTITY:

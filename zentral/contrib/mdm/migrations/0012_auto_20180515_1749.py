@@ -25,9 +25,27 @@ class Migration(migrations.Migration):
                 ('action', models.CharField(choices=[('INSTALL', 'Install'), ('REMOVE', 'Remove')], max_length=64)),
                 ('command_time', models.DateTimeField()),
                 ('result_time', models.DateTimeField(null=True)),
-                ('status_code', models.CharField(choices=[('Acknowledged', 'Acknowledged'), ('Error', 'Error'), ('CommandFormatError', 'Command format error'), ('NotNow', 'Not now')], max_length=64, null=True)),
-                ('artifact_content_type', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.ContentType')),
-                ('enrolled_device', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice')),
+                (
+                    'status_code',
+                    models.CharField(
+                        choices=[
+                            ('Acknowledged', 'Acknowledged'),
+                            ('Error', 'Error'),
+                            ('CommandFormatError', 'Command format error'),
+                            ('NotNow', 'Not now'),
+                        ],
+                        max_length=64,
+                        null=True,
+                    ),
+                ),
+                (
+                    'artifact_content_type',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.ContentType'),
+                ),
+                (
+                    'enrolled_device',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice'),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -46,7 +64,14 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('identifier', models.UUIDField(default=uuid.uuid4, unique=True)),
                 ('version', models.PositiveIntegerField(default=1)),
-                ('allow_user_overrides', models.BooleanField(default=True, help_text='If set to true, users can approve additional kernel extensions not explicitly allowed by configuration profiles')),
+                (
+                    'allow_user_overrides',
+                    models.BooleanField(
+                        default=True,
+                        help_text='If set to true, users can approve additional kernel extensions not explicitly '
+                                  'allowed by configuration profiles',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('trashed_at', models.DateTimeField(editable=False, null=True)),
@@ -71,7 +96,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='kernelextensionpolicy',
             name='meta_business_unit',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='kernel_extension_policy', to='inventory.MetaBusinessUnit'),
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='kernel_extension_policy',
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AddField(
             model_name='kernelextension',

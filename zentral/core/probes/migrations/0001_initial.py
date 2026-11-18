@@ -19,7 +19,12 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=255, unique=True)),
                 ('slug', models.SlugField(max_length=255, unique=True)),
-                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='ACTIVE', max_length=32)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='ACTIVE', max_length=32
+                    ),
+                ),
                 ('description', models.TextField(blank=True)),
                 ('body', models.TextField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),

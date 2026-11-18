@@ -29,7 +29,20 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='event_detail_source',
-            field=models.CharField(choices=[('LOCAL', 'Local configuration'), ('VOTING_PORTAL', 'Voting portal'), ('CUSTOM', 'Custom'), ('NONE', 'None')], default='LOCAL', help_text='Where the block notification button comes from. Local configuration sends nothing, and leaves the button to the configuration profile. Switching back to it does not remove a button already sent to a machine: force a clean sync to do that. If the voting portal becomes unavailable, Zentral removes the button.', max_length=16),
+            field=models.CharField(
+                choices=[
+                    ('LOCAL', 'Local configuration'),
+                    ('VOTING_PORTAL', 'Voting portal'),
+                    ('CUSTOM', 'Custom'),
+                    ('NONE', 'None'),
+                ],
+                default='LOCAL',
+                help_text='Where the block notification button comes from. Local configuration sends nothing, and '
+                          'leaves the button to the configuration profile. Switching back to it does not remove a '
+                          'button already sent to a machine: force a clean sync to do that. If the voting portal '
+                          'becomes unavailable, Zentral removes the button.',
+                max_length=16,
+            ),
         ),
         migrations.AddField(
             model_name='configuration',
@@ -39,7 +52,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='event_detail_url',
-            field=models.URLField(blank=True, help_text='Custom URL of the block notification button. The following sequences are replaced: %file_identifier%, %bundle_or_file_identifier%, %file_bundle_id%, %team_id%, %signing_id%, %cdhash%, %username%, %machine_id%, %hostname%, %uuid%, %serial%.', max_length=1024),
+            field=models.URLField(
+                blank=True,
+                help_text='Custom URL of the block notification button. The following sequences are replaced: '
+                          '%file_identifier%, %bundle_or_file_identifier%, %file_bundle_id%, %team_id%, '
+                          '%signing_id%, %cdhash%, %username%, %machine_id%, %hostname%, %uuid%, %serial%.',
+                max_length=1024,
+            ),
         ),
         migrations.RunPython(set_voting_portal_source, unset_voting_portal_source),
     ]

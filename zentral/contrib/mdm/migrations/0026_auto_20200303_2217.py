@@ -16,16 +16,34 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='otaenrollmentsession',
             name='phase2_request',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='inventory.EnrollmentSecretRequest'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='+',
+                to='inventory.EnrollmentSecretRequest',
+            ),
         ),
         migrations.AddField(
             model_name='otaenrollmentsession',
             name='realm_user',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='realms.RealmUser'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='realms.RealmUser'
+            ),
         ),
         migrations.AlterField(
             model_name='otaenrollmentsession',
             name='status',
-            field=models.CharField(choices=[('PHASE_1', 'Phase 1'), ('PHASE_2', 'Phase 2'), ('PHASE_2_SCEP_VERIFIED', 'Phase 2 SCEP verified'), ('PHASE_3', 'Phase 3'), ('PHASE_3_SCEP_VERIFIED', 'Phase 3 SCEP verified'), ('AUTHENTICATED', 'Authenticated'), ('COMPLETED', 'Completed')], max_length=64),
+            field=models.CharField(
+                choices=[
+                    ('PHASE_1', 'Phase 1'),
+                    ('PHASE_2', 'Phase 2'),
+                    ('PHASE_2_SCEP_VERIFIED', 'Phase 2 SCEP verified'),
+                    ('PHASE_3', 'Phase 3'),
+                    ('PHASE_3_SCEP_VERIFIED', 'Phase 3 SCEP verified'),
+                    ('AUTHENTICATED', 'Authenticated'),
+                    ('COMPLETED', 'Completed'),
+                ],
+                max_length=64,
+            ),
         ),
     ]

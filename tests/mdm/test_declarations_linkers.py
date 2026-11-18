@@ -431,7 +431,6 @@ class MDMDeclarationLinkersTestCase(TestCase):
             )
         self.assertEqual(cm.exception.args[0], f"Referenced artifact {identifier} not available for all platforms.")
 
-
     def test_find_zentral_ref_artifact_cert_asset_acme(self):
         # _find_zentral_ref_artifact's CERT_ASSET branch returns the artifact
         # when the requested type is com.apple.asset.credential.acme.

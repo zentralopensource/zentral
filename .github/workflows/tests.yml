@@ -26,6 +26,7 @@ jobs:
       # docker compose uses this image, and does not build it again.
       # Only main writes the cache: the caches of the repository share one size limit.
       - name: build the web image
+        id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -58,3 +59,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path-to-lcov: "./coverage.lcov"
+
+      # after the tests, so that a warning does not hide their results
+      - name: lint
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: docker compose run --rm --quiet-pull --no-deps web flake8

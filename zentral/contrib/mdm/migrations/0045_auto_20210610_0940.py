@@ -13,12 +13,28 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='deviceartifact',
             name='status',
-            field=models.CharField(choices=[('Acknowledged', 'Acknowledged'), ('AwaitingConfirmation', 'AwaitingConfirmation'), ('Installed', 'Installed')], default='Acknowledged', max_length=64),
+            field=models.CharField(
+                choices=[
+                    ('Acknowledged', 'Acknowledged'),
+                    ('AwaitingConfirmation', 'AwaitingConfirmation'),
+                    ('Installed', 'Installed'),
+                ],
+                default='Acknowledged',
+                max_length=64,
+            ),
         ),
         migrations.AddField(
             model_name='userartifact',
             name='status',
-            field=models.CharField(choices=[('Acknowledged', 'Acknowledged'), ('AwaitingConfirmation', 'AwaitingConfirmation'), ('Installed', 'Installed')], default='Acknowledged', max_length=64),
+            field=models.CharField(
+                choices=[
+                    ('Acknowledged', 'Acknowledged'),
+                    ('AwaitingConfirmation', 'AwaitingConfirmation'),
+                    ('Installed', 'Installed'),
+                ],
+                default='Acknowledged',
+                max_length=64,
+            ),
         ),
         migrations.AlterUniqueTogether(
             name='deviceartifact',

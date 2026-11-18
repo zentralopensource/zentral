@@ -23,7 +23,16 @@ class Migration(migrations.Migration):
                 ('product_type', models.CharField(choices=[('App', 'App'), ('Book', 'Book')], max_length=4)),
                 ('device_assignable', models.BooleanField()),
                 ('revocable', models.BooleanField()),
-                ('supported_platforms', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('iOS', 'iOS'), ('iPadOS', 'iPadOS'), ('macOS', 'macOS'), ('tvOS', 'tvOS')], max_length=64), size=None)),
+                (
+                    'supported_platforms',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            choices=[('iOS', 'iOS'), ('iPadOS', 'iPadOS'), ('macOS', 'macOS'), ('tvOS', 'tvOS')],
+                            max_length=64,
+                        ),
+                        size=None,
+                    ),
+                ),
                 ('metadata', models.JSONField(null=True)),
                 ('name', models.TextField(null=True)),
                 ('bundle_id', models.TextField(null=True)),
@@ -76,13 +85,27 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='artifact',
             name='type',
-            field=models.CharField(choices=[('EnterpriseApp', 'Enterprise App'), ('Profile', 'Profile'), ('StoreApp', 'Store App')], editable=False, max_length=64),
+            field=models.CharField(
+                choices=[('EnterpriseApp', 'Enterprise App'), ('Profile', 'Profile'), ('StoreApp', 'Store App')],
+                editable=False,
+                max_length=64,
+            ),
         ),
         migrations.CreateModel(
             name='StoreApp',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('associated_domains', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=256, validators=[django.core.validators.MinLengthValidator(3)]), blank=True, default=list, size=None)),
+                (
+                    'associated_domains',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            max_length=256, validators=[django.core.validators.MinLengthValidator(3)]
+                        ),
+                        blank=True,
+                        default=list,
+                        size=None,
+                    ),
+                ),
                 ('associated_domains_enable_direct_downloads', models.BooleanField(default=False)),
                 ('removable', models.BooleanField(default=False)),
                 ('vpn_uuid', models.TextField(blank=True, null=True)),
@@ -91,8 +114,16 @@ class Migration(migrations.Migration):
                 ('configuration', models.BinaryField(null=True)),
                 ('remove_on_unenroll', models.BooleanField(default=True)),
                 ('prevent_backup', models.BooleanField(default=False)),
-                ('artifact_version', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='store_app', to='mdm.artifactversion')),
-                ('location_asset', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.locationasset')),
+                (
+                    'artifact_version',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE, related_name='store_app', to='mdm.artifactversion'
+                    ),
+                ),
+                (
+                    'location_asset',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.locationasset'),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -102,8 +133,14 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('attempts', models.IntegerField(default=0)),
                 ('last_attempted_at', models.DateTimeField(null=True)),
-                ('enrolled_device', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.enrolleddevice')),
-                ('location_asset', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.locationasset')),
+                (
+                    'enrolled_device',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.enrolleddevice'),
+                ),
+                (
+                    'location_asset',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.locationasset'),
+                ),
             ],
             options={
                 'unique_together': {('enrolled_device', 'location_asset')},
@@ -115,7 +152,10 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('serial_number', models.TextField(db_index=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('location_asset', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.locationasset')),
+                (
+                    'location_asset',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.locationasset'),
+                ),
             ],
             options={
                 'unique_together': {('location_asset', 'serial_number')},

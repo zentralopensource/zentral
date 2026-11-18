@@ -13,6 +13,14 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='configuration',
             name='event_detail_url',
-            field=models.URLField(blank=True, help_text='When the user gets a block notification, a button can be displayed which will take them to a web page with more information about that event.This property contains a kind of format string to be turned into the URL to send them to. The following sequences will be replaced in the final URL: %file_sha%, %machine_id%, %username%, %bundle_id%, %bundle_ver%.', max_length=1024),
+            field=models.URLField(
+                blank=True,
+                help_text='When the user gets a block notification, a button can be displayed which will take them '
+                          'to a web page with more information about that event.This property contains a kind of '
+                          'format string to be turned into the URL to send them to. The following sequences will be '
+                          'replaced in the final URL: %file_sha%, %machine_id%, %username%, %bundle_id%, '
+                          '%bundle_ver%.',
+                max_length=1024,
+            ),
         ),
     ]

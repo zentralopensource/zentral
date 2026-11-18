@@ -58,7 +58,10 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('realm', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='realms.Realm')),
-                ('user', models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, to='realms.RealmUser')),
+                (
+                    'user',
+                    models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, to='realms.RealmUser'),
+                ),
             ],
         ),
     ]

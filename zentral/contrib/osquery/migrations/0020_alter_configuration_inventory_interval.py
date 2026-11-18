@@ -14,6 +14,13 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='configuration',
             name='inventory_interval',
-            field=models.IntegerField(default=86400, help_text='Inventory refresh interval in seconds (Minimum: 300s)', validators=[django.core.validators.MinValueValidator(300), django.core.validators.MaxValueValidator(172800)]),
+            field=models.IntegerField(
+                default=86400,
+                help_text='Inventory refresh interval in seconds (Minimum: 300s)',
+                validators=[
+                    django.core.validators.MinValueValidator(300),
+                    django.core.validators.MaxValueValidator(172800),
+                ],
+            ),
         ),
     ]

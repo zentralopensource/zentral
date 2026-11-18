@@ -22,7 +22,10 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('builder', models.CharField(max_length=256)),
                 ('build_kwargs', django.contrib.postgres.fields.jsonb.JSONField(verbose_name='builder parameters')),
-                ('file', models.FileField(blank=True, upload_to=zentral.contrib.monolith.models.enrollment_package_path)),
+                (
+                    'file',
+                    models.FileField(blank=True, upload_to=zentral.contrib.monolith.models.enrollment_package_path),
+                ),
                 ('pkg_info', django.contrib.postgres.fields.jsonb.JSONField(blank=True, null=True)),
                 ('version', models.PositiveSmallIntegerField(default=0)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
@@ -34,6 +37,13 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='submanifestattachment',
             name='type',
-            field=models.CharField(choices=[('configuration_profile', 'configuration profile'), ('package', 'package'), ('script', 'script')], max_length=32),
+            field=models.CharField(
+                choices=[
+                    ('configuration_profile', 'configuration profile'),
+                    ('package', 'package'),
+                    ('script', 'script'),
+                ],
+                max_length=32,
+            ),
         ),
     ]

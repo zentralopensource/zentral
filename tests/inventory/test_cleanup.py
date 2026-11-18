@@ -7,7 +7,7 @@ from django.utils import timezone
 from zentral.conf import ConfigDict
 from zentral.contrib.inventory.models import MachineSnapshot, MachineSnapshotCommit, OSXAppInstance
 from zentral.contrib.inventory.utils.cleanup import (MAX_ATTEMPTS, cleanup_inventory, get_cleanup_max_date,
-                                                    get_default_snapshot_retention_days)
+                                                     get_default_snapshot_retention_days)
 from .utils import create_ms
 
 

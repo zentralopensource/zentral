@@ -17,7 +17,12 @@ class Migration(migrations.Migration):
             name='UserTask',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('task_result', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='django_celery_results.taskresult')),
+                (
+                    'task_result',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE, to='django_celery_results.taskresult'
+                    ),
+                ),
                 ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
         ),

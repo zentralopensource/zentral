@@ -19,27 +19,49 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='depenrollmentsession',
             name='enrollment_secret',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='dep_enrollment_session', to='inventory.EnrollmentSecret'),
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='dep_enrollment_session',
+                to='inventory.EnrollmentSecret',
+            ),
         ),
         migrations.AlterField(
             model_name='depenrollmentsession',
             name='scep_request',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='inventory.EnrollmentSecretRequest'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='+',
+                to='inventory.EnrollmentSecretRequest',
+            ),
         ),
         migrations.AlterField(
             model_name='depprofile',
             name='enrollment_secret',
-            field=models.OneToOneField(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='dep_profile', to='inventory.EnrollmentSecret'),
+            field=models.OneToOneField(
+                editable=False,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='dep_profile',
+                to='inventory.EnrollmentSecret',
+            ),
         ),
         migrations.AlterField(
             model_name='depvirtualserver',
             name='organization',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, to='mdm.DEPOrganization'),
+            field=models.ForeignKey(
+                editable=False, on_delete=django.db.models.deletion.PROTECT, to='mdm.DEPOrganization'
+            ),
         ),
         migrations.AlterField(
             model_name='depvirtualserver',
             name='token',
-            field=models.OneToOneField(editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='virtual_server', to='mdm.DEPToken'),
+            field=models.OneToOneField(
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name='virtual_server',
+                to='mdm.DEPToken',
+            ),
         ),
         migrations.AlterField(
             model_name='kernelextension',
@@ -49,7 +71,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='kernelextensionpolicy',
             name='meta_business_unit',
-            field=models.OneToOneField(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='kernel_extension_policy', to='inventory.MetaBusinessUnit'),
+            field=models.OneToOneField(
+                editable=False,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='kernel_extension_policy',
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AlterField(
             model_name='mdmenrollmentpackage',
@@ -59,21 +86,39 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='otaenrollment',
             name='enrollment_secret',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='ota_enrollment', to='inventory.EnrollmentSecret'),
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='ota_enrollment',
+                to='inventory.EnrollmentSecret',
+            ),
         ),
         migrations.AlterField(
             model_name='otaenrollmentsession',
             name='enrollment_secret',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='ota_enrollment_session', to='inventory.EnrollmentSecret'),
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='ota_enrollment_session',
+                to='inventory.EnrollmentSecret',
+            ),
         ),
         migrations.AlterField(
             model_name='otaenrollmentsession',
             name='phase2_scep_request',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='inventory.EnrollmentSecretRequest'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='+',
+                to='inventory.EnrollmentSecretRequest',
+            ),
         ),
         migrations.AlterField(
             model_name='otaenrollmentsession',
             name='phase3_scep_request',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='inventory.EnrollmentSecretRequest'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='+',
+                to='inventory.EnrollmentSecretRequest',
+            ),
         ),
     ]

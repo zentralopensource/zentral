@@ -48,6 +48,7 @@ elementpath==4.6.0
 Events==0.5
 executing==2.1.0
 filelock==4.2.4
+flake8==7.5.0
 frozenlist==1.7.0
 geoip2==5.2.0
 google-api-core==2.29.0
@@ -88,6 +89,7 @@ lz4==4.4.5
 MarkupSafe==3.0.3
 matplotlib-inline==0.1.7
 maxminddb==3.1.1
+mccabe==0.7.0
 microsoft-kiota-abstractions==1.10.1
 microsoft-kiota-authentication-azure==1.10.1
 microsoft-kiota-http==1.10.1
@@ -122,8 +124,10 @@ pure_eval==0.2.3
 pyarrow==24.0.0
 pyasn1==0.6.5
 pyasn1_modules==0.4.2
+pycodestyle==2.15.0
 pycparser==3.0
 pycurl==7.46.0
+pyflakes==4.1.0
 Pygments==2.20.0
 PyJWT==2.15.1
 pyOpenSSL==26.4.0

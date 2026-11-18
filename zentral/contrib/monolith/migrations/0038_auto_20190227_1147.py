@@ -19,7 +19,13 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollment',
             name='distributor_content_type',
-            field=models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='contenttypes.ContentType'),
+            field=models.ForeignKey(
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='+',
+                to='contenttypes.ContentType',
+            ),
         ),
         migrations.AlterField(
             model_name='manifest',
@@ -39,7 +45,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='pkginfo',
             name='category',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='monolith.PkgInfoCategory'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='monolith.PkgInfoCategory'
+            ),
         ),
         migrations.AlterField(
             model_name='pkginfo',
@@ -49,7 +57,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='submanifest',
             name='meta_business_unit',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='inventory.MetaBusinessUnit'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='inventory.MetaBusinessUnit'
+            ),
         ),
         migrations.AlterField(
             model_name='submanifestpkginfo',

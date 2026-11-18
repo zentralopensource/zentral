@@ -72,7 +72,7 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
     # create enrollment custom view
 
     def test_create_enrollment_custom_view_permission_denied(self):
-        self.login() 
+        self.login()
         self.permission_denied("create_enrollment_custom_view")
 
     def test_create_enrollment_custom_view_get(self):

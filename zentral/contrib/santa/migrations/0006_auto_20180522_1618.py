@@ -22,7 +22,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='enrollment',
             name='distributor_content_type',
-            field=models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, to='contenttypes.ContentType'),
+            field=models.ForeignKey(
+                editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, to='contenttypes.ContentType'
+            ),
         ),
         migrations.AddField(
             model_name='enrollment',
@@ -42,8 +44,11 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollment',
             name='secret',
-            field=models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE,
-                                       related_name='%(app_label)s_%(class)s',
-                                       to='inventory.enrollmentsecret'),
+            field=models.OneToOneField(
+                editable=False,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='%(app_label)s_%(class)s',
+                to='inventory.enrollmentsecret',
+            ),
         ),
     ]

@@ -15,7 +15,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='userenrollment',
             name='realm',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='realms.Realm'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='realms.Realm'
+            ),
         ),
         migrations.AddField(
             model_name='userenrollmentsession',
@@ -30,6 +32,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='userenrollmentsession',
             name='status',
-            field=models.CharField(choices=[('ACCOUNT_DRIVEN_START', 'Account-based onboarding initiated'), ('ACCOUNT_DRIVEN_AUTHENTICATED', 'Account-based onboarding authenticated'), ('STARTED', 'Started'), ('SCEP_VERIFIED', 'SCEP verified'), ('AUTHENTICATED', 'Authenticated'), ('COMPLETED', 'Completed')], max_length=64),
+            field=models.CharField(
+                choices=[
+                    ('ACCOUNT_DRIVEN_START', 'Account-based onboarding initiated'),
+                    ('ACCOUNT_DRIVEN_AUTHENTICATED', 'Account-based onboarding authenticated'),
+                    ('STARTED', 'Started'),
+                    ('SCEP_VERIFIED', 'SCEP verified'),
+                    ('AUTHENTICATED', 'Authenticated'),
+                    ('COMPLETED', 'Completed'),
+                ],
+                max_length=64,
+            ),
         ),
     ]

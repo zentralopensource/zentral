@@ -25,6 +25,11 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollment',
             name='taxonomies',
-            field=models.ManyToManyField(blank=True, help_text='The user will be asked to pick a tag of each one of the selected taxonomies during the enrollment.', to='inventory.Taxonomy'),
+            field=models.ManyToManyField(
+                blank=True,
+                help_text='The user will be asked to pick a tag of each one of the selected taxonomies during the '
+                          'enrollment.',
+                to='inventory.Taxonomy',
+            ),
         ),
     ]

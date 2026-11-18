@@ -22,8 +22,14 @@ class Migration(migrations.Migration):
                 ('artifact_version', models.PositiveIntegerField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('artifact_content_type', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.ContentType')),
-                ('enrolled_device', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice')),
+                (
+                    'artifact_content_type',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.ContentType'),
+                ),
+                (
+                    'enrolled_device',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice'),
+                ),
             ],
         ),
         migrations.AlterUniqueTogether(

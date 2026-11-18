@@ -53,12 +53,38 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='machinesnapshot',
             name='platform',
-            field=models.CharField(blank=True, choices=[('LINUX', 'Linux'), ('MACOS', 'macOS'), ('WINDOWS', 'Windows'), ('ANDROID', 'Android'), ('IOS', 'iOS'), ('IPADOS', 'iPadOS'), ('TVOS', 'tvOS')], max_length=32, null=True),
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ('LINUX', 'Linux'),
+                    ('MACOS', 'macOS'),
+                    ('WINDOWS', 'Windows'),
+                    ('ANDROID', 'Android'),
+                    ('IOS', 'iOS'),
+                    ('IPADOS', 'iPadOS'),
+                    ('TVOS', 'tvOS'),
+                ],
+                max_length=32,
+                null=True,
+            ),
         ),
         migrations.AlterField(
             model_name='machinesnapshot',
             name='type',
-            field=models.CharField(blank=True, choices=[('DESKTOP', 'Desktop'), ('LAPTOP', 'Laptop'), ('MOBILE', 'Mobile'), ('SERVER', 'Server'), ('TABLET', 'Tablet'), ('TV', 'TV'), ('VM', 'Virtual machine')], max_length=32, null=True),
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ('DESKTOP', 'Desktop'),
+                    ('LAPTOP', 'Laptop'),
+                    ('MOBILE', 'Mobile'),
+                    ('SERVER', 'Server'),
+                    ('TABLET', 'Tablet'),
+                    ('TV', 'TV'),
+                    ('VM', 'Virtual machine'),
+                ],
+                max_length=32,
+                null=True,
+            ),
         ),
         migrations.CreateModel(
             name='PrincipalUser',
@@ -69,7 +95,10 @@ class Migration(migrations.Migration):
                 ('unique_id', models.TextField(db_index=True)),
                 ('principal_name', models.TextField(db_index=True)),
                 ('display_name', models.TextField(blank=True, null=True)),
-                ('source', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='inventory.PrincipalUserSource')),
+                (
+                    'source',
+                    models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='inventory.PrincipalUserSource'),
+                ),
             ],
             options={
                 'abstract': False,
@@ -78,6 +107,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshot',
             name='principal_user',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PrincipalUser'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PrincipalUser'
+            ),
         ),
     ]

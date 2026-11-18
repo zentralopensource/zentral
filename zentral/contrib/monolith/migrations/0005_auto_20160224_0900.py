@@ -17,7 +17,18 @@ class Migration(migrations.Migration):
             name='SubManifestPkgInfo',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.CharField(choices=[('managed_installs', 'Managed Installs'), ('managed_uninstalls', 'Managed Uninstalls'), ('optional_installs', 'Optional Installs'), ('managed_updates', 'Managed Updates')], max_length=32)),
+                (
+                    'key',
+                    models.CharField(
+                        choices=[
+                            ('managed_installs', 'Managed Installs'),
+                            ('managed_uninstalls', 'Managed Uninstalls'),
+                            ('optional_installs', 'Optional Installs'),
+                            ('managed_updates', 'Managed Updates'),
+                        ],
+                        max_length=32,
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],

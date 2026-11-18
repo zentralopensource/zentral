@@ -22,9 +22,29 @@ class Migration(migrations.Migration):
                 ('serial_number', models.TextField(unique=True)),
                 ('device_assigned_by', models.EmailField(editable=False, max_length=254)),
                 ('device_assigned_date', models.DateTimeField(editable=False)),
-                ('last_op_type', models.CharField(choices=[('added', 'Added'), ('modified', 'Modified'), ('deleted', 'Deleted')], editable=False, max_length=64, null=True)),
+                (
+                    'last_op_type',
+                    models.CharField(
+                        choices=[('added', 'Added'), ('modified', 'Modified'), ('deleted', 'Deleted')],
+                        editable=False,
+                        max_length=64,
+                        null=True,
+                    ),
+                ),
                 ('last_op_date', models.DateTimeField(editable=False, null=True)),
-                ('profile_status', models.CharField(choices=[('empty', 'Empty'), ('assigned', 'Assigned'), ('pushed', 'Pushed'), ('removed', 'Removed')], editable=False, max_length=64)),
+                (
+                    'profile_status',
+                    models.CharField(
+                        choices=[
+                            ('empty', 'Empty'),
+                            ('assigned', 'Assigned'),
+                            ('pushed', 'Pushed'),
+                            ('removed', 'Removed'),
+                        ],
+                        editable=False,
+                        max_length=64,
+                    ),
+                ),
                 ('profile_uuid', models.UUIDField(editable=False, null=True, unique=True)),
                 ('profile_assign_time', models.DateTimeField(editable=False, null=True)),
                 ('profile_push_time', models.DateTimeField(editable=False, null=True)),
@@ -36,7 +56,18 @@ class Migration(migrations.Migration):
             name='DEPEnrollmentSession',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('STARTED', 'Started'), ('SCEP_VERIFIED', 'SCEP verified'), ('AUTHENTICATED', 'Authenticated'), ('COMPLETED', 'Completed')], max_length=64)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[
+                            ('STARTED', 'Started'),
+                            ('SCEP_VERIFIED', 'SCEP verified'),
+                            ('AUTHENTICATED', 'Authenticated'),
+                            ('COMPLETED', 'Completed'),
+                        ],
+                        max_length=64,
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
@@ -71,7 +102,43 @@ class Migration(migrations.Migration):
                 ('await_device_configured', models.BooleanField(default=False)),
                 ('auto_advance_setup', models.BooleanField(default=False)),
                 ('is_mdm_removable', models.BooleanField(default=False)),
-                ('skip_setup_items', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('AppleID', 'AppleID'), ('Biometric', 'Biometric'), ('Diagnostics', 'Diagnostics'), ('DisplayTone', 'DisplayTone'), ('Location', 'Location'), ('Passcode', 'Passcode'), ('Payment', 'Payment'), ('Privacy', 'Privacy'), ('Restore', 'Restore'), ('Siri', 'Siri'), ('TOS', 'TOS'), ('Zoom', 'Zoom'), ('Android', 'Android'), ('HomeButtonSensitivity', 'HomeButtonSensitivity'), ('OnBoarding', 'OnBoarding'), ('WatchMigration', 'WatchMigration'), ('FileVault', 'FileVault'), ('iCloudDiagnostics', 'iCloudDiagnostics'), ('iCloudStorage', 'iCloudStorage'), ('Registration', 'Registration'), ('ScreenSaver', 'ScreenSaver'), ('TapToSetup', 'TapToSetup'), ('TVHomeScreenSync', 'TVHomeScreenSync'), ('TVProviderSignIn', 'TVProviderSignIn'), ('TVRoom', 'TVRoom')], max_length=64), editable=False, size=None)),
+                (
+                    'skip_setup_items',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            choices=[
+                                ('AppleID', 'AppleID'),
+                                ('Biometric', 'Biometric'),
+                                ('Diagnostics', 'Diagnostics'),
+                                ('DisplayTone', 'DisplayTone'),
+                                ('Location', 'Location'),
+                                ('Passcode', 'Passcode'),
+                                ('Payment', 'Payment'),
+                                ('Privacy', 'Privacy'),
+                                ('Restore', 'Restore'),
+                                ('Siri', 'Siri'),
+                                ('TOS', 'TOS'),
+                                ('Zoom', 'Zoom'),
+                                ('Android', 'Android'),
+                                ('HomeButtonSensitivity', 'HomeButtonSensitivity'),
+                                ('OnBoarding', 'OnBoarding'),
+                                ('WatchMigration', 'WatchMigration'),
+                                ('FileVault', 'FileVault'),
+                                ('iCloudDiagnostics', 'iCloudDiagnostics'),
+                                ('iCloudStorage', 'iCloudStorage'),
+                                ('Registration', 'Registration'),
+                                ('ScreenSaver', 'ScreenSaver'),
+                                ('TapToSetup', 'TapToSetup'),
+                                ('TVHomeScreenSync', 'TVHomeScreenSync'),
+                                ('TVProviderSignIn', 'TVProviderSignIn'),
+                                ('TVRoom', 'TVRoom'),
+                            ],
+                            max_length=64,
+                        ),
+                        editable=False,
+                        size=None,
+                    ),
+                ),
                 ('support_phone_number', models.CharField(blank=True, max_length=50)),
                 ('support_email_address', models.EmailField(blank=True, max_length=250)),
                 ('org_magic', models.CharField(blank=True, max_length=256)),
@@ -79,7 +146,15 @@ class Migration(migrations.Migration):
                 ('include_tls_certificates', models.BooleanField(default=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('enrollment_secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='dep_profile', to='inventory.EnrollmentSecret')),
+                (
+                    'enrollment_secret',
+                    models.OneToOneField(
+                        editable=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='dep_profile',
+                        to='inventory.EnrollmentSecret',
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -110,14 +185,30 @@ class Migration(migrations.Migration):
                 ('uuid', models.UUIDField(editable=False, unique=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('organization', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='mdm.DEPOrganization')),
-                ('token', models.OneToOneField(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='virtual_server', to='mdm.DEPToken')),
+                (
+                    'organization',
+                    models.ForeignKey(
+                        editable=False, on_delete=django.db.models.deletion.CASCADE, to='mdm.DEPOrganization'
+                    ),
+                ),
+                (
+                    'token',
+                    models.OneToOneField(
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='virtual_server',
+                        to='mdm.DEPToken',
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
             model_name='depprofile',
             name='virtual_server',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='mdm.DEPVirtualServer'),
+            field=models.ForeignKey(
+                editable=False, on_delete=django.db.models.deletion.CASCADE, to='mdm.DEPVirtualServer'
+            ),
         ),
         migrations.AddField(
             model_name='depenrollmentsession',
@@ -132,12 +223,21 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='depenrollmentsession',
             name='enrollment_secret',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='dep_enrollment_session', to='inventory.EnrollmentSecret'),
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='dep_enrollment_session',
+                to='inventory.EnrollmentSecret',
+            ),
         ),
         migrations.AddField(
             model_name='depenrollmentsession',
             name='scep_request',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='inventory.EnrollmentSecretRequest'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='+',
+                to='inventory.EnrollmentSecretRequest',
+            ),
         ),
         migrations.AddField(
             model_name='depdevice',
@@ -147,6 +247,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='depdevice',
             name='virtual_server',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='mdm.DEPVirtualServer'),
+            field=models.ForeignKey(
+                editable=False, on_delete=django.db.models.deletion.CASCADE, to='mdm.DEPVirtualServer'
+            ),
         ),
     ]

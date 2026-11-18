@@ -16,11 +16,15 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollmentsecret',
             name='serial_numbers',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, null=True, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.TextField(), blank=True, null=True, size=None
+            ),
         ),
         migrations.AlterField(
             model_name='enrollmentsecret',
             name='udids',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, null=True, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.TextField(), blank=True, null=True, size=None
+            ),
         ),
     ]

@@ -53,29 +53,66 @@ class Migration(migrations.Migration):
             model_name='distributedquery',
             name='minimum_osquery_version',
             field=models.CharField(
-                editable=False, max_length=14, null=True,
-                validators=[django.core.validators.RegexValidator('^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(\\.[0-9]{1,4})?$')]
+                editable=False,
+                max_length=14,
+                null=True,
+                validators=[
+                    django.core.validators.RegexValidator('^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(\\.[0-9]{1,4})?$')
+                ],
             ),
         ),
         migrations.AddField(
             model_name='distributedquery',
             name='platforms',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('darwin', 'darwin'), ('freebsd', 'freebsd'), ('linux', 'linux'), ('posix', 'posix'), ('windows', 'windows')], max_length=32), default=list, editable=False, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(
+                    choices=[
+                        ('darwin', 'darwin'),
+                        ('freebsd', 'freebsd'),
+                        ('linux', 'linux'),
+                        ('posix', 'posix'),
+                        ('windows', 'windows'),
+                    ],
+                    max_length=32,
+                ),
+                default=list,
+                editable=False,
+                size=None,
+            ),
         ),
         migrations.AddField(
             model_name='query',
             name='minimum_osquery_version',
             field=models.CharField(
                 blank=True,
-                help_text='This query will only execute on osquery versions greater than or equal-to this version string',
-                max_length=14, null=True,
-                validators=[django.core.validators.RegexValidator('^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(\\.[0-9]{1,4})?$')]
+                help_text='This query will only execute on osquery versions greater than or equal-to this version '
+                          'string',
+                max_length=14,
+                null=True,
+                validators=[
+                    django.core.validators.RegexValidator('^[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}(\\.[0-9]{1,4})?$')
+                ],
             ),
         ),
         migrations.AddField(
             model_name='query',
             name='platforms',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('darwin', 'darwin'), ('freebsd', 'freebsd'), ('linux', 'linux'), ('posix', 'posix'), ('windows', 'windows')], max_length=32), blank=True, default=list, help_text="Restrict this query to some platforms, default is 'all' platforms", size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(
+                    choices=[
+                        ('darwin', 'darwin'),
+                        ('freebsd', 'freebsd'),
+                        ('linux', 'linux'),
+                        ('posix', 'posix'),
+                        ('windows', 'windows'),
+                    ],
+                    max_length=32,
+                ),
+                blank=True,
+                default=list,
+                help_text="Restrict this query to some platforms, default is 'all' platforms",
+                size=None,
+            ),
         ),
         migrations.RunPython(update_osquery_queries),
         migrations.RemoveField(

@@ -24,8 +24,18 @@ class Migration(migrations.Migration):
                 ('name', models.TextField()),
                 ('path', models.TextField()),
                 ('sha_256', models.CharField(db_index=True, max_length=64)),
-                ('bundle', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.OSXApp')),
-                ('signed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.Certificate')),
+                (
+                    'bundle',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.OSXApp'
+                    ),
+                ),
+                (
+                    'signed_by',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.Certificate'
+                    ),
+                ),
             ],
             options={
                 'abstract': False,

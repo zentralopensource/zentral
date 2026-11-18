@@ -28,7 +28,14 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='client_certificate_auth',
-            field=models.BooleanField(default=False, help_text='If set, a client certificate will be required for sync authentication. Santa will automatically look for a matching certificate and its private key in the System keychain, if the TLS server advertises the accepted CA certificates. If the CA certificates are not sent to the client, use the Client Auth Certificate Issuer CN setting.', verbose_name='Client certificate authentication'),
+            field=models.BooleanField(
+                default=False,
+                help_text='If set, a client certificate will be required for sync authentication. Santa will '
+                          'automatically look for a matching certificate and its private key in the System keychain, '
+                          'if the TLS server advertises the accepted CA certificates. If the CA certificates are not '
+                          'sent to the client, use the Client Auth Certificate Issuer CN setting.',
+                verbose_name='Client certificate authentication',
+            ),
         ),
         migrations.AddField(
             model_name='configuration',
@@ -38,6 +45,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='configuration',
             name='client_auth_certificate_issuer_cn',
-            field=models.CharField(blank=True, help_text='If set, this is the Issuer Name of a certificate in the System keychain to be used for sync authentication. The corresponding private key must also be in the keychain.', max_length=255, verbose_name='Client auth certificate issuer CN'),
+            field=models.CharField(
+                blank=True,
+                help_text='If set, this is the Issuer Name of a certificate in the System keychain to be used for '
+                          'sync authentication. The corresponding private key must also be in the keychain.',
+                max_length=255,
+                verbose_name='Client auth certificate issuer CN',
+            ),
         ),
     ]

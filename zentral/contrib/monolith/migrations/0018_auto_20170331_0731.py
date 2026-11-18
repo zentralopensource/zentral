@@ -26,6 +26,13 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='submanifestattachment',
             name='type',
-            field=models.CharField(choices=[('configuration_profile', 'configuration_profile'), ('package', 'package'), ('script', 'script')], max_length=32),
+            field=models.CharField(
+                choices=[
+                    ('configuration_profile', 'configuration_profile'),
+                    ('package', 'package'),
+                    ('script', 'script'),
+                ],
+                max_length=32,
+            ),
         ),
     ]

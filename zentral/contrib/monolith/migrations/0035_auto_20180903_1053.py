@@ -36,11 +36,15 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='submanifestattachment',
             name='condition',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='monolith.Condition'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='monolith.Condition'
+            ),
         ),
         migrations.AddField(
             model_name='submanifestpkginfo',
             name='condition',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='monolith.Condition'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='monolith.Condition'
+            ),
         ),
     ]

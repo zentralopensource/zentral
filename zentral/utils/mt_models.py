@@ -98,7 +98,7 @@ class Hasher(object):
                 v = make_naive(v)
             v = v.isoformat()
         elif isinstance(v, list):
-            assert(all([isinstance(e, str) and len(e) == 40 for e in v]))
+            assert all([isinstance(e, str) and len(e) == 40 for e in v])
         elif not isinstance(v, str):
             raise ValueError(f"Invalid field value {v} for field {k}")
         self.fields[k] = v
@@ -356,10 +356,10 @@ class AbstractMTObject(models.Model):
         if f.auto_created:
             raise MTOError(f"Field '{name}' of {self._meta.object_name} auto created")
         if many_to_one:
-            assert(many_to_many is None)
+            assert many_to_many is None
             many_to_many = False
         if many_to_many:
-            assert(many_to_one is None)
+            assert many_to_one is None
             many_to_one = False
         if f.many_to_one != many_to_one or f.many_to_many != many_to_many:
             raise MTOError(f"Field '{name}' of {self._meta.object_name} has "

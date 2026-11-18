@@ -19,7 +19,18 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(max_length=256, unique=True)),
                 ('dynamic_password', models.BooleanField(default=True)),
                 ('static_password', models.TextField(editable=False, null=True)),
-                ('rotation_interval_days', models.IntegerField(default=0, help_text='Interval in days after which the recovery password will be automatically rotated.', validators=[django.core.validators.MinValueValidator(0), django.core.validators.MaxValueValidator(366)], verbose_name='Rotation interval (days)')),
+                (
+                    'rotation_interval_days',
+                    models.IntegerField(
+                        default=0,
+                        help_text='Interval in days after which the recovery password will be automatically rotated.',
+                        validators=[
+                            django.core.validators.MinValueValidator(0),
+                            django.core.validators.MaxValueValidator(366),
+                        ],
+                        verbose_name='Rotation interval (days)',
+                    ),
+                ),
                 ('rotate_firmware_password', models.BooleanField(default=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
@@ -41,10 +52,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='blueprint',
             name='recovery_password_config',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='mdm.recoverypasswordconfig'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='mdm.recoverypasswordconfig'
+            ),
         ),
         migrations.AlterModelOptions(
             name='enrolleddevice',
-            options={'permissions': [('view_filevault_prk', 'Can view FileVault PRK'), ('view_recovery_password', 'Can view recovery password')]},
+            options={
+                'permissions': [
+                    ('view_filevault_prk', 'Can view FileVault PRK'),
+                    ('view_recovery_password', 'Can view recovery password'),
+                ]
+            },
         ),
     ]

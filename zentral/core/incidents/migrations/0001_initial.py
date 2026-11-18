@@ -20,11 +20,28 @@ class Migration(migrations.Migration):
                 ('name', models.TextField()),
                 ('description', models.TextField(blank=True)),
                 ('severity', models.PositiveIntegerField(choices=[(300, 'Critical'), (200, 'Major'), (100, 'Minor')])),
-                ('status', models.CharField(choices=[('OPEN', 'Open'), ('IN_PROGRESS', 'In Progress'), ('RESOLVED', 'Resolved'), ('CLOSED', 'Closed'), ('REOPENED', 'Reopened')], max_length=64)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[
+                            ('OPEN', 'Open'),
+                            ('IN_PROGRESS', 'In Progress'),
+                            ('RESOLVED', 'Resolved'),
+                            ('CLOSED', 'Closed'),
+                            ('REOPENED', 'Reopened'),
+                        ],
+                        max_length=64,
+                    ),
+                ),
                 ('event_id', models.UUIDField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('probe_source', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='probes.ProbeSource')),
+                (
+                    'probe_source',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='probes.ProbeSource'
+                    ),
+                ),
             ],
             options={
                 'ordering': ('-created_at',),
@@ -35,7 +52,19 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('serial_number', models.TextField(db_index=True)),
-                ('status', models.CharField(choices=[('OPEN', 'Open'), ('IN_PROGRESS', 'In Progress'), ('RESOLVED', 'Resolved'), ('CLOSED', 'Closed'), ('REOPENED', 'Reopened')], max_length=64)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[
+                            ('OPEN', 'Open'),
+                            ('IN_PROGRESS', 'In Progress'),
+                            ('RESOLVED', 'Resolved'),
+                            ('CLOSED', 'Closed'),
+                            ('REOPENED', 'Reopened'),
+                        ],
+                        max_length=64,
+                    ),
+                ),
                 ('event_id', models.UUIDField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
@@ -47,10 +76,18 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='machineincident',
-            constraint=models.UniqueConstraint(condition=models.Q(status__in=('IN_PROGRESS', 'OPEN', 'REOPENED')), fields=('incident', 'serial_number'), name='one_open_machine_incident_per_incident'),
+            constraint=models.UniqueConstraint(
+                condition=models.Q(status__in=('IN_PROGRESS', 'OPEN', 'REOPENED')),
+                fields=('incident', 'serial_number'),
+                name='one_open_machine_incident_per_incident',
+            ),
         ),
         migrations.AddConstraint(
             model_name='incident',
-            constraint=models.UniqueConstraint(condition=models.Q(status__in=('IN_PROGRESS', 'OPEN', 'REOPENED')), fields=('probe_source',), name='one_open_incident_per_probe'),
+            constraint=models.UniqueConstraint(
+                condition=models.Q(status__in=('IN_PROGRESS', 'OPEN', 'REOPENED')),
+                fields=('probe_source',),
+                name='one_open_incident_per_probe',
+            ),
         ),
     ]

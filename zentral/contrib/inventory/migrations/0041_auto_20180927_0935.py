@@ -16,11 +16,17 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollmentsecret',
             name='meta_business_unit',
-            field=models.ForeignKey(help_text='The business unit the machine will be assigned to at enrollment', on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit'),
+            field=models.ForeignKey(
+                help_text='The business unit the machine will be assigned to at enrollment',
+                on_delete=django.db.models.deletion.CASCADE,
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AlterField(
             model_name='enrollmentsecret',
             name='tags',
-            field=models.ManyToManyField(blank=True, help_text='The tags that the machine will get at enrollment', to='inventory.Tag'),
+            field=models.ManyToManyField(
+                blank=True, help_text='The tags that the machine will get at enrollment', to='inventory.Tag'
+            ),
         ),
     ]

@@ -14,7 +14,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='devicecommand',
             name='artifact_operation',
-            field=models.CharField(choices=[('Installation', 'Installation'), ('Removal', 'Removal')], max_length=64, null=True),
+            field=models.CharField(
+                choices=[('Installation', 'Installation'), ('Removal', 'Removal')], max_length=64, null=True
+            ),
         ),
         migrations.AddField(
             model_name='devicecommand',
@@ -24,7 +26,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='usercommand',
             name='artifact_operation',
-            field=models.CharField(choices=[('Installation', 'Installation'), ('Removal', 'Removal')], max_length=64, null=True),
+            field=models.CharField(
+                choices=[('Installation', 'Installation'), ('Removal', 'Removal')], max_length=64, null=True
+            ),
         ),
         migrations.AddField(
             model_name='usercommand',

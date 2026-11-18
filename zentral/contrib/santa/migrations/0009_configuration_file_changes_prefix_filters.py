@@ -13,6 +13,10 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='file_changes_prefix_filters',
-            field=models.TextField(blank=True, help_text='A list of ignore prefixes which are checked in-kernel. This is more performant than FileChangesRegex when ignoring whole directory trees.'),
+            field=models.TextField(
+                blank=True,
+                help_text='A list of ignore prefixes which are checked in-kernel. This is more performant than '
+                          'FileChangesRegex when ignoring whole directory trees.',
+            ),
         ),
     ]

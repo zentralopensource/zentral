@@ -21,10 +21,44 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=256, unique=True)),
-                ('config_refresh', models.IntegerField(default=1200, help_text='Configuration refresh interval in seconds. If the configuration endpoint cannot be reached during runtime, the normal retry approach is applied.', validators=[django.core.validators.MinValueValidator(60), django.core.validators.MaxValueValidator(86400)])),
-                ('distributed_interval', models.IntegerField(default=180, help_text='In seconds, the amount of time that osqueryd will wait between periodically checking in with a distributed query server to see if there are any queries to execute.', validators=[django.core.validators.MinValueValidator(60), django.core.validators.MaxValueValidator(86400)])),
+                (
+                    'config_refresh',
+                    models.IntegerField(
+                        default=1200,
+                        help_text='Configuration refresh interval in seconds. If the configuration endpoint cannot '
+                                  'be reached during runtime, the normal retry approach is applied.',
+                        validators=[
+                            django.core.validators.MinValueValidator(60),
+                            django.core.validators.MaxValueValidator(86400),
+                        ],
+                    ),
+                ),
+                (
+                    'distributed_interval',
+                    models.IntegerField(
+                        default=180,
+                        help_text='In seconds, the amount of time that osqueryd will wait between periodically '
+                                  'checking in with a distributed query server to see if there are any queries to '
+                                  'execute.',
+                        validators=[
+                            django.core.validators.MinValueValidator(60),
+                            django.core.validators.MaxValueValidator(86400),
+                        ],
+                    ),
+                ),
                 ('disable_carver', models.BooleanField(default=True, help_text='Disable the osquery file carver')),
-                ('buffered_log_max', models.IntegerField(default=500000, help_text='Maximum number of logs (status and result) kept on disk if Zentral is unavailable (0 = unlimited, max 1000000)', validators=[django.core.validators.MinValueValidator(0), django.core.validators.MaxValueValidator(1000000)])),
+                (
+                    'buffered_log_max',
+                    models.IntegerField(
+                        default=500000,
+                        help_text='Maximum number of logs (status and result) kept on disk if Zentral is unavailable '
+                                  '(0 = unlimited, max 1000000)',
+                        validators=[
+                            django.core.validators.MinValueValidator(0),
+                            django.core.validators.MaxValueValidator(1000000),
+                        ],
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
@@ -47,11 +81,29 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('osquery_release', models.CharField(blank=True, max_length=64)),
-                ('configuration', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='osquery.Configuration')),
-                ('distributor_content_type', models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='contenttypes.ContentType')),
-                ('secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE,
-                                                related_name='%(app_label)s_%(class)s',
-                                                to='inventory.enrollmentsecret')),
+                (
+                    'configuration',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='osquery.Configuration'),
+                ),
+                (
+                    'distributor_content_type',
+                    models.ForeignKey(
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='+',
+                        to='contenttypes.ContentType',
+                    ),
+                ),
+                (
+                    'secret',
+                    models.OneToOneField(
+                        editable=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='%(app_label)s_%(class)s',
+                        to='inventory.enrollmentsecret',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,

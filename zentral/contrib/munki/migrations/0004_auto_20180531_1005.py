@@ -32,10 +32,25 @@ class Migration(migrations.Migration):
                 ('distributor_pk', models.PositiveIntegerField(editable=False, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('distributor_content_type', models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='contenttypes.ContentType')),
-                ('secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE,
-                                                related_name='%(app_label)s_%(class)s',
-                                                to='inventory.enrollmentsecret')),
+                (
+                    'distributor_content_type',
+                    models.ForeignKey(
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='+',
+                        to='contenttypes.ContentType',
+                    ),
+                ),
+                (
+                    'secret',
+                    models.OneToOneField(
+                        editable=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='%(app_label)s_%(class)s',
+                        to='inventory.enrollmentsecret',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,

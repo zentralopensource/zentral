@@ -67,6 +67,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshot',
             name='puppetdb_inventory',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.PuppetDBInventory'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.PuppetDBInventory'
+            ),
         ),
     ]

@@ -16,6 +16,8 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='metabusinessunit',
             name='dashboard_osx_app_bundle_id_list',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.TextField(), blank=True, default=list, size=None
+            ),
         ),
     ]

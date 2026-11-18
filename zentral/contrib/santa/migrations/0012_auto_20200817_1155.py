@@ -17,7 +17,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='client_auth_certificate_issuer_cn',
-            field=models.CharField(blank=True, help_text='If set, this is the Issuer Name of a certificate in the System keychain to be used for sync authentication. The corresponding private key must also be in the keychain.', max_length=255),
+            field=models.CharField(
+                blank=True,
+                help_text='If set, this is the Issuer Name of a certificate in the System keychain to be used for '
+                          'sync authentication. The corresponding private key must also be in the keychain.',
+                max_length=255,
+            ),
         ),
         migrations.AlterUniqueTogether(
             name='enrolledmachine',

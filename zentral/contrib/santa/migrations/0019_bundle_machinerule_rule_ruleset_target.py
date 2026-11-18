@@ -26,7 +26,13 @@ class Migration(migrations.Migration):
             name='Target',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('type', models.CharField(choices=[('BINARY', 'Binary'), ('BUNDLE', 'Bundle'), ('CERTIFICATE', 'Certificate')], max_length=16)),
+                (
+                    'type',
+                    models.CharField(
+                        choices=[('BINARY', 'Binary'), ('BUNDLE', 'Bundle'), ('CERTIFICATE', 'Certificate')],
+                        max_length=16,
+                    ),
+                ),
                 ('sha256', models.CharField(max_length=64)),
             ],
         ),
@@ -56,15 +62,41 @@ class Migration(migrations.Migration):
             name='Rule',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('policy', models.PositiveSmallIntegerField(choices=[(1, 'Allowlist'), (2, 'Blocklist'), (3, 'Silent blocklist'), (5, 'Allowlist compiler')])),
+                (
+                    'policy',
+                    models.PositiveSmallIntegerField(
+                        choices=[
+                            (1, 'Allowlist'),
+                            (2, 'Blocklist'),
+                            (3, 'Silent blocklist'),
+                            (5, 'Allowlist compiler'),
+                        ]
+                    ),
+                ),
                 ('custom_msg', models.TextField(blank=True)),
                 ('version', models.PositiveIntegerField(default=1)),
-                ('serial_numbers', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), default=list, size=None, blank=True)),
-                ('primary_users', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), default=list, size=None, blank=True)),
+                (
+                    'serial_numbers',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), default=list, size=None, blank=True
+                    ),
+                ),
+                (
+                    'primary_users',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), default=list, size=None, blank=True
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('configuration', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='santa.Configuration')),
-                ('ruleset', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='santa.RuleSet')),
+                (
+                    'configuration',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='santa.Configuration'),
+                ),
+                (
+                    'ruleset',
+                    models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='santa.RuleSet'),
+                ),
                 ('tags', models.ManyToManyField(to='inventory.Tag', blank=True)),
                 ('target', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='santa.Target')),
             ],
@@ -76,10 +108,24 @@ class Migration(migrations.Migration):
             name='MachineRule',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('policy', models.PositiveSmallIntegerField(choices=[(1, 'Allowlist'), (2, 'Blocklist'), (3, 'Silent blocklist'), (5, 'Allowlist compiler'), (4, 'Remove')])),
+                (
+                    'policy',
+                    models.PositiveSmallIntegerField(
+                        choices=[
+                            (1, 'Allowlist'),
+                            (2, 'Blocklist'),
+                            (3, 'Silent blocklist'),
+                            (5, 'Allowlist compiler'),
+                            (4, 'Remove'),
+                        ]
+                    ),
+                ),
                 ('version', models.PositiveIntegerField()),
                 ('cursor', models.CharField(max_length=8, null=True)),
-                ('enrolled_machine', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='santa.EnrolledMachine')),
+                (
+                    'enrolled_machine',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='santa.EnrolledMachine'),
+                ),
                 ('target', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='santa.Target')),
             ],
             options={

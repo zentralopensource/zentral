@@ -155,4 +155,3 @@ class MonolithRoleProvisioningTestCase(TestCase):
         )
         role.refresh_from_db()
         self.assertNotEqual(role.name, "HaHa")
-

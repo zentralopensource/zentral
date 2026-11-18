@@ -23,13 +23,29 @@ class Migration(migrations.Migration):
                 ('secret', models.CharField(max_length=256, unique=True)),
                 ('module', models.CharField(db_index=True, max_length=256)),
                 ('config', django.contrib.postgres.fields.jsonb.JSONField(blank=True, null=True)),
-                ('serial_numbers', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), size=None)),
+                (
+                    'serial_numbers',
+                    django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), size=None),
+                ),
                 ('udids', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), size=None)),
-                ('quota', models.IntegerField(blank=True, null=True, validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(200000)])),
+                (
+                    'quota',
+                    models.IntegerField(
+                        blank=True,
+                        null=True,
+                        validators=[
+                            django.core.validators.MinValueValidator(1),
+                            django.core.validators.MaxValueValidator(200000),
+                        ],
+                    ),
+                ),
                 ('revoked_at', models.DateTimeField(blank=True, null=True)),
                 ('expired_at', models.DateTimeField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('meta_business_unit', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
+                (
+                    'meta_business_unit',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit'),
+                ),
                 ('tags', models.ManyToManyField(to='inventory.Tag')),
             ],
         ),
@@ -42,7 +58,10 @@ class Migration(migrations.Migration):
                 ('udid', models.TextField(blank=True)),
                 ('serial_number', models.TextField(blank=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('enrollment_secret', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.EnrollmentSecret')),
+                (
+                    'enrollment_secret',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.EnrollmentSecret'),
+                ),
             ],
         ),
     ]

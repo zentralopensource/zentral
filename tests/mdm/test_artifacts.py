@@ -12,7 +12,7 @@ from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag
 from zentral.contrib.mdm.artifacts import (ForceArtifactInstallError, Target,
                                            update_blueprint_serialized_artifacts)
 from zentral.contrib.mdm.declarations import (build_target_management_status_subscriptions,
-                                             get_artifact_version_server_token)
+                                              get_artifact_version_server_token)
 from zentral.contrib.mdm.models import (
     Artifact,
     ArtifactVersion,
@@ -1775,8 +1775,8 @@ class TestMDMArtifacts(TestCase):
     @patch("zentral.contrib.mdm.artifacts.naive_utcnow")
     def test_update_target_artifacts_from_status_report_installed_updated(self, patched_naive_utcnow, post_event):
         patched_naive_utcnow.side_effect = [datetime(2001, 2, 3, 4, 5, 6),
-                                               datetime(2002, 3, 4, 5, 6, 7),
-                                               datetime(2003, 4, 5, 6, 7, 8),]
+                                            datetime(2002, 3, 4, 5, 6, 7),
+                                            datetime(2003, 4, 5, 6, 7, 8)]
         _, profile_a, (profile_av2, profile_av) = self._force_blueprint_artifact(version_count=2)
         # v1
         status_report = build_status_report([(profile_av, True, True, None)])

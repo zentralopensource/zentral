@@ -19,15 +19,54 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=256)),
                 ('description', models.TextField(blank=True)),
-                ('serial_numbers', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None)),
-                ('excluded_serial_numbers', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None)),
-                ('primary_users', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None)),
-                ('excluded_primary_users', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None)),
+                (
+                    'serial_numbers',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), blank=True, default=list, size=None
+                    ),
+                ),
+                (
+                    'excluded_serial_numbers',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), blank=True, default=list, size=None
+                    ),
+                ),
+                (
+                    'primary_users',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), blank=True, default=list, size=None
+                    ),
+                ),
+                (
+                    'excluded_primary_users',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), blank=True, default=list, size=None
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('policy', models.CharField(choices=[('ALLOW', 'Allow'), ('BLOCK', 'Block')], help_text='Santa evaluates the block regex before the allow regex, so a path matched by both is blocked. In Monitor mode an allow entry grants nothing, and it stops the executions it matches from being reported.', max_length=16)),
-                ('regex', models.TextField(help_text='ICU pattern, matched against the path of the executable. It is anchored at the start of the path: use a leading .* to match anywhere. Capture groups are not allowed, because the entries of a policy are combined into one pattern.')),
-                ('configuration', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='santa.configuration')),
+                (
+                    'policy',
+                    models.CharField(
+                        choices=[('ALLOW', 'Allow'), ('BLOCK', 'Block')],
+                        help_text='Santa evaluates the block regex before the allow regex, so a path matched by both '
+                                  'is blocked. In Monitor mode an allow entry grants nothing, and it stops the '
+                                  'executions it matches from being reported.',
+                        max_length=16,
+                    ),
+                ),
+                (
+                    'regex',
+                    models.TextField(
+                        help_text='ICU pattern, matched against the path of the executable. It is anchored at the '
+                                  'start of the path: use a leading .* to match anywhere. Capture groups are not '
+                                  'allowed, because the entries of a policy are combined into one pattern.'
+                    ),
+                ),
+                (
+                    'configuration',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='santa.configuration'),
+                ),
                 ('excluded_tags', models.ManyToManyField(blank=True, related_name='+', to='inventory.tag')),
                 ('tags', models.ManyToManyField(blank=True, related_name='+', to='inventory.tag')),
             ],

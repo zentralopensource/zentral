@@ -23,7 +23,10 @@ class Migration(migrations.Migration):
                 ('token', models.BinaryField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('enrolled_device', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice')),
+                (
+                    'enrolled_device',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice'),
+                ),
             ],
         ),
     ]

@@ -14,7 +14,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollmentsecret',
             name='request_count',
-            field=models.IntegerField(default=0, editable=False, validators=[django.core.validators.MinValueValidator(0)]),
+            field=models.IntegerField(
+                default=0, editable=False, validators=[django.core.validators.MinValueValidator(0)]
+            ),
         ),
         migrations.AlterField(
             model_name='enrollmentsecret',

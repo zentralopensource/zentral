@@ -8,7 +8,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from zentral.contrib.monolith.utils import make_package_info
 from zentral.contrib.osquery.osx_package.builder import (LAUNCH_DAEMON_LABEL, LAUNCH_DAEMON_PLIST,
-                                                        OSQUERYD_PATHS, OsqueryZentralEnrollPkgBuilder)
+                                                         OSQUERYD_PATHS, OsqueryZentralEnrollPkgBuilder)
 from .utils import force_enrollment
 
 

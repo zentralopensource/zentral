@@ -29,6 +29,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshot',
             name='azure_ad_info',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.AzureADInfo'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.AzureADInfo'
+            ),
         ),
     ]

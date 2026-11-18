@@ -24,6 +24,8 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='depenrollment',
             name='skip_setup_items',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=64), editable=False, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(max_length=64), editable=False, size=None
+            ),
         ),
     ]

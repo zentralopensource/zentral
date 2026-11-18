@@ -20,7 +20,15 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(max_length=256, unique=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('meta_business_unit', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
+                (
+                    'meta_business_unit',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to='inventory.MetaBusinessUnit',
+                    ),
+                ),
             ],
             options={
                 'ordering': ('meta_business_unit__name', 'name'),
@@ -29,6 +37,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='tag',
             name='taxonomy',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.Taxonomy'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.Taxonomy'
+            ),
         ),
     ]

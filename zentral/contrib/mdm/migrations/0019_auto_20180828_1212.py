@@ -15,6 +15,11 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='depdevice',
             name='profile_status',
-            field=models.CharField(choices=[('empty', 'Empty'), ('assigned', 'Assigned'), ('pushed', 'Pushed'), ('removed', 'Removed')], default='empty', editable=False, max_length=64),
+            field=models.CharField(
+                choices=[('empty', 'Empty'), ('assigned', 'Assigned'), ('pushed', 'Pushed'), ('removed', 'Removed')],
+                default='empty',
+                editable=False,
+                max_length=64,
+            ),
         ),
     ]

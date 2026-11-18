@@ -19,6 +19,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollment',
             name='distributor_content_type',
-            field=models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='+', to='contenttypes.ContentType'),
+            field=models.ForeignKey(
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='+',
+                to='contenttypes.ContentType',
+            ),
         ),
     ]

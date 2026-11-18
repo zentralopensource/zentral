@@ -20,11 +20,33 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=256, unique=True)),
-                ('no_restart', models.BooleanField(default=False, help_text='Remove the launchd package restart requirement')),
-                ('depnotify_release', models.CharField(blank=True, help_text='Choose a DEPNotify release to be installed', max_length=64)),
-                ('depnotify_commands', models.TextField(blank=True, help_text='Configure DEPNotify with some commands')),
-                ('eula', models.TextField(blank=True, help_text='This text will be displayed in DEPNotify, and the user will be asked to accept it')),
-                ('setup_script', models.TextField(blank=True, help_text='A script that will be run when this enrollment package is installed')),
+                (
+                    'no_restart',
+                    models.BooleanField(default=False, help_text='Remove the launchd package restart requirement'),
+                ),
+                (
+                    'depnotify_release',
+                    models.CharField(
+                        blank=True, help_text='Choose a DEPNotify release to be installed', max_length=64
+                    ),
+                ),
+                (
+                    'depnotify_commands',
+                    models.TextField(blank=True, help_text='Configure DEPNotify with some commands'),
+                ),
+                (
+                    'eula',
+                    models.TextField(
+                        blank=True,
+                        help_text='This text will be displayed in DEPNotify, and the user will be asked to accept it',
+                    ),
+                ),
+                (
+                    'setup_script',
+                    models.TextField(
+                        blank=True, help_text='A script that will be run when this enrollment package is installed'
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
@@ -47,12 +69,30 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('munki_release', models.CharField(blank=True, max_length=64)),
-                ('configuration', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='monolith.Configuration')),
-                ('distributor_content_type', models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='contenttypes.ContentType')),
+                (
+                    'configuration',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='monolith.Configuration'),
+                ),
+                (
+                    'distributor_content_type',
+                    models.ForeignKey(
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='+',
+                        to='contenttypes.ContentType',
+                    ),
+                ),
                 ('manifest', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='monolith.Manifest')),
-                ('secret', models.OneToOneField(editable=False, on_delete=django.db.models.deletion.CASCADE,
-                                                related_name='%(app_label)s_%(class)s',
-                                                to='inventory.enrollmentsecret')),
+                (
+                    'secret',
+                    models.OneToOneField(
+                        editable=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='%(app_label)s_%(class)s',
+                        to='inventory.enrollmentsecret',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,

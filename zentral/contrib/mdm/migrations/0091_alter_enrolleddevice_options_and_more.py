@@ -41,7 +41,9 @@ class Migration(migrations.Migration):
             name="admin_password_rotation_delay",
             field=models.IntegerField(
                 default=60,
-                help_text="When an admin password is read, delay in minutes after which a command to rotate the password on the device will be scheduled. 60 min by default, 1 day max (1440 min). If 0, no automatic password rotation will be scheduled.",
+                help_text="When an admin password is read, delay in minutes after which a command to rotate the "
+                          "password on the device will be scheduled. 60 min by default, 1 day max (1440 min). If 0, "
+                          "no automatic password rotation will be scheduled.",
                 validators=[
                     django.core.validators.MinValueValidator(0),
                     django.core.validators.MaxValueValidator(1440),

@@ -18,14 +18,56 @@ class Migration(migrations.Migration):
             name='OTAEnrollmentSession',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('PHASE_2', 'Phase 2'), ('PHASE_2_SCEP_VERIFIED', 'Phase 2 SCEP verified'), ('PHASE_3', 'Phase 3'), ('PHASE_3_SCEP_VERIFIED', 'Phase 3 SCEP verified'), ('AUTHENTICATED', 'Authenticated'), ('COMPLETED', 'Completed')], max_length=64)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[
+                            ('PHASE_2', 'Phase 2'),
+                            ('PHASE_2_SCEP_VERIFIED', 'Phase 2 SCEP verified'),
+                            ('PHASE_3', 'Phase 3'),
+                            ('PHASE_3_SCEP_VERIFIED', 'Phase 3 SCEP verified'),
+                            ('AUTHENTICATED', 'Authenticated'),
+                            ('COMPLETED', 'Completed'),
+                        ],
+                        max_length=64,
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('enrolled_device', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice')),
-                ('enrollment_secret', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='ota_enrollment_session', to='inventory.EnrollmentSecret')),
-                ('ota_enrollment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.OTAEnrollment')),
-                ('phase2_scep_request', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='inventory.EnrollmentSecretRequest')),
-                ('phase3_scep_request', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='+', to='inventory.EnrollmentSecretRequest')),
+                (
+                    'enrolled_device',
+                    models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice'),
+                ),
+                (
+                    'enrollment_secret',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='ota_enrollment_session',
+                        to='inventory.EnrollmentSecret',
+                    ),
+                ),
+                (
+                    'ota_enrollment',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.OTAEnrollment'),
+                ),
+                (
+                    'phase2_scep_request',
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='+',
+                        to='inventory.EnrollmentSecretRequest',
+                    ),
+                ),
+                (
+                    'phase3_scep_request',
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='+',
+                        to='inventory.EnrollmentSecretRequest',
+                    ),
+                ),
             ],
         ),
         migrations.RemoveField(

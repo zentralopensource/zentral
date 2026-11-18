@@ -21,6 +21,10 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='enrollment',
             name='secret',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='santa_enrollment', to='inventory.EnrollmentSecret'),
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='santa_enrollment',
+                to='inventory.EnrollmentSecret',
+            ),
         ),
     ]

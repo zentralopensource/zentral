@@ -123,6 +123,7 @@ The `check` job of the release workflow validates the file. The readers validate
 
 - **Line length: 119** (both [pyproject.toml](pyproject.toml) ruff config and [tox.ini](tox.ini) flake8 config)
 - Ruff is configured with `select = ["E", "F"]`, `ignore = ["E741"]`
+- The tests workflow runs `flake8` on the whole repository after the tests, and fails on a warning. Ruff does not report the blank-line rules (E301, E303), so run flake8 too on the files you change.
 - Match the surrounding code's style — most modules are plain Django + DRF, no heavy framework abstractions
 
 ### Comments

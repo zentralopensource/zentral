@@ -15,11 +15,34 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshot',
             name='platform',
-            field=models.CharField(blank=True, choices=[('LINUX', 'Linux'), ('MACOS', 'macOS'), ('WINDOWS', 'Windows'), ('ANDROID', 'Android'), ('IOS', 'iOS')], max_length=32, null=True),
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ('LINUX', 'Linux'),
+                    ('MACOS', 'macOS'),
+                    ('WINDOWS', 'Windows'),
+                    ('ANDROID', 'Android'),
+                    ('IOS', 'iOS'),
+                ],
+                max_length=32,
+                null=True,
+            ),
         ),
         migrations.AddField(
             model_name='machinesnapshot',
             name='type',
-            field=models.CharField(blank=True, choices=[('DESKTOP', 'Desktop'), ('LAPTOP', 'Laptop'), ('MOBILE', 'Mobile'), ('SERVER', 'Server'), ('TABLET', 'Tablet'), ('VM', 'VM')], max_length=32, null=True),
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ('DESKTOP', 'Desktop'),
+                    ('LAPTOP', 'Laptop'),
+                    ('MOBILE', 'Mobile'),
+                    ('SERVER', 'Server'),
+                    ('TABLET', 'Tablet'),
+                    ('VM', 'VM'),
+                ],
+                max_length=32,
+                null=True,
+            ),
         ),
     ]

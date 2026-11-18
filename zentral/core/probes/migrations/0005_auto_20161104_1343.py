@@ -16,13 +16,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='probesource',
             name='apps',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None
+            ),
             preserve_default=False,
         ),
         migrations.AddField(
             model_name='probesource',
             name='event_types',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None
+            ),
             preserve_default=False,
         ),
         migrations.AddField(

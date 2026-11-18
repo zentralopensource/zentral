@@ -52,7 +52,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshotcommit',
             name='parent',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.MachineSnapshotCommit'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                to='inventory.MachineSnapshotCommit',
+            ),
         ),
         migrations.AddField(
             model_name='machinesnapshotcommit',

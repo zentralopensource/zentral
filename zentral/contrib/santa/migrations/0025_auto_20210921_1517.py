@@ -15,12 +15,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='rule',
             name='excluded_primary_users',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.TextField(), blank=True, default=list, size=None
+            ),
         ),
         migrations.AddField(
             model_name='rule',
             name='excluded_serial_numbers',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.TextField(), blank=True, default=list, size=None
+            ),
         ),
         migrations.AddField(
             model_name='rule',

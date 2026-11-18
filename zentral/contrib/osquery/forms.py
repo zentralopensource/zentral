@@ -29,6 +29,7 @@ from .packs import OsqueryConfigParser, update_or_create_pack
 from .releases import get_osquery_versions
 from .serializers import OsqueryPackSerializer
 
+
 # common
 
 class PlatformsWidget(forms.CheckboxSelectMultiple):

@@ -199,11 +199,43 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=256, unique=True)),
                 ('description', models.TextField(blank=True)),
-                ('table_name', models.CharField(max_length=64, unique=True, validators=[django.core.validators.RegexValidator('[a-z_]+')])),
+                (
+                    'table_name',
+                    models.CharField(
+                        max_length=64, unique=True, validators=[django.core.validators.RegexValidator('[a-z_]+')]
+                    ),
+                ),
                 ('query', models.TextField()),
                 ('path', models.CharField(max_length=256)),
-                ('columns', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=64, validators=[django.core.validators.RegexValidator('[a-z_]')]), size=None)),
-                ('platforms', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('darwin', 'darwin'), ('freebsd', 'freebsd'), ('linux', 'linux'), ('posix', 'posix'), ('windows', 'windows')], max_length=32), blank=True, default=list, help_text="Restrict this automatic table construction to some platforms, default is 'all' platforms", size=None)),
+                (
+                    'columns',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            max_length=64, validators=[django.core.validators.RegexValidator('[a-z_]')]
+                        ),
+                        size=None,
+                    ),
+                ),
+                (
+                    'platforms',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            choices=[
+                                ('darwin', 'darwin'),
+                                ('freebsd', 'freebsd'),
+                                ('linux', 'linux'),
+                                ('posix', 'posix'),
+                                ('windows', 'windows'),
+                            ],
+                            max_length=32,
+                        ),
+                        blank=True,
+                        default=list,
+                        help_text="Restrict this automatic table construction to some platforms, default is 'all' "
+                                  "platforms",
+                        size=None,
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
@@ -222,8 +254,23 @@ class Migration(migrations.Migration):
                 ('sql', models.TextField(editable=False)),
                 ('valid_from', models.DateTimeField()),
                 ('valid_until', models.DateTimeField(blank=True, null=True)),
-                ('serial_numbers', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None)),
-                ('shard', models.IntegerField(default=100, help_text='Restrict this query to a percentage (1-100) of target hosts', validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(100)])),
+                (
+                    'serial_numbers',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), blank=True, default=list, size=None
+                    ),
+                ),
+                (
+                    'shard',
+                    models.IntegerField(
+                        default=100,
+                        help_text='Restrict this query to a percentage (1-100) of target hosts',
+                        validators=[
+                            django.core.validators.MinValueValidator(1),
+                            django.core.validators.MaxValueValidator(100),
+                        ],
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
@@ -237,7 +284,10 @@ class Migration(migrations.Migration):
                 ('error_message', models.TextField(null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('distributed_query', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='osquery.DistributedQuery')),
+                (
+                    'distributed_query',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='osquery.DistributedQuery'),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -246,7 +296,10 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('serial_number', models.TextField()),
                 ('row', django.contrib.postgres.fields.jsonb.JSONField()),
-                ('distributed_query', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='osquery.DistributedQuery')),
+                (
+                    'distributed_query',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='osquery.DistributedQuery'),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -265,9 +318,24 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(max_length=256, unique=True)),
                 ('slug', models.CharField(editable=False, max_length=256, unique=True)),
                 ('description', models.TextField(blank=True)),
-                ('file_paths', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=256), blank=True, default=list, size=None)),
-                ('exclude_paths', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=256), blank=True, default=list, size=None)),
-                ('file_paths_queries', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, size=None)),
+                (
+                    'file_paths',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(max_length=256), blank=True, default=list, size=None
+                    ),
+                ),
+                (
+                    'exclude_paths',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(max_length=256), blank=True, default=list, size=None
+                    ),
+                ),
+                (
+                    'file_paths_queries',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(), blank=True, default=list, size=None
+                    ),
+                ),
                 ('access_monitoring', models.BooleanField(default=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
@@ -280,10 +348,58 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(max_length=256, unique=True)),
                 ('slug', models.CharField(editable=False, max_length=256, unique=True)),
                 ('description', models.TextField(blank=True)),
-                ('discovery_queries', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, help_text='This pack will only execute if all discovery queries return results.', size=None)),
-                ('platforms', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('darwin', 'darwin'), ('freebsd', 'freebsd'), ('linux', 'linux'), ('posix', 'posix'), ('windows', 'windows')], max_length=32), blank=True, default=list, help_text="Restrict this pack to some platforms, default is 'all' platforms", size=None)),
-                ('minimum_osquery_version', models.CharField(blank=True, help_text='This pack will only execute on osquery versions greater than or equal-to this version string', max_length=14, null=True, validators=[django.core.validators.RegexValidator('[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}')])),
-                ('shard', models.IntegerField(blank=True, help_text='Restrict every pack queries to a percentage (1-100) of target hosts', null=True, validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(100)])),
+                (
+                    'discovery_queries',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.TextField(),
+                        blank=True,
+                        default=list,
+                        help_text='This pack will only execute if all discovery queries return results.',
+                        size=None,
+                    ),
+                ),
+                (
+                    'platforms',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            choices=[
+                                ('darwin', 'darwin'),
+                                ('freebsd', 'freebsd'),
+                                ('linux', 'linux'),
+                                ('posix', 'posix'),
+                                ('windows', 'windows'),
+                            ],
+                            max_length=32,
+                        ),
+                        blank=True,
+                        default=list,
+                        help_text="Restrict this pack to some platforms, default is 'all' platforms",
+                        size=None,
+                    ),
+                ),
+                (
+                    'minimum_osquery_version',
+                    models.CharField(
+                        blank=True,
+                        help_text='This pack will only execute on osquery versions greater than or equal-to this '
+                                  'version string',
+                        max_length=14,
+                        null=True,
+                        validators=[django.core.validators.RegexValidator('[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}')],
+                    ),
+                ),
+                (
+                    'shard',
+                    models.IntegerField(
+                        blank=True,
+                        help_text='Restrict every pack queries to a percentage (1-100) of target hosts',
+                        null=True,
+                        validators=[
+                            django.core.validators.MinValueValidator(1),
+                            django.core.validators.MaxValueValidator(100),
+                        ],
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
@@ -293,30 +409,103 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('slug', models.CharField(editable=False, max_length=256)),
-                ('interval', models.IntegerField(help_text='interval in seconds to run the query (subject to splay/smoothing)', validators=[django.core.validators.MinValueValidator(10), django.core.validators.MaxValueValidator(86400)])),
-                ('log_removed_actions', models.BooleanField(default=True, help_text="If 'removed' action should be logged")),
+                (
+                    'interval',
+                    models.IntegerField(
+                        help_text='interval in seconds to run the query (subject to splay/smoothing)',
+                        validators=[
+                            django.core.validators.MinValueValidator(10),
+                            django.core.validators.MaxValueValidator(86400),
+                        ],
+                    ),
+                ),
+                (
+                    'log_removed_actions',
+                    models.BooleanField(default=True, help_text="If 'removed' action should be logged"),
+                ),
                 ('snapshot_mode', models.BooleanField(default=False, help_text="Run this query in 'snapshot' mode")),
-                ('platforms', django.contrib.postgres.fields.ArrayField(base_field=models.CharField(choices=[('darwin', 'darwin'), ('freebsd', 'freebsd'), ('linux', 'linux'), ('posix', 'posix'), ('windows', 'windows')], max_length=32), blank=True, default=list, help_text="restrict this query to some platforms, default is 'all' platforms", size=None)),
-                ('minimum_osquery_version', models.CharField(blank=True, help_text='only run this query on osquery versions greater than or equal-to this version string', max_length=14, null=True, validators=[django.core.validators.RegexValidator('[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}')])),
-                ('shard', models.IntegerField(blank=True, help_text='restrict this query to a percentage (1-100) of target hosts', null=True, validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(100)])),
-                ('can_be_denylisted', models.BooleanField(default=True, help_text='If this query can be denylisted when stopped for excessive resource consumption.')),
+                (
+                    'platforms',
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.CharField(
+                            choices=[
+                                ('darwin', 'darwin'),
+                                ('freebsd', 'freebsd'),
+                                ('linux', 'linux'),
+                                ('posix', 'posix'),
+                                ('windows', 'windows'),
+                            ],
+                            max_length=32,
+                        ),
+                        blank=True,
+                        default=list,
+                        help_text="restrict this query to some platforms, default is 'all' platforms",
+                        size=None,
+                    ),
+                ),
+                (
+                    'minimum_osquery_version',
+                    models.CharField(
+                        blank=True,
+                        help_text='only run this query on osquery versions greater than or equal-to this version '
+                                  'string',
+                        max_length=14,
+                        null=True,
+                        validators=[django.core.validators.RegexValidator('[0-9]{1,4}\\.[0-9]{1,4}\\.[0-9]{1,4}')],
+                    ),
+                ),
+                (
+                    'shard',
+                    models.IntegerField(
+                        blank=True,
+                        help_text='restrict this query to a percentage (1-100) of target hosts',
+                        null=True,
+                        validators=[
+                            django.core.validators.MinValueValidator(1),
+                            django.core.validators.MaxValueValidator(100),
+                        ],
+                    ),
+                ),
+                (
+                    'can_be_denylisted',
+                    models.BooleanField(
+                        default=True,
+                        help_text='If this query can be denylisted when stopped for excessive resource consumption.',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('pack', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='osquery.Pack')),
+                (
+                    'pack',
+                    models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='osquery.Pack'),
+                ),
             ],
         ),
         migrations.CreateModel(
             name='FileCarvingSession',
             fields=[
                 ('id', models.UUIDField(primary_key=True, serialize=False)),
-                ('distributed_query',  models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='osquery.DistributedQuery')),
-                ('pack_query', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='osquery.PackQuery')),
+                (
+                    'distributed_query',
+                    models.ForeignKey(
+                        null=True, on_delete=django.db.models.deletion.CASCADE, to='osquery.DistributedQuery'
+                    ),
+                ),
+                (
+                    'pack_query',
+                    models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, to='osquery.PackQuery'),
+                ),
                 ('serial_number', models.TextField(db_index=True)),
                 ('carve_guid', models.TextField()),
                 ('carve_size', models.BigIntegerField()),
                 ('block_size', models.IntegerField()),
                 ('block_count', models.IntegerField()),
-                ('archive', models.FileField(null=True, upload_to=zentral.contrib.osquery.models.file_carving_session_archive_path)),
+                (
+                    'archive',
+                    models.FileField(
+                        null=True, upload_to=zentral.contrib.osquery.models.file_carving_session_archive_path
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],
         ),
@@ -354,17 +543,28 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='inventory_apps',
-            field=models.BooleanField(default=False, help_text='Include macOS apps or linux packages in the inventory'),
+            field=models.BooleanField(
+                default=False, help_text='Include macOS apps or linux packages in the inventory'
+            ),
         ),
         migrations.AddField(
             model_name='configuration',
             name='inventory_interval',
-            field=models.IntegerField(default=86400, help_text='Inventory refresh interval in seconds', validators=[django.core.validators.MinValueValidator(300), django.core.validators.MaxValueValidator(172800)]),
+            field=models.IntegerField(
+                default=86400,
+                help_text='Inventory refresh interval in seconds',
+                validators=[
+                    django.core.validators.MinValueValidator(300),
+                    django.core.validators.MaxValueValidator(172800),
+                ],
+            ),
         ),
         migrations.AddField(
             model_name='configuration',
             name='options',
-            field=django.contrib.postgres.fields.jsonb.JSONField(blank=True, default=dict, help_text='Osquery options'),
+            field=django.contrib.postgres.fields.jsonb.JSONField(
+                blank=True, default=dict, help_text='Osquery options'
+            ),
         ),
         migrations.AddField(
             model_name='enrolledmachine',
@@ -397,7 +597,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='distributedquery',
             name='query',
-            field=models.ForeignKey(editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, to='osquery.Query'),
+            field=models.ForeignKey(
+                editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, to='osquery.Query'
+            ),
         ),
         migrations.AddField(
             model_name='distributedquery',
@@ -407,7 +609,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configurationpack',
             name='configuration',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='osquery.Configuration'),
+            field=models.ForeignKey(
+                editable=False, on_delete=django.db.models.deletion.CASCADE, to='osquery.Configuration'
+            ),
         ),
         migrations.AddField(
             model_name='configurationpack',
@@ -432,7 +636,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='packquery',
             name='query',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, to='osquery.Query')
+            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, to='osquery.Query'),
         ),
         migrations.AlterUniqueTogether(
             name='packquery',

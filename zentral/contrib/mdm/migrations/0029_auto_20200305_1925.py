@@ -71,7 +71,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='configurationprofile',
             name='meta_business_unit',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='mdm_configurationprofile', to='inventory.MetaBusinessUnit'),
+            field=models.ForeignKey(
+                editable=False,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='mdm_configurationprofile',
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AlterField(
             model_name='configurationprofile',
@@ -81,7 +86,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='kernelextensionpolicy',
             name='meta_business_unit',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='mdm_kernelextensionpolicy', to='inventory.MetaBusinessUnit'),
+            field=models.ForeignKey(
+                editable=False,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='mdm_kernelextensionpolicy',
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AlterField(
             model_name='kernelextensionpolicy',
@@ -91,7 +101,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='mdmenrollmentpackage',
             name='meta_business_unit',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='mdm_mdmenrollmentpackage', to='inventory.MetaBusinessUnit'),
+            field=models.ForeignKey(
+                editable=False,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name='mdm_mdmenrollmentpackage',
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AlterField(
             model_name='mdmenrollmentpackage',
@@ -107,10 +122,25 @@ class Migration(migrations.Migration):
                 ('dictionary', django.contrib.postgres.fields.jsonb.JSONField()),
                 ('time', models.DateTimeField(null=True)),
                 ('result_time', models.DateTimeField(null=True)),
-                ('status_code', models.CharField(choices=[('Acknowledged', 'Acknowledged'), ('Error', 'Error'), ('CommandFormatError', 'Command format error'), ('NotNow', 'Not now')], max_length=64, null=True)),
+                (
+                    'status_code',
+                    models.CharField(
+                        choices=[
+                            ('Acknowledged', 'Acknowledged'),
+                            ('Error', 'Error'),
+                            ('CommandFormatError', 'Command format error'),
+                            ('NotNow', 'Not now'),
+                        ],
+                        max_length=64,
+                        null=True,
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('enrolled_device', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice')),
+                (
+                    'enrolled_device',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.EnrolledDevice'),
+                ),
             ],
         ),
         migrations.AddField(

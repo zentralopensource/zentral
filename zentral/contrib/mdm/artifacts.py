@@ -494,7 +494,6 @@ class Target:
         artifact_to_install_pks = []
 
         def all_to_install_callback(artifact, artifact_version):
-            nonlocal only_first
             if (
                 (not included_types or artifact["type"] in included_types)
                 and self._test_artifact_version_to_install(artifact, artifact_version)

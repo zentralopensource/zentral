@@ -42,7 +42,12 @@ class Migration(migrations.Migration):
                 ('sha_256', models.CharField(db_index=True, max_length=64)),
                 ('valid_from', models.DateTimeField()),
                 ('valid_until', models.DateTimeField()),
-                ('signed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.Certificate')),
+                (
+                    'signed_by',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.Certificate'
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -96,11 +101,25 @@ class Migration(migrations.Migration):
                 ('mt_hash', models.CharField(db_index=True, max_length=40)),
                 ('mt_created_at', models.DateTimeField(auto_now_add=True)),
                 ('reference', models.TextField(blank=True, null=True)),
-                ('business_unit', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.BusinessUnit')),
+                (
+                    'business_unit',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.BusinessUnit'
+                    ),
+                ),
                 ('groups', models.ManyToManyField(to='inventory.MachineGroup')),
                 ('links', models.ManyToManyField(to='inventory.Link')),
                 ('machine', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.Machine')),
-                ('mt_next', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='mt_previous', to='inventory.MachineSnapshot')),
+                (
+                    'mt_next',
+                    models.OneToOneField(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='mt_previous',
+                        to='inventory.MachineSnapshot',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -161,7 +180,12 @@ class Migration(migrations.Migration):
                 ('sha_256', models.CharField(blank=True, db_index=True, max_length=64, null=True)),
                 ('type', models.TextField(blank=True, null=True)),
                 ('app', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.OSXApp')),
-                ('signed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.Certificate')),
+                (
+                    'signed_by',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.Certificate'
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -219,7 +243,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshot',
             name='os_version',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.OSVersion'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.OSVersion'
+            ),
         ),
         migrations.AddField(
             model_name='machinesnapshot',
@@ -234,12 +260,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='machinesnapshot',
             name='system_info',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.SystemInfo'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.SystemInfo'
+            ),
         ),
         migrations.AddField(
             model_name='machinesnapshot',
             name='teamviewer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.TeamViewer'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.TeamViewer'
+            ),
         ),
         migrations.AddField(
             model_name='machinegroup',

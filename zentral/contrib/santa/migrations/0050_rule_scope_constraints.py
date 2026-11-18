@@ -18,19 +18,32 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='scopedpathregex',
             name='regex',
-            field=models.CharField(help_text='ICU pattern, matched against the path of the executable. It is anchored at the start of the path: use a leading .* to match anywhere. Capture groups are not allowed, because the entries of a policy are combined into one pattern. At most 512 characters.', max_length=512),
+            field=models.CharField(
+                help_text='ICU pattern, matched against the path of the executable. It is anchored at the start of '
+                          'the path: use a leading .* to match anywhere. Capture groups are not allowed, because the '
+                          'entries of a policy are combined into one pattern. At most 512 characters.',
+                max_length=512,
+            ),
         ),
         migrations.AddConstraint(
             model_name='rule',
-            constraint=models.UniqueConstraint(fields=('configuration', 'target', 'policy'), name='santa_rule_one_per_target_and_policy'),
+            constraint=models.UniqueConstraint(
+                fields=('configuration', 'target', 'policy'), name='santa_rule_one_per_target_and_policy'
+            ),
         ),
         migrations.AddConstraint(
             model_name='rule',
-            constraint=models.UniqueConstraint(condition=models.Q(('is_voting_rule', True)), fields=('configuration', 'target'), name='santa_rule_one_voting_rule_per_target'),
+            constraint=models.UniqueConstraint(
+                condition=models.Q(('is_voting_rule', True)),
+                fields=('configuration', 'target'),
+                name='santa_rule_one_voting_rule_per_target',
+            ),
         ),
         migrations.AddConstraint(
             model_name='scopedclientmode',
-            constraint=models.UniqueConstraint(fields=('configuration', 'client_mode'), name='santa_scopedclientmode_one_per_mode'),
+            constraint=models.UniqueConstraint(
+                fields=('configuration', 'client_mode'), name='santa_scopedclientmode_one_per_mode'
+            ),
         ),
         # the composition removes a leading ^, so ^/a/ and /a/ are one pattern. The form and the
         # API remove it before the constraint is checked, and the rows written before them follow.
@@ -40,6 +53,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='scopedpathregex',
-            constraint=models.UniqueConstraint(fields=('configuration', 'regex', 'policy'), name='santa_scopedpathregex_one_per_pattern_and_policy'),
+            constraint=models.UniqueConstraint(
+                fields=('configuration', 'regex', 'policy'), name='santa_scopedpathregex_one_per_pattern_and_policy'
+            ),
         ),
     ]

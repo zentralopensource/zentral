@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from django.test import TestCase
 from django.urls import reverse
 from django.utils.crypto import get_random_string

@@ -16,6 +16,8 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='manifest',
             name='meta_business_unit',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit', unique=True),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit', unique=True
+            ),
         ),
     ]

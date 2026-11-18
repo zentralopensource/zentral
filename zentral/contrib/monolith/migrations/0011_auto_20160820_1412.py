@@ -17,13 +17,27 @@ class Migration(migrations.Migration):
             name='SubManifestConfigurationProfile',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key', models.CharField(choices=[('managed_installs', 'Managed Installs'), ('managed_uninstalls', 'Managed Uninstalls'), ('optional_installs', 'Optional Installs'), ('managed_updates', 'Managed Updates')], max_length=32)),
+                (
+                    'key',
+                    models.CharField(
+                        choices=[
+                            ('managed_installs', 'Managed Installs'),
+                            ('managed_uninstalls', 'Managed Uninstalls'),
+                            ('optional_installs', 'Optional Installs'),
+                            ('managed_updates', 'Managed Updates'),
+                        ],
+                        max_length=32,
+                    ),
+                ),
                 ('name', models.CharField(max_length=256)),
                 ('version', models.PositiveSmallIntegerField(default=0)),
                 ('configuration_profile', models.FileField(upload_to="/tmp")),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('sub_manifest', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='monolith.SubManifest')),
+                (
+                    'sub_manifest',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='monolith.SubManifest'),
+                ),
             ],
         ),
         migrations.AlterModelOptions(

@@ -14,11 +14,24 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='configuration',
             name='enable_sysx_cache',
-            field=models.BooleanField(default=False, help_text='When enabled, a self-managed cache for decision responses will be used to help improve performance when running Santa as a system extension alongside another system extension.', verbose_name='Enable system extension cache'),
+            field=models.BooleanField(
+                default=False,
+                help_text='When enabled, a self-managed cache for decision responses will be used to help improve '
+                          'performance when running Santa as a system extension alongside another system extension.',
+                verbose_name='Enable system extension cache',
+            ),
         ),
         migrations.AddField(
             model_name='configuration',
             name='full_sync_interval',
-            field=models.IntegerField(default=600, help_text='The max time to wait in seconds before performing a full sync with the server. Minimum: 60s, hardcoded in Santa.', validators=[django.core.validators.MinValueValidator(60), django.core.validators.MaxValueValidator(86400)]),
+            field=models.IntegerField(
+                default=600,
+                help_text='The max time to wait in seconds before performing a full sync with the server. Minimum: '
+                          '60s, hardcoded in Santa.',
+                validators=[
+                    django.core.validators.MinValueValidator(60),
+                    django.core.validators.MaxValueValidator(86400),
+                ],
+            ),
         ),
     ]

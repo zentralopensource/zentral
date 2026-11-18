@@ -25,12 +25,18 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='certificate',
             name='signed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='inventory.Certificate'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='inventory.Certificate'
+            ),
         ),
         migrations.AlterField(
             model_name='enrollmentsecret',
             name='meta_business_unit',
-            field=models.ForeignKey(help_text='The business unit the machine will be assigned to at enrollment', on_delete=django.db.models.deletion.PROTECT, to='inventory.MetaBusinessUnit'),
+            field=models.ForeignKey(
+                help_text='The business unit the machine will be assigned to at enrollment',
+                on_delete=django.db.models.deletion.PROTECT,
+                to='inventory.MetaBusinessUnit',
+            ),
         ),
         migrations.AlterField(
             model_name='machinegroup',
@@ -40,17 +46,23 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='machinesnapshot',
             name='business_unit',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.BusinessUnit'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.BusinessUnit'
+            ),
         ),
         migrations.AlterField(
             model_name='machinesnapshot',
             name='os_version',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.OSVersion'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.OSVersion'
+            ),
         ),
         migrations.AlterField(
             model_name='machinesnapshot',
             name='puppet_node',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PuppetNode'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PuppetNode'
+            ),
         ),
         migrations.AlterField(
             model_name='machinesnapshot',
@@ -60,12 +72,16 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='machinesnapshot',
             name='system_info',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.SystemInfo'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.SystemInfo'
+            ),
         ),
         migrations.AlterField(
             model_name='machinesnapshot',
             name='teamviewer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.TeamViewer'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.TeamViewer'
+            ),
         ),
         migrations.AlterField(
             model_name='osxappinstance',
@@ -75,16 +91,22 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='osxappinstance',
             name='signed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.Certificate'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.Certificate'
+            ),
         ),
         migrations.AlterField(
             model_name='puppetnode',
             name='core_facts',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PuppetCoreFacts'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PuppetCoreFacts'
+            ),
         ),
         migrations.AlterField(
             model_name='puppetnode',
             name='trusted_facts',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PuppetTrustedFacts'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.PuppetTrustedFacts'
+            ),
         ),
     ]

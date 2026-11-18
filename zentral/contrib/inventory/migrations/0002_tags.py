@@ -30,7 +30,10 @@ class Migration(migrations.Migration):
             name='MetaBusinessUnitTag',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('meta_business_unit', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
+                (
+                    'meta_business_unit',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit'),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -39,7 +42,15 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.TextField()),
                 ('color', models.CharField(default='FFFFFF', max_length=6)),
-                ('meta_business_unit', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
+                (
+                    'meta_business_unit',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to='inventory.MetaBusinessUnit',
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(

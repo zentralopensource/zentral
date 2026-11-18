@@ -18,8 +18,18 @@ import django.db.models.deletion
 # zentral.core.probes.migrations.0010_auto_20161129_1733
 
 class Migration(migrations.Migration):
-
-    replaces = [('probes', '0001_initial'), ('probes', '0002_auto_20160602_1001'), ('probes', '0003_auto_20160604_0908'), ('probes', '0004_auto_20161103_1728'), ('probes', '0005_auto_20161104_1343'), ('probes', '0006_auto_20161104_1343'), ('probes', '0007_auto_20161105_1647'), ('probes', '0008_auto_20161111_1906'), ('probes', '0009_auto_20161127_1928'), ('probes', '0010_auto_20161129_1733')]
+    replaces = [
+        ('probes', '0001_initial'),
+        ('probes', '0002_auto_20160602_1001'),
+        ('probes', '0003_auto_20160604_0908'),
+        ('probes', '0004_auto_20161103_1728'),
+        ('probes', '0005_auto_20161104_1343'),
+        ('probes', '0006_auto_20161104_1343'),
+        ('probes', '0007_auto_20161105_1647'),
+        ('probes', '0008_auto_20161111_1906'),
+        ('probes', '0009_auto_20161127_1928'),
+        ('probes', '0010_auto_20161129_1733'),
+    ]
 
     initial = True
 
@@ -33,7 +43,12 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=255, unique=True)),
                 ('slug', models.SlugField(max_length=255, unique=True)),
-                ('status', models.CharField(choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='ACTIVE', max_length=32)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='ACTIVE', max_length=32
+                    ),
+                ),
                 ('description', models.TextField(blank=True)),
                 ('body', models.TextField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
@@ -52,13 +67,17 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='probesource',
             name='apps',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None
+            ),
             preserve_default=False,
         ),
         migrations.AddField(
             model_name='probesource',
             name='event_types',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None),
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.CharField(max_length=255), blank=True, default=[], editable=False, size=None
+            ),
             preserve_default=False,
         ),
         migrations.AddField(
@@ -79,7 +98,9 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='probesource',
             name='status',
-            field=models.CharField(choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='INACTIVE', max_length=32),
+            field=models.CharField(
+                choices=[('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')], default='INACTIVE', max_length=32
+            ),
         ),
         migrations.CreateModel(
             name='Feed',
@@ -96,7 +117,13 @@ class Migration(migrations.Migration):
             name='FeedImport',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('OK', 'OK'), ('DOWNLOAD_ERROR', 'download error'), ('FEED_ERROR', 'feed error')], max_length=32)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[('OK', 'OK'), ('DOWNLOAD_ERROR', 'download error'), ('FEED_ERROR', 'feed error')],
+                        max_length=32,
+                    ),
+                ),
                 ('new_probes', models.PositiveIntegerField(default=0)),
                 ('updated_probes', models.PositiveIntegerField(default=0)),
                 ('archived_probes', models.PositiveIntegerField(default=0)),

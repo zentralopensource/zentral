@@ -15,6 +15,17 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='printer',
             name='scheme',
-            field=models.CharField(choices=[('ipp', 'ipp'), ('ipps', 'ipps'), ('http', 'http'), ('https', 'https'), ('lpd', 'lpd'), ('socket', 'socket')], default='ipp', max_length=5),
+            field=models.CharField(
+                choices=[
+                    ('ipp', 'ipp'),
+                    ('ipps', 'ipps'),
+                    ('http', 'http'),
+                    ('https', 'https'),
+                    ('lpd', 'lpd'),
+                    ('socket', 'socket'),
+                ],
+                default='ipp',
+                max_length=5,
+            ),
         ),
     ]

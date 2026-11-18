@@ -14,6 +14,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='packquery',
             name='interval',
-            field=models.IntegerField(help_text='interval in seconds to run the query (subject to splay/smoothing)', validators=[django.core.validators.MinValueValidator(10), django.core.validators.MaxValueValidator(1000000)]),
+            field=models.IntegerField(
+                help_text='interval in seconds to run the query (subject to splay/smoothing)',
+                validators=[
+                    django.core.validators.MinValueValidator(10),
+                    django.core.validators.MaxValueValidator(1000000),
+                ],
+            ),
         ),
     ]

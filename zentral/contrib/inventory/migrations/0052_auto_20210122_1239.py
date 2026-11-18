@@ -36,8 +36,18 @@ class Migration(migrations.Migration):
                 ('path', models.TextField()),
                 ('sha_256', models.CharField(db_index=True, max_length=64)),
                 ('bundle_path', models.TextField(blank=True, null=True)),
-                ('bundle', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.OSXApp')),
-                ('signed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.Certificate')),
+                (
+                    'bundle',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.OSXApp'
+                    ),
+                ),
+                (
+                    'signed_by',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='inventory.Certificate'
+                    ),
+                ),
                 ('source', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='inventory.Source')),
             ],
             options={
@@ -47,7 +57,15 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='principalusersource',
             name='type',
-            field=models.CharField(choices=[('COMPANY_PORTAL', 'Company portal'), ('GOOGLE_CHROME', 'Google Chrome'), ('LOGGED_IN_USER', 'Logged-in user'), ('SANTA_MACHINE_OWNER', 'Santa machine owner')], max_length=64),
+            field=models.CharField(
+                choices=[
+                    ('COMPANY_PORTAL', 'Company portal'),
+                    ('GOOGLE_CHROME', 'Google Chrome'),
+                    ('LOGGED_IN_USER', 'Logged-in user'),
+                    ('SANTA_MACHINE_OWNER', 'Santa machine owner'),
+                ],
+                max_length=64,
+            ),
         ),
         migrations.RunPython(copy_santa_collected_apps),
     ]

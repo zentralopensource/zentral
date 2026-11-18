@@ -20,7 +20,10 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('meta_business_unit', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
+                (
+                    'meta_business_unit',
+                    models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit'),
+                ),
             ],
         ),
         migrations.CreateModel(

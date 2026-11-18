@@ -16,6 +16,8 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='tag',
             name='color',
-            field=models.CharField(default='0079bf', max_length=6, validators=[zentral.contrib.inventory.models.validate_color]),
+            field=models.CharField(
+                default='0079bf', max_length=6, validators=[zentral.contrib.inventory.models.validate_color]
+            ),
         ),
     ]

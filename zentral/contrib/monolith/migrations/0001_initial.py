@@ -35,7 +35,10 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('catalogs', models.ManyToManyField(to='monolith.Catalog')),
-                ('meta_business_unit', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
+                (
+                    'meta_business_unit',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit'),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -73,11 +76,33 @@ class Migration(migrations.Migration):
                 ('description', models.TextField(blank=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('managed_installs', models.ManyToManyField(related_name='_submanifest_managed_installs_+', to='monolith.PkgInfoName')),
-                ('managed_uninstalls', models.ManyToManyField(related_name='_submanifest_managed_uninstalls_+', to='monolith.PkgInfoName')),
-                ('managed_updates', models.ManyToManyField(related_name='_submanifest_managed_updates_+', to='monolith.PkgInfoName')),
-                ('meta_business_unit', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='inventory.MetaBusinessUnit')),
-                ('optional_installs', models.ManyToManyField(related_name='_submanifest_optional_installs_+', to='monolith.PkgInfoName')),
+                (
+                    'managed_installs',
+                    models.ManyToManyField(related_name='_submanifest_managed_installs_+', to='monolith.PkgInfoName'),
+                ),
+                (
+                    'managed_uninstalls',
+                    models.ManyToManyField(
+                        related_name='_submanifest_managed_uninstalls_+', to='monolith.PkgInfoName'
+                    ),
+                ),
+                (
+                    'managed_updates',
+                    models.ManyToManyField(related_name='_submanifest_managed_updates_+', to='monolith.PkgInfoName'),
+                ),
+                (
+                    'meta_business_unit',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to='inventory.MetaBusinessUnit',
+                    ),
+                ),
+                (
+                    'optional_installs',
+                    models.ManyToManyField(related_name='_submanifest_optional_installs_+', to='monolith.PkgInfoName'),
+                ),
             ],
         ),
         migrations.AddField(

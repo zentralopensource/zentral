@@ -18,6 +18,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='connection',
             name='type',
-            field=models.CharField(choices=[('OAUTH', 'OAuth Admin SDK'), ('SA_CLOUD_ID', 'Service Account Could Identity')], default='OAUTH'),
+            field=models.CharField(
+                choices=[('OAUTH', 'OAuth Admin SDK'), ('SA_CLOUD_ID', 'Service Account Could Identity')],
+                default='OAUTH',
+            ),
         ),
     ]

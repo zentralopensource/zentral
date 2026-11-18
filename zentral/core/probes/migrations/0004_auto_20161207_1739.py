@@ -16,7 +16,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='probesource',
             name='feed_probe',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.SET_NULL, to='probes.FeedProbe'),
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to='probes.FeedProbe',
+            ),
         ),
         migrations.AddField(
             model_name='probesource',

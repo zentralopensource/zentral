@@ -20,6 +20,8 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='printer',
             name='required_package',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='monolith.PkgInfoName'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='monolith.PkgInfoName'
+            ),
         ),
     ]

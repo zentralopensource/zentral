@@ -24,7 +24,10 @@ class Migration(migrations.Migration):
                 ('unlock_token', models.BinaryField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('push_certificate', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.PushCertificate')),
+                (
+                    'push_certificate',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='mdm.PushCertificate'),
+                ),
             ],
         ),
     ]
