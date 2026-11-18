@@ -113,7 +113,7 @@ class MDMViewsTestCase(TestCase):
         super().setUp()
         scep_ca_store = crypto.X509Store()
         scep_ca_store.add_cert(crypto.X509.from_cryptography(self.scep_ca_cert))
-        patcher = patch("zentral.contrib.mdm.crypto.SCEP_CA_STORE", scep_ca_store)
+        patcher = patch("zentral.contrib.mdm.crypto.get_scep_ca_store", return_value=scep_ca_store)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -302,6 +302,13 @@ class MDMViewsTestCase(TestCase):
             session=session,
             sign_message=sign_message,
         )
+
+    def _self_signed_issuer(self, session):
+        return x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, f"MDM$DEP${session.enrollment_secret.secret}"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, f"MBU${self.mbu.pk}"),
+            x509.NameAttribute(NameOID.SERIAL_NUMBER, session.enrollment_secret.serial_numbers[0]),
+        ]).rfc4514_string()
 
     def _assertAbort(self, post_event, reason, **kwargs):
         last_event = post_event.call_args.args[0]
@@ -680,10 +687,44 @@ class MDMViewsTestCase(TestCase):
             self_signed=True,
         )
         self.assertEqual(response.status_code, 400)
-        self._assertAbort(post_event, "Unknown header signature certificate issuer")
+        self._assertAbort(
+            post_event,
+            f"Unknown header signature certificate issuer: {self._self_signed_issuer(session)}",
+        )
         session.refresh_from_db()
         self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
         self.assertIsNone(session.enrolled_device)
+
+    @patch("zentral.contrib.mdm.crypto.get_scep_ca_store", return_value=None)
+    def test_authenticate_dep_enrollment_session_macos_mdm_signature_header_no_scep_ca_fullchain(
+        self, get_scep_ca_store, post_event
+    ):
+        session, udid, serial_number = force_dep_enrollment_session(self.mbu)
+        payload = {
+            "UDID": udid,
+            "SerialNumber": serial_number,
+            "MessageType": "Authenticate",
+            "Topic": session.get_enrollment().push_certificate.topic,
+            "DeviceName": get_random_string(12),
+            "Model": "Macmini9,1",
+            "ModelName": "Mac mini",
+            "OSVersion": "12.4",
+            "BuildVersion": "21F79",
+        }
+        with self.assertLogs("zentral.contrib.mdm.crypto", level="ERROR") as cm:
+            response = self._put(reverse("mdm_public:checkin"), payload, session, sign_message=True)
+        self.assertEqual(
+            cm.output,
+            ["ERROR:zentral.contrib.mdm.crypto:No certificate in the scep_ca_fullchain "
+             "of the zentral.contrib.mdm configuration"]
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(
+            post_event,
+            f"Unknown header signature certificate issuer: {self.scep_ca_cert.subject.rfc4514_string()}",
+        )
+        session.refresh_from_db()
+        self.assertEqual(session.status, DEPEnrollmentSession.STARTED)
 
     @patch("zentral.contrib.mdm.public_views.mdm.verify_zentral_scep_ca_issuer")
     def test_authenticate_dep_enrollment_session_macos_mtls_headers_no_issuer_check(
@@ -3148,7 +3189,10 @@ class MDMViewsTestCase(TestCase):
             reverse("mdm_public:connect"), payload, session, sign_message=True, self_signed=True
         )
         self.assertEqual(response.status_code, 400)
-        self._assertAbort(post_event, "Unknown header signature certificate issuer")
+        self._assertAbort(
+            post_event,
+            f"Unknown header signature certificate issuer: {self._self_signed_issuer(session)}",
+        )
         enrolled_device.refresh_from_db()
         self.assertIsNone(enrolled_device.last_seen_at)
 

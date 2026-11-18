@@ -107,9 +107,9 @@ class MDMView(PostEventMixin, View):
                 certs, raw_payload = verify_signed_payload(request.body, base64.b64decode(header_signature))
             except Exception:
                 self.abort("Invalid header signature")
-            _, certificate_bytes, self.certificate = certs[0]
+            certificate_i, certificate_bytes, self.certificate = certs[0]
             if not verify_zentral_scep_ca_issuer(certificate_bytes):
-                self.abort("Unknown header signature certificate issuer")
+                self.abort(f"Unknown header signature certificate issuer: {certificate_i}")
             try:
                 self.payload = plistlib.loads(raw_payload)
             except plistlib.InvalidFileException:

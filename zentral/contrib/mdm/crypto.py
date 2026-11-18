@@ -1,8 +1,10 @@
 import base64
 import hashlib
 import hmac
+import logging
 import os
 import subprocess
+from functools import cache
 from tempfile import NamedTemporaryFile
 from asn1crypto import cms
 from cryptography import x509
@@ -15,6 +17,9 @@ from django.utils.functional import SimpleLazyObject
 from django.utils.timezone import make_naive
 from zentral.conf import settings
 from OpenSSL import crypto
+
+
+logger = logging.getLogger("zentral.contrib.mdm.crypto")
 
 
 # CA verification
@@ -39,20 +44,25 @@ def verify_store_certificate(store, certificate_bytes):
         return True
 
 
+@cache
 def get_scep_ca_store():
-    store = crypto.X509Store()
     head = "-----BEGIN CERTIFICATE-----"
-    for tail in settings["apps"]["zentral.contrib.mdm"]["scep_ca_fullchain"].split(head)[1:]:
+    tails = (settings["apps"]["zentral.contrib.mdm"].get("scep_ca_fullchain") or "").split(head)[1:]
+    if not tails:
+        return None
+    store = crypto.X509Store()
+    for tail in tails:
         certificate_bytes = (head + tail).encode("utf-8")
         store.add_cert(crypto.load_certificate(crypto.FILETYPE_PEM, certificate_bytes))
     return store
 
 
-SCEP_CA_STORE = SimpleLazyObject(get_scep_ca_store)
-
-
 def verify_zentral_scep_ca_issuer(certificate_bytes):
-    return verify_store_certificate(SCEP_CA_STORE, certificate_bytes)
+    store = get_scep_ca_store()
+    if store is None:
+        logger.error("No certificate in the scep_ca_fullchain of the zentral.contrib.mdm configuration")
+        return False
+    return verify_store_certificate(store, certificate_bytes)
 
 
 def get_iphone_device_ca_store():

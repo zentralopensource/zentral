@@ -1,6 +1,7 @@
 import os.path
 import plistlib
-from datetime import datetime
+from datetime import datetime, timedelta
+from unittest.mock import patch
 from asn1crypto import cms
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -8,7 +9,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import pkcs7
 from cryptography.x509.oid import NameOID
 from django.test import SimpleTestCase
-from zentral.contrib.mdm.crypto import verify_iphone_ca_signed_payload, verify_signed_payload
+from zentral.conf import settings
+from zentral.contrib.mdm.crypto import (get_scep_ca_store, verify_iphone_ca_signed_payload, verify_signed_payload,
+                                        verify_zentral_scep_ca_issuer)
 from .utils import build_signed_data_with_unknown_signer, build_signed_data_without_signer
 
 
@@ -150,3 +153,64 @@ class MDMCryptoSignedAttributesTestCase(SimpleTestCase):
             ]
         )
         self.assertNotVerified("Content type mismatch", signed_data)
+
+
+class MDMCryptoSCEPCAStoreTestCase(SimpleTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.ca_key = ec.generate_private_key(ec.SECP256R1())
+        ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "yolo CA")])
+        now = datetime.now()
+        cls.ca_cert = (
+            x509.CertificateBuilder()
+            .subject_name(ca_name)
+            .issuer_name(ca_name)
+            .not_valid_before(now - timedelta(days=1))
+            .not_valid_after(now + timedelta(days=1))
+            .serial_number(x509.random_serial_number())
+            .public_key(cls.ca_key.public_key())
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(private_key=cls.ca_key, algorithm=hashes.SHA256())
+        )
+        cls.cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "yolo")]))
+            .issuer_name(ca_name)
+            .not_valid_before(now - timedelta(days=1))
+            .not_valid_after(now + timedelta(days=1))
+            .serial_number(x509.random_serial_number())
+            .public_key(ec.generate_private_key(ec.SECP256R1()).public_key())
+            .sign(private_key=cls.ca_key, algorithm=hashes.SHA256())
+        )
+
+    def get_store(self, **config):
+        mdm_config = settings._collection["apps"]._collection["zentral.contrib.mdm"]._collection
+        with patch.dict(mdm_config, config):
+            if not config:
+                mdm_config.pop("scep_ca_fullchain", None)
+            return get_scep_ca_store.__wrapped__()
+
+    def test_no_scep_ca_fullchain(self):
+        self.assertIsNone(self.get_store())
+
+    def test_empty_scep_ca_fullchain(self):
+        self.assertIsNone(self.get_store(scep_ca_fullchain=""))
+
+    def test_scep_ca_fullchain_without_certificate(self):
+        self.assertIsNone(self.get_store(scep_ca_fullchain="NOT_A_VALID_CERT"))
+
+    def test_scep_ca_fullchain(self):
+        store = self.get_store(scep_ca_fullchain=self.ca_cert.public_bytes(serialization.Encoding.PEM).decode("ascii"))
+        with patch("zentral.contrib.mdm.crypto.get_scep_ca_store", return_value=store):
+            self.assertTrue(verify_zentral_scep_ca_issuer(self.cert.public_bytes(serialization.Encoding.DER)))
+
+    @patch("zentral.contrib.mdm.crypto.get_scep_ca_store", return_value=None)
+    def test_verify_zentral_scep_ca_issuer_no_store(self, get_scep_ca_store):
+        with self.assertLogs("zentral.contrib.mdm.crypto", level="ERROR") as cm:
+            self.assertFalse(verify_zentral_scep_ca_issuer(self.cert.public_bytes(serialization.Encoding.DER)))
+        self.assertEqual(
+            cm.output,
+            ["ERROR:zentral.contrib.mdm.crypto:No certificate in the scep_ca_fullchain "
+             "of the zentral.contrib.mdm configuration"]
+        )
