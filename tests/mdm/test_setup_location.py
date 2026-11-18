@@ -80,9 +80,6 @@ class SetupLocationViewsTestCase(TestCase, LoginCase):
 
     # list server server_tokens
 
-    def test_list_locations_redirect(self):
-        self.login_redirect("locations")
-
     def test_list_locations_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:locations"))
@@ -96,10 +93,6 @@ class SetupLocationViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, location.name)
 
     # view server server_token
-
-    def test_view_locations_redirect(self):
-        location, _ = self._force_location()
-        self.login_redirect("location", location.pk)
 
     def test_view_location_permission_denied(self):
         location, _ = self._force_location()
@@ -115,10 +108,6 @@ class SetupLocationViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, location.name)
 
     # delete server server_token
-
-    def test_delete_locations_redirect(self):
-        location, _ = self._force_location()
-        self.login_redirect("delete_location", location.pk)
 
     def test_delete_location_permission_denied(self):
         location, _ = self._force_location()
@@ -140,9 +129,6 @@ class SetupLocationViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, location.name)
 
     # create server server_token
-
-    def test_create_location_redirect(self):
-        self.login_redirect("create_location")
 
     def test_create_location_permission_denied(self):
         self.login()
@@ -277,10 +263,6 @@ class SetupLocationViewsTestCase(TestCase, LoginCase):
         self.assertEqual(location.name, "zentral.example.com")
 
     # update server server_token
-
-    def test_update_locations_redirect(self):
-        location, _ = self._force_location()
-        self.login_redirect("update_location", location.pk)
 
     def test_update_location_permission_denied(self):
         location, _ = self._force_location()

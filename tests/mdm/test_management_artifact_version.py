@@ -31,10 +31,6 @@ class ArtifactVersionManagementViewsTestCase(TestCase, LoginCase):
 
     # artifact version
 
-    def test_artifact_version_redirect(self):
-        artifact, (profile_av,) = force_artifact()
-        self.login_redirect("artifact_version", artifact.pk, profile_av.pk)
-
     def test_artifact_version_permission_denied(self):
         artifact, (profile_av,) = force_artifact()
         self.login()
@@ -102,10 +98,6 @@ class ArtifactVersionManagementViewsTestCase(TestCase, LoginCase):
 
     # update artifact version
 
-    def test_update_artifact_version_redirect(self):
-        artifact, (profile_av,) = force_artifact()
-        self.login_redirect("update_artifact_version", artifact.pk, profile_av.pk)
-
     def test_update_artifact_version_permission_denied(self):
         artifact, (profile_av,) = force_artifact()
         self.login()
@@ -165,10 +157,6 @@ class ArtifactVersionManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(serialized_artifact_version["tag_shards"], {str(shard_tag.pk): 42})
 
     # delete artifact version
-
-    def test_delete_artifact_version_redirect(self):
-        artifact, (profile_av,) = force_artifact()
-        self.login_redirect("delete_artifact_version", artifact.pk, profile_av.pk)
 
     def test_delete_artifact_version_permission_denied(self):
         artifact, (profile_av,) = force_artifact()

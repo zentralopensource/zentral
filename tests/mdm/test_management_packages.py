@@ -60,9 +60,6 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
 
     # list
 
-    def test_packages_redirect(self):
-        self.login_redirect("packages")
-
     def test_packages_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:packages"))
@@ -93,10 +90,6 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("mdm:delete_package", args=(package.pk,)))
 
     # detail
-
-    def test_package_redirect(self):
-        package = force_package()
-        self.login_redirect("package", package.pk)
 
     def test_package_permission_denied(self):
         package = force_package()
@@ -147,9 +140,6 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "ref-artifact")
 
     # create
-
-    def test_create_package_redirect(self):
-        self.login_redirect("create_package")
 
     def test_create_package_permission_denied(self):
         self.login()
@@ -272,10 +262,6 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
 
     # update
 
-    def test_update_package_redirect(self):
-        package = force_package()
-        self.login_redirect("update_package", package.pk)
-
     def test_update_package_permission_denied(self):
         package = force_package()
         self.login()
@@ -324,10 +310,6 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
 
     # delete
 
-    def test_delete_package_redirect(self):
-        package = force_package()
-        self.login_redirect("delete_package", package.pk)
-
     def test_delete_package_permission_denied(self):
         package = force_package()
         self.login()
@@ -362,10 +344,6 @@ class PackageManagementViewsTestCase(TestCase, LoginCase):
         self.assertIn("prev_value", event.payload["object"])
 
     # download
-
-    def test_download_package_redirect(self):
-        package = force_package()
-        self.login_redirect("download_package", package.pk)
 
     def test_download_package_permission_denied(self):
         package = force_package()

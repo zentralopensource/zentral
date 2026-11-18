@@ -38,9 +38,6 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(len(events), 1)
         return events[0]
 
-    def test_realm_group_tag_mappings_redirect(self):
-        self.login_redirect("realm_group_tag_mappings")
-
     def test_realm_group_tag_mappings_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:realm_group_tag_mappings"))
@@ -102,9 +99,6 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
 
     # create
 
-    def test_create_realm_group_tag_mapping_redirect(self):
-        self.login_redirect("create_realm_group_tag_mapping")
-
     def test_create_realm_group_tag_mapping_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:create_realm_group_tag_mapping"))
@@ -140,10 +134,6 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(new_value["tag"], {"pk": tag.pk, "name": tag.name})
 
     # update rgtm
-
-    def test_update_realm_group_tag_mapping_redirect(self):
-        rgtm = force_realm_group_tag_mapping()
-        self.login_redirect("update_realm_group_tag_mapping", rgtm.pk)
 
     def test_update_realm_group_tag_mapping_permission_denied(self):
         rgtm = force_realm_group_tag_mapping()
@@ -184,10 +174,6 @@ class RealmGroupTagMappingManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(event.payload["object"]["new_value"]["tag"]["pk"], new_tag.pk)
 
     # delete rgtm
-
-    def test_delete_realm_group_tag_mapping_redirect(self):
-        rgtm = force_realm_group_tag_mapping()
-        self.login_redirect("delete_realm_group_tag_mapping", rgtm.pk)
 
     def test_delete_realm_group_tag_mapping_permission_denied(self):
         rgtm = force_realm_group_tag_mapping()

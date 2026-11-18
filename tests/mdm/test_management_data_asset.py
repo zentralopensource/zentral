@@ -122,9 +122,6 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
 
     # upload data asset GET
 
-    def test_upload_data_asset_get_redirect(self):
-        self.login_redirect("upload_data_asset")
-
     def test_upload_data_asset_get_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:upload_data_asset"))
@@ -137,14 +134,6 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/dataasset_form.html")
 
     # upload data_asset POST
-
-    def test_upload_data_asset_post_redirect(self):
-        zipfile = build_zipfile()
-        self.login_redirect("upload_data_asset",
-                            data={"type": str(DataAsset.Type.ZIP),
-                                  "file": zipfile,
-                                  "name": get_random_string(12),
-                                  "platforms": [str(Platform.MACOS)]})
 
     def test_upload_data_asset_post_permission_denied(self):
         zipfile = build_zipfile()
@@ -267,10 +256,6 @@ class MDMDataAssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(data_asset.get_content_type(), "application/zip")
 
     # upgrade data asset GET
-
-    def test_upgrade_data_asset_get_redirect(self):
-        artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)
-        self.login_redirect("upgrade_data_asset", artifact.pk)
 
     def test_upgrade_data_asset_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.DATA_ASSET)

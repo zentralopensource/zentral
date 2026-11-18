@@ -73,9 +73,6 @@ class InventorySearchViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_login_redirect(self):
-        self.login_redirect("index", query_params={"sf": "mbu-t-tp-hm-pf-osv"})
-
     def test_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:index"))

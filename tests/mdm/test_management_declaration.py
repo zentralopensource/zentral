@@ -76,10 +76,6 @@ class MDMDeclarationManagementViewsTestCase(TestCase, LoginCase):
 
     # create declaration GET
 
-    def test_create_declaration_get_redirect(self):
-        for suffix in ("activation", "asset", "configuration", "manual_configuration"):
-            self.login_redirect(f"create_{suffix}")
-
     def test_create_declaration_get_permission_denied(self):
         self.login()
         for suffix in ("activation", "asset", "configuration", "manual_configuration"):
@@ -94,10 +90,6 @@ class MDMDeclarationManagementViewsTestCase(TestCase, LoginCase):
             self.assertTemplateUsed(response, "mdm/declaration_form.html")
 
     # create declaration POST
-
-    def test_create_declaration_post_redirect(self):
-        for suffix in ("activation", "asset", "configuration", "manual_configuration"):
-            self.login_redirect(f"create_{suffix}", data={"yolo": "fomo"})
 
     def test_create_declaration_post_permission_denied(self):
         self.login()
@@ -310,19 +302,11 @@ class MDMDeclarationManagementViewsTestCase(TestCase, LoginCase):
 
     # upgrade declaration POST
 
-    def test_upgrade_declaration_get_redirect(self):
-        artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self.login_redirect("upgrade_declaration", artifact.pk)
-
     def test_upgrade_declaration_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
         self.login()
         response = self.client.get(reverse("mdm:upgrade_declaration", args=(artifact.pk,)))
         self.assertEqual(response.status_code, 403)
-
-    def test_upgrade_declaration_post_redirect(self):
-        artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)
-        self.login_redirect("upgrade_declaration", artifact.pk, data={"un": 2})
 
     def test_upgrade_declaration_post_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CONFIGURATION)

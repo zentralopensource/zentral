@@ -31,9 +31,6 @@ class SetupIndexViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_locations_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:index"))
@@ -56,9 +53,6 @@ class SetupIndexViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("mdm:blueprints"))
 
     # root CA
-
-    def test_root_ca_redirect(self):
-        self.login_redirect("root_ca")
 
     def test_root_ca_permission_denied(self):
         self.login()

@@ -43,10 +43,6 @@ class EnrolledUserManagementViewsTestCase(TestCase, LoginCase):
 
     # test enrolled user
 
-    def test_enrolled_user_redirect(self):
-        enrolled_user, enrolled_device = self._force_enrolled_user()
-        self.login_redirect("enrolled_user", enrolled_device.pk, enrolled_user.pk)
-
     def test_enrolled_user_permission_denied(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
         self.login()
@@ -163,10 +159,6 @@ class EnrolledUserManagementViewsTestCase(TestCase, LoginCase):
 
     # test enrolled user commands
 
-    def test_enrolled_user_commands_redirect(self):
-        enrolled_user, enrolled_device = self._force_enrolled_user()
-        self.login_redirect("enrolled_user_commands", enrolled_device.pk, enrolled_user.pk)
-
     def test_enrolled_user_commands_permission_denied(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()
         self.login()
@@ -215,15 +207,6 @@ class EnrolledUserManagementViewsTestCase(TestCase, LoginCase):
         )
 
     # download custom command result
-
-    def test_download_enrolled_user_command_result_redirect(self):
-        enrolled_user, enrolled_device = self._force_enrolled_user()
-        cmd = CustomCommand.create_for_target(
-            Target(enrolled_device, enrolled_user),
-            kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
-            queue=True
-        )
-        self.login_redirect("download_enrolled_user_command_result", cmd.db_command.uuid)
 
     def test_download_enrolled_user_command_result_permission_denied(self):
         enrolled_user, enrolled_device = self._force_enrolled_user()

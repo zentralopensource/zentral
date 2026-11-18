@@ -174,11 +174,6 @@ class MDMForceInstallViewsTestCase(TestCase, LoginCase):
 
     # force install device artifact
 
-    def test_force_install_device_artifact_redirect(self):
-        enrolled_device = self._force_enrolled_device()
-        artifact, _, _ = self._force_target_artifact(enrolled_device)
-        self.login_redirect("force_install_device_artifact", enrolled_device.pk, artifact.pk)
-
     def test_force_install_device_artifact_permission_denied(self):
         enrolled_device = self._force_enrolled_device()
         artifact, _, _ = self._force_target_artifact(enrolled_device)

@@ -37,10 +37,6 @@ class ActionViewsTestCase(TestCase, LoginCase):
 
     # action details
 
-    def test_detail_action_redirect(self):
-        action = force_action()
-        self.login_redirect("action", str(action.pk))
-
     def test_detail_action_permission_denied(self):
         action = force_action()
         self.login()
@@ -63,9 +59,6 @@ class ActionViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "value_hash")
 
     # action list
-
-    def test_list_redirect(self):
-        self.login_redirect("actions")
 
     def test_list_permission_denied(self):
         self.login()

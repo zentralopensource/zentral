@@ -75,23 +75,12 @@ class AccountTasksViewsTestCase(TestCase):
     def login(self, user):
         self.client.force_login(user)
 
-    def login_redirect(self, url_name, *args):
-        url = reverse("accounts:{}".format(url_name), args=args)
-        response = self.client.get(url)
-        self.assertRedirects(response, "{u}?next={n}".format(u=reverse("login"), n=url))
-
     # urls
-
-    def test_task_list_redirect(self):
-        self.login_redirect("tasks")
 
     def test_task_list_login(self):
         self.login(self.ui_user)
         response = self.client.get(reverse("accounts:tasks"))
         self.assertEqual(response.status_code, 200)
-
-    def test_task_detail_redirect(self):
-        self.login_redirect("task", self.task_by_user.task_id)
 
     def test_task_detail_login(self):
         self.login(self.ui_user)

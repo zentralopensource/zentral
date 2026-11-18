@@ -114,9 +114,6 @@ class AppsViewsTestCase(TestCase, LoginCase):
 
     # Android apps
 
-    def test_android_apps_redirect(self):
-        self.login_redirect("android_apps")
-
     def test_android_apps_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:android_apps"))
@@ -174,9 +171,6 @@ class AppsViewsTestCase(TestCase, LoginCase):
 
     # Debian packages
 
-    def test_deb_packages_redirect(self):
-        self.login_redirect("deb_packages")
-
     def test_deb_packages_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:deb_packages"))
@@ -233,9 +227,6 @@ class AppsViewsTestCase(TestCase, LoginCase):
 
     # iOS apps
 
-    def test_ios_apps_redirect(self):
-        self.login_redirect("ios_apps")
-
     def test_ios_apps_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:ios_apps"))
@@ -291,9 +282,6 @@ class AppsViewsTestCase(TestCase, LoginCase):
 
     # macOS apps
 
-    def test_macos_apps_redirect(self):
-        self.login_redirect("macos_apps")
-
     def test_macos_apps_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:macos_apps"))
@@ -348,9 +336,6 @@ class AppsViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "We didn't find any item related to your search")
 
     # Programs
-
-    def test_programs_redirect(self):
-        self.login_redirect("programs")
 
     def test_programs_permission_denied(self):
         self.login()

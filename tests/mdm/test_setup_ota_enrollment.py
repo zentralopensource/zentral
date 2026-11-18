@@ -33,9 +33,6 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # create OTA enrollment
 
-    def test_create_ota_enrollment_redirect(self):
-        self.login_redirect("create_ota_enrollment")
-
     def test_create_ota_enrollment_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:create_ota_enrollment"))
@@ -79,10 +76,6 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # view OTA enrollment
 
-    def test_view_ota_enrollment_redirect(self):
-        enrollment = force_ota_enrollment(self.mbu)
-        self.login_redirect("ota_enrollment", enrollment.pk)
-
     def test_view_ota_enrollment_permission_denied(self):
         enrollment = force_ota_enrollment(self.mbu)
         self.login()
@@ -120,10 +113,6 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # download OTA profile
 
-    def test_download_profile_service_payload_redirect(self):
-        enrollment = force_ota_enrollment(self.mbu)
-        self.login_redirect("download_profile_service_payload", enrollment.pk)
-
     def test_download_profile_service_payload_permission_denied(self):
         enrollment = force_ota_enrollment(self.mbu)
         self.login()
@@ -147,10 +136,6 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 404)
 
     # update OTA enrollment
-
-    def test_update_ota_enrollment_redirect(self):
-        enrollment = force_ota_enrollment(self.mbu)
-        self.login_redirect("update_ota_enrollment", enrollment.pk)
 
     def test_update_ota_enrollment_permission_denied(self):
         enrollment = force_ota_enrollment(self.mbu)
@@ -192,10 +177,6 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # revoke OTA enrollment
 
-    def test_revoke_ota_enrollment_redirect(self):
-        enrollment = force_ota_enrollment(self.mbu)
-        self.login_redirect("revoke_ota_enrollment", enrollment.pk)
-
     def test_revoke_ota_enrollment_permission_denied(self):
         enrollment = force_ota_enrollment(self.mbu)
         self.login()
@@ -220,9 +201,6 @@ class MDMOTAEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertIsNotNone(enrollment.enrollment_secret.revoked_at)
 
     # list OTA enrollments
-
-    def test_list_ota_enrollments_redirect(self):
-        self.login_redirect("enrollments")
 
     def test_list_ota_enrollments_no_perm_empty(self):
         enrollment = force_ota_enrollment(self.mbu)

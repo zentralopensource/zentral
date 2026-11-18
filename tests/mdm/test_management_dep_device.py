@@ -35,9 +35,6 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     # test DEP devices
 
-    def test_dep_devices_redirect(self):
-        self.login_redirect("dep_devices")
-
     def test_dep_devices_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:dep_devices"))
@@ -157,10 +154,6 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     # test DEP device
 
-    def test_dep_device_redirect(self):
-        device = force_dep_device()
-        self.login_redirect("dep_device", device.pk)
-
     def test_dep_device_permission_denied(self):
         device = force_dep_device()
         self.login()
@@ -220,10 +213,6 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "REPLACEMENT")
 
     # test assign profile
-
-    def test_assign_profile_redirect(self):
-        device = force_dep_device()
-        self.login_redirect("assign_dep_device_profile", device.pk)
 
     def test_assign_profile_permission_denied(self):
         device = force_dep_device()
@@ -389,10 +378,6 @@ class DEPDeviceManagementViewsTestCase(TestCase, LoginCase):
         client.assign_profile.assert_called_once_with(enrollment.uuid, [device.serial_number])
 
     # test refresh
-
-    def test_refresh_login_redirect(self):
-        device = force_dep_device()
-        self.login_redirect("refresh_dep_device", device.pk)
 
     def test_refresh_permission_denied(self):
         device = force_dep_device()

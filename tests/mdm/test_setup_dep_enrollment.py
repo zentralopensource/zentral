@@ -47,9 +47,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # create DEP enrollment
 
-    def test_create_dep_enrollment_redirect(self):
-        self.login_redirect("create_dep_enrollment")
-
     def test_create_dep_enrollment_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:create_dep_enrollment"))
@@ -338,10 +335,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # view DEP enrollment
 
-    def test_view_dep_enrollment_redirect(self):
-        enrollment = force_dep_enrollment(self.mbu)
-        self.login_redirect("dep_enrollment", enrollment.pk)
-
     def test_view_dep_enrollment_permission_denied(self):
         enrollment = force_dep_enrollment(self.mbu)
         self.login()
@@ -396,10 +389,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # check DEP enrollment
 
-    def test_check_dep_enrollment_redirect(self):
-        enrollment = force_dep_enrollment(self.mbu)
-        self.login_redirect("check_dep_enrollment", enrollment.pk)
-
     def test_check_dep_enrollment_permission_denied(self):
         enrollment = force_dep_enrollment(self.mbu)
         self.login()
@@ -419,10 +408,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         client.get_profile.assert_called_once_with(enrollment.uuid)
 
     # update DEP enrollment
-
-    def test_update_dep_enrollment_redirect(self):
-        enrollment = force_dep_enrollment(self.mbu)
-        self.login_redirect("update_dep_enrollment", enrollment.pk)
 
     def test_update_dep_enrollment_permission_denied(self):
         enrollment = force_dep_enrollment(self.mbu)
@@ -639,9 +624,6 @@ class MDMDEPEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(enrollment.admin_password_rotation_delay, 15)
 
     # list DEP enrollments
-
-    def test_list_dep_enrollments_redirect(self):
-        self.login_redirect("enrollments")
 
     def test_list_dep_enrollments_no_perm_empty(self):
         enrollment = force_dep_enrollment(self.mbu)

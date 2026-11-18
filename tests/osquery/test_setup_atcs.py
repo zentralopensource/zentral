@@ -50,9 +50,6 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
 
     # create atc
 
-    def test_create_atc_redirect(self):
-        self.login_redirect("create_atc")
-
     def test_create_atc_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:create_atc"))
@@ -108,10 +105,6 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
 
     # update atc
 
-    def test_update_atc_redirect(self):
-        atc, _ = self._force_atc()
-        self.login_redirect("update_atc", atc.pk)
-
     def test_update_atc_permission_denied(self):
         atc, _ = self._force_atc()
         self.login()
@@ -146,10 +139,6 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
 
     # delete atc
 
-    def test_delete_atc_redirect(self):
-        atc, _ = self._force_atc()
-        self.login_redirect("delete_atc", atc.pk)
-
     def test_delete_atc_permission_denied(self):
         atc, _ = self._force_atc()
         self.login()
@@ -180,9 +169,6 @@ class OsquerySetupATCViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"osquery_automatic_table_construction": [str(atc.pk)]})
 
     # atc list
-
-    def test_atc_list_redirect(self):
-        self.login_redirect("atcs")
 
     def test_atc_list_permission_denied(self):
         self.login()

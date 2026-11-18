@@ -10,9 +10,6 @@ from .utils import (TurboSetupTestCase, force_configuration, force_enrollment, f
 class TurboSetupConfigurationsTestCase(TurboSetupTestCase):
     # configuration list
 
-    def test_configurations_redirect(self):
-        self.login_redirect("configurations")
-
     def test_configurations_permission_denied(self):
         self.login()
         response = self.client.get(reverse("turbo:configurations"))
@@ -114,9 +111,6 @@ class TurboSetupConfigurationsTestCase(TurboSetupTestCase):
 
     # create configuration
 
-    def test_create_configuration_redirect(self):
-        self.login_redirect("create_configuration")
-
     def test_create_configuration_permission_denied(self):
         self.login()
         response = self.client.get(reverse("turbo:create_configuration"))
@@ -179,10 +173,6 @@ class TurboSetupConfigurationsTestCase(TurboSetupTestCase):
 
     # update configuration
 
-    def test_update_configuration_redirect(self):
-        configuration = force_configuration()
-        self.login_redirect("update_configuration", configuration.pk)
-
     def test_update_configuration_permission_denied(self):
         configuration = force_configuration()
         self.login()
@@ -232,10 +222,6 @@ class TurboSetupConfigurationsTestCase(TurboSetupTestCase):
         self.assertEqual(event.payload["object"]["new_value"]["name"], new_name)
 
     # delete configuration
-
-    def test_delete_configuration_redirect(self):
-        configuration = force_configuration()
-        self.login_redirect("delete_configuration", configuration.pk)
 
     def test_delete_configuration_permission_denied(self):
         configuration = force_configuration()

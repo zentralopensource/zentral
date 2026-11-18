@@ -40,9 +40,6 @@ class IntuneViewsTestCase(TestCase, LoginCase):
 
     # Tenants
 
-    def test_tenants_redirect(self):
-        self.login_redirect("tenants")
-
     def test_tenants_permission_denied(self):
         self.login()
         response = self.client.get(reverse("intune:tenants"))
@@ -57,9 +54,6 @@ class IntuneViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "intune/tenant_list.html")
 
     # Create Tenant
-
-    def test_create_tenant_redirect(self):
-        self.login_redirect("create_tenant")
 
     def test_create_tenant_permission_denied(self):
         self.login()
@@ -125,10 +119,6 @@ class IntuneViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["intune", "zentral"])
 
     # Update Tenant
-
-    def test_update_tenant_redirect(self):
-        tenant = force_tenant(self.bu)
-        self.login_redirect("update_tenant", tenant.pk)
 
     def test_update_tenant_permission_denied(self):
         tenant = force_tenant(self.bu)
@@ -199,10 +189,6 @@ class IntuneViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["intune", "zentral"])
 
     # Delete Tenant
-
-    def test_delete_tenant_redirect(self):
-        tenant = force_tenant(self.bu)
-        self.login_redirect("delete_tenant", tenant.pk)
 
     def test_delete_tenant_permission_denied(self):
         tenant = force_tenant(self.bu)

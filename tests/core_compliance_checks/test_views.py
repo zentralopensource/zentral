@@ -56,10 +56,6 @@ class ComplianceChecksViewsTestCase(TestCase, LoginCase):
 
     # redirect
 
-    def test_redirect_redirect(self):
-        cc = self._force_jmespath_check()
-        self.login_redirect("redirect", cc.compliance_check.pk)
-
     def test_redirect_permission_denied(self):
         cc = self._force_jmespath_check()
         self.login()

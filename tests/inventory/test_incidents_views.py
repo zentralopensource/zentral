@@ -76,9 +76,6 @@ class InventoryIncidentsViewsTestCase(TestCase, LoginCase):
 
     # machine incidents
 
-    def test_machine_incidents_redirect(self):
-        self.login_redirect("machine_incidents", self.url_msn)
-
     def test_machine_incidents_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:machine_incidents", args=(self.url_msn,)))

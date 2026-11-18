@@ -36,9 +36,6 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase, LoginCase):
 
     # create DEP enrollment custom view
 
-    def test_create_dep_enrollment_custom_view_redirect(self):
-        self.login_redirect("create_dep_enrollment_custom_view", self.dep_enrollment.pk)
-
     def test_create_dep_enrollment_custom_view_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:create_dep_enrollment_custom_view", args=(self.dep_enrollment.pk,)))
@@ -118,10 +115,6 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     # update DEP enrollment custom view
-
-    def test_update_dep_enrollment_custom_view_redirect(self):
-        decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self.login_redirect("update_dep_enrollment_custom_view", self.dep_enrollment.pk, decv.pk)
 
     def test_update_dep_enrollment_custom_view_permission_denied(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)
@@ -212,10 +205,6 @@ class MDMDEPEnrollmentCustomViewSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     # delete DEP enrollment custom view
-
-    def test_delete_dep_enrollment_custom_view_redirect(self):
-        decv = force_dep_enrollment_custom_view(self.dep_enrollment)
-        self.login_redirect("delete_dep_enrollment_custom_view", self.dep_enrollment.pk, decv.pk)
 
     def test_delete_dep_enrollment_custom_view_permission_denied(self):
         decv = force_dep_enrollment_custom_view(self.dep_enrollment)

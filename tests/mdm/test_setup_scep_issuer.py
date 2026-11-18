@@ -73,10 +73,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # view SCEP issuer
 
-    def test_view_scep_issuer_redirect(self):
-        scep_issuer = force_scep_issuer()
-        self.login_redirect("scep_issuer", scep_issuer.pk)
-
     def test_view_scep_issuer_permission_denied(self):
         scep_issuer = force_scep_issuer()
         self.login()
@@ -104,9 +100,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, scep_issuer.get_backend_kwargs()["challenge"])
 
     # list SCEP issuers
-
-    def test_list_scep_issuers_redirect(self):
-        self.login_redirect("scep_issuers")
 
     def test_list_scep_issuers_permission_denied(self):
         force_scep_issuer()

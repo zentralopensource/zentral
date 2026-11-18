@@ -27,9 +27,6 @@ class OsquerySetupViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:index"))

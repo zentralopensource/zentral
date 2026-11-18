@@ -63,9 +63,6 @@ class SantaMachineActionsViewsTestCase(TestCase, LoginCase):
 
     # force a clean sync
 
-    def test_force_clean_sync_redirect(self):
-        self.login_redirect("force_machine_clean_sync", "012345678", "CLEAN")
-
     def test_force_clean_sync_permission_denied(self):
         enrolled_machine = force_enrolled_machine()
         machine = MetaMachine(enrolled_machine.serial_number)

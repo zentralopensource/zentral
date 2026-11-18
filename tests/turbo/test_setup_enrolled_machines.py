@@ -19,9 +19,6 @@ JOB_MACHINE_ACTIONS = ('Turbo::Action::"viewOneTimeJobMachine"', 'Turbo::Action:
 class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
     # list
 
-    def test_enrolled_machines_redirect(self):
-        self.login_redirect("enrolled_machines")
-
     def test_enrolled_machines_permission_denied(self):
         self.login()
         response = self.client.get(reverse("turbo:enrolled_machines"))

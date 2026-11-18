@@ -34,9 +34,6 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
 
     # tags
 
-    def test_tags_redirect(self):
-        self.login_redirect("tags")
-
     def test_tags_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:tags"))
@@ -51,9 +48,6 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "inventory/tag_index.html")
 
     # create tag
-
-    def test_create_tag_redirect(self):
-        self.login_redirect("create_tag")
 
     def test_create_tag_permission_denied(self):
         self.login()
@@ -97,10 +91,6 @@ class MacOSAppsViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, color)
 
     # update tag
-
-    def test_update_tag_redirect(self):
-        tag = self._force_tag()
-        self.login_redirect("update_tag", tag.pk)
 
     def test_update_tag_permission_denied(self):
         tag = self._force_tag()

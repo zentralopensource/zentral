@@ -49,9 +49,6 @@ class EnterpriseAppManagementViewsTestCase(TestCase, LoginCase):
 
     # upload enterprise app GET
 
-    def test_upload_enterprise_app_get_redirect(self):
-        self.login_redirect("upload_enterprise_app")
-
     def test_upload_enterprise_app_get_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:upload_enterprise_app"))
@@ -64,10 +61,6 @@ class EnterpriseAppManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/enterpriseapp_form.html")
 
     # upload profile POST
-
-    def test_upload_enterprise_app_post_redirect(self):
-        package = self._build_package()
-        self.login_redirect("upload_enterprise_app", data={"package": package})
 
     def test_upload_enterprise_app_post_permission_denied(self):
         package = self._build_package()
@@ -128,10 +121,6 @@ class EnterpriseAppManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(artifact.name, "TestPackage789")
 
     # upgrade enterprise app GET
-
-    def test_upgrade_enterprise_app_get_login_redirect(self):
-        artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self.login_redirect("upgrade_enterprise_app", artifact.pk)
 
     def test_upgrade_enterprise_app_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
@@ -245,10 +234,6 @@ class EnterpriseAppManagementViewsTestCase(TestCase, LoginCase):
         )
 
     # download enterprise_app
-
-    def test_download_enterprise_app_login_redirect(self):
-        _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)
-        self.login_redirect("download_enterprise_app", enterprise_app_av.pk)
 
     def test_download_enterprise_app_permission_denied(self):
         _, (enterprise_app_av,) = force_artifact(artifact_type=Artifact.Type.ENTERPRISE_APP)

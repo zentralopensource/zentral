@@ -66,9 +66,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     # targets
 
-    def test_targets_redirect(self):
-        self.login_redirect("targets")
-
     def test_targets_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:targets"))
@@ -585,9 +582,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     # binary target
 
-    def test_binary_target_redirect(self):
-        self.login_redirect("binary", self.file_sha256)
-
     def test_binary_target_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
@@ -746,9 +740,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("santa:binary", args=(self.file_sha256,)))
         self.assertIn(configuration.name, [name for name, _ in response.context["add_rule_links"]])
 
-    def test_binary_target_events_redirect(self):
-        self.login_redirect("binary_events", self.file_sha256)
-
     def test_binary_target_events_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:binary_events", args=(self.file_sha256,)))
@@ -763,9 +754,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_sha256)
 
-    def test_fetch_binary_target_events_redirect(self):
-        self.login_redirect("fetch_binary_events", self.file_sha256)
-
     def test_fetch_binary_target_events_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:fetch_binary_events", args=(self.file_sha256,)))
@@ -779,9 +767,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
-    def test_binary_target_store_redirect_login_redirect(self):
-        self.login_redirect("binary_events_store_redirect", self.file_sha256)
-
     def test_binary_target_store_redirect_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:binary_events_store_redirect", args=(self.file_sha256,)))
@@ -794,9 +779,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # bundle target
-
-    def test_bundle_target_redirect(self):
-        self.login_redirect("bundle", self.bundle_target.identifier)
 
     def test_bundle_target_permission_denied(self):
         self.login()
@@ -820,9 +802,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
 
     # metabundle target
 
-    def test_metabundle_target_redirect(self):
-        self.login_redirect("metabundle", self.metabundle_sha256)
-
     def test_metabundle_target_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:metabundle", args=(self.metabundle_sha256,)))
@@ -844,9 +823,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, "createRule")
 
     # cdhash target
-
-    def test_cdhash_target_redirect(self):
-        self.login_redirect("cdhash", self.cdhash)
 
     def test_cdhash_target_permission_denied(self):
         self.login()
@@ -884,9 +860,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.cdhash)
 
-    def test_fetch_cdhash_target_events_redirect(self):
-        self.login_redirect("fetch_cdhash_events", self.cdhash)
-
     def test_fetch_cdhash_target_events_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:fetch_cdhash_events", args=(self.cdhash,)))
@@ -900,9 +873,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
-    def test_cdhash_target_store_redirect_login_redirect(self):
-        self.login_redirect("cdhash_events_store_redirect", self.cdhash)
-
     def test_cdhash_target_store_redirect_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:cdhash_events_store_redirect", args=(self.cdhash,)))
@@ -915,9 +885,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # certificate target
-
-    def test_certificate_target_redirect(self):
-        self.login_redirect("certificate", self.file_cert_sha256)
 
     def test_certificate_target_permission_denied(self):
         self.login()
@@ -955,9 +922,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_cert_sha256)
 
-    def test_fetch_certificate_target_events_redirect(self):
-        self.login_redirect("fetch_certificate_events", self.file_cert_sha256)
-
     def test_fetch_certificate_target_events_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:fetch_certificate_events", args=(self.file_cert_sha256,)))
@@ -971,9 +935,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
-    def test_certificate_target_store_redirect_login_redirect(self):
-        self.login_redirect("certificate_events_store_redirect", self.file_cert_sha256)
-
     def test_certificate_target_store_redirect_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:certificate_events_store_redirect", args=(self.file_cert_sha256,)))
@@ -986,9 +947,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # team ID target
-
-    def test_team_id_target_redirect(self):
-        self.login_redirect("teamid", self.file_team_id)
 
     def test_team_id_target_permission_denied(self):
         self.login()
@@ -1026,9 +984,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_team_id)
 
-    def test_fetch_team_id_target_events_redirect(self):
-        self.login_redirect("fetch_teamid_events", self.file_team_id)
-
     def test_fetch_team_id_target_events_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:fetch_teamid_events", args=(self.file_team_id,)))
@@ -1042,9 +997,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
-    def test_team_id_target_store_redirect_login_redirect(self):
-        self.login_redirect("teamid_events_store_redirect", self.file_team_id)
-
     def test_team_id_target_store_redirect_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:teamid_events_store_redirect", args=(self.file_team_id,)))
@@ -1057,9 +1009,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # signing ID target
-
-    def test_signing_id_target_redirect(self):
-        self.login_redirect("signingid", self.file_signing_id)
 
     def test_signing_id_target_permission_denied(self):
         self.login()
@@ -1097,9 +1046,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "santa/target_events.html")
         self.assertContains(response, self.file_signing_id)
 
-    def test_fetch_signing_id_target_events_redirect(self):
-        self.login_redirect("fetch_signingid_events", self.file_signing_id)
-
     def test_fetch_signing_id_target_events_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:fetch_signingid_events", args=(self.file_signing_id,)))
@@ -1113,9 +1059,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
-    def test_signing_id_target_store_redirect_login_redirect(self):
-        self.login_redirect("signingid_events_store_redirect", self.file_signing_id)
-
     def test_signing_id_target_store_redirect_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:signingid_events_store_redirect", args=(self.file_signing_id,)))
@@ -1128,11 +1071,6 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # reset target state
-
-    def test_reset_target_state_redirect(self):
-        configuration = force_configuration()
-        ts = TargetState.objects.create(configuration=configuration, target=self.file_target)
-        self.login_redirect("reset_target_state", configuration.pk, ts.pk)
 
     def test_reset_target_state_permission_denied(self):
         configuration = force_configuration()

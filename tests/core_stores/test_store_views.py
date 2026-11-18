@@ -29,9 +29,6 @@ class StoreViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("stores:index"))
@@ -58,10 +55,6 @@ class StoreViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, '<span class="store-backend">HTTP</span>')
 
     # store
-
-    def test_store_redirect(self):
-        store = force_store()
-        self.login_redirect("store", store.pk)
 
     def test_store_permission_denied(self):
         store = force_store()

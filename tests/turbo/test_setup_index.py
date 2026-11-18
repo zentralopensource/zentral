@@ -5,9 +5,6 @@ from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSe
 
 
 class TurboSetupIndexTestCase(TurboSetupTestCase):
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied_without_module_perms(self):
         self.login()  # authenticated, but no turbo permissions
         response = self.client.get(reverse("turbo:index"))

@@ -31,9 +31,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # create User enrollment
 
-    def test_create_user_enrollment_redirect(self):
-        self.login_redirect("create_user_enrollment")
-
     def test_create_user_enrollment_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:create_user_enrollment"))
@@ -95,10 +92,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # view User enrollment
 
-    def test_view_user_enrollment_redirect(self):
-        enrollment = force_user_enrollment(self.mbu)
-        self.login_redirect("user_enrollment", enrollment.pk)
-
     def test_view_user_enrollment_permission_denied(self):
         enrollment = force_user_enrollment(self.mbu)
         self.login()
@@ -138,10 +131,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, enrollment.scep_issuer.get_absolute_url())
 
     # update User enrollment
-
-    def test_update_user_enrollment_redirect(self):
-        enrollment = force_user_enrollment(self.mbu)
-        self.login_redirect("update_user_enrollment", enrollment.pk)
 
     def test_update_user_enrollment_permission_denied(self):
         enrollment = force_user_enrollment(self.mbu)
@@ -186,9 +175,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(enrollment.display_name, new_display_name)
 
     # list User enrollments
-
-    def test_list_user_enrollments_redirect(self):
-        self.login_redirect("enrollments")
 
     def test_list_user_enrollments_no_perm_empty(self):
         enrollment = force_user_enrollment(self.mbu)

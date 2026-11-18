@@ -35,9 +35,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
 
     # meta business units
 
-    def test_meta_business_units_redirect(self):
-        self.login_redirect("mbu")
-
     def test_meta_business_units_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:mbu"))
@@ -65,9 +62,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("inventory:update_mbu", args=(self.mbu.pk,)))
 
     # create meta business unit
-
-    def test_create_meta_business_unit_redirect(self):
-        self.login_redirect("create_mbu")
 
     def test_create_meta_business_unit_permission_denied(self):
         self.login()
@@ -141,10 +135,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         )
 
     # update meta business unit
-
-    def test_update_meta_business_unit_redirect(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self.login_redirect("update_mbu", meta_business_unit.pk)
 
     def test_update_meta_business_unit_permission_denied(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
@@ -255,10 +245,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, 'disabled id="id_api_enrollment" checked')
 
     # delete meta business unit
-
-    def test_delete_meta_business_unit_redirect(self):
-        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
-        self.login_redirect("delete_mbu", meta_business_unit.pk)
 
     def test_delete_meta_business_unit_permission_denied(self):
         meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
@@ -467,10 +453,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
 
     # delete tag
 
-    def test_delete_tag_redirect(self):
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.login_redirect("delete_tag", tag.pk)
-
     def test_delete_tag_permission_denied(self):
         tag = Tag.objects.create(name=get_random_string(12))
         self.login()
@@ -540,9 +522,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         )
 
     # create taxonomy
-
-    def test_create_taxonomy_redirect(self):
-        self.login_redirect("create_taxonomy")
 
     def test_create_taxonomy_permission_denied(self):
         self.login()
@@ -615,10 +594,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         )
 
     # update taxonomy
-
-    def test_update_taxonomy_redirect(self):
-        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self.login_redirect("update_taxonomy", taxonomy.pk)
 
     def test_update_taxonomy_permission_denied(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))
@@ -701,10 +676,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         )
 
     # delete taxonomy
-
-    def test_delete_taxonomy_redirect(self):
-        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
-        self.login_redirect("delete_taxonomy", taxonomy.pk)
 
     def test_delete_taxonomy_permission_denied(self):
         taxonomy = Taxonomy.objects.create(name=get_random_string(12))

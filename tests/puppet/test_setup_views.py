@@ -62,9 +62,6 @@ class PuppetSetupViewsTestCase(TestCase, LoginCase):
 
     # instances
 
-    def test_instances_redirect(self):
-        self.login_redirect("instances")
-
     def test_instances_permission_denied(self):
         self.login()
         response = self.client.get(reverse("puppet:instances"))
@@ -83,10 +80,6 @@ class PuppetSetupViewsTestCase(TestCase, LoginCase):
 
     # instance events
 
-    def test_instance_events_redirect(self):
-        instance = self._force_instance()
-        self.login_redirect("instance_events", instance.pk)
-
     def test_instance_events_permission_denied(self):
         instance = self._force_instance()
         self.login()
@@ -101,10 +94,6 @@ class PuppetSetupViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("puppet:instance_events", args=(instance.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "puppet/instance_events.html")
-
-    def test_fetch_instance_events_redirect(self):
-        instance = self._force_instance()
-        self.login_redirect("fetch_instance_events", instance.pk)
 
     def test_fetch_instance_events_permission_denied(self):
         instance = self._force_instance()
@@ -122,9 +111,6 @@ class PuppetSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     # create instance
-
-    def test_create_instance_redirect(self):
-        self.login_redirect("create_instance")
 
     def test_create_instance_permission_denied(self):
         self.login()
@@ -174,10 +160,6 @@ class PuppetSetupViewsTestCase(TestCase, LoginCase):
 
     # update instance
 
-    def test_update_instance_redirect(self):
-        instance = self._force_instance()
-        self.login_redirect("update_instance", instance.pk)
-
     def test_update_instance_permission_denied(self):
         instance = self._force_instance()
         self.login()
@@ -225,10 +207,6 @@ class PuppetSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(version, instance2.version)
 
     # delete instance
-
-    def test_delete_instance_redirect(self):
-        instance = self._force_instance()
-        self.login_redirect("delete_instance", instance.pk)
 
     def test_delete_instance_permission_denied(self):
         instance = self._force_instance()

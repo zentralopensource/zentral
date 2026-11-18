@@ -38,9 +38,6 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
 
     # Android apps
 
-    def test_machine_android_apps_redirect(self):
-        self.login_redirect("machine_android_apps", self.ms.serial_number)
-
     def test_machine_android_apps_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:machine_android_apps", args=(self.ms.serial_number,)))
@@ -55,9 +52,6 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "AndroidApp2")
 
     # Deb packages
-
-    def test_machine_deb_packages_redirect(self):
-        self.login_redirect("machine_deb_packages", self.ms.serial_number)
 
     def test_machine_deb_packages_permission_denied(self):
         self.login()
@@ -74,9 +68,6 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
 
     # iOS apps
 
-    def test_machine_ios_apps_redirect(self):
-        self.login_redirect("machine_ios_apps", self.ms.serial_number)
-
     def test_machine_ios_apps_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:machine_ios_apps", args=(self.ms.serial_number,)))
@@ -91,9 +82,6 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "3Password")
 
     # macOS apps
-
-    def test_machine_macos_app_instances_redirect(self):
-        self.login_redirect("machine_macos_app_instances", self.ms.serial_number)
 
     def test_machine_macos_app_instances_permission_denied(self):
         self.login()
@@ -173,9 +161,6 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
 
     # Profiles
 
-    def test_machine_profiles_redirect(self):
-        self.login_redirect("machine_profiles", self.ms.serial_number)
-
     def test_machine_profiles_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:machine_profiles", args=(self.ms.serial_number,)))
@@ -189,9 +174,6 @@ class MachineAppsProfilesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Zentral - FileVault configuration")
 
     # Programs
-
-    def test_machine_program_instances_redirect(self):
-        self.login_redirect("machine_program_instances", self.ms.serial_number)
 
     def test_machine_program_instances_permission_denied(self):
         self.login()

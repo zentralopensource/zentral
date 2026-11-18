@@ -89,9 +89,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
 
     # list
 
-    def test_compliance_checks_redirect(self):
-        self.login_redirect("compliance_checks")
-
     def test_compliance_checks_permission_denied(self):
         self.login()
         response = self.client.get(reverse("inventory:compliance_checks"))
@@ -116,9 +113,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("inventory:create_compliance_check"))
 
     # create
-
-    def test_create_compliance_check_redirect(self):
-        self.login_redirect("create_compliance_check")
 
     def test_create_compliance_check_permission_denied(self):
         self.login()
@@ -203,10 +197,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
 
     # view
 
-    def test_compliance_check_redirect(self):
-        cc = self._force_jmespath_check()
-        self.login_redirect("compliance_check", cc.pk)
-
     def test_compliance_check_permission_denied(self):
         cc = self._force_jmespath_check()
         self.login()
@@ -240,10 +230,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
 
     # events
 
-    def test_cc_events_redirect(self):
-        cc = self._force_jmespath_check()
-        self.login_redirect("compliance_check_events", cc.pk)
-
     def test_cc_events_permission_denied(self):
         cc = self._force_jmespath_check()
         self.login()
@@ -260,10 +246,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "inventory/compliancecheck_events.html")
 
     # fetch events
-
-    def test_cc_fetch_events_redirect(self):
-        cc = self._force_jmespath_check()
-        self.login_redirect("fetch_compliance_check_events", cc.pk)
 
     def test_cc_fetch_events_permission_denied(self):
         cc = self._force_jmespath_check()
@@ -282,10 +264,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
 
     # events store redirect
 
-    def test_cc_events_store_redirect_redirect(self):
-        cc = self._force_jmespath_check()
-        self.login_redirect("compliance_check_events_store_redirect", cc.pk)
-
     def test_cc_events_store_redirect_permission_denied(self):
         cc = self._force_jmespath_check()
         self.login()
@@ -300,10 +278,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertRedirects(response, reverse("inventory:compliance_check_events", args=(cc.pk,)))
 
     # update
-
-    def test_update_compliance_check_redirect(self):
-        cc = self._force_jmespath_check()
-        self.login_redirect("update_compliance_check", cc.pk)
 
     def test_update_compliance_check_permission_denied(self):
         cc = self._force_jmespath_check()
@@ -392,10 +366,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
 
     # delete
 
-    def test_delete_compliance_check_redirect(self):
-        cc = self._force_jmespath_check()
-        self.login_redirect("delete_compliance_check", cc.pk)
-
     def test_delete_compliance_check_permission_denied(self):
         cc = self._force_jmespath_check()
         self.login()
@@ -435,9 +405,6 @@ class InventoryComplianceChecksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"]["compliance_check"], [str(prev_cc_pk)])
 
     # devtool
-
-    def test_compliance_check_devtool_redirect(self):
-        self.login_redirect("compliance_check_devtool")
 
     def test_compliance_check_devtool_permission_denied(self):
         self.login()

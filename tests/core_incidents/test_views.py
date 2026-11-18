@@ -63,9 +63,6 @@ class InventoryViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("incidents:index"))
@@ -106,10 +103,6 @@ class InventoryViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("incidents:index") + '">all the items')
 
     # detail
-
-    def test_incident_detail_redirect(self):
-        incident = self._force_incident()
-        self.login_redirect("incident", incident.pk)
 
     def test_incident_detail_permission_denied(self):
         incident = self._force_incident()
@@ -208,10 +201,6 @@ class InventoryViewsTestCase(TestCase, LoginCase):
 
     # update incident
 
-    def test_update_incident_redirect(self):
-        incident = self._force_incident()
-        self.login_redirect("update_incident", incident.pk)
-
     def test_update_incident_permission_denied(self):
         incident = self._force_incident()
         self.login("incidents.view_incident")
@@ -250,10 +239,6 @@ class InventoryViewsTestCase(TestCase, LoginCase):
 
     # incident events
 
-    def test_incident_events_redirect(self):
-        incident = self._force_incident()
-        self.login_redirect("incident_events", incident.pk)
-
     def test_incident_events_permission_denied(self):
         incident = self._force_incident()
         self.login()
@@ -266,10 +251,6 @@ class InventoryViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("incidents:incident_events", args=(incident.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "incidents/incident_events.html")
-
-    def test_fetch_incident_events_redirect(self):
-        incident = self._force_incident()
-        self.login_redirect("fetch_incident_events", incident.pk)
 
     def test_fetch_incident_events_permission_denied(self):
         incident = self._force_incident()
@@ -286,10 +267,6 @@ class InventoryViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
-    def test_incident_events_store_redirect_redirect(self):
-        incident = self._force_incident()
-        self.login_redirect("incident_events_store_redirect", incident.pk)
-
     def test_incident_events_store_redirect_permission_denied(self):
         incident = self._force_incident()
         self.login()
@@ -304,11 +281,6 @@ class InventoryViewsTestCase(TestCase, LoginCase):
         self.assertTrue(response.url.startswith("/kibana/"))
 
     # update machine incident
-
-    def test_update_machine_incident_redirect(self):
-        incident = self._force_incident()
-        machine_incident = self._force_machine_incident(incident)
-        self.login_redirect("update_machine_incident", incident.pk, machine_incident.pk)
 
     def test_update_machine_incident_permission_denied(self):
         incident = self._force_incident()

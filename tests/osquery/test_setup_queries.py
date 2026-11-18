@@ -62,9 +62,6 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
 
     # create query
 
-    def test_create_query_redirect(self):
-        self.login_redirect("create_query")
-
     def test_create_query_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:create_query"))
@@ -235,10 +232,6 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
 
     # update query
 
-    def test_update_query_redirect(self):
-        query = self._force_query()
-        self.login_redirect("update_query", query.pk)
-
     def test_update_query_permission_denied(self):
         query = self._force_query()
         self.login()
@@ -363,10 +356,6 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
 
     # delete query
 
-    def test_delete_query_redirect(self):
-        query = self._force_query()
-        self.login_redirect("delete_query", query.pk)
-
     def test_delete_query_permission_denied(self):
         query = self._force_query()
         self.login()
@@ -438,10 +427,6 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
 
     # query events
 
-    def test_query_events_redirect(self):
-        query = self._force_query()
-        self.login_redirect("query_events", query.pk)
-
     def test_query_events_permission_denied(self):
         query = self._force_query()
         self.login()
@@ -456,10 +441,6 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("osquery:query_events", args=(query.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "osquery/query_events.html")
-
-    def test_fetch_query_events_redirect(self):
-        query = self._force_query()
-        self.login_redirect("fetch_query_events", query.pk)
 
     def test_fetch_query_events_permission_denied(self):
         query = self._force_query()
@@ -477,9 +458,6 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     # query list
-
-    def test_query_list_redirect(self):
-        self.login_redirect("queries")
 
     def test_query_list_permission_denied(self):
         self.login()

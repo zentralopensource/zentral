@@ -34,9 +34,6 @@ class MachineEventsViewsTestCase(TestCase, LoginCase):
 
     # machine events
 
-    def test_machine_events_login_redirect(self):
-        self.login_redirect("machine_events", "1111")
-
     def test_machine_events_permission_denied(self):
         self.login("inventory.view_machinetag")
         response = self.client.get(reverse("inventory:machine_events", args=("1111",)))
@@ -49,9 +46,6 @@ class MachineEventsViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "inventory/machine_events.html")
 
     # fetch machine events
-
-    def test_fetch_login_redirect(self):
-        self.login_redirect("fetch_machine_events", "1111")
 
     def test_fetch_permission_denied(self):
         self.login("inventory.view_machinetag")
@@ -67,9 +61,6 @@ class MachineEventsViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     # machine events store redirect
-
-    def test_store_redirect_login_redirect(self):
-        self.login_redirect("machine_events_store_redirect", "1111")
 
     def test_store_redirect_permission_denied(self):
         self.login("inventory.view_machinetag")

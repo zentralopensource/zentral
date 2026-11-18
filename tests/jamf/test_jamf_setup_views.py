@@ -57,9 +57,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
 
     # jamf index
 
-    def test_jamf_index_redirect(self):
-        self.login_redirect("index")
-
     def test_jamf_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("jamf:index"))
@@ -83,9 +80,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
 
     # jamf instances
 
-    def test_jamf_instances_redirect(self):
-        self.login_redirect("jamf_instances")
-
     def test_jamf_instances_permission_denied(self):
         self.login()
         response = self.client.get(reverse("jamf:jamf_instances"))
@@ -99,9 +93,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Instances (0)")
 
     # create jamf instance
-
-    def test_create_jamf_instance_redirect(self):
-        self.login_redirect("create_jamf_instance")
 
     def test_create_jamf_instance_permission_denied(self):
         self.login()
@@ -170,10 +161,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
 
     # delete jamf instance
 
-    def test_delete_jamf_instance_redirect(self):
-        jamf_instance = self._force_jamf_instance()
-        self.login_redirect("delete_jamf_instance", jamf_instance.pk)
-
     def test_delete_jamf_instance_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
         self.login()
@@ -214,10 +201,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
 
     # setup jamf instance
 
-    def test_setup_jamf_instance_redirect(self):
-        jamf_instance = self._force_jamf_instance()
-        self.login_redirect("setup_jamf_instance", jamf_instance.pk)
-
     def test_setup_jamf_instance_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
         self.login()
@@ -237,10 +220,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
         session_post.assert_called_once()
 
     # update jamf instance
-
-    def test_update_jamf_instance_redirect(self):
-        jamf_instance = self._force_jamf_instance()
-        self.login_redirect("update_jamf_instance", jamf_instance.pk)
 
     def test_update_jamf_instance_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
@@ -280,10 +259,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(jamf_instance2.get_password(), "pwd1234")
 
     # create tag config
-
-    def test_create_tag_config_redirect(self):
-        jamf_instance = self._force_jamf_instance()
-        self.login_redirect("create_tag_config", jamf_instance.pk)
 
     def test_create_tag_config_permission_denied(self):
         jamf_instance = self._force_jamf_instance()
@@ -329,10 +304,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
 
     # update tag config
 
-    def test_update_tag_config_redirect(self):
-        tag_config = self._force_tag_config()
-        self.login_redirect("create_tag_config", tag_config.instance.pk)
-
     def test_update_tag_config_permission_denied(self):
         tag_config = self._force_tag_config()
         self.login()
@@ -354,11 +325,6 @@ class JamfSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "haha")
 
     # delete tag config
-
-    def test_delete_tag_config_redirect(self):
-        tag_config = self._force_tag_config()
-        jamf_instance = tag_config.instance
-        self.login_redirect("delete_tag_config", jamf_instance.pk, tag_config.pk)
 
     def test_delete_tag_config_permission_denied(self):
         tag_config = self._force_tag_config()

@@ -48,9 +48,6 @@ class SantaBallotsViewsTestCase(TestCase, LoginCase):
 
     # ballots
 
-    def test_ballots_redirect(self):
-        self.login_redirect("ballots")
-
     def test_ballots_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:ballots"))
@@ -265,9 +262,6 @@ class SantaBallotsViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "-934")
 
     # cast ballot
-
-    def test_cast_ballot_redirect(self):
-        self.login_redirect("cast_ballot")
 
     def test_cast_ballot_permission_denied(self):
         self.login()

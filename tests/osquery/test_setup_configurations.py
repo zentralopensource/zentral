@@ -49,9 +49,6 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase, LoginCase):
 
     # create configuration
 
-    def test_create_configuration_redirect(self):
-        self.login_redirect("create_configuration")
-
     def test_create_configuration_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:create_configuration"))
@@ -118,10 +115,6 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase, LoginCase):
 
     # update configuration
 
-    def test_update_configuration_redirect(self):
-        configuration = self._force_configuration()
-        self.login_redirect("update_configuration", configuration.pk)
-
     def test_update_configuration_permission_denied(self):
         configuration = self._force_configuration()
         self.login()
@@ -176,9 +169,6 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase, LoginCase):
 
     # configuration list
 
-    def test_configuration_list_redirect(self):
-        self.login_redirect("configurations")
-
     def test_configuration_list_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:configurations"))
@@ -214,10 +204,6 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("osquery:add_configuration_pack", args=(configuration.pk,)))
 
     # add configuration pack
-
-    def test_add_configuration_pack_redirect(self):
-        configuration = self._force_configuration()
-        self.login_redirect("add_configuration_pack", configuration.pk)
 
     def test_add_configuration_pack_permission_denied(self):
         configuration = self._force_configuration()
@@ -278,10 +264,6 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["osquery", "zentral"])
 
     # update configuration pack
-
-    def test_update_configuration_pack_redirect(self):
-        configuration_pack = self._force_configuration_pack()
-        self.login_redirect("update_configuration_pack", configuration_pack.configuration.pk, configuration_pack.pk)
 
     def test_update_configuration_pack_permission_denied(self):
         configuration_pack = self._force_configuration_pack()
@@ -363,10 +345,6 @@ class OsquerySetupConfigurationsViewsTestCase(TestCase, LoginCase):
                           "osquery_pack": [str(configuration_pack.pack.pk)]})
 
     # remove configuration pack
-
-    def test_remove_configuration_pack_redirect(self):
-        configuration_pack = self._force_configuration_pack()
-        self.login_redirect("remove_configuration_pack", configuration_pack.configuration.pk, configuration_pack.pk)
 
     def test_remove_configuration_pack_permission_denied(self):
         configuration_pack = self._force_configuration_pack()

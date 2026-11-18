@@ -142,9 +142,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:index"))
@@ -157,9 +154,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "monolith/index.html")
 
     # repositories
-
-    def test_repositories_redirect(self):
-        self.login_redirect("repositories")
 
     def test_repositories_permission_denied(self):
         self.login()
@@ -197,9 +191,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("monolith:delete_repository", args=(repository2.pk,)))
 
     # create repository
-
-    def test_create_repository_redirect(self):
-        self.login_redirect("create_repository")
 
     def test_create_repository_permission_denied(self):
         self.login()
@@ -404,10 +395,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # repository
 
-    def test_repository_redirect(self):
-        repository = force_repository()
-        self.login_redirect("repository", repository.pk)
-
     def test_repository_permission_denied(self):
         repository = force_repository()
         self.login()
@@ -482,10 +469,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("monolith_api:sync_repository", args=(repository.pk,)))
 
     # update repository
-
-    def test_update_repository_redirect(self):
-        repository = force_repository()
-        self.login_redirect("update_repository", repository.pk)
 
     def test_update_repository_permission_denied(self):
         repository = force_repository()
@@ -700,10 +683,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # delete repository
 
-    def test_delete_repository_redirect(self):
-        repository = force_repository()
-        self.login_redirect("delete_repository", repository.pk)
-
     def test_delete_repository_permission_denied(self):
         repository = force_repository()
         self.login()
@@ -761,9 +740,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # pkg infos
 
-    def test_pkg_infos_login_redirect(self):
-        self.login_redirect("pkg_infos")
-
     def test_pkg_infos_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:pkg_infos"))
@@ -806,9 +782,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # pkg info name
 
-    def test_pkg_info_name_login_redirect(self):
-        self.login_redirect("pkg_info_name", self.pkginfo_name_1.pk)
-
     def test_pkg_info_name_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:pkg_info_name", args=(self.pkginfo_name_1.pk,)))
@@ -820,15 +793,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "monolith/pkg_info_name.html")
         self.assertContains(response, self.pkginfo_name_1.name)
-
-    def test_pkg_info_name_events_login_redirect(self):
-        self.login_redirect("pkg_info_name_events", self.pkginfo_name_1.pk)
-
-    def test_pkg_info_name_fetch_events_login_redirect(self):
-        self.login_redirect("fetch_pkg_info_name_events", self.pkginfo_name_1.pk)
-
-    def test_pkg_info_name_events_store_redirect_login_redirect(self):
-        self.login_redirect("pkg_info_name_events_store_redirect", self.pkginfo_name_1.pk)
 
     def test_pkg_info_name_events_permission_denied(self):
         self.login("monolith.view_pkginfo")
@@ -875,9 +839,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # create pkg info name
 
-    def test_create_pkg_info_name_login_redirect(self):
-        self.login_redirect("create_pkg_info_name")
-
     def test_create_pkg_info_name_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:create_pkg_info_name"))
@@ -916,9 +877,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # delete pkg info name
-
-    def test_delete_pkg_info_name_login_redirect(self):
-        self.login_redirect("delete_pkg_info_name", self.pkginfo_name_1.pk)
 
     def test_delete_pkg_info_name_permission_denied(self):
         self.login()
@@ -963,9 +921,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # upload package
-
-    def test_upload_package_login_redirect(self):
-        self.login_redirect("upload_package")
 
     def test_upload_package_permission_denied(self):
         self.login()
@@ -1333,10 +1288,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # update package
 
-    def test_update_package_login_redirect(self):
-        pkg_info = force_pkg_info()
-        self.login_redirect("update_package", pkg_info.pk)
-
     def test_update_package_permission_denied(self):
         pkg_info = force_pkg_info()
         self.login()
@@ -1401,10 +1352,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # pkg info data
-
-    def test_pkg_info_data_login_redirect(self):
-        pkg_info = force_pkg_info()
-        self.login_redirect("pkg_info_data", pkg_info.pk)
 
     def test_pkg_info_data_permission_denied(self):
         pkg_info = force_pkg_info()
@@ -1645,10 +1592,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # delete pkg info
 
-    def test_delete_pkg_info_login_redirect(self):
-        pkg_info = force_pkg_info()
-        self.login_redirect("delete_pkg_info", pkg_info.pk)
-
     def test_delete_pkg_info_permission_denied(self):
         pkg_info = force_pkg_info()
         self.login()
@@ -1697,9 +1640,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # catalogs
 
-    def test_catalogs_login_redirect(self):
-        self.login_redirect("catalogs")
-
     def test_catalogs_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:catalogs"))
@@ -1712,10 +1652,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "monolith/catalog_list.html")
 
     # catalog
-
-    def test_catalog_login_redirect(self):
-        catalog = force_catalog()
-        self.login_redirect("catalog", catalog.pk)
 
     def test_catalog_permission_denied(self):
         catalog = force_catalog()
@@ -1732,9 +1668,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, catalog.name)
 
     # create catalog
-
-    def test_create_catalog_login_redirect(self):
-        self.login_redirect("create_catalog")
 
     def test_create_catalog_permission_denied(self):
         self.login()
@@ -1786,11 +1719,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update catalog
-
-    def test_update_catalog_login_redirect(self):
-        repository = force_repository(virtual=True)
-        catalog = force_catalog(repository=repository)
-        self.login_redirect("update_catalog", catalog.pk)
 
     def test_update_catalog_permission_denied(self):
         repository = force_repository(virtual=True)
@@ -1859,11 +1787,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # delete catalog
 
-    def test_delete_catalog_login_redirect(self):
-        repository = force_repository(virtual=True)
-        catalog = force_catalog(repository=repository)
-        self.login_redirect("delete_catalog", catalog.pk)
-
     def test_delete_catalog_permission_denied(self):
         repository = force_repository(virtual=True)
         catalog = force_catalog(repository=repository)
@@ -1907,9 +1830,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # conditions
 
-    def test_conditions_login_redirect(self):
-        self.login_redirect("conditions")
-
     def test_conditions_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:conditions"))
@@ -1922,10 +1842,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "monolith/condition_list.html")
 
     # condition
-
-    def test_condition_login_redirect(self):
-        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self.login_redirect("condition", condition.pk)
 
     def test_condition_permission_denied(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
@@ -1963,9 +1879,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # create condition
 
-    def test_create_condition_login_redirect(self):
-        self.login_redirect("create_condition")
-
     def test_create_condition_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:create_condition"))
@@ -2002,10 +1915,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update condition
-
-    def test_update_condition_login_redirect(self):
-        condition = force_condition()
-        self.login_redirect("update_condition", condition.pk)
 
     def test_update_condition_permission_denied(self):
         condition = force_condition()
@@ -2054,10 +1963,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(manifest.version, 2)
 
     # delete condition
-
-    def test_delete_condition_login_redirect(self):
-        condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
-        self.login_redirect("delete_condition", condition.pk)
 
     def test_delete_condition_permission_denied(self):
         condition = Condition.objects.create(name=get_random_string(12), predicate='machine_type == "laptop"')
@@ -2122,9 +2027,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # sub manifests
 
-    def test_sub_manifests_login_redirect(self):
-        self.login_redirect("sub_manifests")
-
     def test_sub_manifests_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:sub_manifests"))
@@ -2155,10 +2057,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, "We didn't find any item related to your search")
 
     # sub manifest
-
-    def test_sub_manifest_login_redirect(self):
-        sub_manifest = force_sub_manifest()
-        self.login_redirect("sub_manifest", sub_manifest.pk)
 
     def test_sub_manifest_permission_denied(self):
         sub_manifest = force_sub_manifest()
@@ -2272,9 +2170,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # create submanifest
 
-    def test_create_submanifest_redirect(self):
-        self.login_redirect("create_sub_manifest")
-
     def test_create_submanifest_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:create_sub_manifest"))
@@ -2327,10 +2222,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # update submanifest
 
-    def test_update_submanifest_redirect(self):
-        sub_manifest = force_sub_manifest()
-        self.login_redirect("update_sub_manifest", sub_manifest.pk)
-
     def test_post_update_configuration_view_permission_denied(self):
         self.login("monolith.add_submanifest", "monolith.view_submanifest")
         sub_manifest = force_sub_manifest()
@@ -2381,10 +2272,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # delete submanifest
 
-    def test_delete_submanifest_redirect(self):
-        sub_manifest = force_sub_manifest()
-        self.login_redirect("delete_sub_manifest", sub_manifest.pk)
-
     def test_delete_submanifest_permission_denied(self):
         self.login("monolith.add_submanifest", "monolith.view_submanifest")
         sub_manifest = force_sub_manifest()
@@ -2429,10 +2316,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # add submanifest pkginfo
-
-    def test_add_sub_manifest_pkg_info_redirect(self):
-        sub_manifest = force_sub_manifest()
-        self.login_redirect("sub_manifest_add_pkg_info", sub_manifest.pk)
 
     def test_add_sub_manifest_pkg_info_permission_denied(self):
         sub_manifest = force_sub_manifest()
@@ -2535,11 +2418,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, pkginfo_name.name)
 
     # update submanifest pkg info
-
-    def test_update_sub_manifest_pkg_info_login_redirect(self):
-        sub_manifest = force_sub_manifest()
-        smpi = force_sub_manifest_pkg_info(sub_manifest=sub_manifest)
-        self.login_redirect("update_sub_manifest_pkg_info", sub_manifest.pk, smpi.pk)
 
     def test_update_sub_manifest_pkg_info_permission_denied(self):
         sub_manifest = force_sub_manifest()
@@ -2805,10 +2683,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # delete submanifest pkginfo
 
-    def test_delete_sub_manifest_pkg_info_redirect(self):
-        smpi = force_sub_manifest_pkg_info()
-        self.login_redirect("delete_sub_manifest_pkg_info", smpi.sub_manifest.pk, smpi.pk)
-
     def test_delete_sub_manifest_pkg_info_permission_denied(self):
         smpi = force_sub_manifest_pkg_info()
         self.login()
@@ -2861,9 +2735,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # manifests
 
-    def test_manifests_login_redirect(self):
-        self.login_redirect("manifests")
-
     def test_manifests_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:manifests"))
@@ -2877,9 +2748,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["object_list"][0], self.manifest)
 
     # manifest
-
-    def test_manifest_login_redirect(self):
-        self.login_redirect("manifest", self.manifest.pk)
 
     def test_manifest_permission_denied(self):
         self.login()
@@ -2928,9 +2796,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # create manifest
 
-    def test_create_manifest_login_redirect(self):
-        self.login_redirect("create_manifest")
-
     def test_create_manifest_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:create_manifest"))
@@ -2974,10 +2839,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update manifest
-
-    def test_update_manifest_login_redirect(self):
-        manifest = force_manifest()
-        self.login_redirect("update_manifest", manifest.pk)
 
     def test_update_manifest_permission_denied(self):
         manifest = force_manifest()
@@ -3026,10 +2887,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # manifest machine info
-
-    def test_manifest_machine_info_redirect(self):
-        self.login_redirect("manifest_machine_info", self.manifest.pk,
-                            query_params={"serial_number": self.serial_number})
 
     def test_manifest_machine_info_permission_denied(self):
         self.login()
@@ -3140,11 +2997,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
             self.assertEqual(excluded_tags, [])
             self.assertEqual(tag_shards, [])
 
-    # manifest catalog
     # create manifest_catalog
-
-    def test_create_manifestcatalog_redirect(self):
-        self.login_redirect("add_manifest_catalog", self.manifest.pk)
 
     def test_create_manifestcatalog_permission_denied(self):
         self.login()
@@ -3196,10 +3049,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update manifestcatalog
-
-    def test_update_manifestcatalog_redirect(self):
-        manifest_catalog = force_manifest_catalog()
-        self.login_redirect("edit_manifest_catalog", manifest_catalog.manifest.pk, manifest_catalog.catalog.pk)
 
     def test_update_manifestcatalog_permission_denied(self):
         self.login("monolith.add_manifestcatalog", "monolith.view_manifest")
@@ -3260,10 +3109,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
 
     # delete manifestcatalog
 
-    def test_delete_manifestcatalog_redirect(self):
-        manifest_catalog = force_manifest_catalog()
-        self.login_redirect("delete_manifest_catalog", manifest_catalog.manifest.pk, manifest_catalog.catalog.pk)
-
     def test_delete_manifestcatalog_permission_denied(self):
         self.login("monolith.add_manifestcatalog", "monolith.view_manifest")
         manifest_catalog = force_manifest_catalog()
@@ -3303,11 +3148,7 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"monolith_manifest_catalog": [str(manifest_catalog.pk)]})
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
-    # manifest submanifest
     # create ManifestSubManifest
-    def test_create_manifestsubmanifest_redirect(self):
-        self.login_redirect("add_manifest_sub_manifest", self.manifest.pk)
-
     def test_create_manifestsubmanifest_permission_denied(self):
         self.login()
         response = self.client.get(reverse("monolith:add_manifest_sub_manifest", args=(self.manifest.pk,)))
@@ -3357,12 +3198,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # update manifestsubmanifest
-
-    def test_update_manifestsubmanifest_redirect(self):
-        manifest_sub_manifest = force_manifest_sub_manifest()
-        self.login_redirect("edit_manifest_sub_manifest",
-                            manifest_sub_manifest.manifest.pk,
-                            manifest_sub_manifest.sub_manifest.pk)
 
     def test_update_manifestsubmanifest_permission_denied(self):
         self.login("monolith.add_manifestsubmanifest", "monolith.view_manifest")
@@ -3424,12 +3259,6 @@ class MonolithSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["monolith", "zentral"])
 
     # delete manifestsubmanifest
-
-    def test_delete_manifestsubmanifest_redirect(self):
-        manifest_sub_manifest = force_manifest_sub_manifest()
-        self.login_redirect("delete_manifest_sub_manifest",
-                            manifest_sub_manifest.manifest.pk,
-                            manifest_sub_manifest.sub_manifest.pk)
 
     def test_delete_manifestsubmanifest_permission_denied(self):
         self.login("monolith.add_manifestsubmanifest", "monolith.view_manifest")

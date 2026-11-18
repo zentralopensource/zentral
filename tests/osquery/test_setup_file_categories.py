@@ -39,9 +39,6 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
 
     # create file_category
 
-    def test_create_file_category_redirect(self):
-        self.login_redirect("create_file_category")
-
     def test_create_file_category_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:create_file_category"))
@@ -99,10 +96,6 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
 
     # update file category
 
-    def test_update_file_category_redirect(self):
-        file_category = self._force_file_category()
-        self.login_redirect("update_file_category", file_category.pk)
-
     def test_update_file_category_permission_denied(self):
         file_category = self._force_file_category()
         self.login()
@@ -145,10 +138,6 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
 
     # delete file category
 
-    def test_delete_file_category_redirect(self):
-        file_category = self._force_file_category()
-        self.login_redirect("delete_file_category", file_category.pk)
-
     def test_delete_file_category_permission_denied(self):
         file_category = self._force_file_category()
         self.login()
@@ -180,9 +169,6 @@ class OsquerySetupFileCategoriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"osquery_file_category": [str(file_category.pk)]})
 
     # file category list
-
-    def test_file_category_list_redirect(self):
-        self.login_redirect("file_categories")
 
     def test_file_category_permission_denied(self):
         self.login()

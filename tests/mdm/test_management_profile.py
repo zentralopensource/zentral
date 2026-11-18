@@ -90,9 +90,6 @@ class ProfileManagementViewsTestCase(TestCase, LoginCase):
 
     # upload profile GET
 
-    def test_upload_profile_get_redirect(self):
-        self.login_redirect("upload_profile")
-
     def test_upload_profile_get_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:upload_profile"))
@@ -105,10 +102,6 @@ class ProfileManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/profile_form.html")
 
     # upload profile POST
-
-    def test_upload_profile_post_redirect(self):
-        mobileconfig = self._build_mobileconfig()
-        self.login_redirect("upload_profile", data={"source_file": mobileconfig})
 
     def test_upload_profile_post_permission_denied(self):
         mobileconfig = self._build_mobileconfig()
@@ -209,10 +202,6 @@ class ProfileManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(artifact.name, "iOS Restrictions (1)")
 
     # upgrade profile GET
-
-    def test_upgrade_profile_get_login_redirect(self):
-        _, artifact, _ = self._force_profile()
-        self.login_redirect("upgrade_profile", artifact.pk)
 
     def test_upgrade_profile_get_permission_denied(self):
         _, artifact, _ = self._force_profile()
@@ -354,10 +343,6 @@ class ProfileManagementViewsTestCase(TestCase, LoginCase):
         )
 
     # download profile
-
-    def test_download_profile_login_redirect(self):
-        _, _, profile = self._force_profile(channel=Channel.DEVICE)
-        self.login_redirect("download_profile", profile.artifact_version.pk)
 
     def test_download_profile_permission_denied(self):
         _, _, profile = self._force_profile(channel=Channel.DEVICE)

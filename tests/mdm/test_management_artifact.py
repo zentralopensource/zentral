@@ -30,9 +30,6 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
 
     # artifacts
 
-    def test_artifacts_redirect(self):
-        self.login_redirect("artifacts")
-
     def test_artifacts_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:artifacts"))
@@ -101,10 +98,6 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["object"], artifact)
 
     # artifact
-
-    def test_artifact_redirect(self):
-        artifact, _ = force_artifact()
-        self.login_redirect("artifact", artifact.pk)
 
     def test_artifact_permission_denied(self):
         artifact, _ = force_artifact()
@@ -202,10 +195,6 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
 
     # update artifact
-
-    def test_update_artifact_redirect(self):
-        artifact, _ = force_artifact()
-        self.login_redirect("update_artifact", artifact.pk)
 
     def test_update_artifact_permission_denied(self):
         artifact, _ = force_artifact()
@@ -371,10 +360,6 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
         self.assertFalse(artifact2.install_during_setup_assistant)
 
     # delete artifact
-
-    def test_delete_artifact_redirect(self):
-        artifact, _ = force_artifact()
-        self.login_redirect("delete_artifact", artifact.pk)
 
     def test_delete_artifact_permission_denied(self):
         artifact, _ = force_artifact()

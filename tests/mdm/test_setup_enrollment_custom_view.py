@@ -36,9 +36,6 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
 
     # Enrollment custom views
 
-    def test_enrollment_custom_views_redirect(self):
-        self.login_redirect("enrollment_custom_views")
-
     def test_enrollment_custom_views_permission_denied(self):
         self.login()
         self.permission_denied("enrollment_custom_views")
@@ -73,9 +70,6 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
         self.assertContains(response, reverse("mdm:delete_enrollment_custom_view", args=(ecv2.pk,)))
 
     # create enrollment custom view
-
-    def test_create_enrollment_custom_view_redirect(self):
-        self.login_redirect("create_enrollment_custom_view")
 
     def test_create_enrollment_custom_view_permission_denied(self):
         self.login() 
@@ -136,10 +130,6 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
 
     # enrollment custom view
 
-    def test_enrollment_custom_view_redirect(self):
-        ecv = force_enrollment_custom_view()
-        self.login_redirect("enrollment_custom_view", ecv.pk)
-
     def test_enrollment_custom_view_permission_denied(self):
         ecv = force_enrollment_custom_view()
         self.login()
@@ -179,10 +169,6 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
 
     # download enrollment custom view
 
-    def test_download_enrollment_custom_view_redirect(self):
-        ecv = force_enrollment_custom_view()
-        self.login_redirect("download_enrollment_custom_view", ecv.pk)
-
     def test_download_enrollment_custom_view_permission_denied(self):
         ecv = force_enrollment_custom_view()
         self.login()
@@ -199,10 +185,6 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
         self.assertTrue(response["Content-Type"].startswith("text/html"))
 
     # update FileVault configuration
-
-    def test_update_enrollment_custom_view_redirect(self):
-        ecv = force_enrollment_custom_view()
-        self.login_redirect("update_enrollment_custom_view", ecv.pk)
 
     def test_update_enrollment_custom_view_permission_denied(self):
         ecv = force_enrollment_custom_view()
@@ -270,10 +252,6 @@ class EnrollmentCustomViewManagementViewsTestCase(TestCase, LoginCase, EventAsse
             expected_tags=["mdm", "zentral"])
 
     # delete enrollment custom view
-
-    def test_delete_enrollment_custom_view_redirect(self):
-        ecv = force_enrollment_custom_view()
-        self.login_redirect("delete_enrollment_custom_view", ecv.pk)
 
     def test_delete_enrollment_custom_view_permission_denied(self):
         ecv = force_enrollment_custom_view()

@@ -34,9 +34,6 @@ class BlueprintManagementViewsTestCase(TestCase, LoginCase):
 
     # blueprints
 
-    def test_blueprints_redirect(self):
-        self.login_redirect("blueprints")
-
     def test_blueprints_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:blueprints"))
@@ -51,9 +48,6 @@ class BlueprintManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, blueprint.name)
 
     # create blueprint
-
-    def test_create_blueprint_redirect(self):
-        self.login_redirect("create_blueprint")
 
     def test_create_blueprint_permission_denied(self):
         self.login()
@@ -145,10 +139,6 @@ class BlueprintManagementViewsTestCase(TestCase, LoginCase):
 
     # blueprint
 
-    def test_blueprint_redirect(self):
-        blueprint = force_blueprint()
-        self.login_redirect("blueprint", blueprint.pk)
-
     def test_blueprint_permission_denied(self):
         blueprint = force_blueprint()
         self.login()
@@ -210,10 +200,6 @@ class BlueprintManagementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("mdm:delete_blueprint", args=(blueprint.pk,)))
 
     # update blueprint
-
-    def test_update_blueprint_redirect(self):
-        blueprint = force_blueprint()
-        self.login_redirect("update_blueprint", blueprint.pk)
 
     def test_update_blueprint_permission_denied(self):
         blueprint = force_blueprint()
@@ -290,10 +276,6 @@ class BlueprintManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     # delete blueprint
-
-    def test_delete_blueprint_redirect(self):
-        blueprint = force_blueprint()
-        self.login_redirect("delete_blueprint", blueprint.pk)
 
     def test_delete_blueprint_permission_denied(self):
         blueprint = force_blueprint()

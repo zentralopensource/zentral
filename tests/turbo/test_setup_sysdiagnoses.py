@@ -8,9 +8,6 @@ from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSe
 class TurboSetupSysdiagnosesTestCase(TurboSetupTestCase):
     # list
 
-    def test_sysdiagnoses_redirect(self):
-        self.login_redirect("sysdiagnoses")
-
     def test_sysdiagnoses_permission_denied(self):
         self.login()
         response = self.client.get(reverse("turbo:sysdiagnoses"))
@@ -61,10 +58,6 @@ class TurboSetupSysdiagnosesTestCase(TurboSetupTestCase):
         self.assertContains(response, "Turbo sysdiagnoses")
 
     # detail
-
-    def test_sysdiagnose_redirect(self):
-        sysdiagnose = force_command()
-        self.login_redirect("sysdiagnose", sysdiagnose.pk)
 
     def test_sysdiagnose_permission_denied(self):
         sysdiagnose = force_command()

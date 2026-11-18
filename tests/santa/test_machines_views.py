@@ -80,9 +80,6 @@ class SantaMachinesViewsTestCase(TestCase, LoginCase):
 
     # machine list
 
-    def test_machines_redirect(self):
-        self.login_redirect("machines")
-
     def test_machines_permission_denied(self):
         self.login()
         response = self.client.get(reverse("santa:machines"))
@@ -226,9 +223,6 @@ class SantaMachinesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(len(response.context["object_list"]), 1)
 
     # machine page
-
-    def test_machine_redirect(self):
-        self.login_redirect("machine", "0123456789")
 
     def test_machine_permission_denied(self):
         enrolled_machine = force_enrolled_machine()

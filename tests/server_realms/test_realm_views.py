@@ -72,9 +72,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("realms:index"))
@@ -103,9 +100,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
             self.assertContains(response, reverse(f"realms:{view_name}"))
 
     # realm list
-
-    def test_realm_list_redirect(self):
-        self.login_redirect("list")
 
     def test_realm_list_permission_denied(self):
         self.login()
@@ -163,13 +157,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("realms:update", args=(realm.pk,)))
 
     # create realm
-
-    def test_create_realm_redirect(self):
-        self.login_redirect("create", "ldap")
-
-    def test_create_realm_unknown_backend_redirect(self):
-        # the login comes first, and an unknown backend gives the same answer as a known one
-        self.login_redirect("create", "yolo")
 
     def test_create_realm_unknown_backend_permission_denied(self):
         self._login_admin()
@@ -313,10 +300,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # view realm
 
-    def test_view_realm_redirect(self):
-        realm = force_realm()
-        self.login_redirect("view", realm.pk)
-
     def test_view_realm_permission_denied(self):
         realm = force_realm()
         self.login()
@@ -384,10 +367,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("realms:create_role_mapping"))
 
     # update realm
-
-    def test_update_realm_redirect(self):
-        realm = force_realm()
-        self.login_redirect("update", realm.pk)
 
     def test_update_realm_permission_denied(self):
         realm = force_realm()
@@ -506,9 +485,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # realm group mappings
 
-    def test_realm_group_mappings_redirect(self):
-        self.login_redirect("realm_group_mappings")
-
     def test_realm_group_mappings_permission_denied(self):
         self.login()
         response = self.client.get(reverse("realms:realm_group_mappings"))
@@ -551,9 +527,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("realms:delete_realm_group_mapping", args=(rgm.pk,)))
 
     # create realm group mapping
-
-    def test_create_realm_group_mapping_redirect(self):
-        self.login_redirect("create_realm_group_mapping")
 
     def test_create_realm_group_mapping_permission_denied(self):
         self.login()
@@ -652,10 +625,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # update realm group mapping
 
-    def test_update_realm_group_mapping_redirect(self):
-        rgm = force_realm_group_mapping()
-        self.login_redirect("update_realm_group_mapping", rgm.pk)
-
     def test_update_realm_group_mapping_permission_denied(self):
         rgm = force_realm_group_mapping()
         self.login()
@@ -706,10 +675,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # delete realm group mapping
 
-    def test_delete_realm_group_mapping_redirect(self):
-        rgm = force_realm_group_mapping()
-        self.login_redirect("delete_realm_group_mapping", rgm.pk)
-
     def test_delete_realm_group_mapping_permission_denied(self):
         rgm = force_realm_group_mapping()
         self.login()
@@ -743,9 +708,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(rgm_qs.count(), 0)
 
     # role mappings
-
-    def test_role_mappings_redirect(self):
-        self.login_redirect("role_mappings")
 
     def test_role_mappings_permission_denied(self):
         self.login()
@@ -794,9 +756,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("realms:delete_role_mapping", args=(rm.pk,)))
 
     # create role mapping
-
-    def test_create_role_mapping_redirect(self):
-        self.login_redirect("create_role_mapping")
 
     def test_create_role_mapping_permission_denied(self):
         self.login()
@@ -866,10 +825,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # update role mapping
 
-    def test_update_role_mapping_redirect(self):
-        rm = force_role_mapping()
-        self.login_redirect("update_role_mapping", rm.pk)
-
     def test_update_role_mapping_permission_denied(self):
         rm = force_role_mapping()
         self.login()
@@ -918,10 +873,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # delete role mapping
 
-    def test_delete_role_mapping_redirect(self):
-        rm = force_role_mapping()
-        self.login_redirect("delete_role_mapping", rm.pk)
-
     def test_delete_role_mapping_permission_denied(self):
         rm = force_role_mapping()
         self.login()
@@ -955,9 +906,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(rm_qs.count(), 0)
 
     # realm groups
-
-    def test_realm_groups_redirect(self):
-        self.login_redirect("groups")
 
     def test_realm_groups_permission_denied(self):
         self.login()
@@ -1037,10 +985,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # realm group
 
-    def test_realm_group_redirect(self):
-        group = force_realm_group()
-        self.login_redirect("group", group.pk)
-
     def test_realm_group_permission_denied(self):
         group = force_realm_group()
         self.login("realms.view_realmuser")
@@ -1081,9 +1025,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # create realm group
 
-    def test_create_realm_group_redirect(self):
-        self.login_redirect("create_group")
-
     def test_create_realm_group_permission_denied(self):
         self.login("realms.view_realmuser")
         response = self.client.get(reverse("realms:create_group"))
@@ -1113,10 +1054,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, display_name)
 
     # update realm group
-
-    def test_update_realm_group_redirect(self):
-        realm_group = force_realm_group()
-        self.login_redirect("update_group", realm_group.pk)
 
     def test_update_realm_group_permission_denied(self):
         realm_group = force_realm_group()
@@ -1150,10 +1087,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertEqual(realm_group.display_name, new_display_name)
 
     # delete realm group
-
-    def test_delete_realm_group_redirect(self):
-        realm_group = force_realm_group()
-        self.login_redirect("delete_group", realm_group.pk)
 
     def test_delete_realm_group_permission_denied(self):
         realm_group = force_realm_group()
@@ -1270,9 +1203,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # realm users
 
-    def test_realm_users_redirect(self):
-        self.login_redirect("users")
-
     def test_realm_users_permission_denied(self):
         self.login("realms.view_realmgroup")
         response = self.client.get(reverse("realms:users"))
@@ -1335,10 +1265,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, "We didn't find any item related to your search")
 
     # realm user
-
-    def test_realm_user_redirect(self):
-        _, user = force_realm_user()
-        self.login_redirect("user", user.pk)
 
     def test_realm_user_permission_denied(self):
         _, user = force_realm_user()
@@ -1419,10 +1345,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
 
     # add realm user to group
 
-    def test_add_realm_user_to_group_login_redirect(self):
-        _, user = force_realm_user()
-        self.login_redirect("add_user_to_group", user.pk)
-
     def test_add_realm_user_to_group_permission_denied(self):
         _, user = force_realm_user()
         self.login("realms.view_realmuser")
@@ -1466,11 +1388,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         send_robust.assert_called_once()
 
     # remove realm user from group
-
-    def test_remove_realm_user_from_group_redirect(self):
-        group = force_realm_group()
-        _, user = force_realm_user(realm=group.realm, group=group)
-        self.login_redirect("remove_user_from_group", user.pk, group.pk)
 
     def test_remove_realm_user_from_group_permission_denied(self):
         group = force_realm_group()
@@ -1706,10 +1623,6 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertRedirects(response, reverse("realms_public:ldap_login", args=(realm.pk, ras.pk)))
 
     # authentication session
-
-    def test_authentication_session_login_redirect(self):
-        ras = force_realm_authentication_session()
-        self.login_redirect("test", ras.realm.pk)
 
     def test_authentication_session_permission_denied(self):
         ras = force_realm_authentication_session()

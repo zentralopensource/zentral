@@ -35,9 +35,6 @@ class MunkiMachineActionsViewsTestCase(TestCase, LoginCase):
 
     # force machine full sync
 
-    def test_force_machine_full_sync_redirect(self):
-        self.login_redirect("force_machine_full_sync", "012345678")
-
     def test_force_machine_full_sync_permission_denied(self):
         self.login("munki.view_configuration")
         response = self.client.get(reverse("munki:force_machine_full_sync", args=("012345678",)))

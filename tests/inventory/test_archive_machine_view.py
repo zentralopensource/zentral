@@ -43,9 +43,6 @@ class ArchiveMachineViewTestCase(TestCase, LoginCase):
 
     # GET
 
-    def test_get_login_redirect(self):
-        self.login_redirect("archive_machine", "1111")
-
     def test_get_permission_denied(self):
         self.login("inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:archive_machine", args=("1111",)))

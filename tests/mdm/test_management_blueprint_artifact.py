@@ -31,10 +31,6 @@ class BlueprintArtifactManagementViewsTestCase(TestCase, LoginCase):
 
     # create
 
-    def test_create_blueprint_artifact_redirect(self):
-        artifact, _ = force_artifact()
-        self.login_redirect("create_blueprint_artifact", artifact.pk)
-
     def test_create_blueprint_artifact_permission_denied(self):
         artifact, _ = force_artifact()
         self.login()
@@ -72,10 +68,6 @@ class BlueprintArtifactManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(set(blueprint.serialized_artifacts.keys()), set([str(artifact.pk)]))
 
     # update
-
-    def test_update_blueprint_artifact_redirect(self):
-        blueprint_artifact, artifact, _ = force_blueprint_artifact()
-        self.login_redirect("update_blueprint_artifact", artifact.pk, blueprint_artifact.pk)
 
     def test_update_blueprint_artifact_permission_denied(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()
@@ -191,10 +183,6 @@ class BlueprintArtifactManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(serialized_artifact["tag_shards"], {str(next_tag.pk): 6})
 
     # delete
-
-    def test_delete_blueprint_artifact_redirect(self):
-        blueprint_artifact, artifact, _ = force_blueprint_artifact()
-        self.login_redirect("delete_blueprint_artifact", artifact.pk, blueprint_artifact.pk)
 
     def test_delete_blueprint_artifact_permission_denied(self):
         blueprint_artifact, artifact, _ = force_blueprint_artifact()

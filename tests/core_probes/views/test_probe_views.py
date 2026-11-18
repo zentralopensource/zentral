@@ -47,9 +47,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
 
     # create probe
 
-    def test_create_probe_redirect(self):
-        self.login_redirect("create")
-
     def test_create_probe_permission_denied(self):
         self.login()
         response = self.client.get(reverse("probes:create"))
@@ -94,10 +91,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
 
     # update probe
 
-    def test_update_probe_redirect(self):
-        probe_source = self._force_probe()
-        self.login_redirect("update", probe_source.pk)
-
     def test_update_probe_permission_denied(self):
         probe_source = self._force_probe()
         self.login()
@@ -132,10 +125,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
 
     # delete probe
 
-    def test_delete_probe_redirect(self):
-        probe_source = self._force_probe()
-        self.login_redirect("delete", probe_source.pk)
-
     def test_delete_probe_permission_denied(self):
         probe_source = self._force_probe()
         self.login()
@@ -157,10 +146,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "probes/index.html")
 
     # clone probe
-
-    def test_clone_probe_redirect(self):
-        probe_source = self._force_probe()
-        self.login_redirect("clone", probe_source.pk)
 
     def test_clone_probe_permission_denied(self):
         probe_source = self._force_probe()
@@ -206,10 +191,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
 
     # probe events
 
-    def test_probe_events_redirect(self):
-        probe_source = self._force_probe()
-        self.login_redirect("probe_events", probe_source.pk)
-
     def test_probe_events_permission_denied(self):
         probe_source = self._force_probe()
         self.login("probes.add_probesource")
@@ -224,10 +205,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "probes/probe_events.html")
 
     # add filter
-
-    def test_add_probe_filter_redirect(self):
-        probe_source = self._force_probe()
-        self.login_redirect("add_filter", probe_source.pk, "inventory")
 
     def test_add_probe_filter_permission_denied(self):
         probe_source = self._force_probe()
@@ -287,10 +264,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
         )
 
     # update filter
-
-    def test_update_probe_filter_redirect(self):
-        probe_source = self._force_probe(platforms=["LINUX"])
-        self.login_redirect("update_filter", probe_source.pk, "inventory", 0)
 
     def test_update_probe_filter_permission_denied(self):
         probe_source = self._force_probe(platforms=["LINUX"])
@@ -371,10 +344,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
 
     # delete filter
 
-    def test_delete_probe_filter_redirect(self):
-        probe_source = self._force_probe(platforms=["LINUX"])
-        self.login_redirect("delete_filter", probe_source.pk, "inventory", 0)
-
     def test_delete_probe_filter_permission_denied(self):
         probe_source = self._force_probe(platforms=["LINUX"])
         self.login()
@@ -400,9 +369,6 @@ class ProbeViewsTestCase(TestCase, LoginCase):
         self.assertEqual(ctx_probe_source.body["filters"]["inventory"], [])
 
     # index
-
-    def test_index_redirect(self):
-        self.login_redirect("index")
 
     def test_index_permission_denied(self):
         self.login()

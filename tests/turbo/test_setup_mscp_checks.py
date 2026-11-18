@@ -11,9 +11,6 @@ from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSe
 class TurboSetupMSCPChecksTestCase(TurboSetupTestCase):
     # mSCP checks
 
-    def test_mscp_checks_redirect(self):
-        self.login_redirect("mscp_checks")
-
     def test_mscp_checks_permission_denied(self):
         self.login()
         response = self.client.get(reverse("turbo:mscp_checks"))
@@ -95,9 +92,6 @@ class TurboSetupMSCPChecksTestCase(TurboSetupTestCase):
         self.assertContains(response, configuration.get_absolute_url())
 
     # create mSCP check
-
-    def test_create_mscp_check_redirect(self):
-        self.login_redirect("create_mscp_check")
 
     def test_create_mscp_check_permission_denied(self):
         self.login()

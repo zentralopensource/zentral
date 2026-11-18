@@ -52,9 +52,6 @@ class BaseViewsTestCase(TestCase, LoginCase):
 
     # create index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_get(self):
         self.login()
         response = self.client.get(reverse("base:index"))

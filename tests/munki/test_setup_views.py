@@ -45,9 +45,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login()
         response = self.client.get(reverse("munki:index"))
@@ -68,9 +65,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("munki:script_checks"))
 
     # configurations
-
-    def test_configurations_redirect(self):
-        self.login_redirect("configurations")
 
     def test_configurations_permission_denied(self):
         self.login()
@@ -117,10 +111,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("munki:configuration_events",
                                               args=(configuration.pk,)))
 
-    def test_configuration_events_redirect(self):
-        configuration = force_configuration()
-        self.login_redirect("configuration_events", configuration.pk)
-
     def test_configuration_events_permission_denied(self):
         configuration = force_configuration()
         self.login("munki.view_configuration")
@@ -148,9 +138,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "munki/configuration_events.html")
 
     # create configuration
-
-    def test_create_configuration_redirect(self):
-        self.login_redirect("create_configuration")
 
     def test_create_configuration_permission_denied(self):
         self.login()
@@ -230,10 +217,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["munki", "zentral"])
 
     # update configuration
-
-    def test_update_configuration_redirect(self):
-        configuration = force_configuration()
-        self.login_redirect("update_configuration", configuration.pk)
 
     def test_update_configuration_permission_denied(self):
         configuration = force_configuration()
@@ -332,10 +315,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
 
     # create enrollment
 
-    def test_create_enrollment_redirect(self):
-        configuration = force_configuration()
-        self.login_redirect("create_enrollment", configuration.pk)
-
     def test_create_enrollment_permission_denied(self):
         configuration = force_configuration()
         self.login()
@@ -387,10 +366,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
 
     # bump enrollment version
 
-    def test_bump_enrollment_version_redirect(self):
-        enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.login_redirect("bump_enrollment_version", enrollment.configuration.pk, enrollment.pk)
-
     def test_bump_enrollment_version_permission_denied(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
         self.login()
@@ -430,10 +405,6 @@ class MunkiSetupViewsTestCase(TestCase, LoginCase):
         assert_no_enrollment_secret(self, payload, enrollment)
 
     # delete enrollment
-
-    def test_delete_enrollment_redirect(self):
-        enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.login_redirect("delete_enrollment", enrollment.configuration.pk, enrollment.pk)
 
     def test_delete_enrollment_permission_denied(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)

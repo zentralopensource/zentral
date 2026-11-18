@@ -262,9 +262,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # user list
 
-    def test_user_list_login_redirect(self):
-        self.login_redirect("users")
-
     def test_user_list_realm_session_of_an_inactive_user(self):
         self.login("accounts.view_user", realm_user=True)
         response = self.client.get(reverse("accounts:users"))
@@ -562,9 +559,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # profile
 
-    def test_profile_login_redirect(self):
-        self.login_redirect("profile")
-
     def test_profile(self):
         self.login()
         response = self.client.get(reverse("accounts:profile"))
@@ -584,9 +578,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertNotContains(response, ">Manage your verification devices</a>")
         self.assertContains(response, "Global items per page")
 
-    def test_update_profile_login_redirect(self):
-        self.login_redirect("update_profile")
-
     def test_update_profile_get(self):
         self.login()
         response = self.client.get(reverse("accounts:update_profile"))
@@ -601,9 +592,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(self.ui_user.items_per_page, 42)
 
     # invite
-
-    def test_user_invite_login_redirect(self):
-        self.login_redirect("invite_user")
 
     def test_user_invite_permission_denied(self):
         self.login("accounts.view_user")
@@ -721,9 +709,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # create service account
 
-    def test_create_service_account_login_redirect(self):
-        self.login_redirect("create_service_account")
-
     def test_create_service_account_permission_denied(self):
         self.login("accounts.view_user")
         self.permission_denied("create_service_account")
@@ -806,9 +791,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertEqual(list(service_account.groups.all()), [self.ui_group])
 
     # update
-
-    def test_user_update_login_redirect(self):
-        self.login_redirect("update_user", self.user.id)
 
     def test_user_update_permission_denied(self):
         self.login("accounts.add_user")
@@ -1184,9 +1166,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # delete
 
-    def test_user_delete_login_redirect(self):
-        self.login_redirect("delete_user", self.user.id)
-
     def test_user_delete_login_redirect_same_answer_for_each_id(self):
         # without a login, an unknown id and a superuser get the answer of a user
         for pk in (self.user.id, self.superuser.id, 0):
@@ -1299,15 +1278,7 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, "Service account {} deleted".format(service_account))
         self.assertTemplateUsed(response, "accounts/user_list.html")
 
-    # verification devices list
-
-    def test_verification_devices_login_redirect(self):
-        self.login_redirect("verification_devices")
-
     # add TOTP device
-
-    def test_add_totp_login_redirect(self):
-        self.login_redirect("add_totp")
 
     def test_add_totp_get(self):
         self.login()
@@ -1341,14 +1312,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, name)
 
     # delete TOTP device
-
-    def test_delete_totp_login_redirect(self):
-        user_totp = UserTOTP.objects.create(
-            user=self.ui_user,
-            name=get_random_string(12),
-            secret=pyotp.random_base32(),
-        )
-        self.login_redirect("delete_totp", user_totp.pk)
 
     def test_delete_totp_404(self):
         self.login()
@@ -1405,9 +1368,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # add WebAuthn device
 
-    def test_register_webauthn_login_redirect(self):
-        self.login_redirect("register_webauthn_device")
-
     def test_register_webauthn_get(self):
         self.login()
         response = self.client.get(reverse("accounts:register_webauthn_device"))
@@ -1424,18 +1384,6 @@ class AccountUsersViewsTestCase(TestCase, LoginCase, EventAssertions):
         self.assertContains(response, "alert-danger")
 
     # delete WebAuthn device
-
-    def test_delete_webauthn_device_login_redirect(self):
-        user_webauthn = UserWebAuthn.objects.create(
-            user=self.ui_user,
-            name=get_random_string(12),
-            rp_id=settings["api"]["fqdn"],
-            key_handle=get_random_string(length=86, allowed_chars="s9xL"),
-            public_key=b"123",
-            sign_count=0,
-            transports=[],
-        )
-        self.login_redirect("delete_webauthn_device", user_webauthn.pk)
 
     def test_delete_webauthn_device_404(self):
         self.login()

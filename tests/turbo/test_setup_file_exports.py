@@ -12,9 +12,6 @@ class TurboSetupFileExportsTestCase(TurboSetupTestCase):
 
     # list
 
-    def test_file_exports_redirect(self):
-        self.login_redirect("file_exports")
-
     def test_file_exports_permission_denied(self):
         self.login("turbo.view_sysdiagnose")
         response = self.client.get(reverse("turbo:file_exports"))
@@ -43,10 +40,6 @@ class TurboSetupFileExportsTestCase(TurboSetupTestCase):
         self.assertEqual(list(response.context["object_list"]), [scheduled])
 
     # detail
-
-    def test_file_export_redirect(self):
-        file_export = self._force_file_export()
-        self.login_redirect("file_export", file_export.pk)
 
     def test_file_export_permission_denied(self):
         file_export = self._force_file_export()

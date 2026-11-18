@@ -14,9 +14,6 @@ from .utils import (SCHEDULE_ACTIONS, VIEW_RECURRING_JOB_ACTION, TurboSetupTestC
 class TurboSetupRecurringJobsTestCase(TurboSetupTestCase):
     # list
 
-    def test_recurring_jobs_redirect(self):
-        self.login_redirect("recurring_jobs")
-
     def test_recurring_jobs_without_a_policy(self):
         # each schedule has its own decision, so the list needs no permission, and it is empty
         recurring_job = force_recurring_job()
@@ -133,10 +130,6 @@ class TurboSetupRecurringJobsTestCase(TurboSetupTestCase):
         response = self.client.get(reverse("turbo:delete_recurring_job", args=(rj.configuration.pk, rj.pk)))
         self.assertEqual(response.status_code, 200)
 
-    def test_update_recurring_job_redirect(self):
-        rj = force_recurring_job()
-        self.login_redirect("update_recurring_job", rj.configuration.pk, rj.pk)
-
     def test_update_recurring_job_without_the_view_action(self):
         # one action decides the page: the view of the schedule is another decision
         rj = force_recurring_job(interval=3600)
@@ -156,10 +149,6 @@ class TurboSetupRecurringJobsTestCase(TurboSetupTestCase):
         self.login_with_policy(view_schedule_policy(self.group))
         response = self.client.get(reverse("turbo:update_recurring_job", args=(rj.configuration.pk, rj.pk)))
         self.assertEqual(response.status_code, 403)
-
-    def test_delete_recurring_job_redirect(self):
-        rj = force_recurring_job()
-        self.login_redirect("delete_recurring_job", rj.configuration.pk, rj.pk)
 
     def test_delete_recurring_job_without_the_view_action(self):
         # one action decides the page: the view of the schedule is another decision

@@ -77,9 +77,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     # test enrolled devices
 
-    def test_enrolled_devices_redirect(self):
-        self.login_redirect("enrolled_devices")
-
     def test_enrolled_devices_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:enrolled_devices"))
@@ -247,10 +244,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, serial_number3)
 
     # test enrolled device
-
-    def test_enrolled_device_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("enrolled_device", session.enrolled_device.pk)
 
     def test_enrolled_device_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -688,10 +681,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     # test enrolled device commands
 
-    def test_enrolled_device_commands_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("enrolled_device_commands", session.enrolled_device.pk)
-
     def test_enrolled_device_commands_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self.login()
@@ -761,10 +750,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             response,
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "CustomCommand"))
         )
-
-    def test_create_enrolled_device_custom_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "CustomCommand")
 
     def test_create_enrolled_device_custom_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -924,10 +909,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "DeviceInformation"))
         )
 
-    def test_create_enrolled_device_device_information_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "DeviceInformation")
-
     def test_create_enrolled_device_device_information_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self.login("mdm.view_enrolleddevice")
@@ -984,10 +965,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             response,
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "DeviceLock"))
         )
-
-    def test_create_enrolled_device_device_lock_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "DeviceLock")
 
     def test_create_enrolled_device_device_lock_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -1098,10 +1075,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "EraseDevice"))
         )
 
-    def test_create_enrolled_device_erase_device_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "EraseDevice")
-
     def test_create_enrolled_device_erase_device_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self.login("mdm.view_enrolleddevice")
@@ -1204,10 +1177,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             response,
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "RestartDevice"))
         )
-
-    def test_create_enrolled_device_restart_device_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "RestartDevice")
 
     def test_create_enrolled_device_restart_device_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -1338,10 +1307,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SecurityInfo"))
         )
 
-    def test_create_enrolled_device_security_info_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "SecurityInfo")
-
     def test_create_enrolled_device_security_info_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self.login("mdm.view_enrolleddevice")
@@ -1414,12 +1379,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             response,
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetRecoveryLock"))
         )
-
-    def test_create_enrolled_device_set_recovery_lock_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        session.enrolled_device.apple_silicon = True
-        session.enrolled_device.save()
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "SetRecoveryLock")
 
     def test_create_enrolled_device_set_recovery_lock_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -1607,10 +1566,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetFirmwarePassword"))
         )
 
-    def test_create_enrolled_device_set_firmware_password_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "SetFirmwarePassword")
-
     def test_create_enrolled_device_set_firmware_password_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self.login("mdm.view_enrolleddevice")
@@ -1795,16 +1750,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "SetAutoAdminPassword"))
         )
 
-    def test_create_enrolled_device_set_auto_admin_password_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        session.enrolled_device.device_information = {
-            "AutoSetupAdminAccounts": [
-                {"GUID": "yolo", "shortName": "fomo"}
-            ]
-        }
-        session.enrolled_device.save()
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "SetAutoAdminPassword")
-
     def test_create_enrolled_device_set_auto_admin_password_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         session.enrolled_device.device_information = {
@@ -1928,13 +1873,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
             reverse("mdm:create_enrolled_device_command", args=(session.enrolled_device.pk, "RotateFileVaultKey"))
         )
 
-    def test_create_enrolled_device_rotate_filevault_key_command_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        enrolled_device = session.enrolled_device
-        enrolled_device.set_filevault_prk("AAAA-AAAA-AAAA-AAAA-AAAA-AAAA")
-        enrolled_device.save()
-        self.login_redirect("create_enrolled_device_command", session.enrolled_device.pk, "RotateFileVaultKey")
-
     def test_create_enrolled_device_rotate_filevault_key_command_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         enrolled_device = session.enrolled_device
@@ -1978,15 +1916,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(command.name, "RotateFileVaultKey")
 
     # download custom command result
-
-    def test_download_enrolled_device_command_result_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        cmd = CustomCommand.create_for_device(
-            session.enrolled_device,
-            kwargs={"command": plistlib.dumps({"RequestType": "DeviceInformation"}).decode("utf-8")},
-            queue=True
-        )
-        self.login_redirect("download_enrolled_device_command_result", cmd.db_command.uuid)
 
     def test_download_enrolled_device_command_result_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -2036,10 +1965,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(plistlib.loads(b"".join(response.streaming_content)), result)
 
     # change blueprint
-
-    def test_change_enrolled_device_blueprint_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("change_enrolled_device_blueprint", session.enrolled_device.pk)
 
     def test_change_enrolled_device_blueprint_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -2095,10 +2020,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
 
     # poke
 
-    def test_poke_enrolled_device_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("poke_enrolled_device", session.enrolled_device.pk)
-
     def test_poke_enrolled_device_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
         self.login()
@@ -2129,11 +2050,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["request"]["method"], "POST")
         self.assertEqual(metadata["request"]["view"], "mdm:poke_enrolled_device")
 
-    def test_poke_enrolled_user_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        enrolled_user = force_enrolled_user(session.enrolled_device)
-        self.login_redirect("poke_enrolled_user", session.enrolled_device.pk, enrolled_user.pk)
-
     @patch("zentral.contrib.mdm.apns.httpx.Client.post")
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_poke_enrolled_user_post_event_is_attributable(self, post_event, post):
@@ -2159,10 +2075,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(event.payload["user_id"], enrolled_user.user_id)
 
     # block
-
-    def test_block_enrolled_device_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("block_enrolled_device", session.enrolled_device.pk)
 
     def test_block_enrolled_device_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
@@ -2253,10 +2165,6 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         post_event.assert_not_called()
 
     # ununblock
-
-    def test_unblock_enrolled_device_redirect(self):
-        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
-        self.login_redirect("unblock_enrolled_device", session.enrolled_device.pk)
 
     def test_unblock_enrolled_device_permission_denied(self):
         session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)

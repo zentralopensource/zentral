@@ -44,10 +44,6 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
 
     # create enrollment
 
-    def test_create_enrollment_redirect(self):
-        configuration = self._force_configuration()
-        self.login_redirect("create_enrollment", configuration.pk)
-
     def test_create_enrollment_permission_denied(self):
         configuration = self._force_configuration()
         self.login()
@@ -115,10 +111,6 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
 
     # bump enrollment version
 
-    def test_bump_enrollment_version_redirect(self):
-        enrollment = self._force_enrollment()
-        self.login_redirect("bump_enrollment_version", enrollment.configuration.pk, enrollment.pk)
-
     def test_bump_enrollment_version_permission_denied(self):
         enrollment = self._force_enrollment()
         self.login()
@@ -157,10 +149,6 @@ class OsquerySetupEnrollmentsViewsTestCase(TestCase, LoginCase):
                           "osquery_configuration": [str(enrollment.configuration.pk)]})
 
     # delete enrollment
-
-    def test_delete_enrollment_redirect(self):
-        enrollment = self._force_enrollment()
-        self.login_redirect("delete_enrollment", enrollment.configuration.pk, enrollment.pk)
 
     def test_delete_enrollment_permission_denied(self):
         enrollment = self._force_enrollment()

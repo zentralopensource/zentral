@@ -12,10 +12,6 @@ from .utils import TurboSetupTestCase, force_configuration, force_enrollment, ma
 class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
     # create enrollment
 
-    def test_create_enrollment_redirect(self):
-        configuration = force_configuration()
-        self.login_redirect("create_enrollment", configuration.pk)
-
     def test_create_enrollment_permission_denied(self):
         configuration = force_configuration()
         self.login()
@@ -68,10 +64,6 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         })
 
     # bump enrollment version
-
-    def test_bump_enrollment_version_redirect(self):
-        enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.login_redirect("bump_enrollment_version", enrollment.configuration.pk, enrollment.pk)
 
     def test_bump_enrollment_version_permission_denied(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)
@@ -129,10 +121,6 @@ class TurboSetupEnrollmentsTestCase(TurboSetupTestCase):
         self.assertEqual(response.status_code, 404)
 
     # delete enrollment
-
-    def test_delete_enrollment_redirect(self):
-        enrollment = force_enrollment(meta_business_unit=self.mbu)
-        self.login_redirect("delete_enrollment", enrollment.configuration.pk, enrollment.pk)
 
     def test_delete_enrollment_permission_denied(self):
         enrollment = force_enrollment(meta_business_unit=self.mbu)

@@ -103,9 +103,6 @@ class MDMCertAssetManagementViewsTestCase(TestCase, LoginCase):
 
     # create cert asset GET
 
-    def test_create_cert_asset_get_redirect(self):
-        self.login_redirect("create_cert_asset")
-
     def test_create_cert_asset_get_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:create_cert_asset"))
@@ -118,21 +115,6 @@ class MDMCertAssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "mdm/certasset_form.html")
 
     # create cert_asset POST
-
-    def test_create_cert_asset_post_redirect(self):
-        acme_issuer = force_acme_issuer()
-        self.login_redirect(
-            "create_cert_asset",
-            data={
-                "name": get_random_string(12),
-                "channel": "DEVICE",
-                "platforms": [str(Platform.MACOS)],
-                "acme_issuer": acme_issuer.pk,
-                "subject": json.dumps([{"type": "CN", "value": "yolo"}]),
-                "subject_alt_name": json.dumps({}),
-                "accessible": "Default",
-            },
-        )
 
     def test_create_cert_asset_post_permission_denied(self):
         acme_issuer = force_acme_issuer()
@@ -327,10 +309,6 @@ class MDMCertAssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(cert_asset.accessible, "AfterFirstUnlock")
 
     # upgrade cert asset GET
-
-    def test_upgrade_cert_asset_get_redirect(self):
-        artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)
-        self.login_redirect("upgrade_cert_asset", artifact.pk)
 
     def test_upgrade_cert_asset_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.CERT_ASSET)

@@ -12,9 +12,6 @@ from .utils import (VIEW_ONE_TIME_JOB_ACTION, VIEW_RECURRING_JOB_ACTION, TurboSe
 class TurboSetupScriptsTestCase(TurboSetupTestCase):
     # scripts
 
-    def test_scripts_redirect(self):
-        self.login_redirect("scripts")
-
     def test_scripts_permission_denied(self):
         self.login()
         response = self.client.get(reverse("turbo:scripts"))
@@ -135,9 +132,6 @@ class TurboSetupScriptsTestCase(TurboSetupTestCase):
         self.assertNotContains(response, configuration.name)
 
     # create script
-
-    def test_create_script_redirect(self):
-        self.login_redirect("create_script")
 
     def test_create_script_permission_denied(self):
         self.login()

@@ -71,9 +71,6 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
 
     # list DEP virtual servers
 
-    def test_list_dep_virtual_servers_redirect(self):
-        self.login_redirect("dep_virtual_servers")
-
     def test_list_dep_virtual_servers_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:dep_virtual_servers"))
@@ -87,10 +84,6 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, virtual_server.name)
 
     # DEP virtual server
-
-    def test_dep_virtual_server_redirect(self):
-        virtual_server = force_dep_virtual_server()
-        self.login_redirect("dep_virtual_server", virtual_server.pk)
 
     def test_dep_virtual_server_permission_denied(self):
         virtual_server = force_dep_virtual_server()
@@ -139,10 +132,6 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
 
     # update DEP virtual server
 
-    def test_update_dep_virtual_server_redirect(self):
-        virtual_server = force_dep_virtual_server()
-        self.login_redirect("update_dep_virtual_server", virtual_server.pk)
-
     def test_update_dep_virtual_server_permission_denied(self):
         virtual_server = force_dep_virtual_server()
         self.login()
@@ -175,9 +164,6 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(virtual_server.default_enrollment, enrollment)
 
     # connect DEP virtual server
-
-    def test_connect_dep_virtual_server_redirect(self):
-        self.login_redirect("connect_dep_virtual_server")
 
     def test_connect_dep_virtual_server_permission_denied(self):
         self.login()
@@ -427,11 +413,6 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
 
     # download DEP token public key
 
-    def test_download_dep_token_public_key_redirect(self):
-        dep_token = DEPToken.objects.create()
-        add_dep_token_certificate(dep_token)
-        self.login_redirect("download_dep_token_public_key", dep_token.pk)
-
     def test_download_dep_token_public_key_permission_denied(self):
         dep_token = DEPToken.objects.create()
         add_dep_token_certificate(dep_token)
@@ -449,11 +430,6 @@ class SetupDEPVirtualServerViewsTestCase(TestCase, LoginCase):
         self.assertEqual(dep_token.certificate, b"".join(response.streaming_content))
 
     # renew DEP token
-
-    def test_renew_dep_token_redirect(self):
-        dep_token = DEPToken.objects.create()
-        add_dep_token_certificate(dep_token)
-        self.login_redirect("renew_dep_token", dep_token.pk)
 
     def test_renew_dep_token_permission_denied(self):
         dep_token = DEPToken.objects.create()

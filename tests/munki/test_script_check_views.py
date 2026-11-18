@@ -41,9 +41,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
 
     # list
 
-    def test_script_checks_redirect(self):
-        self.login_redirect("script_checks")
-
     def test_script_checks_permission_denied(self):
         self.login()
         response = self.client.get(reverse("munki:script_checks"))
@@ -120,9 +117,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, sc_b.compliance_check.name)
 
     # create
-
-    def test_create_script_check_redirect(self):
-        self.login_redirect("create_script_check")
 
     def test_create_script_check_permission_denied(self):
         self.login()
@@ -341,10 +335,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
 
     # view
 
-    def test_view_script_check_redirect(self):
-        sc = force_script_check()
-        self.login_redirect("script_check", sc.pk)
-
     def test_view_script_check_permission_denied(self):
         sc = force_script_check()
         self.login()
@@ -382,10 +372,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("munki:delete_script_check", args=(sc.pk,)))
 
     # update
-
-    def test_update_script_check_redirect(self):
-        sc = force_script_check()
-        self.login_redirect("update_script_check", sc.pk)
 
     def test_update_script_check_permission_denied(self):
         sc = force_script_check()
@@ -561,10 +547,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
 
     # delete
 
-    def test_delete_script_check_redirect(self):
-        sc = force_script_check()
-        self.login_redirect("delete_script_check", sc.pk)
-
     def test_delete_script_check_permission_denied(self):
         sc = force_script_check()
         self.login()
@@ -614,10 +596,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
 
     # events
 
-    def test_script_check_events_redirect(self):
-        sc = force_script_check()
-        self.login_redirect("script_check_events", sc.pk)
-
     def test_script_check_events_permission_denied(self):
         sc = force_script_check()
         self.login()
@@ -635,10 +613,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
 
     # fetch events
 
-    def test_script_check_fetch_events_redirect(self):
-        sc = force_script_check()
-        self.login_redirect("fetch_script_check_events", sc.pk)
-
     def test_script_check_fetch_events_permission_denied(self):
         sc = force_script_check()
         self.login()
@@ -655,10 +629,6 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
         self.assertTemplateUsed(response, "core/stores/events_events.html")
 
     # events store redirect
-
-    def test_script_check_events_store_redirect_redirect(self):
-        sc = force_script_check()
-        self.login_redirect("script_check_events_store_redirect", sc.pk)
 
     def test_script_check_events_store_redirect_permission_denied(self):
         sc = force_script_check()

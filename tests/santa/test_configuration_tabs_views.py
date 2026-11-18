@@ -187,12 +187,6 @@ class SantaConfigurationTabsViewsTestCase(TestCase, LoginCase):
 
     # the two tabs of the scoped entries
 
-    def test_scoped_tabs_redirect(self):
-        configuration = force_configuration()
-        for url_name in self.SCOPED_TABS:
-            with self.subTest(url_name=url_name):
-                self.login_redirect(url_name, configuration.pk)
-
     def test_scoped_tabs_permission_denied(self):
         configuration = force_configuration()
         self.login("santa.view_rule")

@@ -32,9 +32,6 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
 
     # FileVault configurations
 
-    def test_filevault_configurations_redirect(self):
-        self.login_redirect("filevault_configs")
-
     def test_filevault_configurations_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:filevault_configs"))
@@ -66,9 +63,6 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("mdm:delete_filevault_config", args=(fv_config2.pk,)))
 
     # create FileVault configuration
-
-    def test_create_filevault_configuration_redirect(self):
-        self.login_redirect("create_filevault_config")
 
     def test_create_filevault_configuration_permission_denied(self):
         self.login()
@@ -186,10 +180,6 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
 
     # FileVault configuration
 
-    def test_filevault_configuration_redirect(self):
-        fv_config = force_filevault_config()
-        self.login_redirect("filevault_config", fv_config.pk)
-
     def test_filevault_configuration_permission_denied(self):
         fv_config = force_filevault_config()
         self.login()
@@ -225,10 +215,6 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("mdm:delete_filevault_config", args=(fv_config.pk,)))
 
     # update FileVault configuration
-
-    def test_update_filevault_configuration_redirect(self):
-        fv_config = force_filevault_config()
-        self.login_redirect("update_filevault_config", fv_config.pk)
 
     def test_update_filevault_configuration_permission_denied(self):
         fv_config = force_filevault_config()
@@ -309,10 +295,6 @@ class FileVaultConfigManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     # delete FileVault configuration
-
-    def test_delete_filevault_configuration_redirect(self):
-        fv_config = force_filevault_config()
-        self.login_redirect("delete_filevault_config", fv_config.pk)
 
     def test_delete_filevault_configuration_permission_denied(self):
         fv_config = force_filevault_config()

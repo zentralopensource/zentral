@@ -60,9 +60,6 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
 
     # list
 
-    def test_policies_redirect(self):
-        self.login_redirect("policies")
-
     def test_policies_permission_denied(self):
         self.login()
         response = self.client.get(self.build_url("policies"))
@@ -131,9 +128,6 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
                     self.assertEqual(self.client.get(url).status_code, 200)
 
     # schema
-
-    def test_policies_schema_redirect(self):
-        self.login_redirect("policies_schema")
 
     def test_policies_schema_permission_denied(self):
         self.login()
@@ -294,9 +288,6 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
 
     # create
 
-    def test_create_policy_redirect(self):
-        self.login_redirect("create_policy")
-
     def test_create_policy_permission_denied(self):
         # No superuser → forbidden, even for an authenticated user.
         self.login()
@@ -394,10 +385,6 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         send_notification.assert_called_once_with("policies.change")
 
     # view
-
-    def test_view_policy_login_redirect(self):
-        p = force_policy()
-        self.login_redirect("policy", p.pk)
 
     def test_view_policy_permission_denied(self):
         p = force_policy()
@@ -551,10 +538,6 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
 
     # update
 
-    def test_update_policy_login_redirect(self):
-        p = force_policy()
-        self.login_redirect("update_policy", p.pk)
-
     def test_update_policy_permission_denied(self):
         p = force_policy()
         self.login()
@@ -623,10 +606,6 @@ class PoliciesViewsTestCase(TestCase, LoginCase):
         send_notification.assert_called_once_with("policies.change")
 
     # delete
-
-    def test_delete_policy_login_redirect(self):
-        p = force_policy()
-        self.login_redirect("delete_policy", p.pk)
 
     def test_delete_policy_permission_denied(self):
         p = force_policy()

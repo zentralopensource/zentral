@@ -34,9 +34,6 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
 
     # SUE list
 
-    def test_software_update_enforcements_redirect(self):
-        self.login_redirect("software_update_enforcements")
-
     def test_software_update_enforcements_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:software_update_enforcements"))
@@ -72,9 +69,6 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("mdm:delete_software_update_enforcement", args=(sue2.pk,)))
 
     # create SUE
-
-    def test_create_software_update_enforcement_redirect(self):
-        self.login_redirect("create_software_update_enforcement")
 
     def test_create_software_update_enforcement_permission_denied(self):
         self.login()
@@ -330,10 +324,6 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
 
     # SUE
 
-    def test_software_update_enforcement_redirect(self):
-        sue = force_software_update_enforcement()
-        self.login_redirect("software_update_enforcement", sue.pk)
-
     def test_software_update_enforcement_permission_denied(self):
         sue = force_software_update_enforcement()
         self.login()
@@ -369,10 +359,6 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("mdm:delete_software_update_enforcement", args=(sue.pk,)))
 
     # update SUE
-
-    def test_update_software_update_enforcement_redirect(self):
-        sue = force_software_update_enforcement()
-        self.login_redirect("update_software_update_enforcement", sue.pk)
 
     def test_update_software_update_enforcement_permission_denied(self):
         sue = force_software_update_enforcement()
@@ -454,10 +440,6 @@ class SoftwareUpdateEnforcementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     # delete FileVault configuration
-
-    def test_delete_software_update_enforcement_redirect(self):
-        sue = force_software_update_enforcement()
-        self.login_redirect("delete_software_update_enforcement", sue.pk)
 
     def test_delete_software_update_enforcement_permission_denied(self):
         sue = force_software_update_enforcement()

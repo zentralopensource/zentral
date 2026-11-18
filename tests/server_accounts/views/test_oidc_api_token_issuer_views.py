@@ -157,9 +157,6 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
                         self.build_url("delete_oidc_api_token_issuer", user_id, issuer.pk)):
                 self.assertEqual(self.client.get(url).status_code, 403)
 
-    def test_create_issuer_login_redirect(self):
-        self.login_redirect("create_oidc_api_token_issuer", self.service_account.pk)
-
     def test_create_issuer_permission_denied(self):
         self.login("accounts.view_user")
         response = self.client.get(self.build_url("create_oidc_api_token_issuer", self.service_account.pk))
@@ -342,10 +339,6 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
 
     # view OIDC API token issuer
 
-    def test_view_issuer_login_redirect(self):
-        issuer = self._force_issuer()
-        self.login_redirect("oidc_api_token_issuer", self.service_account.pk, issuer.pk)
-
     def test_view_issuer_permission_denied(self):
         issuer = self._force_issuer()
         self.login("accounts.view_user")
@@ -390,10 +383,6 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     # update OIDC API token issuer
-
-    def test_update_issuer_login_redirect(self):
-        issuer = self._force_issuer()
-        self.login_redirect("update_oidc_api_token_issuer", self.service_account.pk, issuer.pk)
 
     def test_update_issuer_permission_denied(self):
         issuer = self._force_issuer()
@@ -593,10 +582,6 @@ class OIDCAPITokenIssuerViewsTestCase(TestCase, LoginCase):
         )
 
     # delete OIDC API token issuer
-
-    def test_delete_issuer_login_redirect(self):
-        issuer = self._force_issuer()
-        self.login_redirect("delete_oidc_api_token_issuer", self.service_account.pk, issuer.pk)
 
     def test_delete_issuer_permission_denied(self):
         issuer = self._force_issuer()

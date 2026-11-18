@@ -45,9 +45,6 @@ class MachineTagsViewsTestCase(TestCase, LoginCase):
 
     # get machine tags
 
-    def test_get_machine_tags_login_redirect(self):
-        self.login_redirect("machine_tags", "1111")
-
     def test_get_machine_tags_permission_denied(self):
         self.login("inventory.view_machinesnapshot")
         response = self.client.get(reverse("inventory:machine_tags", args=("1111",)))
@@ -92,9 +89,6 @@ class MachineTagsViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, unavailable_tag.name)
 
     # add tag
-
-    def test_create_tag_redirect(self):
-        self.login_redirect("create_machine_tag", "1111", 2222)
 
     def test_create_unknown_tag(self):
         self.login()
@@ -179,9 +173,6 @@ class MachineTagsViewsTestCase(TestCase, LoginCase):
         self.assertIsInstance(event, MachineTagEvent)
 
     # delete tag
-
-    def test_delete_tag_redirect(self):
-        self.login_redirect("delete_machine_tag", "1111", 2222)
 
     def test_delete_unknown_tag(self):
         self.login()

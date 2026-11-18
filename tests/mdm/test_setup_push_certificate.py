@@ -54,9 +54,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # upload push certificate
 
-    def test_upload_push_certificate_redirect(self):
-        self.login_redirect("upload_push_certificate")
-
     def test_upload_push_certificate_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:upload_push_certificate"))
@@ -94,9 +91,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # create push certificate
 
-    def test_create_push_certificate_redirect(self):
-        self.login_redirect("create_push_certificate")
-
     def test_create_push_certificate_permission_denied(self):
         self.login("mdm.view_pushcertificate")
         response = self.client.get(reverse("mdm:create_push_certificate"))
@@ -132,10 +126,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertIsNone(push_certificate.certificate)
 
     # view push certificate
-
-    def test_view_push_certificate_redirect(self):
-        push_certificate = force_push_certificate()
-        self.login_redirect("push_certificate", push_certificate.pk)
 
     def test_view_push_certificate_permission_denied(self):
         push_certificate = force_push_certificate()
@@ -247,10 +237,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # push certificate CSR
 
-    def test_push_certificate_csr_redirect(self):
-        push_certificate = force_push_certificate()
-        self.login_redirect("push_certificate_csr", push_certificate.pk)
-
     def test_push_certificate_csr_permission_denied(self):
         push_certificate = force_push_certificate()
         self.login("mdm.view_pushcertificate")
@@ -267,10 +253,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
                          f'attachment; filename="push_certificate_{push_certificate.pk}.csr"')
 
     # push certificate signed CSR
-
-    def test_push_certificate_signed_csr_redirect(self):
-        push_certificate = force_push_certificate()
-        self.login_redirect("push_certificate_signed_csr", push_certificate.pk)
 
     def test_push_certificate_signed_csr_permission_denied(self):
         push_certificate = force_push_certificate()
@@ -303,10 +285,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         make_get_caller_identity_request.assert_called_once()
 
     # upload push certificate certificate
-
-    def test_upload_push_certificate_certificate_redirect(self):
-        push_certificate = force_push_certificate()
-        self.login_redirect("upload_push_certificate_certificate", push_certificate.pk)
 
     def test_upload_push_certificate_certificate_permission_denied(self):
         push_certificate = force_push_certificate()
@@ -387,10 +365,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # renew push certificate
 
-    def test_renew_push_certificate_redirect(self):
-        push_certificate = force_push_certificate(with_material=True)
-        self.login_redirect("renew_push_certificate", push_certificate.pk)
-
     def test_renew_push_certificate_permission_denied(self):
         push_certificate = force_push_certificate(with_material=True)
         self.login()
@@ -427,9 +401,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
 
     # list push certificates
 
-    def test_list_push_certificates_redirect(self):
-        self.login_redirect("push_certificates")
-
     def test_list_push_certificates_permission_denied(self):
         force_push_certificate(with_material=True)
         self.login()
@@ -446,10 +417,6 @@ class MDMUserEnrollmentSetupViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, push_certificate.name)
 
     # delete push certificate
-
-    def test_delete_push_certificate_redirect(self):
-        push_certificate = force_push_certificate(with_material=True)
-        self.login_redirect("delete_push_certificate", push_certificate.pk)
 
     def test_delete_push_certificate_permission_denied(self):
         push_certificate = force_push_certificate(with_material=True)

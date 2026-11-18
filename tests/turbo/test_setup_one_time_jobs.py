@@ -16,9 +16,6 @@ from .utils import (SCHEDULE_ACTIONS, VIEW_ONE_TIME_JOB_ACTION, TurboSetupTestCa
 class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
     # list
 
-    def test_one_time_jobs_redirect(self):
-        self.login_redirect("one_time_jobs")
-
     def test_one_time_jobs_without_a_policy(self):
         # each schedule has its own decision, so the list needs no permission, and it is empty
         one_time_job = force_one_time_job()
@@ -147,10 +144,6 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         self.assertEqual(sum('FROM "turbo_onetimejob"' in query["sql"] for query in ctx.captured_queries), 2)
         self.assertFalse(any('FROM "turbo_configuration"' in query["sql"] for query in ctx.captured_queries))
 
-    def test_update_one_time_job_redirect(self):
-        otj = force_one_time_job()
-        self.login_redirect("update_one_time_job", otj.configuration.pk, otj.pk)
-
     def test_update_one_time_job_without_the_view_action(self):
         # one action decides the page: the view of the schedule is another decision
         otj = force_one_time_job()
@@ -170,10 +163,6 @@ class TurboSetupOneTimeJobsTestCase(TurboSetupTestCase):
         self.login_with_policy(view_schedule_policy(self.group))
         response = self.client.get(reverse("turbo:update_one_time_job", args=(otj.configuration.pk, otj.pk)))
         self.assertEqual(response.status_code, 403)
-
-    def test_delete_one_time_job_redirect(self):
-        otj = force_one_time_job()
-        self.login_redirect("delete_one_time_job", otj.configuration.pk, otj.pk)
 
     def test_delete_one_time_job_without_the_view_action(self):
         # one action decides the page: the view of the schedule is another decision

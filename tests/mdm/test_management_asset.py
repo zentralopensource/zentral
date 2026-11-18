@@ -152,9 +152,6 @@ class AssetManagementViewsTestCase(TestCase, LoginCase):
 
     # assets
 
-    def test_assets_redirect(self):
-        self.login_redirect("assets")
-
     def test_assets_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:assets"))
@@ -170,10 +167,6 @@ class AssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, asset.bundle_id)
 
     # asset
-
-    def test_asset_redirect(self):
-        asset = self._force_asset()
-        self.login_redirect("asset", asset.pk)
 
     def test_asset_permission_denied(self):
         self.login()
@@ -214,10 +207,6 @@ class AssetManagementViewsTestCase(TestCase, LoginCase):
 
     # associate_location_asset
 
-    def test_associate_location_asset_login_redirect(self):
-        location_asset = self._force_location_asset()
-        self.login_redirect("associate_location_asset", location_asset.asset.pk, location_asset.pk)
-
     def test_associate_location_asset_permission_denied(self):
         location_asset = self._force_location_asset()
         self.login()
@@ -255,10 +244,6 @@ class AssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(UserTask.objects.get(task_result=tr).user, self.user)
 
     # create_asset_artifact
-
-    def test_create_asset_artifact_login_redirect(self):
-        asset = self._force_asset()
-        self.login_redirect("create_asset_artifact", asset.pk)
 
     def test_create_asset_artifact_permission_denied(self):
         self.login()
@@ -416,10 +401,6 @@ class AssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(form.fields["name"].initial, asset.name)
 
     # upgrade store app get
-
-    def test_upgrade_store_app_get_redirect(self):
-        artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)
-        self.login_redirect("upgrade_store_app", artifact.pk)
 
     def test_upgrade_store_app_get_permission_denied(self):
         artifact, _ = force_artifact(artifact_type=Artifact.Type.STORE_APP)

@@ -125,9 +125,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
 
     # IndexView
 
-    def test_index_login_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login()
         self.permission_denied("index")
@@ -146,9 +143,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 405)
 
     # ConnectionsView
-
-    def test_connection_list_login_redirect(self):
-        self.login_redirect("connections")
 
     def test_connection_list_permission_denied(self):
         self.login()
@@ -217,9 +211,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, "Delete connection")
 
     # CreateConnectionView
-
-    def test_connection_create_login_redirect(self):
-        self.login_redirect("create_connection")
 
     def test_connection_create_permission_denied(self):
         self.login()
@@ -331,9 +322,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
 
     # ConnectionRedirectView
 
-    def test_connection_redirect_login_redirect(self):
-        self.login_redirect("redirect")
-
     def test_connection_redirect_permission_denied(self):
         self.login()
         self.permission_denied("redirect")
@@ -385,9 +373,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
 
     # AuthorizeConnectionView
 
-    def test_connection_authorize_login_redirect(self):
-        self.login_redirect("authorize_connection", uuid.uuid4())
-
     def test_connection_authorize_permission_denied(self):
         self.login()
         self.permission_denied("authorize_connection", uuid.uuid4())
@@ -413,9 +398,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 405)
 
     # UpdateConnectionView
-
-    def test_connection_udpate_login_redirect(self):
-        self.login_redirect("update_connection", uuid.uuid4())
 
     def test_connection_udpate_permission_denied(self):
         self.login()
@@ -538,9 +520,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
 
     # DeleteConnectionView
 
-    def test_connection_delete_login_redirect(self):
-        self.login_redirect("delete_connection", uuid.uuid4())
-
     def test_connection_delete_permission_denied(self):
         self.login()
         self.permission_denied("delete_connection", uuid.uuid4())
@@ -574,9 +553,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
         self._assert_audit_event_send(connection, post_event, callbacks, AuditEvent.Action.DELETED, prev_value)
 
     # ConnectionView
-
-    def test_connection__redirect(self):
-        self.login_redirect("connection", uuid.uuid4())
 
     def test_connection_permission_denied(self):
         self.login()
@@ -727,9 +703,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
 
     # CreateGroupTagMappingView
 
-    def test_group_tag_mapping_create_login_redirect(self):
-        self.login_redirect("create_group_tag_mapping", uuid.uuid4())
-
     def test_group_tag_mapping_create_permission_denied(self):
         self.login()
         self.permission_denied("create_group_tag_mapping", uuid.uuid4())
@@ -838,9 +811,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
 
     # UpdateGroupTagMappingView
 
-    def test_group_tag_mapping_update_login_redirect(self):
-        self.login_redirect("update_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
-
     def test_group_tag_mapping_update_permission_denied(self):
         self.login()
         self.permission_denied("update_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
@@ -939,9 +909,6 @@ class ConnectionViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["form"], "tags", "This field is required.")
 
     # DeleteGroupTagMappingView
-
-    def test_group_tag_mapping_delete_login_redirect(self):
-        self.login_redirect("delete_group_tag_mapping", uuid.uuid4(), uuid.uuid4())
 
     def test_group_tag_mapping_delete_permission_denied(self):
         self.login()

@@ -54,10 +54,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
 
     # create distributed query
 
-    def test_create_distributed_query_redirect(self):
-        query = self._force_query()
-        self.login_redirect("create_distributed_query", query_params={"q": query.pk})
-
     def test_create_distributed_query_permission_denied(self):
         query = self._force_query()
         self.login()
@@ -226,10 +222,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
 
     # update distributed query
 
-    def test_update_distributed_query_redirect(self):
-        distributed_query = self._force_distributed_query()
-        self.login_redirect("update_distributed_query", distributed_query.pk)
-
     def test_update_distributed_query_permission_denied(self):
         distributed_query = self._force_distributed_query()
         self.login()
@@ -289,9 +281,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
 
     # distributed query list
 
-    def test_distributed_queries_redirect(self):
-        self.login_redirect("distributed_queries")
-
     def test_distributed_queries_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:distributed_queries"))
@@ -323,10 +312,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
 
     # distributed query
 
-    def test_distributed_query_redirect(self):
-        distributed_query = self._force_distributed_query()
-        self.login_redirect("distributed_query", distributed_query.pk)
-
     def test_distributed_query_permission_denied(self):
         distributed_query = self._force_distributed_query()
         self.login()
@@ -342,10 +327,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.context["object"], distributed_query)
 
     # delete distributed query
-
-    def test_delete_distributed_query_redirect(self):
-        distributed_query = self._force_distributed_query()
-        self.login_redirect("delete_distributed_query", distributed_query.pk)
 
     def test_delete_distributed_query_permission_denied(self):
         distributed_query = self._force_distributed_query()
@@ -396,10 +377,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
                           "osquery_query": [str(distributed_query.query.pk)]})
 
     # distributed query machines
-
-    def test_distributed_query_machines_redirect(self):
-        distributed_query = self._force_distributed_query()
-        self.login_redirect("distributed_query_machines", distributed_query.pk)
 
     def test_distributed_query_machines_permission_denied(self):
         distributed_query = self._force_distributed_query()
@@ -495,10 +472,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
 
     # distributed query results
 
-    def test_distributed_query_results_redirect(self):
-        distributed_query = self._force_distributed_query()
-        self.login_redirect("distributed_query_results", distributed_query.pk)
-
     def test_distributed_query_results_permission_denied(self):
         distributed_query = self._force_distributed_query()
         self.login()
@@ -543,10 +516,6 @@ class OsquerySetupDistributedQueriesViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "Result (1)")
 
     # distributed query file carving sessions
-
-    def test_distributed_query_file_carving_sessions_redirect(self):
-        distributed_query = self._force_distributed_query()
-        self.login_redirect("distributed_query_file_carving_sessions", distributed_query.pk)
 
     def test_distributed_query_file_carving_sessions_permission_denied(self):
         distributed_query = self._force_distributed_query()

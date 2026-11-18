@@ -32,9 +32,6 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
 
     # recovery password configurations
 
-    def test_recovery_password_configurations_redirect(self):
-        self.login_redirect("recovery_password_configs")
-
     def test_recovery_password_configurations_permission_denied(self):
         self.login()
         response = self.client.get(reverse("mdm:recovery_password_configs"))
@@ -68,9 +65,6 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("mdm:delete_recovery_password_config", args=(rp_config2.pk,)))
 
     # create recovery password configuration
-
-    def test_create_recovery_password_configuration_redirect(self):
-        self.login_redirect("create_recovery_password_config")
 
     def test_create_recovery_password_configuration_permission_denied(self):
         self.login()
@@ -256,10 +250,6 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
 
     # recovery password configuration
 
-    def test_recovery_password_configuration_redirect(self):
-        rp_config = force_recovery_password_config()
-        self.login_redirect("recovery_password_config", rp_config.pk)
-
     def test_recovery_password_configuration_permission_denied(self):
         rp_config = force_recovery_password_config()
         self.login()
@@ -295,10 +285,6 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, reverse("mdm:delete_recovery_password_config", args=(rp_config.pk,)))
 
     # update recovery password configuration
-
-    def test_update_recovery_password_configuration_redirect(self):
-        rp_config = force_recovery_password_config()
-        self.login_redirect("update_recovery_password_config", rp_config.pk)
 
     def test_update_recovery_password_configuration_permission_denied(self):
         rp_config = force_recovery_password_config()
@@ -370,10 +356,6 @@ class RecoveryPasswordConfigManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(sorted(metadata["tags"]), ["mdm", "zentral"])
 
     # delete recovery password configuration
-
-    def test_delete_recovery_password_configuration_redirect(self):
-        rp_config = force_recovery_password_config()
-        self.login_redirect("delete_recovery_password_config", rp_config.pk)
 
     def test_delete_recovery_password_configuration_permission_denied(self):
         rp_config = force_recovery_password_config()

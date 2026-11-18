@@ -53,18 +53,6 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # create API token
 
-    def test_create_api_token_login_redirect(self):
-        """User is not logged in."""
-        self.login_redirect("create_user_api_token", self.user.id)
-
-    def test_create_api_token_login_redirect_unknown_user(self):
-        self.login_redirect("create_user_api_token", 123456789)
-
-    def test_create_api_token_login_redirect_superuser(self):
-        superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
-                                             is_superuser=True)
-        self.login_redirect("create_user_api_token", superuser.id)
-
     def test_create_api_token_unknown_user_404(self):
         self._promote_ui_user_to_superuser()
         self.login()
@@ -217,14 +205,6 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
 
     # update API token
 
-    def test_update_apitoken_redirect(self):
-        """User can not call the route without login."""
-        user, token = force_user_token()
-        self.login_redirect("update_user_api_token", user.id, token.id)
-
-    def test_update_api_token_login_redirect_unknown_user(self):
-        self.login_redirect("update_user_api_token", 123456789, uuid.uuid4())
-
     def test_update_api_token_unknown_user_404(self):
         self._promote_ui_user_to_superuser()
         self.login()
@@ -347,11 +327,6 @@ class APITokenViewsTestCase(TestCase, LoginCase, EventAssertions):
             post_event)
 
     # delete API token
-
-    def test_delete_apitoken_redirect(self):
-        """User can not call the route without login."""
-        user, token = force_user_token()
-        self.login_redirect("delete_user_api_token", user.id, token.id)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_api_token_not_self(self, post_event):

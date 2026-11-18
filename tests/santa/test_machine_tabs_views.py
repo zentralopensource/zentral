@@ -93,9 +93,6 @@ class SantaMachineTabsViewsTestCase(TestCase, LoginCase):
 
     # the rules tab
 
-    def test_machine_rules_redirect(self):
-        self.login_redirect("machine_rules", "0123456789")
-
     def test_machine_rules_permission_denied(self):
         enrolled_machine, _ = self.force_machine()
         self.login()

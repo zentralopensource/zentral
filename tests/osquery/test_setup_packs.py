@@ -59,9 +59,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
 
     # create pack
 
-    def test_create_pack_redirect(self):
-        self.login_redirect("create_pack")
-
     def test_create_pack_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:create_pack"))
@@ -113,10 +110,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
 
     # update pack
 
-    def test_update_pack_redirect(self):
-        pack = self._force_pack()
-        self.login_redirect("update_pack", pack.pk)
-
     def test_update_pack_permission_denied(self):
         pack = self._force_pack()
         self.login()
@@ -154,10 +147,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertEqual(metadata["objects"], {"osquery_pack": [str(pack.pk)]})
 
     # upload pack
-
-    def test_upload_pack_redirect(self):
-        pack = self._force_pack()
-        self.login_redirect("upload_pack", pack.pk)
 
     def test_upload_pack_permission_denied(self):
         pack = self._force_pack()
@@ -267,10 +256,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
 
     # delete pack
 
-    def test_delete_pack_redirect(self):
-        pack = self._force_pack()
-        self.login_redirect("delete_pack", pack.pk)
-
     def test_delete_pack_permission_denied(self):
         pack = self._force_pack()
         self.login()
@@ -302,9 +287,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
 
     # pack list
 
-    def test_pack_list_redirect(self):
-        self.login_redirect("packs")
-
     def test_pack_list_permission_denied(self):
         self.login()
         response = self.client.get(reverse("osquery:packs"))
@@ -320,10 +302,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, pack.name)
 
     # pack detail
-
-    def test_pack_detail_redirect(self):
-        pack = self._force_pack()
-        self.login_redirect("pack", pack.pk)
 
     def test_pack_detail_permission_denied(self):
         pack = self._force_pack()
@@ -351,10 +329,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, reverse("osquery:add_pack_query", args=(pack.pk,)))
 
     # add pack query
-
-    def test_add_pack_query_redirect(self):
-        pack = self._force_pack()
-        self.login_redirect("add_pack_query", pack.pk)
 
     def test_add_pack_query_permission_denied(self):
         pack = self._force_pack()
@@ -454,11 +428,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
 
     # update pack query
 
-    def test_update_pack_query_redirect(self):
-        query = self._force_query(force_pack=True)
-        pack_query = query.packquery
-        self.login_redirect("update_pack_query", pack_query.pack.pk, pack_query.pk)
-
     def test_update_pack_query_permission_denied(self):
         query = self._force_query(force_pack=True)
         pack_query = query.packquery
@@ -528,11 +497,6 @@ class OsquerySetupPacksViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, "123456s")
 
     # delete pack query
-
-    def test_delete_pack_query_redirect(self):
-        query = self._force_query(force_pack=True)
-        pack_query = query.packquery
-        self.login_redirect("delete_pack_query", pack_query.pack.pk, pack_query.pk)
 
     def test_delete_pack_query_permission_denied(self):
         query = self._force_query(force_pack=True)

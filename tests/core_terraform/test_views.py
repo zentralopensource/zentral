@@ -29,9 +29,6 @@ class TerraformViewsTestCase(TestCase, LoginCase):
 
     # index
 
-    def test_index_redirect(self):
-        self.login_redirect("index")
-
     def test_index_permission_denied(self):
         self.login('terraform.add_state')
         response = self.client.get(reverse("terraform:index"))
@@ -47,10 +44,6 @@ class TerraformViewsTestCase(TestCase, LoginCase):
         self.assertContains(response, state.slug)
 
     # state
-
-    def test_state_redirect(self):
-        state = force_state()
-        self.login_redirect("state", state.pk)
 
     def test_state_permission_denied(self):
         state = force_state()

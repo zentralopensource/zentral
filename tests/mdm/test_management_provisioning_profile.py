@@ -30,9 +30,6 @@ class ProvisioningProfileManagementViewsTestCase(LoginCase, TestCase):
 
     # upload profile GET
 
-    def test_upload_provisioning_profile_get_redirect(self):
-        self.login_redirect("upload_provisioning_profile")
-
     def test_upload_provisioning_profile_get_permission_denied(self):
         self.login()
         self.permission_denied("upload_provisioning_profile")
@@ -44,10 +41,6 @@ class ProvisioningProfileManagementViewsTestCase(LoginCase, TestCase):
         self.assertTemplateUsed(response, "mdm/provisioningprofile_form.html")
 
     # upload profile POST
-
-    def test_upload_provisioning_profile_post_redirect(self):
-        source_file = build_provisioning_profile_file()
-        self.login_redirect("upload_provisioning_profile", data={"source_file": source_file})
 
     def test_upload_provisioning_profile_post_permission_denied(self):
         source_file = build_provisioning_profile_file()
@@ -130,10 +123,6 @@ class ProvisioningProfileManagementViewsTestCase(LoginCase, TestCase):
 
     # upgrade profile GET
 
-    def test_upgrade_provisioning_profile_get_login_redirect(self):
-        artifact, _ = force_artifact(version_count=0, artifact_type=Artifact.Type.PROVISIONING_PROFILE)
-        self.login_redirect("upgrade_provisioning_profile", artifact.pk)
-
     def test_upgrade_provisioning_profile_get_permission_denied(self):
         artifact, _ = force_artifact(version_count=0, artifact_type=Artifact.Type.PROVISIONING_PROFILE)
         self.login()
@@ -211,10 +200,6 @@ class ProvisioningProfileManagementViewsTestCase(LoginCase, TestCase):
         )
 
     # download profile
-
-    def test_download_provisioning_profile_login_redirect(self):
-        _, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.PROVISIONING_PROFILE)
-        self.login_redirect("download_provisioning_profile", artifact_version.pk)
 
     def test_download_provisioning_profile_permission_denied(self):
         _, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.PROVISIONING_PROFILE)
