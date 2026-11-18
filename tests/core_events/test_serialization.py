@@ -15,6 +15,14 @@ class TestEvent3(BaseEvent):
 register_event_type(TestEvent3)
 
 
+class TestEvent4(BaseEvent):
+    event_type = "event_type_4"
+    tags = ["yolo"]
+
+
+register_event_type(TestEvent4)
+
+
 def make_event(ip=None, ua=None, with_msn=True, routing_key=None):
     msn = request = None
     if with_msn:
@@ -133,6 +141,20 @@ class EventSerializationTestCase(TestCase):
     def test_machine_request_payloads_without_request(self):
         event = list(TestEvent3.build_from_machine_request_payloads(None, None, None, [{"godzilla": "yo"}]))[0]
         self.assertNotIn("request", event.serialize()["_zentral"])
+
+    def test_machine_request_payloads_without_tags(self):
+        event = list(TestEvent4.build_from_machine_request_payloads(None, "ua", None, [{"godzilla": "yo"}]))[0]
+        self.assertEqual(event.serialize()["_zentral"]["tags"], ["yolo"])
+
+    def test_machine_request_payloads_tags_round_trip(self):
+        events = list(TestEvent4.build_from_machine_request_payloads(
+            None, "ua", None, [{"godzilla": "yo"}, {"godzilla": "yo2"}], tags=["fomo"]
+        ))
+        for event in events:
+            event_d = event.serialize()
+            self.assertEqual(event_d["_zentral"]["tags"], ["fomo", "yolo"])
+            self.assertEqual(event_from_event_d(event_d).serialize()["_zentral"]["tags"], ["fomo", "yolo"])
+        self.assertIsNot(events[0].metadata.tags, events[1].metadata.tags)
 
     def test_event_without_request(self):
         event = make_event()

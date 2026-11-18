@@ -263,6 +263,8 @@ class MDMViewsTestCase(TestCase):
         for k, v in kwargs.items():
             if k == "serial_number":
                 self.assertEqual(last_event.metadata.machine_serial_number, v)
+            elif k == "heartbeat":
+                self.assertEqual("heartbeat" in last_event.metadata.all_tags, v)
             else:
                 self.assertEqual(last_event.payload.get(k), v)
 
@@ -270,6 +272,7 @@ class MDMViewsTestCase(TestCase):
         last_event = post_event.call_args.args[0]
         self.assertIsInstance(last_event, MDMRequestEvent)
         self.assertEqual(last_event.payload["status"], "success")
+        self.assertIn("heartbeat", last_event.metadata.all_tags)
         for k, v in kwargs.items():
             self.assertEqual(last_event.payload.get(k), v)
 
@@ -346,6 +349,34 @@ class MDMViewsTestCase(TestCase):
 
     # checkin - authenticate
 
+    def test_unknown_enrollment_secret_no_heartbeat(self, post_event):
+        serial_number = get_random_string(12)
+        response = self.client.put(
+            reverse("mdm_public:checkin"),
+            data=plistlib.dumps({"MessageType": "Authenticate"}),
+            HTTP_X_SSL_CLIENT_S_DN=f"serialNumber={serial_number},"
+                                   f"CN=MDM$DEP${get_random_string(12)},O=MBU${self.mbu.pk}",
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(
+            post_event, "Bad DEP enrollment session secret in client certificate CN",
+            serial_number=serial_number, heartbeat=False,
+        )
+
+    def test_unknown_meta_business_unit_no_heartbeat(self, post_event):
+        session, _, serial_number = force_dep_enrollment_session(self.mbu)
+        response = self.client.put(
+            reverse("mdm_public:checkin"),
+            data=plistlib.dumps({"MessageType": "Authenticate"}),
+            HTTP_X_SSL_CLIENT_S_DN=f"serialNumber={serial_number},"
+                                   f"CN=MDM$DEP${session.enrollment_secret.secret},O=MBU$0",
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assertAbort(
+            post_event, "unknown meta business unit in client certificate DN",
+            serial_number=serial_number, heartbeat=False,
+        )
+
     def test_unknown_message_type(self, post_event):
         session, udid, serial_number = force_dep_enrollment_session(self.mbu)
         response = self._put(
@@ -355,7 +386,7 @@ class MDMViewsTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self._assertAbort(
-            post_event, "unknown message type", udid=udid, serial_number=serial_number
+            post_event, "unknown message type", udid=udid, serial_number=serial_number, heartbeat=True
         )
 
     def test_unknown_topic(self, post_event):

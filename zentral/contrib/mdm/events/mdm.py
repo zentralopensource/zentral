@@ -47,7 +47,8 @@ register_event_type(UserEnrollmentRequestEvent)
 
 class MDMRequestEvent(BaseEvent):
     event_type = "mdm_request"
-    tags = ["mdm", "heartbeat"]
+    # the "heartbeat" tag is added to the requests of an authenticated device only
+    tags = ["mdm"]
 
 
 register_event_type(MDMRequestEvent)

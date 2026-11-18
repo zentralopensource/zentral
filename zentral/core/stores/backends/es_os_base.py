@@ -474,8 +474,7 @@ class ESOSStore(BaseStore):
                         'event_types': {
                             'terms': {
                                 'field': self._get_type_field(),
-                                'size': len([et for et in event_types.values()
-                                             if 'heartbeat' in et.tags])
+                                'size': len(event_types)
                             },
                             'aggs': {
                                 'user_agents': {

@@ -448,9 +448,11 @@ class BaseEvent(object):
     heartbeat_timeout = None
 
     @classmethod
-    def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None, observer=None):
-        # None, None is a caller without a request. A request without a user agent and an IP address
-        # is still a request, and a heartbeat needs it, because its user agent is the heartbeat key.
+    def build_from_machine_request_payloads(
+        cls, msn, ua, ip, payloads, get_created_at=None, observer=None, tags=None
+    ):
+        # a request without a user agent and an IP address is still a request,
+        # and a heartbeat needs it, because its user agent is the heartbeat key
         if ua is None and ip is None:
             request = None
         else:
@@ -472,12 +474,17 @@ class BaseEvent(object):
                                      machine_serial_number=msn,
                                      observer=observer,
                                      request=request,
-                                     created_at=created_at)
+                                     created_at=created_at,
+                                     tags=list(tags or []))
             yield cls(metadata, payload)
 
     @classmethod
-    def post_machine_request_payloads(cls, msn, user_agent, ip, payloads, get_created_at=None, observer=None):
-        for event in cls.build_from_machine_request_payloads(msn, user_agent, ip, payloads, get_created_at, observer):
+    def post_machine_request_payloads(
+        cls, msn, user_agent, ip, payloads, get_created_at=None, observer=None, tags=None
+    ):
+        for event in cls.build_from_machine_request_payloads(
+            msn, user_agent, ip, payloads, get_created_at, observer, tags
+        ):
             event.post()
 
     def __init__(self, metadata, payload):

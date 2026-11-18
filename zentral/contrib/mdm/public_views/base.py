@@ -4,6 +4,7 @@ from zentral.utils.http import user_agent_and_ip_address_from_request
 
 class PostEventMixin:
     _setup_done = False
+    event_tags = None
 
     def dispatch(self, request, *args, **kwargs):
         self.setup_with_request(request)
@@ -29,7 +30,7 @@ class PostEventMixin:
             event_payload["realm_user"] = {"pk": str(self.realm_user.pk),
                                            "username": self.realm_user.username}
         self.event_class.post_machine_request_payloads(self.serial_number, self.user_agent, self.ip,
-                                                       [event_payload])
+                                                       [event_payload], tags=self.event_tags)
 
     def abort(self, reason, **event_payload):
         if reason:

@@ -153,6 +153,8 @@ class OTAEnrollView(PostEventMixin, View):
             # get the serial number from the DN of the payload signing certificate
             serial_number = signing_certificate.subject.get_attributes_for_oid(NameOID.SERIAL_NUMBER)[0].value
             if self.serial_number != serial_number:
+                # the event is a heartbeat, so it gets the serial number of the certificate
+                self.serial_number = serial_number
                 self.abort("signing certificate DN serial number != payload serial number", phase=phase)
 
             # get the ota enrollment session from the DN of the payload signing certificate

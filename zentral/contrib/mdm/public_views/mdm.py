@@ -193,6 +193,9 @@ class MDMView(PostEventMixin, View):
                 self.meta_business_unit = MetaBusinessUnit.objects.get(pk=mbu_pk)
             except (MetaBusinessUnit.DoesNotExist, ValueError):
                 self.abort("unknown meta business unit in client certificate DN")
+
+        # the device is authenticated, so its requests are heartbeats, also when they are refused later
+        self.event_tags = ["heartbeat"]
         return super().dispatch(request, *args, **kwargs)
 
     def put(self, request, *args, **kwargs):

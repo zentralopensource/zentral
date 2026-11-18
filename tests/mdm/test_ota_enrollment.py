@@ -7,6 +7,7 @@ from django.utils.crypto import get_random_string
 from zentral.conf import settings
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.crypto import verify_signed_payload
+from zentral.contrib.mdm.events import OTAEnrollmentRequestEvent
 from zentral.contrib.mdm.models import EnrolledDevice, OTAEnrollment, OTAEnrollmentSession, ReEnrollmentSession
 from zentral.contrib.mdm.payloads import build_scep_payload
 from .utils import complete_enrollment_session, force_ota_enrollment, force_realm, force_realm_user
@@ -258,3 +259,43 @@ class TestOTAEnrollment(TestCase):
         self.assertEqual(session_qs.first(), session)
         session.refresh_from_db()
         self.assertEqual(session.status, OTAEnrollmentSession.PHASE_3)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_zentral_scep_ca_issuer")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_apple_iphone_device_ca_issuer")
+    @patch("zentral.contrib.mdm.public_views.ota.verify_signed_payload")
+    def test_ota_enroll_view_phase_3_serial_number_mismatch(
+        self,
+        mocked_verify_signed_payload,
+        mocked_verify_apple_iphone_device_ca_issuer,
+        mocked_verify_zentral_scep_ca_issuer,
+        post_event,
+    ):
+        enrollment = force_ota_enrollment(self.mbu)
+        serial_number = get_random_string(12)
+        udid = str(uuid.uuid4()).upper()
+        session = OTAEnrollmentSession.objects.create_from_machine_info(enrollment, serial_number, udid)
+        payload = {
+            "SERIAL": get_random_string(12),
+            "UDID": udid,
+            "CHALLENGE": session.enrollment_secret.secret,
+            "PRODUCT": "Mac14,2",
+            "OS_VERSION": "15.6.1",
+        }
+        signing_certificate = Mock()
+        serial_number_attr = Mock()
+        serial_number_attr.value = serial_number
+        signing_certificate.subject.get_attributes_for_oid.return_value = [serial_number_attr]
+        certificates = [(Mock(), Mock(), signing_certificate)]
+        mocked_verify_signed_payload.return_value = (certificates, plistlib.dumps(payload))
+        mocked_verify_apple_iphone_device_ca_issuer.return_value = False
+        mocked_verify_zentral_scep_ca_issuer.return_value = True
+        response = self.client.post(reverse("mdm_public:ota_enroll"))
+        self.assertEqual(response.status_code, 400)
+        event = post_event.call_args.args[0]
+        self.assertIsInstance(event, OTAEnrollmentRequestEvent)
+        self.assertEqual(event.payload["status"], "failure")
+        self.assertEqual(event.payload["reason"], "signing certificate DN serial number != payload serial number")
+        self.assertEqual(event.metadata.machine_serial_number, serial_number)
+        session.refresh_from_db()
+        self.assertEqual(session.status, OTAEnrollmentSession.PHASE_2)

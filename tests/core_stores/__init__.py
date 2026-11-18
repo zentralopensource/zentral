@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.inventory.events import InventoryHeartbeat
+from zentral.contrib.mdm.events import MDMRequestEvent
 from zentral.contrib.osquery.events import OsqueryRequestEvent
 from zentral.core.events.base import BaseEvent, EventMetadata, EventRequest, EventRequestUser, register_event_type
 from zentral.utils.text import encode_args
@@ -165,6 +166,19 @@ class BaseTestStore(object):
              (OsqueryRequestEvent,
               None,
               [('osquery/5.20.0', datetime(2025, 12, 8, 2, 0))])]
+        )
+
+    def test_last_machine_heartbeats_event_tag(self):
+        msn = get_random_string(12)
+        for user_agent, hour, tags in (("MDM/1.0", 2, ["heartbeat"]), ("MDM/2.0", 3, [])):
+            event = list(MDMRequestEvent.build_from_machine_request_payloads(
+                msn, user_agent, "203.0.113.17", [{"status": "success"}],
+                get_created_at=lambda p: datetime(2025, 12, 8, hour), tags=tags,
+            ))[0]
+            self.store.store(event)
+        self.assertEqual(
+            self.store.get_last_machine_heartbeats(msn, from_dt=datetime(2025, 12, 8)),
+            [(MDMRequestEvent, None, [("MDM/1.0", datetime(2025, 12, 8, 2, 0))])]
         )
 
     # fetch object events
