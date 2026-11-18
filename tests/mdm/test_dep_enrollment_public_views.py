@@ -405,6 +405,18 @@ class MDMDEPEnrollmentPublicViewsTestCase(TestCase):
 
     # dep_web_enroll
 
+    def test_dep_web_enroll_custom_view_without_session(self, vicsp, post_event):
+        enrollment = force_dep_enrollment(self.mbu)
+        response = self.client.get(reverse("mdm_public:dep_web_enroll_custom_view",
+                                           args=(enrollment.enrollment_secret.secret, uuid.uuid4())))
+        self.assertEqual(response.status_code, 404)
+
+    def test_dep_web_enroll_profile_without_session(self, vicsp, post_event):
+        enrollment = force_dep_enrollment(self.mbu)
+        response = self.client.get(reverse("mdm_public:dep_web_enroll_profile",
+                                           args=(enrollment.enrollment_secret.secret,)))
+        self.assertEqual(response.status_code, 404)
+
     def test_dep_web_enroll_missing_header(self, vicsp, post_event):
         vicsp.side_effect = lambda d: d
         session, _, _ = force_dep_enrollment_session(self.mbu, realm_user=True)

@@ -2,7 +2,7 @@ import base64
 import logging
 import plistlib
 
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.template import Context, Engine
 from django.urls import reverse
@@ -259,7 +259,9 @@ class DEPWebEnrollCustomView(PostEventMixin, View):
             DEPEnrollment,
             enrollment_secret__secret=kwargs["dep_enrollment_secret"]
         )
-        self.payload = request.session[DEP_ENROLLMENT_PAYLOAD_KEY]
+        self.payload = request.session.get(DEP_ENROLLMENT_PAYLOAD_KEY)
+        if self.payload is None:
+            raise Http404
         self.serial_number = self.payload["SERIAL"]
         self.udid = self.payload["UDID"]
         self.current_decv = (
@@ -308,7 +310,7 @@ class DEPWebEnrollProfileView(PostEventMixin, MDMProfileResponseMixin, View):
     def get(self, request, *args, **kwargs):
         dep_enrollment_session = get_object_or_404(
             DEPEnrollmentSession,
-            pk=request.session[DEP_ENROLLMENT_SESSION_KEY],
+            pk=request.session.get(DEP_ENROLLMENT_SESSION_KEY),
             realm_user__isnull=False,
             dep_enrollment__enrollment_secret__secret=kwargs["dep_enrollment_secret"],
             dep_enrollment__realm__isnull=False,

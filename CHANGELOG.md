@@ -633,7 +633,7 @@ A machine whose serial number holds a character that Cedar cannot read is author
 
 An anonymous request to a page of the web console goes to the login page before the view runs now. Some views looked up an object of the URL before they checked the user, so an anonymous client could find which objects exist from the answer, a 404 error or a redirect to the login page, and could cause 500 errors with a malformed URL. A middleware checks each view that requires a user, and answers as the view does for an anonymous request. The public, API and agent endpoints are not changed.
 
-The MDM check-in and the OTA enrollment endpoints refuse a malformed signature with a 400 error now, and not with a 500 error. A signature with no signer, with a signer that matches no certificate, or with a signer that is identified by its subject key identifier, is refused as a signature that is not valid. Before, the first one was read as a verified signature with no certificate, and the other two gave an error.
+The MDM check-in, the OTA enrollment and the DEP web enrollment endpoints refuse a malformed request with a 4xx error now, and not with a 500 error. A signature with no signer, with a signer that matches no certificate, or with a signer that is identified by its subject key identifier, is refused as a signature that is not valid. Before, the first one was read as a verified signature with no certificate, and the other two gave an error. The DEP web enrollment custom views and profile answer 404 to a request without an enrollment in the session.
 
 
 ## 2026.5
