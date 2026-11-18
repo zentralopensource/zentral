@@ -517,6 +517,8 @@ The probe caches expire after 300 seconds now. A notifier notification was the o
 
 The ClickHouse event store keeps the timestamps of the event metadata and payload as strings now. ClickHouse stored a string that looks like a date as a `Date` or a `DateTime`, and the event pages showed it in another format: `2026-11-01T10:00:00.123456` became `2026-11-01T10:00:00.123456000Z`, a time in UTC although it had no time zone. The events stored before the update keep the old types until the TTL removes them.
 
+Fixed the ClickHouse event store, that refused a heartbeat event from a request without a `User-Agent` header. The machine heartbeats use the user agent as a key, and the key had no value. The store worker tried the batch again and again, and each try wrote the events of the batch again. The request metadata of an event always has a user agent now, an empty string when the request has none.
+
 A store worker verifies the configuration of its store every 300 seconds now. Before, only a notifier notification made the worker apply a change, and the notifier does not guarantee delivery. A worker that did not receive the notification kept the event filters and the credentials from its start, and an operator had to restart it. The worker now stops when it finds a change to its store, and starts again with the configuration in the database.
 
 Fixed the enrich worker that restarted again and again on an event with a machine serial number that is not a string. The worker stopped on the event, and the queue sent the same event again until it expired. Zentral ignores such a serial number now, and the Munki, Osquery and Santa enrollment endpoints reject it with a 400 error.

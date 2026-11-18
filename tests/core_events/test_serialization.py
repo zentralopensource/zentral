@@ -113,13 +113,26 @@ class EventSerializationTestCase(TestCase):
         event = make_event(ip="10.1.2.3")
         d = event.serialize()
         metadata = d["_zentral"]
-        self.assertEqual(metadata["request"], {"ip": "10.1.2.3"})
+        self.assertEqual(metadata["request"], {"user_agent": "", "ip": "10.1.2.3"})
         event = make_event(ua="YO! ua")
         cache.delete(f"mm-si_{self.ms.serial_number}")
         d = event.serialize()
         metadata = d["_zentral"]
         self.assertEqual(metadata["request"], {"user_agent": "YO! ua"})
         cache.delete(f"mm-si_{self.ms.serial_number}")
+
+    def test_event_request_without_user_agent_round_trip(self):
+        er = EventRequest.deserialize({"ip": "10.1.2.3"})
+        self.assertIsNone(er.user_agent)
+        self.assertEqual(er.serialize(), {"user_agent": "", "ip": "10.1.2.3"})
+
+    def test_machine_request_payloads_without_user_agent_and_ip(self):
+        event = list(TestEvent3.build_from_machine_request_payloads(None, "", None, [{"godzilla": "yo"}]))[0]
+        self.assertEqual(event.serialize()["_zentral"]["request"], {"user_agent": ""})
+
+    def test_machine_request_payloads_without_request(self):
+        event = list(TestEvent3.build_from_machine_request_payloads(None, None, None, [{"godzilla": "yo"}]))[0]
+        self.assertNotIn("request", event.serialize()["_zentral"])
 
     def test_event_without_request(self):
         event = make_event()

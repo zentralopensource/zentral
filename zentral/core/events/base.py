@@ -282,11 +282,12 @@ class EventRequest(object):
         return cls(**kwargs)
 
     def serialize(self):
-        d = {k: v for k, v in (("user_agent", self.user_agent),
-                               ("ip", self.ip),
-                               ("method", self.method),
-                               ("path", self.path),
-                               ("view", self.view),) if v}
+        # always a string, because the machine heartbeats use it as a key
+        d = {"user_agent": self.user_agent or ""}
+        d.update((k, v) for k, v in (("ip", self.ip),
+                                     ("method", self.method),
+                                     ("path", self.path),
+                                     ("view", self.view),) if v)
         if self.geo:
             d["geo"] = self.geo.serialize()
         if self.user:
@@ -448,10 +449,12 @@ class BaseEvent(object):
 
     @classmethod
     def build_from_machine_request_payloads(cls, msn, ua, ip, payloads, get_created_at=None, observer=None):
-        if ua or ip:
-            request = EventRequest(ua, ip)
-        else:
+        # None, None is a caller without a request. A request without a user agent and an IP address
+        # is still a request, and a heartbeat needs it, because its user agent is the heartbeat key.
+        if ua is None and ip is None:
             request = None
+        else:
+            request = EventRequest(ua, ip)
         if observer:
             observer = EventObserver.deserialize(observer)
         event_uuid = uuid.uuid4()

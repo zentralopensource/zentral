@@ -88,6 +88,7 @@ class EventFromRequestTestCase(TestCase):
                      'location': {'lat': 53.551086, 'lon': 9.993682},
                      'region_name': 'Hamburg'},
              'ip': '127.0.0.1',
+             'user_agent': '',
              'method': 'GET',
              'path': '/',
              'user': {'email': 'godzilla@zentral.io',
@@ -117,6 +118,7 @@ class EventFromRequestTestCase(TestCase):
         self.assertEqual(
             event_req.serialize(),
             {'ip': '127.0.0.1',
+             'user_agent': '',
              'method': 'GET',
              'path': '/',
              'user': {'email': 'godzilla@zentral.io',

@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from accounts.models import Group
+from zentral.contrib.osquery.events import OsqueryRequestEvent
 from zentral.core.probes.models import ProbeSource
 from zentral.core.probes.probe import Probe
 from zentral.core.stores.backends.all import StoreBackend
@@ -51,6 +52,32 @@ class TestClickHouseStoreStorage(TestCase, BaseTestStore):
         events, _ = self.store.fetch_machine_events(msn, from_dt=get_from_dt())
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].payload, event.payload)
+
+    def test_machine_heartbeat_without_user_agent(self):
+        msn = get_random_string(12)
+        created_at = datetime(2025, 12, 8, 2)
+        event = list(OsqueryRequestEvent.build_from_machine_request_payloads(
+            msn, None, "203.0.113.17", [{"request_type": "distributed_read"}],
+            get_created_at=lambda p: created_at
+        ))[0]
+        self.store.store(event)
+        self.assertEqual(
+            self.store.get_last_machine_heartbeats(msn, from_dt=datetime(2025, 12, 8)),
+            [(OsqueryRequestEvent, None, [("", created_at)])]
+        )
+
+    def test_machine_heartbeat_without_user_agent_and_ip(self):
+        msn = get_random_string(12)
+        created_at = datetime(2025, 12, 8, 2)
+        event = list(OsqueryRequestEvent.build_from_machine_request_payloads(
+            msn, "", None, [{"request_type": "distributed_read"}],
+            get_created_at=lambda p: created_at
+        ))[0]
+        self.store.store(event)
+        self.assertEqual(
+            self.store.get_last_machine_heartbeats(msn, from_dt=datetime(2025, 12, 8)),
+            [(OsqueryRequestEvent, None, [("", created_at)])]
+        )
 
     def test_store_keeps_date_strings(self):
         msn = get_random_string(12)
