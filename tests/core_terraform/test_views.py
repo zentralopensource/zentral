@@ -59,17 +59,19 @@ class TerraformViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 403)
 
     def test_state_no_versions(self):
-        state = force_state_version().state
+        state = force_state()
         self.login("terraform.view_state")
         response = self.client.get(state.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, state.slug)
-        self.assertNotContains(response, "1 Version")
+        self.assertNotContains(response, "Created by")
 
     def test_state_versions(self):
-        state = force_state_version().state
+        state_version = force_state_version()
+        state = state_version.state
         self.login("terraform.view_state")
         response = self.client.get(state.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, state.slug)
-        self.assertNotContains(response, "1 Version")
+        self.assertContains(response, "Created by")
+        self.assertContains(response, state_version.get_created_by_display())

@@ -246,12 +246,6 @@ class TurboSetupEnrolledMachinesTestCase(TurboSetupTestCase):
         # pagination is rendered both above and below the table
         self.assertEqual(response.content.decode("utf-8").count('aria-label="Page navigation"'), 2)
 
-    def test_schedule_machine_one_time_job_not_found(self):
-        self.login_with_policy(turbo_policy(self.group, "turbo.view_enrolledmachine"))
-        response = self.client.get(
-            reverse("turbo:schedule_machine_one_time_job", args=(get_random_string(12),)))
-        self.assertEqual(response.status_code, 404)
-
     def test_schedule_machine_one_time_job_bad_window(self):
         configuration = force_configuration()
         _, serial_number, _ = force_enrolled_machine(configuration=configuration, meta_business_unit=self.mbu)

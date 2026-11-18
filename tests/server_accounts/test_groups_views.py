@@ -213,12 +213,12 @@ class AccountUsersViewsTestCase(TestCase, LoginCase):
 
     def test_view_provisioned_group_no_perms_get(self):
         self.login("auth.view_group")
-        response = self.client.get(reverse("accounts:group", args=(self.group.pk,)))
+        response = self.client.get(reverse("accounts:group", args=(self.provisioned_group.pk,)))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "accounts/group_detail.html")
-        self.assertContains(response, self.group.name)
-        for text in (reverse("accounts:delete_group", args=(self.group.pk,)),
-                     reverse("accounts:update_group", args=(self.group.pk,))):
+        self.assertContains(response, self.provisioned_group.name)
+        for text in (reverse("accounts:delete_group", args=(self.provisioned_group.pk,)),
+                     reverse("accounts:update_group", args=(self.provisioned_group.pk,))):
             self.assertNotContains(response, text)
 
     def test_view_provisioned_group_all_perms_get(self):

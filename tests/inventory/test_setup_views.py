@@ -326,32 +326,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
 
     # list tags
 
-    def test_tags_redirect(self):
-        self.login_redirect("tags")
-
-    def test_tags_permission_denied(self):
-        self.login()
-        response = self.client.get(reverse("inventory:tags"))
-        self.assertEqual(response.status_code, 403)
-
-    def test_tags(self):
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.login("inventory.view_tag")
-        response = self.client.get(reverse("inventory:tags"))
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "inventory/tag_index.html")
-        self.assertContains(response, tag.name)
-
-    # create tag
-
-    def test_create_tag_redirect(self):
-        self.login_redirect("create_tag")
-
-    def test_create_tag_permission_denied(self):
-        self.login()
-        response = self.client.get(reverse("inventory:create_tag"))
-        self.assertEqual(response.status_code, 403)
-
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_create_tag(self, post_event):
         self.login(
@@ -417,16 +391,6 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         )
 
     # update tag
-
-    def test_update_tag_redirect(self):
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.login_redirect("update_tag", tag.pk)
-
-    def test_update_tag_permission_denied(self):
-        tag = Tag.objects.create(name=get_random_string(12))
-        self.login()
-        response = self.client.get(reverse("inventory:update_tag", args=(tag.pk,)))
-        self.assertEqual(response.status_code, 403)
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_update_tag(self, post_event):

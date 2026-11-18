@@ -449,7 +449,7 @@ class OsqueryAPIViewsTestCase(TestCase):
     # config
 
     def test_config_405(self):
-        response = self.client.get(reverse("osquery_public:enroll"))
+        response = self.client.get(reverse("osquery_public:config"))
         self.assertEqual(response.status_code, 405)
         self.assertCountEqual(["POST", "OPTIONS"], (m.strip() for m in response["Allow"].split(",")))
 

@@ -232,7 +232,8 @@ class TurboPBACTestCase(TestCase):
 
     def test_denied_by_default(self):
         configuration = force_configuration()
-        self.assertFalse(self._authorized(CreateOneTimeJobRequest(self.user, configuration)))
+        command = force_command()
+        self.assertFalse(self._authorized(CreateOneTimeJobRequest(self.user, configuration, command.job)))
 
     def test_a_broad_grant_covers_both_questions(self):
         self._grant()
