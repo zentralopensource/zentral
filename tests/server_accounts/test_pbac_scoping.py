@@ -9,7 +9,6 @@ from django.test.utils import CaptureQueriesContext
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
-from pbac.cedar import policies_cache
 from pbac.entities import Action, Namespace
 from pbac.scoping import (_MAX_DEPTH, SQLMap, compile_policies, scope_queryset, values_q, visible_row_counts,
                           visible_rows)
@@ -525,7 +524,6 @@ class ScopeQuerysetTestCase(TestCase):
         ]
 
     def setUp(self):
-        policies_cache.clear()
         self.queryset = OneTimeJobMachine.objects.all()
 
     def _policy(self, condition="", forbid=""):
@@ -534,7 +532,6 @@ class ScopeQuerysetTestCase(TestCase):
             f'permit (principal in Role::"{self.group.pk}", '
             f'action == Turbo::Action::"viewOneTimeJobMachine", resource) {condition};\n{forbid}'
         ))
-        policies_cache.clear()
 
     def _scope(self, user=None, action=view_one_time_job_machine_action):
         return scope_queryset(user or self.user, action, self.queryset, SQL_MAP)
@@ -629,7 +626,6 @@ class ScopeQuerysetTestCase(TestCase):
             f'permit (principal in Role::"{self.group.pk}", action == {ViewRowWithContextRequest.pbac_action}, '
             'resource) unless { context.kind == "script" };'
         ))
-        policies_cache.clear()
         self.assertEqual(list(visible_rows(self.user, ViewRowWithContextRequest, self.queryset)), [self.rows[1]])
         superuser = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.com",
                                              is_superuser=True)
@@ -641,7 +637,6 @@ class ScopeQuerysetTestCase(TestCase):
             f'permit (principal in Role::"{self.group.pk}", action == {ViewRowWithContextRequest.pbac_action}, '
             'resource);'
         ))
-        policies_cache.clear()
         self.assertEqual(set(visible_rows(self.user, ViewRowWithContextRequest, self.queryset)), set(self.rows))
         user = User.objects.get(pk=self.user.pk)
         user.is_active = False
@@ -660,7 +655,6 @@ class ScopeQuerysetTestCase(TestCase):
             f'permit (principal in Role::"{self.group.pk}", action == {ViewRowWithContextRequest.pbac_action}, '
             'resource) unless { context.kind == "script" };'
         ))
-        policies_cache.clear()
         with CaptureQueriesContext(connection) as ctx:
             counts = visible_row_counts(self.user, ViewRowWithContextRequest, self.queryset, "one_time_job")
         self.assertEqual(counts, {self.rows[1].one_time_job_id: 1})

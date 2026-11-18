@@ -278,6 +278,7 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
             for _ in range(machine_count):
                 otjm = self._otjm(one_time_job, in_mbu=True)
                 self._artifact(one_time_job, otjm.serial_number)
+            self._one_time_list(one_time_job)  # warm up the process-level caches
             with CaptureQueriesContext(connection) as queries:
                 response = self._one_time_list(one_time_job)
             self.assertEqual(response.json()["count"], machine_count)
@@ -330,6 +331,7 @@ class TurboJobMachineAPITestCase(TurboAPITestCase):
                 otjm = self._otjm(one_time_job, in_mbu=True)
                 self._artifact(one_time_job, otjm.serial_number)
             self._otjm(one_time_job)  # outside the meta business unit
+            self._one_time_list(one_time_job)  # warm up the process-level caches
             with CaptureQueriesContext(connection) as queries:
                 response = self._one_time_list(one_time_job)
             self.assertEqual(response.json()["count"], machine_count)

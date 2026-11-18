@@ -5,7 +5,6 @@ from django.test import RequestFactory, TestCase
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
-from pbac.cedar import policies_cache
 from pbac.engine import engine
 from pbac.entities import Principal, Request
 from pbac.utils import check_request
@@ -30,7 +29,6 @@ class CheckRequestTestCase(TestCase):
         )
 
     def setUp(self):
-        policies_cache.clear()
         self.request = RequestFactory().get("/")
 
     def _pbac_request(self, perm):

@@ -9,6 +9,8 @@ logger = logging.getLogger("zentral.core.queues.backends.aws_sns_sqs.sns")
 
 
 class SNSPublishThread(threading.Thread):
+    in_queue_timeout = 1
+
     def __init__(self, thread_id, topic_arn, stop_event, in_queue, out_queue, client_kwargs):
         self.client = boto3.client("sns", **client_kwargs)
         self.topic_arn = topic_arn
@@ -21,7 +23,9 @@ class SNSPublishThread(threading.Thread):
         logger.info("[%s] start on topic %s", self.name, self.topic_arn)
         while True:
             try:
-                receipt_handle, routing_key, event_d, event_ts = self.in_queue.get(block=True, timeout=1)
+                receipt_handle, routing_key, event_d, event_ts = self.in_queue.get(
+                    block=True, timeout=self.in_queue_timeout
+                )
             except queue.Empty:
                 logger.debug("[%s] no new event to publish", self.name)
                 if self.stop_event.is_set():

@@ -4,7 +4,6 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
-from pbac.cedar import policies_cache
 from pbac.engine import engine
 from pbac.scoping import scope_queryset
 from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaBusinessUnit, MetaMachine
@@ -79,9 +78,6 @@ class TurboPBACScopingTestCase(TestCase):
             for index in indexes:
                 RecurringJobMachine.objects.create(recurring_job=recurring_job, serial_number=s[index])
 
-    def setUp(self):
-        policies_cache.clear()
-
     # helpers
 
     def _machine(self, index):
@@ -155,7 +151,6 @@ class TurboPBACScopingTestCase(TestCase):
     def _set_policies(self, source):
         Policy.objects.filter(name="Tests").delete()
         Policy.objects.create(name="Tests", source=format_policies(source))
-        policies_cache.clear()
 
     def _authorized_rows(self, request_class, rows):
         rows = list(rows)

@@ -219,6 +219,8 @@ class BatchConsumer(BaseConsumer):
 
 
 class ConsumerProducerFinalThread(threading.Thread):
+    in_queue_timeout = 1
+
     def __init__(self, consumer_producer):
         self.stop_event = consumer_producer.stop_event
         self.in_queue = consumer_producer.published_message_queue
@@ -229,7 +231,7 @@ class ConsumerProducerFinalThread(threading.Thread):
     def run(self):
         while True:
             try:
-                receipt_handle = self.in_queue.get(block=True, timeout=1)
+                receipt_handle = self.in_queue.get(block=True, timeout=self.in_queue_timeout)
             except queue.Empty:
                 logger.debug("[%s] no new published event", self.name)
                 if self.stop_event.is_set():

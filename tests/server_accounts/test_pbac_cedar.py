@@ -6,7 +6,7 @@ from django.utils.crypto import get_random_string
 
 from accounts.models import Policy, User
 from pbac.cedar import (_serialize_requests, authorize_request, authorize_requests,
-                        PoliciesCache, policies_cache, undecided_policies)
+                        PoliciesCache, undecided_policies)
 from pbac.engine import engine
 from pbac.entities import Action, Entity, Namespace, Principal, Request, Resource
 from zentral.utils.drf import PBACPermission
@@ -107,9 +107,6 @@ class AuthorizeRequestTestCase(TestCase):
             ),
         )
 
-    def setUp(self):
-        policies_cache.clear()
-
     def _make_legacy_request(self, perm):
         return Request(
             Principal.from_user(self.user),
@@ -150,7 +147,6 @@ class HasLegacyPermTestCase(TestCase):
         )
 
     def setUp(self):
-        policies_cache.clear()
         # Clear the per-user legacy perm cache that has_legacy_perm builds.
         for attr in ("_pbac_legacy_perms", "_pbac_module_legacy_perms", "_pbac_principal"):
             if hasattr(self.user, attr):
@@ -229,7 +225,6 @@ class PBACCedarPreviewTestCase(TestCase):
         cls.machine = Resource("Machine", "0123456789", INVENTORY)
 
     def setUp(self):
-        policies_cache.clear()
         if hasattr(self.user, "_pbac_principal"):
             del self.user._pbac_principal
 
@@ -239,7 +234,6 @@ class PBACCedarPreviewTestCase(TestCase):
         # the check an operator gets on the policy form
         policy.full_clean()
         policy.save()
-        policies_cache.clear()
 
     def _request(self, unknown_context, context=None, resource=None):
         return Request(
@@ -438,7 +432,6 @@ class PBACGateTestCase(TestCase):
         Policy.objects.create(name="Tests", source=format_policies(
             f'permit (principal == User::"{self.user.pk}", action == Santa::Action::"forceCleanSync", resource);'
         ))
-        policies_cache.clear()
         test_case = self
 
         class View:
@@ -576,15 +569,11 @@ class PBACCedarUnknownResourceTestCase(SerializeMixin, TestCase):
         cls.user.groups.add(cls.group)
         cls.action = engine.get_action("viewOneTimeJobMachine", engine.get_namespace("Turbo"))
 
-    def setUp(self):
-        policies_cache.clear()
-
     def _policy(self, source):
         Policy.objects.filter(name="Tests").delete()
         policy = Policy(name="Tests", source=format_policies(source))
         policy.full_clean()
         policy.save()
-        policies_cache.clear()
 
     def _permit(self, scope="resource", condition=""):
         return (f'permit (principal in Role::"{self.group.pk}", '

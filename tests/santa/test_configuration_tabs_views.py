@@ -271,6 +271,7 @@ class SantaConfigurationTabsViewsTestCase(TestCase, LoginCase):
         self.login_with_actions("santa.view_configuration",
                                 actions=("viewScopedClientMode", "updateScopedClientMode", "deleteScopedClientMode"))
         url = self.url("configuration_scoped_client_modes", configuration)
+        self.client.get(url)  # warm up the process-level caches
         with CaptureQueriesContext(connection) as one_entry:
             self.assertEqual(self.client.get(url).status_code, 200)
         self.force_scoped_client_mode(configuration, client_mode=Configuration.LOCKDOWN_MODE, tags=[tag])
@@ -339,6 +340,7 @@ class SantaConfigurationTabsViewsTestCase(TestCase, LoginCase):
         self.login_with_actions("santa.view_configuration",
                                 actions=("viewScopedPathRegex", "updateScopedPathRegex", "deleteScopedPathRegex"))
         url = self.url("configuration_scoped_path_regexes", configuration)
+        self.client.get(url)  # warm up the process-level caches
         with CaptureQueriesContext(connection) as one_entry:
             self.assertEqual(self.client.get(url).status_code, 200)
         for _ in range(4):

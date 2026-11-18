@@ -141,6 +141,7 @@ class SQSDeleteThread(threading.Thread):
 
 
 class SQSSendThread(threading.Thread):
+    in_queue_timeout = 1
     max_number_of_messages = 10
     max_event_age_seconds = 5
     # SQS caps a single message and the sum of a batch at the same size, and rejects the batch as a
@@ -175,7 +176,9 @@ class SQSSendThread(threading.Thread):
         while True:
             logger.debug("[%s] %s event(s) to send", self.name, len(self.entries))
             try:
-                receipt_handle, routing_key, event_d, event_ts = self.in_queue.get(block=True, timeout=1)
+                receipt_handle, routing_key, event_d, event_ts = self.in_queue.get(
+                    block=True, timeout=self.in_queue_timeout
+                )
             except queue.Empty:
                 logger.debug("[%s] no new event to send", self.name)
                 if self.entries:

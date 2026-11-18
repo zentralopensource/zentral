@@ -1,5 +1,4 @@
 import logging
-import os
 import threading
 import time
 import weakref
@@ -70,11 +69,7 @@ class PoliciesCache:
             return self._policy_set
 
 
-# used for the tests
-zentral_policies_sync = os.environ.get("ZENTRAL_POLICIES_SYNC", "1") == "1"
-
-
-policies_cache = PoliciesCache(with_sync=zentral_policies_sync)
+policies_cache = PoliciesCache(with_sync=True)
 
 
 # Cedar rejects the whole request for a value type it does not know, and it has no float, no date

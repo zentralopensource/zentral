@@ -1134,6 +1134,7 @@ class SantaSetupViewsTestCase(TestCase, LoginCase):
         self.login("santa.view_rule", "santa.view_ruleset", "santa.view_target")
         url = reverse("santa:configuration_rules", args=(configuration.pk,))
         add_rule()
+        self.client.get(url)  # warm up the process-level caches
         with CaptureQueriesContext(connection) as one_rule:
             self.assertEqual(self.client.get(url).status_code, 200)
         for _ in range(4):

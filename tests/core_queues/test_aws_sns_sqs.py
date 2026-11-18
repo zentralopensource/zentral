@@ -602,6 +602,7 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         for event_d in event_ds:
             in_queue.put((None, "routing-key", event_d, time.monotonic()))
         thread = SQSSendThread("https://www.example.com/queue", stop_event, in_queue, None, eq.client_kwargs)
+        thread.in_queue_timeout = 0
         thread.client = Mock()
         thread.client.send_message_batch = Mock(return_value={"Successful": [], "Failed": []})
         # pre-set: run() drains the in_queue, then flushes and exits on the first empty get
@@ -729,6 +730,7 @@ class AWSSNSSQSQueuesTestCase(TestCase):
             out_queue,
             eq.client_kwargs,
         )
+        thread.in_queue_timeout = 0
         thread.client = Mock()
         thread.client.publish = Mock(return_value={"MessageId": "msg-1"})
         thread.run()
@@ -751,6 +753,7 @@ class AWSSNSSQSQueuesTestCase(TestCase):
         # decrement returns True meaning "all events published, ready to delete"
         fake_consumer.decrement_receipt_handle_unpublished_event_count = Mock(return_value=True)
         thread = ConsumerProducerFinalThread(fake_consumer)
+        thread.in_queue_timeout = 0
         stop_event.set()
         thread.run()
         fake_consumer.decrement_receipt_handle_unpublished_event_count.assert_called_once_with("receipt_handle_1")
