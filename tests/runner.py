@@ -22,31 +22,52 @@ def clear_policies_cache(*args, **kwargs):
     policies_cache.clear()
 
 
-def setup_policies_cache():
-    # In production, a notification clears the cache when a transaction changes the policies.
-    # A test never commits its transaction, so the tests clear the cache when a policy is saved
-    # or deleted, and before each test class and each test, because a rollback changes the policies too.
-    from accounts.models import Policy
-    from pbac.cedar import policies_cache
-    policies_cache._sync_started = True  # no notifier callback
-    policies_cache.max_age_seconds = float("inf")
-    post_save.connect(clear_policies_cache, sender=Policy, weak=False)
-    post_delete.connect(clear_policies_cache, sender=Policy, weak=False)
+def clear_probes_cache(*args, **kwargs):
+    from zentral.core.probes.conf import all_probes
+    all_probes.clear()
 
 
-def teardown_policies_cache():
-    from accounts.models import Policy
-    from pbac.cedar import policies_cache
-    post_save.disconnect(clear_policies_cache, sender=Policy)
-    post_delete.disconnect(clear_policies_cache, sender=Policy)
-    policies_cache._sync_started = False
-    del policies_cache.max_age_seconds
+def clear_caches():
     clear_policies_cache()
+    clear_probes_cache()
+
+
+def _caches_and_receivers():
+    from accounts.models import Policy
+    from pbac.cedar import policies_cache
+    from zentral.core.probes.conf import all_probes
+    from zentral.core.probes.models import Action, ProbeSource
+    return ((policies_cache, Policy, clear_policies_cache),
+            (all_probes, ProbeSource, clear_probes_cache),
+            # a probe keeps the backends of its actions
+            (all_probes, Action, clear_probes_cache))
+
+
+def setup_caches():
+    # In production, a notification clears a cache when a transaction changes its objects.
+    # A test never commits its transaction, so the tests clear a cache when one of its objects
+    # is saved or deleted, and before each test class and each test, because a rollback changes them too.
+    for cache, sender, receiver in _caches_and_receivers():
+        cache._sync_started = True  # no notifier callback
+        post_save.connect(receiver, sender=sender, weak=False)
+        post_delete.connect(receiver, sender=sender, weak=False)
+    from pbac.cedar import policies_cache
+    policies_cache.max_age_seconds = float("inf")
+
+
+def teardown_caches():
+    for cache, sender, receiver in _caches_and_receivers():
+        post_save.disconnect(receiver, sender=sender)
+        post_delete.disconnect(receiver, sender=sender)
+        cache._sync_started = False
+    from pbac.cedar import policies_cache
+    del policies_cache.max_age_seconds
+    clear_caches()
 
 
 class ClearCachesBeforeEachTestMixin:
     def startTest(self, test):
-        clear_policies_cache()
+        clear_caches()
         super().startTest(test)
 
 
@@ -68,13 +89,13 @@ class ZentralParallelTestSuite(ParallelTestSuite):
 
 class ZentralTestSuite(unittest.TestSuite):
     def _handleClassSetUp(self, test, result):
-        # The event stores and the policies are cached in the process. The setup of a class runs
-        # after the rollback of the class before it, and with --parallel, the test classes that run
+        # The event stores, the policies and the probes are cached in the process. The setup of a class
+        # runs after the rollback of the class before it, and with --parallel, the test classes that run
         # before this one change from run to run.
         if test.__class__ != getattr(result, "_previousTestClass", None):
             from zentral.core.stores.conf import stores
             stores.clear()
-            clear_policies_cache()
+            clear_caches()
         super()._handleClassSetUp(test, result)
 
 
@@ -86,10 +107,10 @@ class ZentralTestRunner(DiscoverRunner):
         super().setup_test_environment(**kwargs)
         self._fast_password_hashers = override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
         self._fast_password_hashers.enable()
-        setup_policies_cache()
+        setup_caches()
 
     def teardown_test_environment(self, **kwargs):
-        teardown_policies_cache()
+        teardown_caches()
         self._fast_password_hashers.disable()
         super().teardown_test_environment(**kwargs)
 

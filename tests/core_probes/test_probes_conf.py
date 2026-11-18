@@ -3,6 +3,7 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils.crypto import get_random_string
+from django.utils.text import slugify
 from zentral.core.events.base import BaseEvent, EventMetadata
 from zentral.core.probes.conf import all_probes, all_probes_dict, ProbeList, ProbesDict, ProbeView
 from zentral.core.probes.models import ProbeSource
@@ -21,12 +22,18 @@ class ProbesConfTestCase(TestCase):
                                                       body={})
         cls.probe = Probe(cls.probe_source)
 
+    def _create_probe_source_without_signal(self):
+        # bulk_create sends no post_save signal: the caches do not hear about this probe,
+        # as in production when a notification is missed, so only the max age makes it visible
+        name = get_random_string(12)
+        return ProbeSource.objects.bulk_create([
+            ProbeSource(name=name, slug=slugify(name), status=ProbeSource.ACTIVE, event_types=[], body={})
+        ])[0]
+
     def test_all_probes(self):
-        all_probes.clear()
         self.assertEqual(list(all_probes), [self.probe])
 
     def test_all_probes_dict(self):
-        all_probes_dict.clear()
         self.assertEqual(all_probes_dict[self.probe.pk], self.probe)
         with self.assertRaises(KeyError):
             all_probes_dict[self.inactive_probe.pk]
@@ -103,47 +110,33 @@ class ProbesConfTestCase(TestCase):
     # max age fallback
 
     def test_cache_is_fresh_after_load(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         list(all_probes)
         self.assertTrue(all_probes._is_fresh(None))
 
     def test_cache_expires(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         list(all_probes)
         all_probes._last_load_ts -= all_probes.max_age_seconds + 1
         self.assertFalse(all_probes._is_fresh(None))
 
     def test_clear_resets_the_load_timestamp(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         list(all_probes)
         all_probes.clear()
         self.assertIsNone(all_probes._last_load_ts)
         self.assertIsNone(all_probes_dict._last_load_ts)
 
     def test_child_follows_parent_expiry_when_staggered(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         self.assertEqual(all_probes_dict[self.probe.pk], self.probe)
         # the child reloads on its own while the parent is still fresh
         all_probes_dict.clear()
         self.assertEqual(all_probes_dict[self.probe.pk], self.probe)
-        probe_source = ProbeSource.objects.create(name=get_random_string(12),
-                                                  status=ProbeSource.ACTIVE,
-                                                  body={})
+        probe_source = self._create_probe_source_without_signal()
         # only the parent is expired, the child's own timer is still fresh
         all_probes._last_load_ts -= all_probes.max_age_seconds + 1
         self.assertEqual(all_probes_dict[probe_source.pk], Probe(probe_source))
 
     def test_child_has_no_age_of_its_own(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         self.assertEqual(all_probes_dict[self.probe.pk], self.probe)
-        probe_source = ProbeSource.objects.create(name=get_random_string(12),
-                                                  status=ProbeSource.ACTIVE,
-                                                  body={})
+        probe_source = self._create_probe_source_without_signal()
         # only the child is backdated: it follows the parent, which is still fresh,
         # so the new probe stays invisible and the bound is one max age, not two
         all_probes_dict._last_load_ts -= all_probes_dict.max_age_seconds + 1
@@ -153,28 +146,20 @@ class ProbesConfTestCase(TestCase):
     # snapshot
 
     def test_snapshot_pairs_the_generation_with_the_probes(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         generation, probes = all_probes.snapshot()
         self.assertEqual(probes, [self.probe])
         # nothing changed, so the same version and the same probes come back
         self.assertEqual(all_probes.snapshot(), (generation, probes))
 
     def test_snapshot_applies_the_max_age(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         generation, _ = all_probes.snapshot()
-        probe_source = ProbeSource.objects.create(name=get_random_string(12),
-                                                  status=ProbeSource.ACTIVE,
-                                                  body={})
+        probe_source = self._create_probe_source_without_signal()
         all_probes._last_load_ts -= all_probes.max_age_seconds + 1
         new_generation, probes = all_probes.snapshot()
         self.assertGreater(new_generation, generation)
         self.assertIn(Probe(probe_source), probes)
 
     def test_generation_increases_on_every_build(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         first, _ = all_probes.snapshot()
         all_probes.clear()
         second, _ = all_probes.snapshot()
@@ -200,8 +185,6 @@ class ProbesConfTestCase(TestCase):
     # database access
 
     def test_a_fresh_cache_makes_no_query(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         event = BaseEvent(EventMetadata(), {})
         # warm every view on the hot path
         list(all_probes)
@@ -214,8 +197,6 @@ class ProbesConfTestCase(TestCase):
                 list(all_probes.event_filtered(event))
 
     def test_an_expired_cache_queries_again(self):
-        all_probes.clear()
-        self.addCleanup(all_probes.clear)
         list(all_probes)
         all_probes._last_load_ts -= all_probes.max_age_seconds + 1
         # the count depends on the number of probes, only that it goes back matters

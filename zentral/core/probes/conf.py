@@ -1,5 +1,4 @@
 import logging
-import os
 import threading
 import time
 import weakref
@@ -192,9 +191,5 @@ class ProbeList(ProbeView):
         return self.filter(_filter)
 
 
-# used for the tests
-zentral_probes_sync = os.environ.get("ZENTRAL_PROBES_SYNC", "1") == "1"
-
-
-all_probes = ProbeList(with_sync=zentral_probes_sync)
+all_probes = ProbeList(with_sync=True)
 all_probes_dict = all_probes.dict(item_func=lambda p: [(p.pk, p)], unique_key=True)

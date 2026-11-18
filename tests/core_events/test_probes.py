@@ -5,7 +5,6 @@ from django.utils.crypto import get_random_string
 from zentral.core.events import event_from_event_d
 from zentral.core.events.pipeline import enrich_event, process_event
 from zentral.core.incidents.models import Incident, IncidentUpdate, MachineIncident, Severity
-from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import Action, ActionBackend, ProbeSource
 from zentral.core.probes.probe import Probe
 
@@ -70,7 +69,6 @@ class EventProbesTestCase(TestCase):
         cls.probe = Probe(cls.probe_source)
         cls.probe_with_incident = Probe(cls.probe_source_with_incident)
         cls.probe_for_incident_with_incident = Probe(cls.probe_source_for_incident_with_incident)
-        all_probes.clear()
 
     def test_event_from_event_d(self):
         event = event_from_event_d(serialized_event)
