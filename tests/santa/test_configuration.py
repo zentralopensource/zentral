@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.apps import apps
 from django.test import TestCase
 from django.utils.crypto import get_random_string
+from zentral.contrib.santa.events import SantaPreflightEvent
 from zentral.contrib.santa.models import Configuration, voting_portal_event_detail_url
 from zentral.core.incidents.models import Severity
 from .utils import force_enrolled_machine, force_realm
@@ -67,6 +68,43 @@ class SantaConfigurationTestCase(TestCase):
         self.assertEqual(sync_server_config["allowed_path_regex"],
                          f"^(?:(?:{allowed_path_regex}))")
         self.assertEqual(sync_server_config["blocked_path_regex"], Configuration.NON_MATCHING_PATH_REGEX)
+
+    # full sync interval
+
+    def test_full_sync_interval_jitter_bounds(self):
+        config = Configuration.objects.create(name=get_random_string(256), full_sync_interval=600)
+        machine = self.enrolled_machine(config)
+        for uniform, expected in ((-0.15, 510), (0, 600), (0.15, 690)):
+            with patch("zentral.contrib.santa.models.random.uniform", return_value=uniform) as random_uniform:
+                sync_server_config = config.get_sync_server_config(machine, (2022, 1))
+            random_uniform.assert_called_once_with(-0.15, 0.15)
+            self.assertEqual(sync_server_config["full_sync_interval"], expected)
+
+    def test_full_sync_interval_jitter_varies(self):
+        config = Configuration.objects.create(name=get_random_string(256), full_sync_interval=86400)
+        machine = self.enrolled_machine(config)
+        intervals = {config.get_sync_server_config(machine, (2022, 1))["full_sync_interval"] for _ in range(20)}
+        self.assertGreater(len(intervals), 1)
+        self.assertGreaterEqual(min(intervals), 73440)
+        self.assertLessEqual(max(intervals), 99360)
+
+    def test_full_sync_interval_jitter_keeps_client_minimum(self):
+        config = Configuration.objects.create(name=get_random_string(256), full_sync_interval=60)
+        machine = self.enrolled_machine(config)
+        with patch("zentral.contrib.santa.models.random.uniform", return_value=-0.15):
+            sync_server_config = config.get_sync_server_config(machine, (2022, 1))
+        self.assertEqual(sync_server_config["full_sync_interval"], 60)
+
+    def test_full_sync_interval_jitter_under_heartbeat_timeout(self):
+        for full_sync_interval in (60, 600, 86400):
+            config = Configuration.objects.create(name=get_random_string(256),
+                                                  full_sync_interval=full_sync_interval)
+            machine = self.enrolled_machine(config)
+            with patch("zentral.contrib.santa.models.random.uniform",
+                       return_value=Configuration.FULL_SYNC_INTERVAL_JITTER):
+                sync_server_config = config.get_sync_server_config(machine, (2022, 1))
+            self.assertLess(sync_server_config["full_sync_interval"],
+                            SantaPreflightEvent.get_machine_heartbeat_timeout(machine.serial_number))
 
     def test_non_matching_path_regex_stable_across_preflights(self):
         # a value that changed on every preflight made the client flush all its decision

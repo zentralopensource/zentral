@@ -502,9 +502,15 @@ permit (
 
 ## Santa sync
 
-The Santa agent is configured to sync periodically with the Zentral server. The `Full sync interval` can be adjusted for each Santa configuration – 10 min by default, cannot be shorter than 10 min. No need to distribute the updated Santa payload. The agent will apply the new interval during the next sync.
+The Santa agent is configured to sync periodically with the Zentral server. The `Full sync interval` can be adjusted for each Santa configuration – 10 min by default, cannot be shorter than 1 min. No need to distribute the updated Santa payload. The agent will apply the new interval during the next sync.
 
-To check the santa sync configuration and status, use the following command:
+The `Full sync interval` is an average. In each [preflight](#preflight) response, Zentral sends the interval multiplied by a random factor between 0.85 and 1.15, and never less than 1 min. With a 10 min interval, a machine waits between 8 min 30 s and 11 min 30 s before its next full sync. Santa adds no randomness of its own, so without it the machines that synced at the same time – after an outage of the server, or a new sync payload – would keep syncing at the same time.
+
+Near the minimum, the average is higher than the configured value, because the result is never less than 1 min. This applies to the intervals under 71 s. With a 1 min interval, a machine waits between 60 s and 69 s.
+
+Zentral considers a machine inactive when it receives no sync event from it for twice the configured `Full sync interval`. A machine keeps the interval of its last preflight until its next one. If you make the interval more than 1.7 times shorter, a machine can be reported as inactive until its next sync.
+
+To check the santa sync configuration and status, use the following command. It shows the interval of the last preflight, not the configured interval, so the value changes after each sync.
 
 ```
 $ santactl status

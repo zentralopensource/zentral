@@ -114,6 +114,8 @@ The Osquery API publishes the same `zentral_audit` events as the web console now
 
 #### Santa
 
+The `Full sync interval` of a Santa configuration is an average now. Zentral sends it in each preflight response multiplied by a random factor between 0.85 and 1.15, and never less than the 60 s minimum of Santa. Under 71 s, this minimum makes the average higher than the configured value: 60 s to 69 s for a 60 s interval. `santactl status` shows the interval of the last preflight, not the configured one. Before, the machines that synced at the same time — after a restart of the server, or a new sync payload — kept syncing at the same time, one interval later, again and again.
+
 The Santa API publishes the same `zentral_audit` events as the web console now, for the enrollments.
 
 The Santa web console publishes a `zentral_audit` event when a user creates an enrollment. This change had no record.

@@ -1,4 +1,5 @@
 import logging
+import random
 import re
 import uuid
 from collections import namedtuple
@@ -555,6 +556,8 @@ class Configuration(models.Model):
     PREFLIGHT_LOCKDOWN_MODE = "LOCKDOWN"
     DEFAULT_BATCH_SIZE = 50
     DEFAULT_FULL_SYNC_INTERVAL = 600
+    MIN_FULL_SYNC_INTERVAL = 60
+    FULL_SYNC_INTERVAL_JITTER = 0.15
     DEFAULT_EVENT_DETAIL_TEXT = "More info"
     # Santa suppresses the block notification button when the URL is this exact string.
     NO_EVENT_DETAIL_URL = "null"
@@ -572,7 +575,7 @@ class Configuration(models.Model):
         # 'upload_logs_url' not used
         'allowed_path_regex',
         'blocked_path_regex',
-        'full_sync_interval',
+        # 'full_sync_interval' jittered
         # 'fcm_token' cannot be used
         # 'fcm_full_sync_interval' cannot be used
         # 'fcm_global_rule_sync_deadline' cannot be used
@@ -605,9 +608,10 @@ class Configuration(models.Model):
     )
     full_sync_interval = models.IntegerField(
         default=DEFAULT_FULL_SYNC_INTERVAL,
-        validators=[MinValueValidator(60), MaxValueValidator(86400)],
-        help_text="The max time to wait in seconds before performing a full sync with the server. "
-                  "Minimum: 60s, hardcoded in Santa."
+        validators=[MinValueValidator(MIN_FULL_SYNC_INTERVAL), MaxValueValidator(86400)],
+        help_text="The average time to wait in seconds before performing a full sync with the server. "
+                  f"A random variation of ±{FULL_SYNC_INTERVAL_JITTER:.0%} is applied for each sync. "
+                  f"Minimum: {MIN_FULL_SYNC_INTERVAL}s, hardcoded in Santa."
     )
     enable_bundles = models.BooleanField(
         default=False,
@@ -846,9 +850,17 @@ class Configuration(models.Model):
                                              .values_list("tag_id", flat=True))
         return tag_ids
 
+    def get_jittered_full_sync_interval(self):
+        # The client re-arms its full sync timer with this value after each preflight, with no jitter
+        # of its own, so machines that synced together once would keep doing it. The result stays
+        # at or above the minimum of the client, and under the heartbeat timeout, twice the interval.
+        jitter = random.uniform(-self.FULL_SYNC_INTERVAL_JITTER, self.FULL_SYNC_INTERVAL_JITTER)
+        return max(self.MIN_FULL_SYNC_INTERVAL, round(self.full_sync_interval * (1 + jitter)))
+
     def get_sync_server_config(self, enrolled_machine, comparable_santa_version):
         config = {k: getattr(self, k)
                   for k in self.SYNC_SERVER_CONFIGURATION_ATTRIBUTES}
+        config["full_sync_interval"] = self.get_jittered_full_sync_interval()
 
         has_client_modes = self._has_scoped_items(ScopedClientMode, "has_scoped_client_modes",
                                                   enrolled_machine)

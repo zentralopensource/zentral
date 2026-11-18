@@ -178,7 +178,8 @@ class SantaAPIViewsTestCase(TestCase):
             data[key] = idx + 1
 
         # MONITOR mode
-        response = self.post_as_json("preflight", hardware_uuid, data)
+        with patch("zentral.contrib.santa.models.random.uniform", return_value=0):
+            response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
@@ -224,7 +225,8 @@ class SantaAPIViewsTestCase(TestCase):
 
     def test_legacy_preflight(self):
         data, serial_number, hardware_uuid = self._get_preflight_data(legacy=True)
-        response = self.post_as_json("preflight", hardware_uuid, data)
+        with patch("zentral.contrib.santa.models.random.uniform", return_value=0):
+            response = self.post_as_json("preflight", hardware_uuid, data)
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
         self.assertEqual(json_response["client_mode"], Configuration.PREFLIGHT_MONITOR_MODE)
