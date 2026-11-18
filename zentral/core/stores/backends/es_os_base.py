@@ -1,5 +1,4 @@
 import logging
-import os
 import random
 import time
 from urllib.parse import urlencode
@@ -47,6 +46,7 @@ class ESOSStore(BaseStore):
 
     total_fields_limit = 2000
     max_batch_size = 500
+    force_index_refresh = False
     machine_events = True
     last_machine_heartbeats = True
     object_events = True
@@ -177,9 +177,6 @@ class ESOSStore(BaseStore):
         # backward compatibility
         self.version = None
         self.use_mapping_types = None
-
-        # for the tests
-        self.force_index_refresh = os.environ.get("ZENTRAL_FORCE_ES_OS_INDEX_REFRESH") == "1"
 
     def get_index_conf(self):
         index_settings = {

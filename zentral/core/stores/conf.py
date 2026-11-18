@@ -1,5 +1,4 @@
 import logging
-import os
 import threading
 import time
 import weakref
@@ -116,8 +115,4 @@ class Stores:
                 yield store
 
 
-# used for the tests
-zentral_stores_sync = os.environ.get("ZENTRAL_STORES_SYNC", "1") == "1"
-
-
-stores = Stores(with_sync=zentral_stores_sync)
+stores = Stores(with_sync=True)

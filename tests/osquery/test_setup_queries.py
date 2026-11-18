@@ -22,7 +22,6 @@ class OsquerySetupQueriesViewsTestCase(TestCase, LoginCase):
     def setUpTestData(cls):
         # provision the stores
         provision()
-        stores._load(force=True)
         # user
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))

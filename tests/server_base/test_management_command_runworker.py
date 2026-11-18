@@ -3,7 +3,6 @@ import json
 from unittest.mock import patch
 from django.core.management import call_command
 from django.test import TestCase
-from zentral.core.stores.conf import stores
 from zentral.utils.prometheus import PrometheusMetricsExporter
 from zentral.utils.provisioning import provision
 
@@ -21,7 +20,6 @@ class RunWorkerBaseManagementCommandsTest(TestCase):
 
     def test_list_workers_json(self):
         provision()  # provision the stores
-        stores._load(force=True)  # reload the stores
         out = StringIO()
         call_command('runworker', "--list-workers", "--json", stdout=out)
         self.assertEqual(
@@ -38,7 +36,6 @@ class RunWorkerBaseManagementCommandsTest(TestCase):
 
     def test_list_workers_text(self):
         provision()  # provision the stores
-        stores._load(force=True)  # reload the stores
         out = StringIO()
         call_command('runworker', "--list-workers", stdout=out)
         self.assertEqual(

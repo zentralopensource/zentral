@@ -12,8 +12,12 @@ from pbac.cedar import PoliciesCache, policies_cache
 from tests.runner import (clear_caches, setup_caches, teardown_caches,
                           ZentralTestRunner, ZentralTestSuite, ZentralTextTestResult)
 from tests.core_probes.utils import force_action
+from tests.core_stores.utils import force_store
 from zentral.core.probes.conf import all_probes
 from zentral.core.probes.models import ProbeSource
+from zentral.core.stores.backends.es_os_base import ESOSStore
+from zentral.core.stores.conf import stores
+from zentral.core.stores.models import Store
 
 
 def build_cases():
@@ -34,15 +38,13 @@ def build_cases():
 
 class ZentralTestSuiteTestCase(SimpleTestCase):
     @patch("tests.runner.clear_caches")
-    @patch("zentral.core.stores.conf.stores.clear")
-    def test_stores_and_caches_cleared_before_each_test_class(self, clear, clear_caches):
+    def test_caches_cleared_before_each_test_class(self, clear_caches):
         suite = ZentralTestSuite(build_cases())
         # a plain result, so that only the clears of the test classes are counted
         result = unittest.TestResult()
         suite.run(result)
         self.assertTrue(result.wasSuccessful())
         self.assertEqual(result.testsRun, 3)
-        self.assertEqual(clear.call_count, 2)
         self.assertEqual(clear_caches.call_count, 2)
 
     @patch("tests.runner.clear_caches")
@@ -126,35 +128,63 @@ class ZentralTestRunnerProbesCacheTestCase(TestCase):
         self.assertIsNone(all_probes._probes)
 
 
+class ZentralTestRunnerStoresCacheTestCase(TestCase):
+    def test_a_store_save_clears_the_cache(self):
+        list(stores)
+        self.assertIsNotNone(stores._stores)
+        force_store()
+        self.assertIsNone(stores._stores)
+
+    def test_a_store_delete_clears_the_cache(self):
+        name = get_random_string(12)
+        force_store(name=name)
+        list(stores)
+        self.assertIsNotNone(stores._stores)
+        Store.objects.get(name=name).delete()
+        self.assertIsNone(stores._stores)
+
+    def test_the_es_os_stores_refresh_their_index(self):
+        self.assertTrue(ESOSStore.force_index_refresh)
+
+
 class ZentralTestRunnerCachesTestCase(TestCase):
-    def test_clear_caches_clears_the_policies_and_the_probes(self):
+    def load_caches(self):
         policies_cache.policy_set
         list(all_probes)
+        list(stores)
+
+    def test_clear_caches_clears_the_policies_the_probes_and_the_stores(self):
+        self.load_caches()
         clear_caches()
         self.assertIsNone(policies_cache._policy_set)
         self.assertIsNone(all_probes._probes)
+        self.assertIsNone(stores._stores)
 
     def test_the_caches_register_no_notifier_callback(self):
         clear_caches()
         with patch("pbac.cedar.notifier") as policies_notifier, \
-             patch("zentral.core.probes.conf.notifier") as probes_notifier:
-            policies_cache.policy_set
-            list(all_probes)
+             patch("zentral.core.probes.conf.notifier") as probes_notifier, \
+             patch("zentral.core.stores.conf.notifier") as stores_notifier:
+            self.load_caches()
         policies_notifier.add_callback.assert_not_called()
         probes_notifier.add_callback.assert_not_called()
+        stores_notifier.add_callback.assert_not_called()
 
     def test_teardown_undoes_the_setup(self):
         self.addCleanup(setup_caches)
         teardown_caches()
         self.assertEqual(policies_cache.max_age_seconds, PoliciesCache.max_age_seconds)
         with patch("pbac.cedar.notifier") as policies_notifier, \
-             patch("zentral.core.probes.conf.notifier") as probes_notifier:
-            policies_cache.policy_set
-            list(all_probes)
+             patch("zentral.core.probes.conf.notifier") as probes_notifier, \
+             patch("zentral.core.stores.conf.notifier") as stores_notifier:
+            self.load_caches()
         policies_notifier.add_callback.assert_called_once()
         probes_notifier.add_callback.assert_called_once()
+        stores_notifier.add_callback.assert_called_once()
         # the receivers are disconnected: a save does not clear the caches
         Policy.objects.create(name=get_random_string(12), source="permit (principal, action, resource);")
         ProbeSource.objects.create(name=get_random_string(12), status=ProbeSource.ACTIVE, body={})
+        force_store()
         self.assertIsNotNone(policies_cache._policy_set)
         self.assertIsNotNone(all_probes._probes)
+        self.assertIsNotNone(stores._stores)

@@ -27,9 +27,15 @@ def clear_probes_cache(*args, **kwargs):
     all_probes.clear()
 
 
+def clear_stores_cache(*args, **kwargs):
+    from zentral.core.stores.conf import stores
+    stores.clear()
+
+
 def clear_caches():
     clear_policies_cache()
     clear_probes_cache()
+    clear_stores_cache()
 
 
 def _caches_and_receivers():
@@ -37,10 +43,13 @@ def _caches_and_receivers():
     from pbac.cedar import policies_cache
     from zentral.core.probes.conf import all_probes
     from zentral.core.probes.models import Action, ProbeSource
+    from zentral.core.stores.conf import stores
+    from zentral.core.stores.models import Store
     return ((policies_cache, Policy, clear_policies_cache),
             (all_probes, ProbeSource, clear_probes_cache),
             # a probe keeps the backends of its actions
-            (all_probes, Action, clear_probes_cache))
+            (all_probes, Action, clear_probes_cache),
+            (stores, Store, clear_stores_cache))
 
 
 def setup_caches():
@@ -63,6 +72,12 @@ def teardown_caches():
     from pbac.cedar import policies_cache
     del policies_cache.max_age_seconds
     clear_caches()
+
+
+def set_force_index_refresh(value):
+    # the tests read the events they write
+    from zentral.core.stores.backends.es_os_base import ESOSStore
+    ESOSStore.force_index_refresh = value
 
 
 class ClearCachesBeforeEachTestMixin:
@@ -89,12 +104,9 @@ class ZentralParallelTestSuite(ParallelTestSuite):
 
 class ZentralTestSuite(unittest.TestSuite):
     def _handleClassSetUp(self, test, result):
-        # The event stores, the policies and the probes are cached in the process. The setup of a class
-        # runs after the rollback of the class before it, and with --parallel, the test classes that run
-        # before this one change from run to run.
+        # The setup of a class runs after the rollback of the class before it, and with --parallel,
+        # the test classes that run before this one change from run to run.
         if test.__class__ != getattr(result, "_previousTestClass", None):
-            from zentral.core.stores.conf import stores
-            stores.clear()
             clear_caches()
         super()._handleClassSetUp(test, result)
 
@@ -108,8 +120,10 @@ class ZentralTestRunner(DiscoverRunner):
         self._fast_password_hashers = override_settings(PASSWORD_HASHERS=FAST_PASSWORD_HASHERS)
         self._fast_password_hashers.enable()
         setup_caches()
+        set_force_index_refresh(True)
 
     def teardown_test_environment(self, **kwargs):
+        set_force_index_refresh(False)
         teardown_caches()
         self._fast_password_hashers.disable()
         super().teardown_test_environment(**kwargs)

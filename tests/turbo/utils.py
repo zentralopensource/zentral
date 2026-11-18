@@ -11,7 +11,6 @@ from zentral.contrib.turbo.compliance_checks import sync_script_compliance_check
 from zentral.contrib.turbo.models import (COMMAND_KIND_MODELS, Configuration, EnrolledMachine, Enrollment,
                                           MSCPCheck, OneTimeJob, RecurringJob, Script)
 from zentral.core.events.base import AuditEvent
-from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
 from pbac.engine import engine
 
@@ -151,7 +150,6 @@ class TurboSetupTestCase(TestCase, LoginCase):
     @classmethod
     def setUpTestData(cls):
         provision()
-        stores._load(force=True)
         cls.user = User.objects.create_user("godzilla", "godzilla@zentral.io", get_random_string(12))
         cls.group = Group.objects.create(name=get_random_string(12))
         cls.user.groups.set([cls.group])
@@ -180,7 +178,6 @@ class TurboPublicTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         provision()
-        stores._load(force=True)
         cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(64))
         cls.mbu.create_enrollment_business_unit()
 
