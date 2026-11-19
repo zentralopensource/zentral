@@ -56,6 +56,8 @@ class AppsBooksClient:
     retries = 2
     # Apple can change the limits and the URLs without notice, and asks to read them again every 5 minutes
     service_config_max_age_seconds = 300
+    # The documented values, used until a background task reads the limits from Apple
+    default_limits = {"maxAssets": 25, "maxSerialNumbers": 1000}
 
     def __init__(
         self,
@@ -170,7 +172,12 @@ class AppsBooksClient:
         ):
             self._service_config = self.make_request("service/config")
             self._service_config_ts = time.monotonic()
+            cache.set(self.limits_cache_key, self._service_config.get("limits"), None)
         return self._service_config
+
+    @property
+    def limits_cache_key(self):
+        return f"apps-books:limits:{self.mdm_info_id}"
 
     # assets
 
@@ -278,8 +285,12 @@ class AppsBooksClient:
             "serialNumbers": serial_numbers,
         }
 
-    def iter_manage_assets_requests(self, assets, serial_numbers):
-        limits = self.get_service_config()["limits"]
+    def iter_manage_assets_requests(self, assets, serial_numbers, shared_limits=False):
+        if shared_limits:
+            # for the check-in: a request to Apple can wait for the Retry-After of a 429 or a 503, with no limit
+            limits = cache.get(self.limits_cache_key) or self.default_limits
+        else:
+            limits = self.get_service_config()["limits"]
         asset_batches = list(batched(assets, limits["maxAssets"]))
         # serial numbers in the outer loop: they can come from a database cursor, which can be read only once
         for serial_number_batch in batched(serial_numbers, limits["maxSerialNumbers"]):
@@ -390,7 +401,9 @@ def ensure_target_asset_assignments(target):
     for mdm_info_id, assets in missing_assets.items():
         try:
             _, client = location_cache.get(mdm_info_id)
-            for manage_assets_request in client.iter_manage_assets_requests(assets, [target.serial_number]):
+            for manage_assets_request in client.iter_manage_assets_requests(
+                assets, [target.serial_number], shared_limits=True
+            ):
                 event_id = client.post_raw_associations(manage_assets_request)
                 # The cache key indicates that the event is for on-the-fly assignments.
                 # The device will be poked when a successful notification is received.
