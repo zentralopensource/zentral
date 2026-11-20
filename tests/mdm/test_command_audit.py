@@ -49,7 +49,7 @@ class CommandAuditTestCase(TestCase):
         for db_name, command_class in registered_commands.items():
             with self.subTest(db_name):
                 self.assertEqual(
-                    set(command_class.audit_public_kwargs) & set(command_class.audit_secret_kwargs),
+                    set(command_class.audit_public_kwargs) & set(command_class.secret_kwargs),
                     set()
                 )
 

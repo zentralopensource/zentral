@@ -58,7 +58,7 @@ class SetAutoAdminPassword(Command):
     reschedule_notnow = True
     verify_target_before_delivery = True
     form_class = SetAutoAdminPasswordForm
-    audit_secret_kwargs = ("new_password",)
+    secret_kwargs = ("new_password",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):

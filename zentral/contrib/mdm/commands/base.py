@@ -37,11 +37,12 @@ class Command:
 
     # Audit trail. A kwarg is only serialized if it is declared in audit_public_kwargs,
     # so a command class that forgets to declare anything is silent instead of leaky —
-    # adding a new secret kwarg cannot leak it by omission. Keys in audit_secret_kwargs
-    # are reported as redacted, which tells an auditor the value was there without
-    # disclosing it; anything undeclared is reported as omitted.
+    # adding a new secret kwarg cannot leak it by omission. secret_kwargs are the kwargs
+    # encrypted with get_secret_engine_kwargs(). They are reported as redacted, which tells
+    # an auditor the value was there without disclosing it; anything undeclared is reported
+    # as omitted.
     audit_public_kwargs = ()
-    audit_secret_kwargs = ()
+    secret_kwargs = ()
 
     @classmethod
     def build_audit_kwargs(cls, kwargs):
@@ -49,7 +50,7 @@ class Command:
         for key, value in kwargs.items():
             if key in cls.audit_public_kwargs:
                 audit_kwargs[key] = value
-            elif key in cls.audit_secret_kwargs:
+            elif key in cls.secret_kwargs:
                 audit_kwargs[key] = AUDIT_REDACTED
             else:
                 audit_kwargs[key] = AUDIT_OMITTED

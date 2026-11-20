@@ -55,7 +55,7 @@ class SetRecoveryLock(Command):
     reschedule_notnow = True
     verify_target_before_delivery = True
     form_class = SetRecoveryLockForm
-    audit_secret_kwargs = ("new_password",)
+    secret_kwargs = ("new_password",)
 
     @classmethod
     def create_for_automatic_scheduling(cls, target, password=None):
