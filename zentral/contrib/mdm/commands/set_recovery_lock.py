@@ -6,7 +6,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.mdm.events import post_recovery_password_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
-from .base import register_command, Command, CommandBaseForm
+from .base import register_command, Command, CommandBaseForm, get_secret_engine_kwargs
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.set_recovery_lock")
@@ -29,10 +29,6 @@ def generate_password(length=12):
     return get_random_string(length)
 
 
-def get_secret_engine_kwargs(uuid):
-    return {"model": "mdm.devicecommand", "field": "new_password", "uuid": str(uuid)}
-
-
 class SetRecoveryLockForm(CommandBaseForm):
     new_password = forms.CharField(
         label="New password", required=False, strip=True,
@@ -49,7 +45,7 @@ class SetRecoveryLockForm(CommandBaseForm):
         kwargs = {}
         new_password = self.cleaned_data.get("new_password")
         if new_password:
-            kwargs["new_password"] = encrypt_str(self.cleaned_data["new_password"], **get_secret_engine_kwargs(uuid))
+            kwargs["new_password"] = encrypt_str(new_password, **get_secret_engine_kwargs(uuid, "new_password"))
         return kwargs
 
 
@@ -68,7 +64,7 @@ class SetRecoveryLock(Command):
         uuid = uuid4()
         return super().create_for_target(
             target,
-            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid))},
+            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid, "new_password"))},
             uuid=uuid,
         )
 
@@ -81,7 +77,7 @@ class SetRecoveryLock(Command):
         password = generate_password()
         return super().create_for_target(
             target,
-            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid))},
+            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid, "new_password"))},
             queue=True, delay=delay_min * 60,
             uuid=uuid,
         )
@@ -97,7 +93,7 @@ class SetRecoveryLock(Command):
     def load_new_password(self):
         new_password = self.db_command.kwargs.get("new_password")
         if new_password:
-            return decrypt_str(new_password, **get_secret_engine_kwargs(self.uuid))
+            return decrypt_str(new_password, **get_secret_engine_kwargs(self.uuid, "new_password"))
         else:
             return ""
 

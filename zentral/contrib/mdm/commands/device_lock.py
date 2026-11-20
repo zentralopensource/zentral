@@ -8,13 +8,9 @@ from zentral.contrib.mdm.events import post_device_lock_pin_set_event
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
 
-from .base import Command, CommandBaseForm, CommandBaseSerializer, register_command
+from .base import Command, CommandBaseForm, CommandBaseSerializer, register_command, get_secret_engine_kwargs
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.device_lock")
-
-
-def get_secret_engine_kwargs(uuid):
-    return {"model": "mdm.devicecommand", "field": "PIN", "uuid": str(uuid)}
 
 
 class DeviceLockHelperMixin:
@@ -34,7 +30,7 @@ class DeviceLockHelperMixin:
             kwargs["PhoneNumber"] = phone_number
         pin = data.get("pin")
         if pin:
-            kwargs["PIN"] = encrypt_str(pin, **get_secret_engine_kwargs(uuid))
+            kwargs["PIN"] = encrypt_str(pin, **get_secret_engine_kwargs(uuid, "PIN"))
         return kwargs
 
 
@@ -100,7 +96,7 @@ class DeviceLock(Command):
     def load_pin(self):
         encrypted_pin = self.db_command.kwargs.get("PIN")
         if encrypted_pin:
-            return decrypt_str(encrypted_pin, **get_secret_engine_kwargs(self.uuid))
+            return decrypt_str(encrypted_pin, **get_secret_engine_kwargs(self.uuid, "PIN"))
 
     def build_command(self):
         payload = {}

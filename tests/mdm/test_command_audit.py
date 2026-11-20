@@ -1,3 +1,4 @@
+import ast
 import glob
 import json
 import plistlib
@@ -32,13 +33,37 @@ class CommandAuditTestCase(TestCase):
     # the policy itself
 
     def test_no_encrypted_kwarg_is_missing_from_this_list(self):
-        # get_secret_engine_kwargs() declares the encrypted field name in each command
+        # get_secret_engine_kwargs() gets the encrypted field name in each command
         # module. Anything new there has to be classified, or it would be serialized
         # verbatim the moment somebody adds it to audit_public_kwargs.
         found = set()
         for path in glob.glob("zentral/contrib/mdm/commands/*.py"):
-            found.update(re.findall(r"""field=["'](\w+)["']""", open(path).read()))
-        self.assertEqual(found - ENCRYPTED_KWARGS, set())
+            found.update(re.findall(r"""get_secret_engine_kwargs\([\w.]+, ["'](\w+)["']\)""", open(path).read()))
+        self.assertEqual(found, ENCRYPTED_KWARGS)
+
+    def test_no_secret_engine_context_outside_get_secret_engine_kwargs(self):
+        # A context written another way is not found by the test above,
+        # and rewrap_secrets would not rewrap it.
+        call_count = 0
+        found = []
+        for path in glob.glob("zentral/contrib/mdm/commands/*.py"):
+            for node in ast.walk(ast.parse(open(path).read())):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id in ("encrypt", "encrypt_str", "decrypt", "decrypt_str", "rewrap")
+                ):
+                    call_count += 1
+                    if not (
+                        len(node.keywords) == 1
+                        and node.keywords[0].arg is None
+                        and isinstance(node.keywords[0].value, ast.Call)
+                        and isinstance(node.keywords[0].value.func, ast.Name)
+                        and node.keywords[0].value.func.id == "get_secret_engine_kwargs"
+                    ):
+                        found.append(f"{path}:{node.lineno}")
+        self.assertGreater(call_count, 0)
+        self.assertEqual(found, [])
 
     def test_encrypted_kwargs_are_never_public(self):
         for db_name, command_class in registered_commands.items():
