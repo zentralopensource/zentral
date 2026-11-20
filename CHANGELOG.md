@@ -639,6 +639,10 @@ An anonymous request to a page of the web console goes to the login page before 
 
 The MDM check-in, the OTA enrollment and the DEP web enrollment endpoints refuse a malformed request with a 4xx error now, and not with a 500 error. A signature with no signer, with a signer that matches no certificate, or with a signer that is identified by its subject key identifier, is refused as a signature that is not valid. Before, the first one was read as a verified signature with no certificate, and the other two gave an error. The DEP web enrollment custom views and profile answer 404 to a request without an enrollment in the session.
 
+`rewrap_secrets` saves only the fields that it rewraps now, and does not save an object that has no change. Before, it saved all the fields of all the objects, and set the `updated_at` field of each object to the time of the rewrap.
+
+`rewrap_secrets` rewraps the secrets in the kwargs of the MDM commands now: the PIN of the `DeviceLock` and `EraseDevice` commands, the password of the `AccountConfiguration`, `SetAutoAdminPassword`, `SetRecoveryLock` and `SetFirmwarePassword` commands, and the encryption key of the `RotateFileVaultKey` command. Before, these secrets stayed encrypted with the old secret engine. After the removal of this engine, Zentral could not send or acknowledge a command that was still in the queue, and could not decrypt the FileVault PRK that a device returned for a `RotateFileVaultKey` command.
+
 
 ## 2026.5
 

@@ -3,9 +3,9 @@ from uuid import uuid4
 from django import forms
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
-from .base import register_command, Command, CommandBaseForm
+from .base import register_command, Command, CommandBaseForm, get_secret_engine_kwargs
 from .restart_device import RestartDevice
-from .set_recovery_lock import generate_password, get_secret_engine_kwargs, validate_recovery_password
+from .set_recovery_lock import generate_password, validate_recovery_password
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.set_recovery_lock")
@@ -27,7 +27,7 @@ class SetFirmwarePasswordForm(CommandBaseForm):
         kwargs = {}
         new_password = self.cleaned_data.get("new_password")
         if new_password:
-            kwargs["new_password"] = encrypt_str(self.cleaned_data["new_password"], **get_secret_engine_kwargs(uuid))
+            kwargs["new_password"] = encrypt_str(new_password, **get_secret_engine_kwargs(uuid, "new_password"))
         return kwargs
 
 
@@ -37,7 +37,7 @@ class SetFirmwarePassword(Command):
     reschedule_notnow = True
     verify_target_before_delivery = True
     form_class = SetFirmwarePasswordForm
-    audit_secret_kwargs = ("new_password",)
+    secret_kwargs = ("new_password",)
 
     @classmethod
     def create_for_automatic_scheduling(cls, target, password=None):
@@ -46,7 +46,7 @@ class SetFirmwarePassword(Command):
         uuid = uuid4()
         return super().create_for_target(
             target,
-            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid))},
+            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid, "new_password"))},
             uuid=uuid,
         )
 
@@ -60,7 +60,7 @@ class SetFirmwarePassword(Command):
         password = generate_password()
         return super().create_for_target(
             target,
-            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid))},
+            kwargs={"new_password": encrypt_str(password, **get_secret_engine_kwargs(uuid, "new_password"))},
             queue=True, delay=delay_min * 60,
             uuid=uuid,
         )
@@ -78,7 +78,7 @@ class SetFirmwarePassword(Command):
     def load_new_password(self):
         new_password = self.db_command.kwargs.get("new_password")
         if new_password:
-            return decrypt_str(new_password, **get_secret_engine_kwargs(self.uuid))
+            return decrypt_str(new_password, **get_secret_engine_kwargs(self.uuid, "new_password"))
         else:
             return ""
 
