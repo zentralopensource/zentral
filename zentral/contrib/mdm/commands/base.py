@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.models import Channel, Command as DBCommand, DeviceCommand, UserCommand
+from zentral.core.secret_engines import rewrap
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.base")
@@ -55,6 +56,13 @@ class Command:
             else:
                 audit_kwargs[key] = AUDIT_OMITTED
         return audit_kwargs
+
+    @classmethod
+    def rewrap_kwargs(cls, uuid, kwargs):
+        return {
+            key: rewrap(value, **get_secret_engine_kwargs(uuid, key)) if key in cls.secret_kwargs and value else value
+            for key, value in kwargs.items()
+        }
 
     @classmethod
     def get_db_name(cls):
@@ -184,7 +192,8 @@ class Command:
         self.db_command.error_chain = response.get("ErrorChain")
         if self.store_result and self.status != DBCommand.Status.NOT_NOW:
             self.db_command.result = plistlib.dumps(response, fmt=plistlib.FMT_BINARY)
-        self.db_command.save()
+        # not the kwargs, that rewrap_secrets can change after the command is loaded
+        self.db_command.save(update_fields=["result_time", "status", "error_chain", "result", "updated_at"])
         self.response = response
         self.enrollment_session = enrollment_session
         self.realm_user = enrollment_session.realm_user
@@ -204,7 +213,7 @@ class Command:
         if self.db_command.time and not self.status == DBCommand.Status.NOT_NOW:
             raise ValueError("Command {self.db_command.uuid} has time")
         self.db_command.time = timezone.now()
-        self.db_command.save()
+        self.db_command.save(update_fields=["time", "updated_at"])
 
 
 registered_commands = {}
