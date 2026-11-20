@@ -15,7 +15,7 @@ logger = logging.getLogger("zentral.contrib.mdm.commands.account_configuration")
 
 class AccountConfiguration(Command):
     request_type = "AccountConfiguration"
-    audit_secret_kwargs = ("admin_password",)
+    secret_kwargs = ("admin_password",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
