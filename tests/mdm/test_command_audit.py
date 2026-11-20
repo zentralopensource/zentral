@@ -32,13 +32,13 @@ class CommandAuditTestCase(TestCase):
     # the policy itself
 
     def test_no_encrypted_kwarg_is_missing_from_this_list(self):
-        # get_secret_engine_kwargs() declares the encrypted field name in each command
+        # get_secret_engine_kwargs() gets the encrypted field name in each command
         # module. Anything new there has to be classified, or it would be serialized
         # verbatim the moment somebody adds it to audit_public_kwargs.
         found = set()
         for path in glob.glob("zentral/contrib/mdm/commands/*.py"):
-            found.update(re.findall(r"""field=["'](\w+)["']""", open(path).read()))
-        self.assertEqual(found - ENCRYPTED_KWARGS, set())
+            found.update(re.findall(r"""get_secret_engine_kwargs\([\w.]+, ["'](\w+)["']\)""", open(path).read()))
+        self.assertEqual(found, ENCRYPTED_KWARGS)
 
     def test_encrypted_kwargs_are_never_public(self):
         for db_name, command_class in registered_commands.items():

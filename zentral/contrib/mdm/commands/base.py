@@ -17,6 +17,10 @@ AUDIT_REDACTED = "<redacted>"
 AUDIT_OMITTED = "<omitted>"
 
 
+def get_secret_engine_kwargs(uuid, field):
+    return {"model": "mdm.devicecommand", "field": field, "uuid": str(uuid)}
+
+
 class Command:
     request_type = None
     db_name = None
