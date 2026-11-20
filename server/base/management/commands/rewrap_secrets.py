@@ -24,7 +24,10 @@ class Command(BaseCommand):
         for content_type in ContentType.objects.all():
             model_class = content_type.model_class()
             if hasattr(model_class, "rewrap_secrets"):
-                qs = content_type.get_all_objects_for_this_type()
+                if hasattr(model_class, "rewrap_secrets_queryset"):
+                    qs = model_class.rewrap_secrets_queryset()
+                else:
+                    qs = content_type.get_all_objects_for_this_type()
                 print(f"{model_class.__name__}:", qs.count(), "objects to update")
                 if not dry_run:
                     with transaction.atomic():
