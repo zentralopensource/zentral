@@ -639,6 +639,8 @@ An anonymous request to a page of the web console goes to the login page before 
 
 The MDM check-in, the OTA enrollment and the DEP web enrollment endpoints refuse a malformed request with a 4xx error now, and not with a 500 error. A signature with no signer, with a signer that matches no certificate, or with a signer that is identified by its subject key identifier, is refused as a signature that is not valid. Before, the first one was read as a verified signature with no certificate, and the other two gave an error. The DEP web enrollment custom views and profile answer 404 to a request without an enrollment in the session.
 
+`rewrap_secrets` saves only the fields that it rewraps now, and does not save an object that has no change. Before, it saved all the fields of all the objects, and set the `updated_at` field of each object to the time of the rewrap.
+
 
 ## 2026.5
 
