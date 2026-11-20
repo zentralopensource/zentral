@@ -683,38 +683,6 @@ class SCEPIssuer(CertIssuer):
         return d
 
 
-# Legacy SCEP config
-
-
-class SCEPConfig(models.Model):
-    provisioning_uid = models.CharField(max_length=256, unique=True, null=True, editable=False)
-    name = models.CharField(max_length=256, unique=True)
-    url = models.URLField()
-    key_usage = models.IntegerField(choices=((0, 'None (0)'),
-                                             (1, 'Signing (1)'),
-                                             (4, 'Encryption (4)'),
-                                             (5, 'Signing & Encryption (1 | 4 = 5)')),
-                                    default=0,
-                                    help_text="A bitmask indicating the use of the key.")
-    key_is_extractable = models.BooleanField(default=False,
-                                             help_text="If true, the private key can be exported from the keychain.")
-    keysize = models.IntegerField(choices=((1024, '1024-bit'),
-                                           (2048, '2048-bit'),
-                                           (4096, '4096-bit')),
-                                  default=2048)
-    allow_all_apps_access = models.BooleanField(default=False,
-                                                help_text="If true, all apps have access to the private key.")
-    challenge_type = models.CharField(
-        max_length=64,
-        choices=[('STATIC', 'Static'),
-                 ('MICROSOFT_CA', 'Microsoft CA Web Enrollment (certsrv)'),
-                 ('OKTA_CA', 'Okta CA Dynamic Challenge')]
-    )
-    challenge_kwargs = models.JSONField(editable=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-
 # Apps and (not!) Books
 # https://developer.apple.com/documentation/devicemanagement/app_and_book_management
 
