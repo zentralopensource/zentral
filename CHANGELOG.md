@@ -641,6 +641,8 @@ The MDM check-in, the OTA enrollment and the DEP web enrollment endpoints refuse
 
 `rewrap_secrets` saves only the fields that it rewraps now, and does not save an object that has no change. Before, it saved all the fields of all the objects, and set the `updated_at` field of each object to the time of the rewrap.
 
+`rewrap_secrets` rewraps the secrets in the kwargs of the MDM commands now: the PIN of the `DeviceLock` and `EraseDevice` commands, the password of the `AccountConfiguration`, `SetAutoAdminPassword`, `SetRecoveryLock` and `SetFirmwarePassword` commands, and the encryption key of the `RotateFileVaultKey` command. Before, these secrets stayed encrypted with the old secret engine. After the removal of this engine, Zentral could not send or acknowledge a command that was still in the queue, and could not decrypt the FileVault PRK that a device returned for a `RotateFileVaultKey` command.
+
 
 ## 2026.5
 

@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from zentral.contrib.mdm.artifacts import Target
 from zentral.contrib.mdm.models import Channel, Command as DBCommand, DeviceCommand, UserCommand
+from zentral.core.secret_engines import rewrap
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.base")
@@ -55,6 +56,13 @@ class Command:
             else:
                 audit_kwargs[key] = AUDIT_OMITTED
         return audit_kwargs
+
+    @classmethod
+    def rewrap_kwargs(cls, uuid, kwargs):
+        return {
+            key: rewrap(value, **get_secret_engine_kwargs(uuid, key)) if key in cls.secret_kwargs and value else value
+            for key, value in kwargs.items()
+        }
 
     @classmethod
     def get_db_name(cls):

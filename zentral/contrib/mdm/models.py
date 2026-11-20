@@ -3668,6 +3668,21 @@ class Command(models.Model):
             return {key: AUDIT_OMITTED for key in self.kwargs}
         return command_class.build_audit_kwargs(self.kwargs)
 
+    @classmethod
+    def rewrap_secrets_queryset(cls):
+        from zentral.contrib.mdm.commands.base import registered_commands
+        lookup = Q(pk__in=[])
+        for name, command_class in registered_commands.items():
+            if command_class.secret_kwargs:
+                lookup |= Q(name=name, kwargs__has_any_keys=list(command_class.secret_kwargs))
+        return cls.objects.filter(lookup)
+
+    def rewrap_secrets(self):
+        from zentral.contrib.mdm.commands.base import registered_commands
+        command_class = registered_commands.get(self.name)
+        if command_class is not None:
+            self.kwargs = command_class.rewrap_kwargs(self.uuid, self.kwargs)
+
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "uuid": str(self.uuid), "name": self.name}
         if keys_only:
