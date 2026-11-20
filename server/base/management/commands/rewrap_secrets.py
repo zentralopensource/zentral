@@ -1,3 +1,4 @@
+import copy
 import logging
 from django.db import transaction
 from django.core.management.base import BaseCommand
@@ -6,6 +7,17 @@ from tqdm import tqdm
 
 
 logger = logging.getLogger("zentral.server.base.management.commands.rewrap_secrets")
+
+
+def get_field_values(obj):
+    field_values = {}
+    for field in obj._meta.concrete_fields:
+        value = field.value_from_object(obj)
+        if isinstance(value, (dict, list)):
+            # rewrap_secrets() can change a JSON value in place
+            value = copy.deepcopy(value)
+        field_values[field.name] = value
+    return field_values
 
 
 class Command(BaseCommand):
@@ -25,5 +37,10 @@ class Command(BaseCommand):
                 if not dry_run:
                     with transaction.atomic():
                         for obj in tqdm(qs.iterator(), total=qs.count()):
+                            old_values = get_field_values(obj)
                             obj.rewrap_secrets()
-                            super(model_class, obj).save()
+                            # updated_at is not one of the fields to save, so it keeps its value.
+                            update_fields = [name for name, value in get_field_values(obj).items()
+                                             if value != old_values[name]]
+                            if update_fields:
+                                super(model_class, obj).save(update_fields=update_fields)
