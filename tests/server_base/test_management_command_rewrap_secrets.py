@@ -83,6 +83,22 @@ class RewrapSecretsManagementCommandTestCase(TestCase):
         self.assertEqual(updated_jamf_instance.password, jamf_instance.password)
         self.assertEqual(updated_jamf_instance.updated_at, jamf_instance.updated_at)
 
+    def test_rewrap_secrets_queryset(self):
+        jamf_instance = self._force_jamf_instance()
+        skipped_jamf_instance = self._force_jamf_instance()
+        self._load_fernet_engine()
+        with patch.object(JamfInstance, "rewrap_secrets_queryset", create=True,
+                          return_value=JamfInstance.objects.filter(pk=jamf_instance.pk)):
+            stdout, save = self._call_command()
+        self.assertIn("JamfInstance: 1 objects to update", stdout)
+        self.assertEqual(len(self._jamf_instance_save_calls(save, jamf_instance)), 1)
+        self.assertEqual(self._jamf_instance_save_calls(save, skipped_jamf_instance), [])
+        self.assertEqual(JamfInstance.objects.get(pk=jamf_instance.pk).password.split("$")[0], "fernet")
+        self.assertEqual(
+            JamfInstance.objects.get(pk=skipped_jamf_instance.pk).password,
+            skipped_jamf_instance.password
+        )
+
     def test_rewrap_secrets_dry_run(self):
         jamf_instance = self._force_jamf_instance()
         self._load_fernet_engine()
