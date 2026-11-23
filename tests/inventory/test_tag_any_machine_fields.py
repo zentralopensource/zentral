@@ -12,7 +12,7 @@ from accounts.models import Policy, User
 from pbac.scoping import visible_rows
 from zentral.contrib.inventory.forms import (EnrollmentSecretForm, TagAnyMachineChoiceField,
                                              TagAnyMachineMultipleChoiceField)
-from zentral.contrib.inventory.models import EnrollmentSecret, Tag, Taxonomy
+from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit, Tag, Taxonomy
 from zentral.contrib.inventory.pbac import TagAnyMachineRequest, refused_pks
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer, TagAnyMachineSerializerMixin
 from zentral.contrib.osquery.models import Query
@@ -63,6 +63,13 @@ class TagAnyMachineMultipleChoiceFieldTestCase(TestCase):
         with self.assertNoLogs("zentral.pbac.utils"), self.assertRaises(ValidationError) as ctx:
             self._field().clean([str(self.tag.pk), "yolo"])
         self.assertEqual(ctx.exception.code, "invalid_pk_value")
+
+    def test_not_a_list(self):
+        # refused before the decision
+        for value in (str(self.refused_tag.pk), self.refused_tag.pk):
+            with self.assertNoLogs("zentral.pbac.utils"), self.assertRaises(ValidationError) as ctx:
+                self._field().clean(value)
+            self.assertEqual(ctx.exception.code, "invalid_list")
 
     # the decided fields fail closed
 
@@ -151,6 +158,16 @@ class TagAnyMachineMultipleChoiceFieldTestCase(TestCase):
 class TagAnyMachineSerializerMixinTestCase(TestCase):
     def test_built_fields(self):
         self.assertIsInstance(EnrollmentSecretSerializer().fields["tags"], serializers.ManyRelatedField)
+
+    def test_tags_not_a_list(self):
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        tag = Tag.objects.create(name=get_random_string(12))
+        # refused before the decision: the serializer has no request
+        for value, input_type in ((str(tag.pk), "str"), (tag.pk, "int")):
+            serializer = EnrollmentSecretSerializer(data={"meta_business_unit": mbu.pk, "tags": value})
+            self.assertFalse(serializer.is_valid())
+            self.assertEqual(serializer.errors["tags"],
+                             [f'Expected a list of items but got type "{input_type}".'])
 
     def test_declared_many_field_refused(self):
         class DeclaredTagsSerializer(TagAnyMachineSerializerMixin, serializers.ModelSerializer):

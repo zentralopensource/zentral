@@ -15,7 +15,7 @@ from tests.munki.utils import force_script_check
 from tests.turbo.utils import force_script
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
-from zentral.contrib.inventory.models import MachineTag, Tag, Taxonomy
+from zentral.contrib.inventory.models import MachineTag, MetaBusinessUnit, Tag, Taxonomy, lock_row
 from zentral.contrib.inventory.pbac import (TAG_RESOURCE_TYPE, DeleteTagRequest, UpdateTagRequest, ViewTagRequest,
                                             delete_tag_action, update_tag_action,
                                             view_tag_action)
@@ -687,3 +687,30 @@ class TagWriteActionsTestCase(TestCase, LoginCase, RequestCase):
         self.assertTrue(Tag.objects.filter(pk=self.tag.pk).exists())
         self.tag.delete()
         self.assertRedirects(self.client.post(url), reverse("inventory:tags"), fetch_redirect_response=False)
+
+    def test_console_delete_taxonomy_page(self):
+        self._set_policies(permissions=("inventory.delete_taxonomy",))
+        self.client.force_login(self.user)
+        mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        for taxonomy in (Taxonomy.objects.create(name=get_random_string(12)),
+                         Taxonomy.objects.create(meta_business_unit=mbu, name=get_random_string(12))):
+            response = self.client.get(reverse("inventory:delete_taxonomy", args=(taxonomy.pk,)))
+            self.assertEqual(response.status_code, 200)
+            self.assertTemplateUsed(response, "inventory/taxonomy_confirm_delete.html")
+            # its business unit is not a link
+            self.assertEqual(response.context["links"], [])
+
+    def test_console_delete_taxonomy_tag_created_before_the_lock(self):
+        # a tag created in the taxonomy commits between the read of the taxonomy and the lock
+        taxonomy = Taxonomy.objects.create(name=get_random_string(12))
+        self._set_policies(permissions=("inventory.delete_taxonomy",))
+        self.client.force_login(self.user)
+
+        def create_tag_then_lock(instance):
+            Tag.objects.create(taxonomy=taxonomy, name=get_random_string(12))
+            return lock_row(instance)
+
+        with patch("zentral.contrib.inventory.models.lock_row", side_effect=create_tag_then_lock):
+            response = self.client.post(reverse("inventory:delete_taxonomy", args=(taxonomy.pk,)))
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(Taxonomy.objects.filter(pk=taxonomy.pk).exists())

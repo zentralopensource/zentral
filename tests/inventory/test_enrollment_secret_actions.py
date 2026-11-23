@@ -20,12 +20,13 @@ from tests.turbo.utils import force_enrollment as force_turbo_enrollment
 from tests.zentral_test_utils.enrollment_secret_case import EnrollmentSecretCase
 from tests.zentral_test_utils.login_case import LoginCase
 from tests.zentral_test_utils.request_case import RequestCase
-from zentral.contrib.inventory.enrollment_secrets import enrollment_secret_download
+from zentral.contrib.inventory.enrollment_secrets import enrollment_pks_with_secret, enrollment_secret_download
 from zentral.contrib.inventory.events import EnrollmentSecretViewedEvent, post_enrollment_secret_viewed_event
 from zentral.contrib.inventory.models import EnrollmentSecret, MetaBusinessUnit
 from zentral.contrib.inventory.serializers import EnrollmentSecretSerializer
 from zentral.contrib.mdm.dep_client import DEPClientError
 from zentral.contrib.santa.models import Enrollment as SantaEnrollment
+from zentral.contrib.santa.pbac import ViewEnrollmentSecretRequest as ViewSantaEnrollmentSecretRequest
 from zentral.core.events.base import linked_objects_key
 from zentral.core.stores.conf import stores
 from zentral.utils.provisioning import provision
@@ -424,6 +425,43 @@ class MDMUserEnrollmentSecretTestCase(TestCase, LoginCase):
                           if isinstance(call.args[0], EnrollmentSecretViewedEvent)], [])
 
 
+# the rows of a page
+
+
+class EnrollmentSecretRowsTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(get_random_string(12), f"{get_random_string(12)}@zentral.io",
+                                            get_random_string(12))
+        cls.group = Group.objects.create(name=get_random_string(12))
+        cls.user.groups.set([cls.group])
+        cls.mbu = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        cls.enrollment, cls.other_enrollment = (
+            SantaEnrollment.objects.create(configuration=force_santa_configuration(),
+                                           secret=EnrollmentSecret.objects.create(meta_business_unit=mbu))
+            for mbu in (cls.mbu, MetaBusinessUnit.objects.create(name=get_random_string(12)))
+        )
+
+    def test_rows_sql_and_decisions(self):
+        # `has` is not in the SQL subset, so each enrollment gets its own decision: the same rows
+        in_mbu = f'resource in Inventory::MetaBusinessUnit::"{self.mbu.pk}"'
+        for scope, when, decided_rows in ((in_mbu, "", False),
+                                          ("resource", f" when {{ {in_mbu} && !(resource has yolo) }}", True)):
+            Policy.objects.update_or_create(
+                name="Tests enrollment secret rows",
+                defaults={"source": (f'permit (principal in Role::"{self.group.pk}", '
+                                     f'action == Santa::Action::"viewEnrollmentSecret", {scope}){when};\n')}
+            )
+            with patch.object(ViewSantaEnrollmentSecretRequest, "requests_for_rows",
+                              wraps=ViewSantaEnrollmentSecretRequest.requests_for_rows) as requests_for_rows:
+                pks = enrollment_pks_with_secret(
+                    User.objects.get(pk=self.user.pk), ViewSantaEnrollmentSecretRequest,
+                    SantaEnrollment.objects.filter(pk__in=(self.enrollment.pk, self.other_enrollment.pk))
+                )
+            self.assertEqual(pks, {self.enrollment.pk})
+            self.assertEqual(requests_for_rows.called, decided_rows)
+
+
 # the helpers
 
 
@@ -441,6 +479,13 @@ class EnrollmentSecretHelpersTestCase(TestCase):
     def test_serializer_decided(self):
         data = EnrollmentSecretSerializer(self.secret, context={"enrollment_secret_pks": {self.secret.pk}}).data
         self.assertEqual(data["secret"], self.secret.secret)
+
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_event_no_enrollments(self, post_event):
+        request = RequestFactory().get("/")
+        request.user = AnonymousUser()
+        post_enrollment_secret_viewed_event(request, [], "secret", "api_list")
+        post_event.assert_not_called()
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_event_linked_objects(self, post_event):

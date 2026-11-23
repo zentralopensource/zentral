@@ -1225,8 +1225,6 @@ class CreateTagView(AccessMixin, UserFormKwargsMixin, CreateViewWithAudit):
     success_url = reverse_lazy("inventory:tags")
 
     def dispatch(self, request, *args, **kwargs):
-        if not request.user.is_authenticated:
-            return self.handle_no_permission()
         # A preview on all the taxonomies. The form decides: its taxonomy choices are those where the user
         # can create a tag.
         if not could_be_permitted(request, create_tag_action):

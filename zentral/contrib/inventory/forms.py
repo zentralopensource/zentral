@@ -115,8 +115,6 @@ class DecidedModelChoiceField(DecidedChoicesMixin, forms.ModelChoiceField):
 class DecidedModelMultipleChoiceField(DecidedChoicesMixin, forms.ModelMultipleChoiceField):
     def _check_values(self, value):
         queryset = self.decided_queryset()
-        if not isinstance(value, (list, tuple)):
-            return super()._check_values(value)
         try:
             # each value that the queryset resolves is decided, whatever its type
             candidates = list(queryset.filter(pk__in=list(value)))

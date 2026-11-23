@@ -6,7 +6,7 @@ from django.utils.crypto import get_random_string
 
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.inventory.models import MetaBusinessUnit, Tag, Taxonomy
+from zentral.contrib.inventory.models import MachineSnapshotCommit, MetaBusinessUnit, Tag, Taxonomy
 from zentral.contrib.inventory.pbac import create_tag_action, delete_tag_action, update_tag_action, view_tag_action
 from zentral.core.events.base import AuditEvent
 
@@ -252,6 +252,24 @@ class InventorySetupViewsTestCase(TestCase, LoginCase):
         self.login()
         response = self.client.get(reverse("inventory:delete_mbu", args=(meta_business_unit.pk,)))
         self.assertEqual(response.status_code, 403)
+
+    def test_meta_business_unit_can_be_deleted(self):
+        meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        # a business unit without machines is deleted with it
+        business_unit = meta_business_unit.create_enrollment_business_unit()
+        self.assertTrue(meta_business_unit.can_be_deleted())
+        MachineSnapshotCommit.objects.commit_machine_snapshot_tree({
+            "source": {"module": "io.zentral.tests", "name": "zentral"},
+            "serial_number": get_random_string(12),
+            "business_unit": business_unit.serialize(),
+        })
+        self.assertFalse(meta_business_unit.can_be_deleted())
+        # the other relations
+        other_meta_business_unit = MetaBusinessUnit.objects.create(name=get_random_string(12))
+        Tag.objects.create(meta_business_unit=other_meta_business_unit, name=get_random_string(12))
+        self.assertFalse(other_meta_business_unit.can_be_deleted())
+        with self.assertRaises(ValueError):
+            other_meta_business_unit.delete()
 
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_delete_meta_business_unit(self, post_event):

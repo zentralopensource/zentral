@@ -15,7 +15,7 @@ from zentral.contrib.inventory.api_views import UpdateMachineTags
 from zentral.contrib.inventory.events import MachineTagEvent
 from zentral.contrib.inventory.pbac import locked_rows
 from zentral.contrib.inventory.models import (MachineSnapshotCommit, MachineTag, MetaBusinessUnit,
-                                              MetaMachine, Tag, Taxonomy)
+                                              MetaMachine, Tag, Taxonomy, share_lock_rows)
 
 
 class InventoryAPITests(TestCase, LoginCase, RequestCase):
@@ -662,14 +662,19 @@ class InventoryAPITests(TestCase, LoginCase, RequestCase):
     def test_post_tag_renamed_before_the_lock(self):
         # a rename commits between the first read and the lock: the tag is not the one that the operation names
         tag = Tag.objects.create(name=get_random_string(12))
+        new_name = get_random_string(12)
         serial_number = get_random_string(12)
-        self.set_required_permission()
+        self.set_required_permission(self._policy("forbid", "tagAnyMachine", when=f'resource.name == "{new_name}"'))
 
-        def rename_then_lock(*args, **kwargs):
-            Tag.objects.filter(pk=tag.pk).update(name=get_random_string(12))
-            return locked_rows(*args, **kwargs)
+        def rename_then_lock(model, pks):
+            pks = list(pks)
+            if model is Tag:
+                Tag.objects.filter(pk=tag.pk).update(name=new_name)
+            return share_lock_rows(model, pks)
 
-        with patch("zentral.contrib.inventory.api_views.locked_rows", side_effect=rename_then_lock):
+        # the renamed tag is not decided
+        with patch("zentral.contrib.inventory.pbac.share_lock_rows", side_effect=rename_then_lock), \
+             self.assertNoLogs("zentral.pbac.utils"):
             response = self.post({"operations": [{"kind": "ADD", "names": [tag.name]}],
                                   "serial_numbers": [serial_number]})
         self.assertEqual(response.status_code, 400)
