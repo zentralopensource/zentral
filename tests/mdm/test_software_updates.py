@@ -531,6 +531,59 @@ class MDMSoftwareUpdateTestCase(TestCase):
         b_su = best_available_software_update_for_device_id_and_build("J413AP", "123456")
         self.assertEqual(su, b_su)
 
+    def test_available_software_update_same_version_same_posting_date_build_order(self):
+        for builds in (("24K157", "24K6157"), ("24K6157", "24K157")):
+            SoftwareUpdate.objects.all().delete()
+            for build in builds:
+                force_software_update(
+                    device_id="AppleTV14,1",
+                    version="27.2.1",
+                    build=build,
+                    posting_date=datetime.date(2026, 11, 10),
+                    platform=Platform.TVOS,
+                )
+            b_su = best_available_software_update_for_device_id_and_build(
+                "AppleTV14,1", "24K100", date=datetime.date(2026, 11, 20)
+            )
+            self.assertEqual(b_su.build, "24K157")
+            enrolled_device = self._force_enrolled_device(device_id="AppleTV14,1", os_version="27.2.0")
+            _, _, patch_update, _ = best_available_software_updates(enrolled_device, date=datetime.date(2026, 11, 20))
+            self.assertEqual(patch_update.build, "24K157")
+
+    def test_available_software_update_same_version_same_posting_date_expiration_date_ignored(self):
+        expiration_dates = {"24K157": datetime.date(2026, 12, 1), "24K6157": datetime.date(2026, 11, 25)}
+        for builds in (("24K157", "24K6157"), ("24K6157", "24K157")):
+            SoftwareUpdate.objects.all().delete()
+            for build in builds:
+                force_software_update(
+                    device_id="AppleTV14,1",
+                    version="27.2.1",
+                    build=build,
+                    posting_date=datetime.date(2026, 11, 10),
+                    expiration_date=expiration_dates[build],
+                    platform=Platform.TVOS,
+                )
+            b_su = best_available_software_update_for_device_id_and_build(
+                "AppleTV14,1", "24K100", date=datetime.date(2026, 11, 20)
+            )
+            self.assertEqual(b_su.build, "24K157")
+
+    def test_available_software_update_same_version_earliest_posting_date(self):
+        for posting_dates in ((datetime.date(2026, 11, 10), datetime.date(2026, 11, 3)),
+                              (datetime.date(2026, 11, 3), datetime.date(2026, 11, 10))):
+            SoftwareUpdate.objects.all().delete()
+            for posting_date in posting_dates:
+                force_software_update(
+                    device_id="J413AP",
+                    version="26.1.1",
+                    build="25B100",
+                    posting_date=posting_date,
+                )
+            b_su = best_available_software_update_for_device_id_and_build(
+                "J413AP", "25B10", date=datetime.date(2026, 11, 20)
+            )
+            self.assertEqual(b_su.availability.lower, datetime.date(2026, 11, 3))
+
     # management command
 
     @patch("zentral.contrib.mdm.software_updates.requests.get")

@@ -116,6 +116,11 @@ def iter_available_software_updates_for_device_id_and_build(device_id, build, da
         "-minor",
         "-patch",
         "-extra",
+        # GDMF can list one version for a device in more than one entry, with two posting dates or two builds.
+        # Without these, the database picks one, not always the same. Not the whole availability: the expiration
+        # dates move every day.
+        "availability__startswith",
+        "build",
     ):
         if software_update.comparable_os_version >= max_comparable_os_version:
             continue
