@@ -1,5 +1,7 @@
 from contextlib import redirect_stderr, redirect_stdout
+from datetime import datetime
 from io import StringIO
+from unittest.mock import Mock
 import uuid
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import load_der_x509_certificate
@@ -200,6 +202,16 @@ class EnrolledDeviceRewrapSecretsTestCase(TestCase):
         self.assertIsNone(enrolled_device.filevault_escrow_key)
         self.assertIsNone(enrolled_device.device_lock_pin)
         self.assertIsNone(enrolled_device.blocked_at)
+
+    def test_unlock_device_pin(self):
+        self._set_secrets()
+        EnrolledDevice.objects.filter(pk=self.enrolled_device.pk).update(updated_at=datetime(2000, 1, 1))
+        enrolled_device = EnrolledDevice.objects.get(pk=self.enrolled_device.pk)
+        self._rewrap_in_db()
+        Target(enrolled_device).unlock_device_pin(Mock())
+        enrolled_device = self._assert_rewrapped({"device_lock_pin"})
+        self.assertIsNone(enrolled_device.device_lock_pin)
+        self.assertGreater(enrolled_device.updated_at, datetime(2000, 1, 1))
 
     def test_do_checkout(self):
         self._set_secrets()

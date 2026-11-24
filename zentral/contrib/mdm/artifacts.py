@@ -280,7 +280,7 @@ class Target:
             return
         self.enrolled_device.set_device_lock_pin(None)
         transaction.on_commit(lambda: post_device_lock_pin_clear_event(self, request))
-        self.enrolled_device.save(update_fields=["device_lock_pin", "device_lock_pin_updated_at"])
+        self.enrolled_device.save(update_fields=["device_lock_pin", "device_lock_pin_updated_at", "updated_at"])
 
     # blueprint filtering method
 
