@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'docs/**'
+      - 'zentral/core/zql/grammar.lark'
       - 'conf/start/docker/hugo/**'
       - 'docker-compose.docs.yml'
       - '.github/workflows/docs.yml'
@@ -15,6 +16,7 @@ on:
       - main
     paths:
       - 'docs/**'
+      - 'zentral/core/zql/grammar.lark'
       - 'conf/start/docker/hugo/**'
       - 'docker-compose.docs.yml'
       - '.github/workflows/docs.yml'
@@ -35,3 +37,9 @@ jobs:
         env:
           COMPOSE_DOCKER_CLI_BUILD: 1
           DOCKER_BUILDKIT: 1
+
+      # The ZQL grammar page publishes a copy of the grammar file.
+      - name: check the ZQL grammar copy
+        run: >
+          awk '/^```lark$/{copy=1; next} /^```$/{copy=0} copy' docs/content/development/zql-grammar.md
+          | diff - zentral/core/zql/grammar.lark

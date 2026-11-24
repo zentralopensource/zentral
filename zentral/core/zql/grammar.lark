@@ -1,0 +1,117 @@
+// ZQL, the Zentral query language.
+//
+// A query is a source, then stages separated by "|".
+// Load with parser="lalr" (the default lexer is the contextual lexer).
+// The contextual lexer emits a keyword only where the grammar accepts one,
+// so "by" in "stats count() by by" and in "where by == 1" is a field name.
+
+start: query
+
+query: source ("|" stage)*
+
+source: NAME
+
+?stage: where
+      | stats
+      | sort
+      | limit
+      | fields
+      | paths
+
+where: "where" expr
+
+stats: "stats" aggregation ("," aggregation)* group_by?
+aggregation: call alias?
+
+paths: "paths" group_by?
+
+group_by: "by" group_key ("," group_key)*
+group_key: expr alias?
+
+alias: "as" IDENTIFIER
+
+sort: "sort" sort_key ("," sort_key)*
+sort_key: expr sort_order?
+!sort_order: "asc" | "desc"
+
+limit: "limit" INT
+
+fields: "fields" key ("," key)*
+
+// Precedence, loosest first. Each level is left-associative.
+// A comparison does not chain: "a < b < c" is a syntax error.
+
+?expr: or_expr
+
+?or_expr: and_expr
+        | or_expr "or" and_expr -> or_
+
+?and_expr: not_expr
+         | and_expr "and" not_expr -> and_
+
+?not_expr: comparison
+         | "not" not_expr -> not_
+
+?comparison: membership
+           | membership COMPARISON_OPERATOR membership -> compare
+
+?membership: arithmetic
+           | membership "in" list -> in_
+           | membership "has" "any" list -> has_any
+           | membership "has" "all" list -> has_all
+           | membership "contains" arithmetic -> contains
+           | membership "startswith" arithmetic -> startswith
+           | membership "endswith" arithmetic -> endswith
+           | membership "is" "null" -> is_null
+           | membership "is" "not" "null" -> is_not_null
+
+// The only arithmetic: a datetime plus or minus a duration.
+?arithmetic: atom
+           | arithmetic ARITHMETIC_OPERATOR DURATION -> datetime_arithmetic
+
+?atom: literal
+     | call
+     | linked
+     | path
+     | "(" expr ")"
+
+call: IDENTIFIER "(" (expr ("," expr)*)? ")"
+
+// An entity type appears in this production only.
+linked: "linked" "(" (ENTITY_TYPE | STRING) ("," linked_value)+ ")"
+?linked_value: STRING | NUMBER
+
+path: (IDENTIFIER | QUOTED_KEY) segment*
+segment: "." (key | INT) -> member
+        | "[" INT "]" -> index
+        | "[" "]" -> flatten
+?key: NAME | QUOTED_KEY
+
+list: "(" list_item ("," list_item)* ")"
+?list_item: STRING | NUMBER | DURATION | boolean
+
+?literal: STRING | NUMBER | DURATION | boolean
+!boolean: "true" | "false"
+
+COMPARISON_OPERATOR: "==" | "!=" | "<=" | ">=" | "<" | ">"
+ARITHMETIC_OPERATOR: "+" | "-"
+
+NAME: /[A-Za-z_][A-Za-z0-9_]*/
+// A name at the start of an expression, and an alias, which a later stage reads as a path.
+// The keywords that can start an expression are not names there, so a key named "true" takes backticks
+// at the head of a path, and reads as a name after a dot.
+// "null" is not a name there either, so "x == null" is a syntax error and not a path that matches nothing.
+IDENTIFIER: /(?!(not|true|false|null|linked)(?![A-Za-z0-9_]))[A-Za-z_][A-Za-z0-9_]*/
+ENTITY_TYPE: /[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)+/
+// A key that is not an identifier: a space, a hyphen. Never a dot, which is always a separator.
+QUOTED_KEY: /`[^`.\n]+`/
+INT: /[0-9]+/
+NUMBER: /-?[0-9]+(\.[0-9]+)?(?![A-Za-z0-9_.])/
+DURATION: /[0-9]+[smhdw](?![A-Za-z0-9_])/
+// The JSON escapes. A control character, a newline included, is written with an escape.
+STRING: /"([^"\\\x00-\x1f]|\\(["\\\/bfnrt]|u[0-9a-fA-F]{4}))*"/
+
+COMMENT: /\/\/[^\n]*/
+%import common.WS
+%ignore WS
+%ignore COMMENT
