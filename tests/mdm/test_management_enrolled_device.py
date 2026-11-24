@@ -16,11 +16,13 @@ from zentral.contrib.mdm.commands.base import load_command
 from zentral.contrib.mdm.models import (
     Blueprint,
     DeviceArtifact,
+    EnrolledDevice,
     DeviceStatusReport,
     Platform,
     TargetArtifact,
 )
 from zentral.contrib.mdm.events import MDMDeviceNotificationEvent
+from zentral.contrib.mdm.views.management import ChangeEnrolledDeviceBlueprintView
 from zentral.core.events.base import AuditEvent
 
 from .utils import (
@@ -2017,6 +2019,30 @@ class EnrolledDeviceManagementViewsTestCase(TestCase, LoginCase):
         # get_audit_machine_serial_number(), so the change lands on the device timeline
         metadata = event.metadata.serialize()
         self.assertEqual(metadata["machine_serial_number"], enrolled_device.serial_number)
+
+    @patch("zentral.contrib.mdm.views.management.send_enrolled_device_notification")
+    def test_change_enrolled_device_blueprint_post_keeps_the_other_fields(self, send_enrolled_device_notification):
+        session, _, _ = force_dep_enrollment_session(self.mbu, completed=True)
+        enrolled_device = session.enrolled_device
+        self.login("mdm.change_enrolleddevice", "mdm.view_enrolleddevice")
+        blueprint = Blueprint.objects.create(name=get_random_string(12))
+        original_get_object = ChangeEnrolledDeviceBlueprintView.get_object
+
+        def get_object(view, queryset=None):
+            obj = original_get_object(view, queryset)
+            # rewrap_secrets changes the device after the view loads it
+            EnrolledDevice.objects.filter(pk=obj.pk).update(admin_password="fernet$yolo")
+            return obj
+
+        with patch.object(ChangeEnrolledDeviceBlueprintView, "get_object", autospec=True, side_effect=get_object):
+            response = self.client.post(
+                reverse("mdm:change_enrolled_device_blueprint", args=(enrolled_device.pk,)),
+                {"blueprint": blueprint.pk},
+            )
+        self.assertEqual(response.status_code, 302)
+        enrolled_device.refresh_from_db()
+        self.assertEqual(enrolled_device.blueprint, blueprint)
+        self.assertEqual(enrolled_device.admin_password, "fernet$yolo")
 
     # poke
 
