@@ -90,7 +90,7 @@ class AccountConfiguration(Command):
         admin_password = self.load_admin_password()
         if admin_password:
             self.enrolled_device.set_admin_password(admin_password)
-            self.enrolled_device.save()
+            self.enrolled_device.save(update_fields=["admin_password", "admin_password_updated_at", "updated_at"])
             transaction.on_commit(lambda: post_admin_password_updated_event(self))
 
 

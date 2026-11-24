@@ -96,7 +96,9 @@ class SetFirmwarePassword(Command):
                          self.enrolled_device, self.uuid)
             return
         self.enrolled_device.set_pending_firmware_password(self.load_new_password())
-        self.enrolled_device.save()
+        self.enrolled_device.save(
+            update_fields=["pending_firmware_password", "pending_firmware_password_created_at", "updated_at"]
+        )
         # schedule a reboot notification for the pending firmware password to be applied
         RestartDevice.create_for_target(self.target, kwargs={"NotifyUser": True}, queue=True, delay=0)
 

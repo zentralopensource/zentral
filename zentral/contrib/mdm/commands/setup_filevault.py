@@ -25,7 +25,7 @@ def get_escrow_key(enrolled_device):
         escrow_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         raw_escrow_key = escrow_key.private_bytes(Encoding.DER, PrivateFormat.PKCS8, NoEncryption())
         enrolled_device.set_filevault_escrow_key(raw_escrow_key)
-        enrolled_device.save()
+        enrolled_device.save(update_fields=["filevault_escrow_key", "updated_at"])
     else:
         escrow_key = load_der_private_key(raw_escrow_key, password=None)
     return escrow_key
@@ -154,7 +154,7 @@ class SetupFileVault(Command):
 
     def command_acknowledged(self):
         self.enrolled_device.filevault_config_uuid = self.filevault_config_uuid
-        self.enrolled_device.save()
+        self.enrolled_device.save(update_fields=["filevault_config_uuid", "updated_at"])
         SecurityInfo.create_for_prk_escrow(self.target)
 
 

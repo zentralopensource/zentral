@@ -95,7 +95,7 @@ class SetAutoAdminPassword(Command):
     def command_acknowledged(self):
         new_password = self.load_new_password()
         self.enrolled_device.set_admin_password(new_password)
-        self.enrolled_device.save()
+        self.enrolled_device.save(update_fields=["admin_password", "admin_password_updated_at", "updated_at"])
         transaction.on_commit(lambda: post_admin_password_updated_event(self))
 
 

@@ -117,7 +117,7 @@ class RotateFileVaultKey(Command):
         if prk:
             if prk != self.enrolled_device.get_filevault_prk():
                 self.enrolled_device.set_filevault_prk(prk)
-                self.enrolled_device.save()
+                self.enrolled_device.save(update_fields=["filevault_prk", "filevault_prk_updated_at", "updated_at"])
                 transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
         else:
             # the new key is optional in the response, and it can fail to decrypt:

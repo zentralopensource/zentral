@@ -113,7 +113,7 @@ class DeviceLock(Command):
         new_pin = self.load_pin()
         if new_pin:
             self.enrolled_device.set_device_lock_pin(new_pin)
-            self.enrolled_device.save()
+            self.enrolled_device.save(update_fields=["device_lock_pin", "device_lock_pin_updated_at", "updated_at"])
             transaction.on_commit(
                 lambda: post_device_lock_pin_set_event(mdm_command=self)
             )

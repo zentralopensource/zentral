@@ -118,7 +118,9 @@ class SetRecoveryLock(Command):
             operation = "clear"
         if operation:
             self.enrolled_device.set_recovery_password(new_password)
-            self.enrolled_device.save()
+            self.enrolled_device.save(
+                update_fields=["recovery_password", "recovery_password_updated_at", "updated_at"]
+            )
             transaction.on_commit(lambda: post_recovery_password_event(
                 self, password_type="recovery_lock", operation=operation
             ))

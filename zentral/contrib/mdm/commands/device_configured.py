@@ -20,7 +20,7 @@ class DeviceConfigured(Command):
         if self.enrolled_device.awaiting_configuration:
             # TODO event
             self.enrolled_device.awaiting_configuration = False
-            self.enrolled_device.save()
+            self.enrolled_device.save(update_fields=["awaiting_configuration", "updated_at"])
         else:
             logger.error("Enrolled device %s: not awaiting configuration", self.enrolled_device.udid)
 
