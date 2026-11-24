@@ -1634,7 +1634,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         membership = RealmUserGroupMembership.objects.get(user=user, group=group)
         self._assert_audit_event(events, "created", membership,
                                  {"realms_realm_group": [str(group.pk)],
-                                  "realms_realm_user": [str(user.pk)],
+                                  "realm_user": [str(user.pk)],
                                   "realms_realm_user_group_membership": [str(membership.pk)]})
         self.assertEqual(events[0].payload["object"]["new_value"]["realm_user"]["username"], user.username)
 
@@ -1664,7 +1664,7 @@ class RealmViewsTestCase(TestCase, LoginCase):
         self.assertFalse(user.groups.exists())
         self._assert_audit_event(events, "deleted", membership,
                                  {"realms_realm_group": [str(group.pk)],
-                                  "realms_realm_user": [str(user.pk)],
+                                  "realm_user": [str(user.pk)],
                                   "realms_realm_user_group_membership": [str(membership.pk)]},
                                  prev_value)
 

@@ -1,8 +1,17 @@
 import inspect
 import re
+import sys
+import types
+import unittest
+import uuid
+from unittest.mock import patch
 from django.apps import apps
-from django.test import SimpleTestCase, TestCase
-from zentral.core.events.base import AuditEvent, linked_objects_key
+from django.test import RequestFactory, SimpleTestCase, TestCase
+from zentral.core.events.base import AuditEvent, EventMetadata, linked_objects_key
+from zentral.core.stores.views.events import EventsViewMixin
+from tests.linked_objects_keys import (FailOnUnknownLinkedObjectsKeysMixin, LinkedObjectsKeysCheck, MENTION_KEYS,
+                                       class_name, pop_unknown_keys, record_unknown_keys, unknown_keys_error)
+from tests.runner import ZentralTestSuite
 
 
 class FakeMeta:
@@ -98,3 +107,231 @@ class RedundantSelfKeysTestCase(SimpleTestCase):
             if re.search(rf'"{re.escape(own_key)}":\s*{OWN_PK}', inspect.getsource(hook)):
                 offenders.append(f"{model._meta.label} {own_key}")
         self.assertEqual(sorted(offenders), [])
+
+
+class RecordingResult(unittest.TestResult):
+    def __init__(self):
+        super().__init__()
+        self.successes = []
+
+    def addSuccess(self, test):
+        super().addSuccess(test)
+        self.successes.append(test)
+
+
+class LinkedObjectsKeysCheckTestCase(SimpleTestCase):
+    """The check of the test runner records the keys that are neither a model key nor a mention key."""
+
+    def assertNoUnknownKeys(self):
+        self.assertEqual(pop_unknown_keys(), [])
+
+    def test_mention_keys_are_not_model_keys(self):
+        model_keys = set(linked_objects_key(model) for model in apps.get_models())
+        self.assertEqual(MENTION_KEYS & model_keys, set())
+
+    def test_a_model_key_is_not_recorded(self):
+        EventMetadata().add_objects({"santa_configuration": [(1,)]})
+        self.assertNoUnknownKeys()
+
+    def test_a_mention_key_is_not_recorded(self):
+        EventMetadata().add_objects({"apple_team_id": [("MZ6DLR4PNC",)]})
+        self.assertNoUnknownKeys()
+
+    def test_an_unknown_key_is_recorded(self):
+        EventMetadata().add_objects({"realms_realm_user": [(1,)]})
+        unknown_keys = pop_unknown_keys()
+        self.assertEqual(len(unknown_keys), 1)
+        self.assertTrue(unknown_keys[0].startswith("'realms_realm_user' written, from "))
+        self.assertIn("test_audit_event_objects.py:", unknown_keys[0])
+
+    def test_an_unknown_key_of_an_event_names_its_event_type(self):
+        event = AuditEvent(EventMetadata(), {})
+        event.metadata.add_objects({"realms_realm_user": [(1,)]})
+        unknown_keys = pop_unknown_keys()
+        self.assertEqual(len(unknown_keys), 1)
+        self.assertTrue(unknown_keys[0].startswith("'realms_realm_user' written by a zentral_audit event, from "))
+
+    def test_an_unknown_key_of_a_collected_event_is_recorded(self):
+        metadata = EventMetadata()
+        AuditEvent(metadata, {})
+        with self.assertRaises(ReferenceError):
+            metadata.event.event_type
+        metadata.add_objects({"realms_realm_user": [(1,)]})
+        unknown_keys = pop_unknown_keys()
+        self.assertEqual(len(unknown_keys), 1)
+        self.assertTrue(unknown_keys[0].startswith("'realms_realm_user' written, from "))
+
+    def test_unknown_keys_of_mixed_types_are_recorded(self):
+        record_unknown_keys((None, "realms_realm_user"), "written")
+        self.assertEqual([unknown_key.split(" ")[0] for unknown_key in pop_unknown_keys()],
+                         ["'realms_realm_user'", "None"])
+
+    def test_a_deserialized_event_keeps_its_keys(self):
+        event = AuditEvent.deserialize({"_zentral": {"id": str(uuid.uuid4()),
+                                                     "index": 0,
+                                                     "objects": {"realms_realm_user": ["1"]}}})
+        self.assertEqual(event.metadata.objects, {"realms_realm_user": [["1"]]})
+        self.assertNoUnknownKeys()
+
+    def fetch_kwargs(self, fetch_kwargs_extra):
+        class TestEventsView(EventsViewMixin):
+            def get_fetch_kwargs_extra(self):
+                return fetch_kwargs_extra.copy()
+
+        view = TestEventsView()
+        view.request = RequestFactory().get("/")
+        return view.clean_fetch_kwargs()
+
+    def test_a_fetched_model_key_is_not_recorded(self):
+        self.assertEqual(self.fetch_kwargs({"key": "santa_configuration", "val": "1"})["key"], "santa_configuration")
+        self.assertNoUnknownKeys()
+
+    def test_a_fetch_without_key_is_not_recorded(self):
+        self.assertEqual(self.fetch_kwargs({"serial_number": "0123456789"})["serial_number"], "0123456789")
+        self.assertNoUnknownKeys()
+
+    def test_an_unknown_fetched_key_is_recorded(self):
+        self.fetch_kwargs({"key": "realms_realm_user", "val": "1"})
+        unknown_keys = pop_unknown_keys()
+        self.assertEqual(len(unknown_keys), 1)
+        self.assertTrue(unknown_keys[0].startswith("'realms_realm_user' asked for by TestEventsView, from "))
+
+    def test_an_unknown_constructor_key_is_recorded(self):
+        EventMetadata(objects={"realms_realm_user": [(1,)]})
+        unknown_keys = pop_unknown_keys()
+        self.assertEqual(len(unknown_keys), 1)
+        self.assertTrue(unknown_keys[0].startswith("'realms_realm_user' given to EventMetadata, from "))
+        self.assertIn("test_audit_event_objects.py:", unknown_keys[0])
+
+    def test_a_constructor_model_key_is_not_recorded(self):
+        EventMetadata(objects={"santa_configuration": [(1,)]})
+        self.assertNoUnknownKeys()
+
+    def test_no_unknown_keys_no_error(self):
+        self.assertIsNone(unknown_keys_error("in a test"))
+
+    def test_the_error_has_a_traceback(self):
+        record_unknown_keys(("realms_realm_user",), "written")
+        exc_type, exc_value, tb = unknown_keys_error("in a test")
+        self.assertIs(exc_type, AssertionError)
+        self.assertTrue(str(exc_value).startswith(
+            "Unknown linked objects keys in a test:\n'realms_realm_user' written"
+        ))
+        self.assertIsNotNone(tb)
+
+    def run_test(self, *unknown_keys, outcome="success"):
+        result = type("TestResult", (FailOnUnknownLinkedObjectsKeysMixin, RecordingResult), {})()
+        result.startTest(self)
+        record_unknown_keys(unknown_keys, "written")
+        if outcome == "success":
+            result.addSuccess(self)
+        else:
+            result.addError(self, (ValueError, ValueError("yolo"), None))
+        result.stopTest(self)
+        return result
+
+    def test_an_unknown_key_fails_a_passing_test_once(self):
+        result = self.run_test("realms_realm_user")
+        self.assertEqual(result.successes, [])
+        self.assertEqual(len(result.failures), 1)
+        failed_test, error = result.failures[0]
+        self.assertIs(failed_test, self)
+        self.assertIn(f"Unknown linked objects keys in {self.id()}:\n'realms_realm_user' written, from ", error)
+
+    def test_an_unknown_key_of_a_failing_test_is_reported(self):
+        result = self.run_test("realms_realm_user", outcome="error")
+        self.assertEqual(len(result.errors), 1)
+        self.assertEqual(len(result.failures), 1)
+        self.assertIn("'realms_realm_user' written", result.failures[0][1])
+
+    def test_known_keys_do_not_fail_the_test(self):
+        result = self.run_test("santa_configuration", "apple_team_id")
+        self.assertEqual(result.successes, [self])
+        self.assertEqual(result.failures, [])
+
+    def test_a_key_written_between_two_tests_is_not_charged_to_the_next_test(self):
+        result = type("TestResult", (FailOnUnknownLinkedObjectsKeysMixin, RecordingResult), {})()
+        record_unknown_keys(("realms_realm_user",), "written")
+        result.startTest(self)
+        result.addSuccess(self)
+        result.stopTest(self)
+        self.assertEqual(result.successes, [self])
+        self.assertEqual(result.failures, [])
+        self.assertEqual(len(result.errors), 1)
+        holder, error = result.errors[0]
+        self.assertEqual(str(holder), f"linked objects keys before {self.id()}")
+        self.assertIn("'realms_realm_user' written", error)
+
+    def test_keys_written_before_the_tests_are_reported_once(self):
+        result = type("TestResult", (FailOnUnknownLinkedObjectsKeysMixin, RecordingResult), {})()
+        record_unknown_keys(("realms_realm_user",), "written")
+        result.startTestRun()
+        self.assertEqual([str(holder) for holder, _ in result.errors], ["linked objects keys before the tests"])
+        self.assertIn("'realms_realm_user' written", result.errors[0][1])
+        self.assertNoUnknownKeys()
+
+    def test_keys_written_by_the_fixtures_are_not_charged_to_a_test(self):
+        module = types.ModuleType("tests.core_events.linked_objects_keys_fixtures")
+        module.setUpModule = lambda: record_unknown_keys(("module_setup_key",), "written")
+        module.tearDownModule = lambda: record_unknown_keys(("module_teardown_key",), "written")
+        sys.modules[module.__name__] = module
+        self.addCleanup(sys.modules.pop, module.__name__)
+
+        class SetUpClassKeyTestCase(unittest.TestCase):
+            __module__ = module.__name__
+
+            @classmethod
+            def setUpClass(cls):
+                record_unknown_keys(("class_setup_key",), "written")
+
+            def test_nothing(self):
+                pass
+
+        class TearDownClassKeyTestCase(unittest.TestCase):
+            __module__ = module.__name__
+
+            @classmethod
+            def tearDownClass(cls):
+                record_unknown_keys(("class_teardown_key",), "written")
+
+            def test_nothing(self):
+                pass
+
+        result = type("TestResult", (FailOnUnknownLinkedObjectsKeysMixin, RecordingResult), {})()
+        suite = ZentralTestSuite([SetUpClassKeyTestCase("test_nothing"), TearDownClassKeyTestCase("test_nothing")])
+        # the suite in this test must not clear the caches or run the module cleanups of the other tests
+        with patch("tests.runner.clear_caches") as clear_caches, \
+             patch("unittest.case.doModuleCleanups") as do_module_cleanups:
+            suite.run(result)
+        self.assertEqual(clear_caches.call_count, 2)
+        do_module_cleanups.assert_called_once_with()
+        self.assertEqual(len(result.successes), 2)
+        self.assertEqual(result.failures, [])
+        self.assertEqual(
+            [str(holder) for holder, _ in result.errors],
+            [f"linked objects keys in setUpModule of {module.__name__}",
+             f"linked objects keys in setUpClass of {class_name(SetUpClassKeyTestCase)}",
+             f"linked objects keys after the tests of {class_name(TearDownClassKeyTestCase)}",
+             f"linked objects keys in tearDownModule of {module.__name__}"]
+        )
+        keys = ("module_setup_key", "class_setup_key", "class_teardown_key", "module_teardown_key")
+        for (_, error), key in zip(result.errors, keys, strict=True):
+            self.assertIn(f"'{key}' written", error)
+
+    def test_disable_restores_the_methods(self):
+        init = EventMetadata.__init__
+        add_objects = EventMetadata.add_objects
+        clean_fetch_kwargs = EventsViewMixin.clean_fetch_kwargs
+        check = LinkedObjectsKeysCheck()
+        check.enable()
+        try:
+            self.assertIsNot(EventMetadata.__init__, init)
+            self.assertIsNot(EventMetadata.add_objects, add_objects)
+            self.assertIsNot(EventsViewMixin.clean_fetch_kwargs, clean_fetch_kwargs)
+            EventMetadata().add_objects({"realms_realm_user": [(1,)]})
+        finally:
+            check.disable()
+        self.assertIs(EventMetadata.__init__, init)
+        self.assertIs(EventMetadata.add_objects, add_objects)
+        self.assertIs(EventsViewMixin.clean_fetch_kwargs, clean_fetch_kwargs)
+        self.assertNoUnknownKeys()

@@ -78,6 +78,9 @@ class IncidentUpdate(NamedTuple):
 
 
 class Incident(models.Model):
+    # match the key the incident events already use
+    linked_objects_key = "incident"
+
     incident_type = models.CharField(max_length=256)
     key = models.JSONField()
     severity = models.PositiveIntegerField(choices=Severity.choices())
@@ -156,6 +159,9 @@ class Incident(models.Model):
 
 
 class MachineIncident(models.Model):
+    # match the key the incident events already use
+    linked_objects_key = "machine_incident"
+
     incident = models.ForeignKey(Incident, on_delete=models.CASCADE)
     serial_number = models.TextField(db_index=True)
     status = models.CharField(max_length=64, choices=Status.choices())

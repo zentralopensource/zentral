@@ -185,53 +185,53 @@ class BaseTestStore(object):
 
     def test_fetch_object_events_cursor(self):
         for i in range(5):
-            event = make_event(idx=i, objects={"yolo": [("fomo",)]})
+            event = make_event(idx=i, objects={"osquery_pack": [("fomo",)]})
             self.store.store(event)
-            event = make_event(idx=i, objects={"fomo": [("yolo",)]})
+            event = make_event(idx=i, objects={"osquery_query": [("yolo",)]})
             self.store.store(event)
         l, cursor = self.store.fetch_object_events(
-            "yolo", encode_args(("fomo",)),
+            "osquery_pack", encode_args(("fomo",)),
             from_dt=get_from_dt(), limit=2
         )
         self.assertEqual(len(l), 2)
         self.assertEqual(l[0].payload['idx'], 4)
-        self.assertEqual(l[0].metadata.objects, {'yolo': [['fomo']]})
+        self.assertEqual(l[0].metadata.objects, {'osquery_pack': [['fomo']]})
         self.assertEqual(l[1].payload['idx'], 3)
-        self.assertEqual(l[1].metadata.objects, {'yolo': [['fomo']]})
+        self.assertEqual(l[1].metadata.objects, {'osquery_pack': [['fomo']]})
         l2, cursor = self.store.fetch_object_events(
-            "yolo", encode_args(("fomo",)),
+            "osquery_pack", encode_args(("fomo",)),
             from_dt=get_from_dt(), limit=2, cursor=cursor
         )
         self.assertEqual(len(l2), 2)
         self.assertEqual(l2[0].payload['idx'], 2)
-        self.assertEqual(l2[0].metadata.objects, {'yolo': [['fomo']]})
+        self.assertEqual(l2[0].metadata.objects, {'osquery_pack': [['fomo']]})
         self.assertEqual(l2[1].payload['idx'], 1)
-        self.assertEqual(l2[1].metadata.objects, {'yolo': [['fomo']]})
+        self.assertEqual(l2[1].metadata.objects, {'osquery_pack': [['fomo']]})
 
     def test_fetch_object_events_type_to_dt(self):
         to_dt = None
         for i in range(3):
-            event = make_event(idx=i, first_type=i >= 1, objects={"yolo2": [("fomo2",)]})
+            event = make_event(idx=i, first_type=i >= 1, objects={"osquery_configuration": [("fomo2",)]})
             if i == 2:
                 to_dt = event.metadata.created_at
             self.store.store(event)
         l, _ = self.store.fetch_object_events(
-            "yolo2", encode_args(("fomo2",)),
+            "osquery_configuration", encode_args(("fomo2",)),
             event_type="event_type_1",
             from_dt=get_from_dt(), to_dt=to_dt,
         )
         self.assertEqual(len(l), 1)
         self.assertEqual(l[0].payload['idx'], 1)
-        self.assertEqual(l[0].metadata.objects, {'yolo2': [['fomo2']]})
+        self.assertEqual(l[0].metadata.objects, {'osquery_configuration': [['fomo2']]})
 
     # get aggregated object event counts
 
     def test_get_aggregated_object_event_counts(self):
         for i in range(5):
-            event = make_event(idx=i, first_type=i < 3, objects={"yolo3": [("fomo3",)]})
+            event = make_event(idx=i, first_type=i < 3, objects={"osquery_enrollment": [("fomo3",)]})
             self.store.store(event)
         types_d = self.store.get_aggregated_object_event_counts(
-            "yolo3", encode_args(("fomo3",)),
+            "osquery_enrollment", encode_args(("fomo3",)),
             from_dt=get_from_dt(), to_dt=get_to_dt(),
         )
         self.assertEqual(types_d['event_type_1'], 3)

@@ -310,7 +310,7 @@ class PkgInfoName(models.Model):
     def serialize_for_event(self):
         return {"pk": self.pk, "name": self.name, "created_at": self.created_at.isoformat()}
 
-    # TODO: reevaluate for backward compatibility
+    # a munki report knows the name of a package, not a pk: this is the key its events share.
     def linked_objects_keys_for_event(self):
         return {"munki_pkginfo_name": ((self.name,),)}
 

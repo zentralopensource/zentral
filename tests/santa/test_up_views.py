@@ -260,7 +260,7 @@ class SantaSetupViewsTestCase(TestCase):
         self.assertEqual(event1.payload["votes"][0]["weight"], 1)
         self.assertEqual(
             event1.metadata.serialize()["objects"],
-            {"metabundle": [f'sha256|{self.metabundle_sha256}'],
+            {"santa_meta_bundle": [f'sha256|{self.metabundle_sha256}'],
              "realm_user": [str(self.realm_user.pk)],
              "santa_configuration": [str(self.configuration.pk)]}
         )
@@ -286,7 +286,7 @@ class SantaSetupViewsTestCase(TestCase):
         )
         self.assertEqual(
             event2.metadata.serialize()["objects"],
-            {"metabundle": [f'sha256|{self.metabundle_sha256}'],
+            {"santa_meta_bundle": [f'sha256|{self.metabundle_sha256}'],
              "santa_configuration": [str(self.configuration.pk)]}
         )
 

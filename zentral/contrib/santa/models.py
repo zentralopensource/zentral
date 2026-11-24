@@ -1669,6 +1669,9 @@ class Vote(models.Model):
 
 
 class RuleSet(models.Model):
+    # match the key the rule set events already use, until this deprecated model is removed
+    linked_objects_key = "santa_ruleset"
+
     name = models.CharField(max_length=256, unique=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

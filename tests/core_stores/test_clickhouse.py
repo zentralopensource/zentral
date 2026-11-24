@@ -306,18 +306,18 @@ class TestClickHouseStore(TestCase):
         probe = Probe(probe_source)
         event.metadata.add_probe(probe)
         event.metadata.machine_serial_number = "0123456789"
-        event.metadata.add_objects({"fomo": [["a"]], "yolo": [["un", "deux"], ["trois", "quatre"]]})
+        event.metadata.add_objects({"osquery_pack": [["a"]], "tag": [["un", "deux"], ["trois", "quatre"]]})
         self.assertEqual(
             self.get_store()._serialize_event(event),
             ((str(event.metadata.uuid), 0),
              (event.metadata.created_at.isoformat(),
               'zentral_login',
               ['zentral'],
-              ['_s:0123456789', '_o:fomo:a', '_o:yolo:un|deux', '_o:yolo:trois|quatre', f'_p:{probe.pk}'],
+              ['_s:0123456789', '_o:osquery_pack:a', '_o:tag:un|deux', '_o:tag:trois|quatre', f'_p:{probe.pk}'],
               '0123456789',
               f'{{"id": "{event.metadata.uuid}", "index": 0, "namespace": '
               f'"zentral", "probes": [{{"pk": {probe.pk}, "name": "{probe.name}"}}], '
-              '"machine_serial_number": "0123456789", "objects": {"fomo": ["a"], "yolo": '
+              '"machine_serial_number": "0123456789", "objects": {"osquery_pack": ["a"], "tag": '
               '["un|deux", "trois|quatre"]}}',
               f'{{"user": {{"username": "{username}"}}}}'))
         )

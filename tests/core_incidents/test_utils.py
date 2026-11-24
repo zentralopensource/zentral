@@ -19,7 +19,7 @@ class TestEvent(BaseEvent):
     event_type = "test_event"
 
     def get_linked_objects_keys(self):
-        return {"yolo": [(17,)]}
+        return {"osquery_pack": [(17,)]}
 
 
 class IncidentTestCase(TestCase):
@@ -44,12 +44,12 @@ class IncidentTestCase(TestCase):
         incident = Incident.objects.get(pk=event.payload["pk"])
         self.assertEqual(
             event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(incident.pk,)]}
         )
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(incident.pk,)]}  # copied from the incident event
         )
         self.assertEqual(incident.incident_type, incident_type)
@@ -88,12 +88,12 @@ class IncidentTestCase(TestCase):
         self.assertIsInstance(event, IncidentSeverityUpdatedEvent)
         self.assertEqual(
             event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)]}
         )
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(existing_incident.pk,)]}  # copied from the incident event
         )
         self.assertEqual(event.payload["pk"], existing_incident.pk)
@@ -125,12 +125,12 @@ class IncidentTestCase(TestCase):
         self.assertIsInstance(event, IncidentStatusUpdatedEvent)
         self.assertEqual(
             event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)]}
         )
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(existing_incident.pk,)]}  # copied from the incident event
         )
         self.assertEqual(event.payload["pk"], existing_incident.pk)
@@ -223,7 +223,7 @@ class IncidentTestCase(TestCase):
         self.assertIsInstance(machine_incident_event, MachineIncidentStatusUpdatedEvent)
         self.assertEqual(
             machine_incident_event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(existing_machine_incident.pk,)]}
         )
@@ -238,7 +238,7 @@ class IncidentTestCase(TestCase):
         self.assertIsInstance(incident_event, IncidentStatusUpdatedEvent)
         self.assertEqual(
             incident_event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)]}
         )
         self.assertEqual(incident_event.payload["pk"], existing_incident.pk)
@@ -249,7 +249,7 @@ class IncidentTestCase(TestCase):
 
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(existing_machine_incident.pk,)]}
         )
@@ -283,13 +283,13 @@ class IncidentTestCase(TestCase):
         self.assertIsInstance(machine_incident_event, MachineIncidentStatusUpdatedEvent)
         self.assertEqual(
             machine_incident_event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(existing_machine_incident.pk,)]}
         )
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(existing_machine_incident.pk,)]}
         )
@@ -354,13 +354,13 @@ class IncidentTestCase(TestCase):
         self.assertEqual(event.payload["machine_incident"]["pk"], machine_incident.pk)
         self.assertEqual(
             event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(machine_incident.pk,)]}
         )
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(machine_incident.pk,)]}
         )
@@ -391,7 +391,7 @@ class IncidentTestCase(TestCase):
         self.assertIsInstance(incident_event, IncidentSeverityUpdatedEvent)
         self.assertEqual(
             incident_event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)]}
         )
         self.assertEqual(incident_event.payload["previous_severity"], Severity.MAJOR.value)
@@ -408,7 +408,7 @@ class IncidentTestCase(TestCase):
                          machine_incident.pk)
         self.assertEqual(
             machine_incident_event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(machine_incident.pk,)]}
         )
@@ -416,7 +416,7 @@ class IncidentTestCase(TestCase):
                                                         incident__key=key).count(), 2)
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(existing_incident.pk,)],
              "machine_incident": [(machine_incident.pk,)]}
         )
@@ -446,7 +446,7 @@ class IncidentTestCase(TestCase):
         new_incident = Incident.objects.get(pk=incident_event.payload["pk"])
         self.assertEqual(
             incident_event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(new_incident.pk,)]}
         )
         self.assertEqual(new_incident.incident_type, incident_type)
@@ -465,7 +465,7 @@ class IncidentTestCase(TestCase):
                                                            serial_number="12345678")
         self.assertEqual(
             machine_incident_event.metadata.objects,
-            {"yolo": [(17,)],  # copied from the original event
+            {"osquery_pack": [(17,)],  # copied from the original event
              "incident": [(new_incident.pk,)],
              "machine_incident": [(new_machine_incident.pk,)]}
         )
@@ -477,7 +477,7 @@ class IncidentTestCase(TestCase):
                                                         incident__key=key).count(), 2)
         self.assertEqual(
             original_event.metadata.objects,
-            {"yolo": [(17,)],
+            {"osquery_pack": [(17,)],
              "incident": [(new_incident.pk,)],
              "machine_incident": [(new_machine_incident.pk,)]}
         )

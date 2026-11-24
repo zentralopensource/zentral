@@ -6,6 +6,9 @@ from django.db.models.signals import post_delete, post_save
 from django.test.runner import DiscoverRunner, ParallelTestSuite, RemoteTestResult, RemoteTestRunner
 from django.test.utils import override_settings
 
+from .linked_objects_keys import (FailOnUnknownLinkedObjectsKeysMixin, LinkedObjectsKeysCheck, class_name,
+                                  report_unknown_keys_outside_tests)
+
 
 # Python 3.14 starts the processes with forkserver on Linux, and the Django test runner
 # runs the tests in parallel only with fork or spawn. The test command imports this module
@@ -86,11 +89,12 @@ class ClearCachesBeforeEachTestMixin:
         super().startTest(test)
 
 
-class ZentralTextTestResult(ClearCachesBeforeEachTestMixin, unittest.TextTestResult):
+class ZentralTextTestResult(ClearCachesBeforeEachTestMixin, FailOnUnknownLinkedObjectsKeysMixin,
+                            unittest.TextTestResult):
     pass
 
 
-class ZentralRemoteTestResult(ClearCachesBeforeEachTestMixin, RemoteTestResult):
+class ZentralRemoteTestResult(ClearCachesBeforeEachTestMixin, FailOnUnknownLinkedObjectsKeysMixin, RemoteTestResult):
     pass
 
 
@@ -103,12 +107,35 @@ class ZentralParallelTestSuite(ParallelTestSuite):
 
 
 class ZentralTestSuite(unittest.TestSuite):
+    def _handleModuleFixture(self, test, result):
+        new_module = test.__class__.__module__ != self._get_previous_module(result)
+        super()._handleModuleFixture(test, result)
+        if new_module:
+            report_unknown_keys_outside_tests(result, f"in setUpModule of {test.__class__.__module__}")
+
+    def _handleModuleTearDown(self, result):
+        previous_module = self._get_previous_module(result)
+        super()._handleModuleTearDown(result)
+        if previous_module is not None:
+            # also the module cleanups
+            report_unknown_keys_outside_tests(result, f"in tearDownModule of {previous_module}")
+
     def _handleClassSetUp(self, test, result):
         # The setup of a class runs after the rollback of the class before it, and with --parallel,
         # the test classes that run before this one change from run to run.
-        if test.__class__ != getattr(result, "_previousTestClass", None):
+        new_class = test.__class__ != getattr(result, "_previousTestClass", None)
+        if new_class:
             clear_caches()
         super()._handleClassSetUp(test, result)
+        if new_class:
+            report_unknown_keys_outside_tests(result, f"in setUpClass of {class_name(test.__class__)}")
+
+    def _tearDownPreviousClass(self, test, result):
+        previous_class = getattr(result, "_previousTestClass", None)
+        super()._tearDownPreviousClass(test, result)
+        if previous_class is not None and previous_class != test.__class__:
+            # also the Django teardown of the last test of the class, which runs after its stopTest
+            report_unknown_keys_outside_tests(result, f"after the tests of {class_name(previous_class)}")
 
 
 class ZentralTestRunner(DiscoverRunner):
@@ -121,8 +148,11 @@ class ZentralTestRunner(DiscoverRunner):
         self._fast_password_hashers.enable()
         setup_caches()
         set_force_index_refresh(True)
+        self._linked_objects_keys_check = LinkedObjectsKeysCheck()
+        self._linked_objects_keys_check.enable()
 
     def teardown_test_environment(self, **kwargs):
+        self._linked_objects_keys_check.disable()
         set_force_index_refresh(False)
         teardown_caches()
         self._fast_password_hashers.disable()
@@ -132,7 +162,9 @@ class ZentralTestRunner(DiscoverRunner):
         resultclass = super().get_resultclass()
         if resultclass is None:
             return ZentralTextTestResult
-        return type(f"Zentral{resultclass.__name__}", (ClearCachesBeforeEachTestMixin, resultclass), {})
+        return type(f"Zentral{resultclass.__name__}",
+                    (ClearCachesBeforeEachTestMixin, FailOnUnknownLinkedObjectsKeysMixin, resultclass),
+                    {})
 
     def setup_databases(self, **kwargs):
         # With --keepdb, Django keeps a clone that exists, and does not migrate it.

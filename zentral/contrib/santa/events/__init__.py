@@ -211,6 +211,14 @@ class SantaRuleSetUpdateEvent(RuleSetEventMixin, ConfigurationEventMixin, BaseEv
 register_event_type(SantaRuleSetUpdateEvent)
 
 
+SHA256_TARGET_KEYS = {
+    Target.Type.BINARY: "file",
+    Target.Type.BUNDLE: "santa_bundle",
+    Target.Type.CERTIFICATE: "certificate",
+    Target.Type.METABUNDLE: "santa_meta_bundle",
+}
+
+
 class TargetEventMixin:
     target_attrs = ("target",)
 
@@ -243,11 +251,7 @@ class TargetEventMixin:
         else:
             sha256 = target.get("sha256")
             if sha256:
-                if target_type == Target.Type.BINARY:
-                    key_attr = "file"
-                else:
-                    key_attr = target_type.name.lower()
-                keys.setdefault(key_attr, []).append(("sha256", sha256))
+                keys.setdefault(SHA256_TARGET_KEYS[target_type], []).append(("sha256", sha256))
 
     def get_linked_objects_keys(self):
         keys = super().get_linked_objects_keys()

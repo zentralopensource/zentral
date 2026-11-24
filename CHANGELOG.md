@@ -214,6 +214,14 @@ If you manage your own deployment, add rules to the bucket. Zentral does not del
 
 ### Backward incompatibilities
 
+#### 🧨 Realm user and Santa bundle event object keys
+
+The `zentral_audit` events of the realm group members linked the realm user under the `realms_realm_user` key, and the Santa events under the `realm_user` key, so a search found one half of the events only. The two use `realm_user` now. Update a probe or a query that filters on `realms_realm_user`.
+
+The Santa events link a bundle target under the `santa_bundle` key now, not under `bundle`, and a metabundle target under the `santa_meta_bundle` key, not under `metabundle`. Update a probe or a query that filters on `bundle` or `metabundle`.
+
+No backfill is necessary: the stored events keep the old keys, and they disappear with the retention of the event store.
+
 #### 🧨 The enrollment secrets have their own PBAC actions
 
 The secret of an enrollment is read with a typed PBAC action on the enrollment, at the user level: `viewEnrollmentSecret` in Santa, Osquery, Munki, Monolith and Turbo, and `viewOTAEnrollmentSecret`, `viewDEPEnrollmentSecret` and `viewUserEnrollmentSecret` in MDM. The enrollment is a member of the meta business unit of its secret. The read-only roles do not get these actions: the `ViewerActions` groups do not have them.

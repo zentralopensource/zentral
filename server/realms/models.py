@@ -211,6 +211,9 @@ class RealmGroup(models.Model):
 
 
 class RealmUser(models.Model):
+    # match the key the Santa events already use
+    linked_objects_key = "realm_user"
+
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
     realm = models.ForeignKey(Realm, on_delete=models.PROTECT)
 

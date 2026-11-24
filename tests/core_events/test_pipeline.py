@@ -100,9 +100,9 @@ class EnrichEventMetaBusinessUnitsTestCase(TestCase):
 
 class EventMetadataAddObjectsTestCase(TestCase):
     def test_add_objects_compares_the_encoded_args(self):
-        metadata = EventMetadata(objects={"yolo": [["17", "42"], ["11"]]})
-        metadata.add_objects({"yolo": [(17, 42), (11,), (12,), (12,)], "fomo": [(1,)]})
-        self.assertEqual(metadata.objects, {"yolo": [["17", "42"], ["11"], (12,)], "fomo": [(1,)]})
+        metadata = EventMetadata(objects={"osquery_pack": [["17", "42"], ["11"]]})
+        metadata.add_objects({"osquery_pack": [(17, 42), (11,), (12,), (12,)], "osquery_query": [(1,)]})
+        self.assertEqual(metadata.objects, {"osquery_pack": [["17", "42"], ["11"], (12,)], "osquery_query": [(1,)]})
 
 
 class EnrichEventGeoTestCase(TestCase):

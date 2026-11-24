@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.utils.crypto import get_random_string
 
 from zentral.contrib.santa.events import (
+    SHA256_TARGET_KEYS,
     EventMetadata,
     SantaBallotEvent,
     SantaEnrollmentEvent,
@@ -489,6 +490,9 @@ class SantaEventTestCase(TestCase):
              "file": [("sha256", "e699f8aad9c46505531b174f3868ff05de5dddae5d2eef5c3da65a6bac7d2210")]}
         )
 
+    def test_each_sha256_target_type_has_a_linked_objects_key(self):
+        self.assertEqual(set(SHA256_TARGET_KEYS), {t for t in Target.Type if t.has_sha256_identifier})
+
     def test_bundle_rule_update_linked_objects(self):
         event_d = {
             'result': 'updated',
@@ -512,7 +516,7 @@ class SantaEventTestCase(TestCase):
         self.assertEqual(
             event.get_linked_objects_keys(),
             {"santa_configuration": [(1,)],
-             "bundle": [("sha256", "e699f8aad9c46505531b174f3868ff05de5dddae5d2eef5c3da65a6bac7d2210")]}
+             "santa_bundle": [("sha256", "e699f8aad9c46505531b174f3868ff05de5dddae5d2eef5c3da65a6bac7d2210")]}
         )
 
     def test_cdhash_rule_update_linked_objects(self):
