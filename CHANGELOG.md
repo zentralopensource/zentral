@@ -20,6 +20,8 @@ Zentral emits a `zentral_audit` event for each change in the console of a realm 
 
 Zentral emits a `zentral_password_reset_request` event for each password reset request, and a `zentral_password_change` event for each password change, with the old password or with a reset link. Before, only the logins left a trace, and a password reset link opens a local account.
 
+The grammar of ZQL, the Zentral query language for events, is in `zentral/core/zql/grammar.lark`. It is a Lark grammar, and the development documentation publishes it with its precedence and lexical rules. No endpoint runs ZQL queries yet. `lark` is a direct dependency now, at the version that `cel-python` already installs.
+
 
 #### Documentation
 

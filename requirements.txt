@@ -22,6 +22,7 @@ ipython
 jmespath                        # inventory compliance checks
 jinja2                          # events templates
 kombu<6                         # events queues
+lark                            # ZQL grammar
 msgraph-sdk
 opensearch-py<4
 prometheus_client               # publish prometheus metrics

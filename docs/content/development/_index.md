@@ -9,3 +9,4 @@ This section of the documentation contains pages with resources for Zentral deve
  * [Secure coding notes](secure-coding.md)
  * [PBAC rules for views and endpoints](pbac-rules.md)
  * [`ee/` split](ee-split.md)
+ * [ZQL grammar](zql-grammar.md)
