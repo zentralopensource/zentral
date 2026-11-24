@@ -92,6 +92,14 @@ class ConnectionsModelsTestCase(TestCase):
             self.assertIsNone(connection.get_user_info())
             encrypt_str.assert_not_called()
 
+    def test_connection_rewrap_secrets_without_user_info(self):
+        connection = self._given_connection(user_info=None)
+        self.assertIsNone(connection.user_info)
+        client_config = connection.get_client_config()
+        connection.rewrap_secrets()
+        self.assertIsNone(connection.user_info)
+        self.assertEqual(connection.get_client_config(), client_config)
+
     def test_connection_rewrap_secrets(self):
         # Given
         connection = self._given_connection()

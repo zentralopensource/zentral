@@ -68,7 +68,8 @@ class Connection(models.Model):
 
     def rewrap_secrets(self):
         self.client_config = rewrap(self.client_config, **self._get_secret_engine_kwargs("client_config"))
-        self.user_info = rewrap(self.user_info, **self._get_secret_engine_kwargs("user_info"))
+        if self.user_info:
+            self.user_info = rewrap(self.user_info, **self._get_secret_engine_kwargs("user_info"))
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": str(self.pk), "name": self.name}
