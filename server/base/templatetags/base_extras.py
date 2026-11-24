@@ -145,6 +145,13 @@ def jsonprettyprint(val):
     return mark_safe(highlight(s, lexer, formatter))
 
 
+@register.filter()
+def zshhighlight(val):
+    lexer = lexers.get_lexer_by_name('zsh', stripnl=False)
+    formatter = HtmlFormatter(cssclass="highlight scrolleable")
+    return mark_safe(highlight(val or "", lexer, formatter))
+
+
 @register.tag(name="codeexample")
 def do_code_example(parser, token):
     try:

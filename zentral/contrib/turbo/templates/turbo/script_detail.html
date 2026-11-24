@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load ui_extras %}
+{% load base_extras ui_extras %}
 {% load inventory_extras %}
 
 {% block content %}
@@ -28,13 +28,13 @@
     <div class="table-responsive mb-3">
     <table class="table-object-properties table-fixed-scrolleable">
     <thead>
-        <th style="width:30vw">Attribute</th>
+        <th style="width:max(10vw, 7rem)">Attribute</th>
         <th>Value</th>
     </thead>
     <tbody>
         <tr><td>Name</td><td>{{ object.name }}</td></tr>
         <tr><td>Description</td><td>{{ object.description|default:"-"|linebreaksbr }}</td></tr>
-        <tr><td>Source</td><td><pre class="scrolleable mb-0">{{ object.source }}</pre></td></tr>
+        <tr><td>Source</td><td>{{ object.source|zshhighlight }}</td></tr>
         <tr><td>Run on Intel architecture</td><td>{{ object.arch_amd64|yesno }}</td></tr>
         <tr><td>Run on Apple Silicon architecture</td><td>{{ object.arch_arm64|yesno }}</td></tr>
         <tr><td>Minimum OS version</td><td>{{ object.min_os_version|default:"-" }}</td></tr>

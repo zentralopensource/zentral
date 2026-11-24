@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load inventory_extras ui_extras %}
+{% load base_extras inventory_extras ui_extras %}
 
 {% block content %}
 <ol class="breadcrumb">
@@ -57,9 +57,7 @@
             </tr>
             <tr>
             <td>Source</td>
-                <td>
-                    <pre class="scrolleable">{{ object.source }}</pre>
-                </td>
+            <td>{{ object.source|zshhighlight }}</td>
             </tr>
             <tr>
             <td>Expected result</td>

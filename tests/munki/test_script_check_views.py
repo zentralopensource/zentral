@@ -341,6 +341,15 @@ class MunkiScriptCheckViewsTestCase(TestCase, LoginCase):
         response = self.client.get(reverse("munki:script_check", args=(sc.pk,)))
         self.assertEqual(response.status_code, 403)
 
+    def test_view_script_check_source_highlighted_and_escaped(self):
+        sc = force_script_check(source='echo "<b>ok</b>"  # yolo')
+        self.login("munki.view_scriptcheck")
+        response = self.client.get(reverse("munki:script_check", args=(sc.pk,)))
+        self.assertContains(response, '<div class="highlight scrolleable"><pre>')
+        self.assertContains(response, '<span class="c1"># yolo</span>')
+        self.assertContains(response, "&lt;b&gt;ok&lt;/b&gt;")
+        self.assertNotContains(response, "<b>ok</b>")
+
     def test_view_script_check_no_links(self):
         sc = force_script_check()
         self.login("munki.view_scriptcheck")
