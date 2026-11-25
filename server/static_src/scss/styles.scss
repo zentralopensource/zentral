@@ -186,7 +186,8 @@ table.table-app-instances {
     }
 }
 
-pre.scrolleable {
+pre.scrolleable,
+.highlight.scrolleable pre {
     overflow-x: scroll;
     padding-bottom: 2em;
 }

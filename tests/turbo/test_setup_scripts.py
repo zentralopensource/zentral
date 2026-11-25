@@ -106,6 +106,24 @@ class TurboSetupScriptsTestCase(TurboSetupTestCase):
         self.assertTemplateUsed(response, "turbo/script_detail.html")
         self.assertContains(response, script.name)
 
+    def test_script_detail_source_highlighted_and_escaped(self):
+        script = force_script(source='echo "<b>ok</b>"  # yolo')
+        self.login("turbo.view_script")
+        response = self.client.get(script.get_absolute_url())
+        self.assertContains(response, '<div class="highlight scrolleable"><pre>')
+        self.assertContains(response, '<span class="c1"># yolo</span>')
+        self.assertContains(response, "&lt;b&gt;ok&lt;/b&gt;")
+        self.assertNotContains(response, "<b>ok</b>")
+
+    def test_script_detail_source_keeps_blank_lines(self):
+        script = force_script(source="\n\necho ok\n\n\n")
+        self.login("turbo.view_script")
+        response = self.client.get(script.get_absolute_url())
+        self.assertContains(
+            response,
+            '<pre><span></span>\n\n<span class="nb">echo</span><span class="w"> </span>ok\n\n\n</pre>'
+        )
+
     def test_script_detail_lists_jobs(self):
         configuration = force_configuration()
         script = force_script()
