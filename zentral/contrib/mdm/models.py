@@ -897,6 +897,9 @@ class Asset(models.Model):
 
 
 class LocationAsset(models.Model):
+    # Apple gives the free apps an unlimited number of licenses, with this total count
+    UNLIMITED_COUNT = 2147483647
+
     count_attrs = (
         "assigned_count",
         "available_count",
@@ -936,7 +939,12 @@ class LocationAsset(models.Model):
                 d[attr] = getattr(self, attr)
         return d
 
+    def is_unlimited(self):
+        return self.total_count == self.UNLIMITED_COUNT
+
     def get_availability_incident_severity(self):
+        if self.is_unlimited():
+            return Severity.NONE
         if self.total_count > 0:
             incident_update_severity = Severity.NONE
             availability_perc = self.available_count / self.total_count

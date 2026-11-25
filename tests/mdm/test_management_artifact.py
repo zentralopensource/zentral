@@ -6,7 +6,7 @@ from django.utils.crypto import get_random_string
 
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
-from zentral.contrib.mdm.models import Artifact, Platform
+from zentral.contrib.mdm.models import Artifact, LocationAsset, Platform
 from .utils import force_artifact, force_blueprint_artifact
 
 
@@ -193,6 +193,30 @@ class ArtifactManagementViewsTestCase(TestCase, LoginCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/artifact_detail.html")
         self.assertContains(response, reverse("mdm:upgrade_store_app", args=(artifact.pk,)))
+
+    def test_artifact_get_store_app_counts(self):
+        artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.STORE_APP)
+        location_asset = artifact_version.store_app.location_asset
+        location_asset.available_count = 12345
+        location_asset.total_count = 67890
+        location_asset.save()
+        self.login("mdm.view_artifact")
+        response = self.client.get(reverse("mdm:artifact", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "12345")
+        self.assertContains(response, "67890")
+        self.assertNotContains(response, "unlimited")
+
+    def test_artifact_get_store_app_unlimited_counts(self):
+        artifact, (artifact_version,) = force_artifact(artifact_type=Artifact.Type.STORE_APP)
+        location_asset = artifact_version.store_app.location_asset
+        location_asset.available_count = location_asset.total_count = LocationAsset.UNLIMITED_COUNT
+        location_asset.save()
+        self.login("mdm.view_artifact")
+        response = self.client.get(reverse("mdm:artifact", args=(artifact.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "unlimited", count=2)
+        self.assertNotContains(response, str(LocationAsset.UNLIMITED_COUNT))
 
     # update artifact
 

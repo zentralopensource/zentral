@@ -205,6 +205,28 @@ class AssetManagementViewsTestCase(TestCase, LoginCase):
         self.assertNotContains(response, "No artifacts found for this asset.")
         self.assertContains(response, artifact.name)
 
+    def test_asset_with_counts(self):
+        location_asset = self._force_location_asset()
+        location_asset.available_count = 12345
+        location_asset.total_count = 67890
+        location_asset.save()
+        self.login("mdm.view_asset")
+        response = self.client.get(reverse("mdm:asset", args=(location_asset.asset.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<td>12345</td>")
+        self.assertContains(response, "<td>67890</td>")
+        self.assertNotContains(response, "unlimited")
+
+    def test_asset_with_unlimited_counts(self):
+        location_asset = self._force_location_asset()
+        location_asset.available_count = location_asset.total_count = LocationAsset.UNLIMITED_COUNT
+        location_asset.save()
+        self.login("mdm.view_asset")
+        response = self.client.get(reverse("mdm:asset", args=(location_asset.asset.pk,)))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<td>unlimited</td>", count=2)
+        self.assertNotContains(response, str(LocationAsset.UNLIMITED_COUNT))
+
     # associate_location_asset
 
     def test_associate_location_asset_permission_denied(self):

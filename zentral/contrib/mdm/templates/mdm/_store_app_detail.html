@@ -35,7 +35,7 @@
       </tr>
       <tr>
         <th style="padding:0 5px 5px 0">available</th>
-        <td style="padding:0 5px 5px 0">{{ location_asset.available_count }}</td>
+        <td style="padding:0 5px 5px 0">{% if location_asset.is_unlimited %}unlimited{% else %}{{ location_asset.available_count }}{% endif %}</td>
       </tr>
       <tr>
         <th style="padding:0 5px 5px 0">retired</th>
@@ -43,7 +43,7 @@
       </tr>
       <tr>
         <th style="padding:0 5px 5px 0">total</th>
-        <td style="padding:0 5px 5px 0">{{ location_asset.total_count }}</td>
+        <td style="padding:0 5px 5px 0">{% if location_asset.is_unlimited %}unlimited{% else %}{{ location_asset.total_count }}{% endif %}</td>
       </tr>
     </table>
   </td>

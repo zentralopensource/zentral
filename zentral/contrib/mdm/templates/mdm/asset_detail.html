@@ -100,9 +100,9 @@
         {% endif %}
       </td>
       <td>{{ location_asset.assigned_count }}</td>
-      <td>{{ location_asset.available_count }}</td>
+      <td>{% if location_asset.is_unlimited %}unlimited{% else %}{{ location_asset.available_count }}{% endif %}</td>
       <td>{{ location_asset.retired_count }}</td>
-      <td>{{ location_asset.total_count }}</td>
+      <td>{% if location_asset.is_unlimited %}unlimited{% else %}{{ location_asset.total_count }}{% endif %}</td>
       <td>
         {% if perms.mdm.change_locationasset and perms.mdm.view_depvirtualserver %}
         <a href="{% url 'mdm:associate_location_asset' location_asset.asset.pk location_asset.pk %}">

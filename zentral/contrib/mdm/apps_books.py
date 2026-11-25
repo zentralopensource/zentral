@@ -27,12 +27,15 @@ from .events import (
     LocationAssetUpdatedEvent,
 )
 from .incidents import MDMAssetAvailabilityIncident
-from .models import Asset, DEPDevice, Location, LocationAsset
+from .models import Asset, DEPDevice, Location, LocationAsset, hash_location_notification_auth_token
 
 logger = logging.getLogger("zentral.contrib.mdm.apps_books")
 
 
 BATCH_DB_OPS_SIZE = 5000
+
+
+NOTIFICATION_TYPES = ("ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET")
 
 
 # API client
@@ -64,7 +67,8 @@ class AppsBooksClient:
         location_name=None,
         platform=None,
         country_code=None,
-        location=None
+        location=None,
+        respect_retry_after_header=True,
     ):
         self.server_token = server_token
         self.session = requests.Session()
@@ -72,7 +76,7 @@ class AppsBooksClient:
             "User-Agent": deployment_info.user_agent,
             "Authorization": "Bearer " + server_token
         })
-        adapter = CustomHTTPAdapter(self.timeout, self.retries)
+        adapter = CustomHTTPAdapter(self.timeout, self.retries, respect_retry_after_header=respect_retry_after_header)
         self.session.mount("https://", adapter)
         self.mdm_info_id = mdm_info_id
         self.location_name = location_name
@@ -139,11 +143,27 @@ class AppsBooksClient:
 
     # client config
 
-    def get_client_config(self):
-        return self.make_request("client/config", verify_mdm_info=True)
+    def get_client_config(self, verify_mdm_info=True):
+        return self.make_request("client/config", verify_mdm_info=verify_mdm_info)
 
-    def update_client_config(self, notification_auth_token):
+    def get_notification_url(self):
+        return "https://{}{}".format(
+            settings["api"]["webhook_fqdn"],
+            reverse("mdm_public:notify_location", args=(self.mdm_info_id,))
+        )
+
+    def get_notification_types(self):
+        notification_types = set(NOTIFICATION_TYPES)
+        # Apple adds notification types without notice, so Zentral subscribes to all of them
+        supported_notification_types = self.get_service_config().get("notificationTypes")
+        if isinstance(supported_notification_types, list):
+            notification_types.update(t for t in supported_notification_types if isinstance(t, str))
+        return sorted(notification_types)
+
+    def update_client_config(self, notification_auth_token, notification_types=None):
         assert self.mdm_info_id is not None and notification_auth_token is not None
+        if notification_types is None:
+            notification_types = self.get_notification_types()
         return self.make_request(
             "client/config",
             json={
@@ -152,11 +172,8 @@ class AppsBooksClient:
                     "metadata": settings["api"]["fqdn"],
                     "name": "Zentral"
                 },
-                "notificationTypes": ["ASSET_MANAGEMENT", "ASSET_COUNT"],
-                "notificationUrl": "https://{}{}".format(
-                    settings["api"]["webhook_fqdn"],
-                    reverse("mdm_public:notify_location", args=(self.mdm_info_id,))
-                ),
+                "notificationTypes": notification_types,
+                "notificationUrl": self.get_notification_url(),
                 "notificationAuthToken": notification_auth_token,
             }
         )
@@ -180,6 +197,9 @@ class AppsBooksClient:
             return response["assets"][0]
         except IndexError:
             pass
+
+    def get_adam_id_assets(self, adam_id):
+        return self.make_request("assets", params={"adamId": adam_id}).get("assets", [])
 
     def iter_assets(self):
         current_version_id = None
@@ -298,6 +318,44 @@ class AppsBooksClient:
             "assets/disassociate",
             json=self.build_manage_assets_request([(asset.adam_id, asset.pricing_param)], [serial_number]),
         )
+
+
+# client config
+
+
+def ensure_client_config(location, client):
+    config = client.get_client_config(verify_mdm_info=False)
+    mdm_info_id = (config.get("mdmInfo") or {}).get("id")
+    if mdm_info_id and mdm_info_id != client.mdm_info_id:
+        logger.error("Location %s: client config of another MDM, not updated", location.name)
+        return False
+    location.refresh_from_db(fields=["notification_auth_token_hash"])
+    notification_auth_token = config.get("notificationAuthToken")
+    token_ok = (
+        isinstance(notification_auth_token, str)
+        and hash_location_notification_auth_token(notification_auth_token) == location.notification_auth_token_hash
+    )
+    if (
+        token_ok
+        and config.get("notificationUrl") == client.get_notification_url()
+        and set(config.get("subscribedNotificationTypes") or []) == set(client.get_notification_types())
+    ):
+        return False
+    if not token_ok:
+        # Apple sends a notification token that Zentral refuses, so a new token loses nothing.
+        current_hash = location.notification_auth_token_hash
+        notification_auth_token = location.set_notification_auth_token()
+        # Only this field, and only if nobody changed it since it was read: another writer can set a new
+        # token, and send it to Apple, between the read and this update.
+        if not Location.objects.filter(
+            pk=location.pk, notification_auth_token_hash=current_hash
+        ).update(notification_auth_token_hash=location.notification_auth_token_hash):
+            logger.warning("Location %s: notification token changed during the check", location.name)
+            location.refresh_from_db(fields=["notification_auth_token_hash"])
+            return False
+    logger.info("Location %s: update client config", location.name)
+    client.update_client_config(notification_auth_token)
+    return True
 
 
 # location cache
@@ -562,8 +620,43 @@ def sync_asset(location, client, adam_id, pricing_param, notification_id):
     yield from _sync_asset_d(location, client, asset_d, notification_id)
 
 
+def _clear_location_asset(location, location_asset, notification_id):
+    with transaction.atomic():
+        collected_objects = {"asset": location_asset.asset}
+        yield from _update_or_create_location_asset(
+            location,
+            {attr: 0 for attr in LocationAsset.count_attrs},
+            notification_id,
+            collected_objects
+        )
+        yield from _update_assignments(location, set(), notification_id, collected_objects)
+
+
+def sync_unlimited_assets(location, client, adam_ids, notification_id):
+    for adam_id in adam_ids:
+        pricing_params = set()
+        for asset_d in client.get_adam_id_assets(adam_id):
+            pricing_params.add(asset_d["pricingParam"])
+            yield from _sync_asset_d(location, client, asset_d, notification_id)
+        # The notification is also sent when an app is removed from the location.
+        # The location asset is kept, because the store apps use it.
+        for location_asset in (location.locationasset_set
+                                       .select_related("asset")
+                                       .filter(asset__adam_id=adam_id)
+                                       .exclude(asset__pricing_param__in=pricing_params)):
+            events = list(_clear_location_asset(location, location_asset, notification_id))
+            if events:
+                logger.info("Location %s: asset %s/%s removed",
+                            location.name, adam_id, location_asset.asset.pricing_param)
+            yield from events
+
+
 def sync_assets(location):
     client = AppsBooksClient.from_location(location)
+    try:
+        ensure_client_config(location, client)
+    except Exception:
+        logger.exception("Location %s: could not check the client config", location.name)
     for asset_d in client.iter_assets():
         for event in _sync_asset_d(location, client, asset_d):
             event.post()

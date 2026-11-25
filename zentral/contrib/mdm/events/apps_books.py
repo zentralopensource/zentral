@@ -36,11 +36,25 @@ class BaseAppsBooksNotificationEvent(BaseAppsBooksEvent):
     tags = ["mdm", "apps_books", "apps_books_notification"]
 
 
+class AppsBooksNotificationEvent(BaseAppsBooksNotificationEvent):
+    event_type = "mdm_apps_books_notification"
+
+
+register_event_type(AppsBooksNotificationEvent)
+
+
 class AssetCountNotificationEvent(BaseAppsBooksNotificationEvent):
     event_type = "mdm_asset_count_notification"
 
 
 register_event_type(AssetCountNotificationEvent)
+
+
+class UnlimitedAssetNotificationEvent(BaseAppsBooksNotificationEvent):
+    event_type = "mdm_unlimited_asset_notification"
+
+
+register_event_type(UnlimitedAssetNotificationEvent)
 
 
 class AssetAssociationEvent(BaseAppsBooksNotificationEvent):

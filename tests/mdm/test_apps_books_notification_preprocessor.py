@@ -9,6 +9,7 @@ from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
 from zentral.contrib.mdm.apps_books import get_otf_association_cache_key
 from zentral.contrib.mdm.events import (
+    AppsBooksNotificationEvent,
     AssetAssociationErrorEvent,
     AssetAssociationEvent,
     AssetCountNotificationEvent,
@@ -17,6 +18,7 @@ from zentral.contrib.mdm.events import (
     AssetRevocationErrorEvent,
     AssetRevocationEvent,
     MDMDeviceNotificationEvent,
+    UnlimitedAssetNotificationEvent,
 )
 from zentral.contrib.mdm.models import Location
 from zentral.contrib.mdm.preprocessors import get_preprocessors
@@ -58,11 +60,121 @@ class MDMAppsBooksNotificationPreprocessorTestCase(TestCase):
         self.assertEqual(len(events), 0)
         logger_error.assert_called_once_with("Missing or bad notification type")
 
-    @patch("zentral.contrib.mdm.preprocessors.logger.warning")
-    def test_unknown_notification_type(self, logger_warning):
-        events = list(self.preprocessor.process_raw_event({"data": {"notificationType": "YOLO"}}))
-        self.assertEqual(len(events), 0)
-        logger_warning.assert_called_once_with("Unknown notification type: %s", "YOLO")
+    def _process_other_notification(self, notification_type, notification):
+        notification_id = str(uuid.uuid4())
+        now = naive_utcnow()
+        events = list(self.preprocessor.process_raw_event({
+            "data": {"notificationType": notification_type,
+                     "notificationId": notification_id,
+                     "uId": "2049025000431439",
+                     "notification": notification},
+            "metadata": {"request": {"user_agent": "yolo", "ip": "127.0.0.1"},
+                         "created_at": now.isoformat()},
+            "location": {"mdm_info_id": str(self.location.mdm_info_id)}
+        }))
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertIsInstance(event, AppsBooksNotificationEvent)
+        self.assertEqual(event.metadata.created_at, now)
+        self.assertEqual(
+            event.payload,
+            {"location": {"pk": self.location.pk, "mdm_info_id": str(self.location.mdm_info_id)},
+             "notification_type": notification_type,
+             "notification": notification,
+             "notification_id": notification_id}
+        )
+        self.assertEqual(event.get_linked_objects_keys(), {"mdm_location": [(self.location.pk,)]})
+
+    @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
+    def test_test_notification(self, location_cache_get):
+        location_cache_get.return_value = self.location, Mock()
+        with self.assertLogs("zentral.contrib.mdm.preprocessors", "INFO") as cm:
+            self._process_other_notification("TEST_NOTIFICATION", {})
+        self.assertEqual(cm.output, ["INFO:zentral.contrib.mdm.preprocessors:"
+                                     f"Location {self.location.name}: test notification"])
+
+    @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
+    def test_unknown_notification_type(self, location_cache_get):
+        location_cache_get.return_value = self.location, Mock()
+        with self.assertLogs("zentral.contrib.mdm.preprocessors", "INFO") as cm:
+            self._process_other_notification("USER_MANAGEMENT", {"un": 2})
+        self.assertEqual(cm.output, ["WARNING:zentral.contrib.mdm.preprocessors:"
+                                     "Unknown notification type: USER_MANAGEMENT"])
+
+    @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
+    @patch("zentral.contrib.mdm.preprocessors.sync_unlimited_assets")
+    def test_unlimited_asset_notification(self, sync_unlimited_assets, location_cache_get):
+        client = Mock()
+        location_cache_get.return_value = self.location, client
+        sync_unlimited_assets.return_value = []
+        notification_id = str(uuid.uuid4())
+        now = naive_utcnow()
+        events = list(self.preprocessor.process_raw_event({
+            "data": {"notificationType": "UNLIMITED_ASSET",
+                     "notificationId": notification_id,
+                     "uId": "2049025000431439",
+                     "notification": {
+                       "adamIds": ["408709785", "377298193"],
+                       "unlimited": True
+                     }},
+            "metadata": {"request": {"user_agent": "yolo", "ip": "127.0.0.1"},
+                         "created_at": now.isoformat()},
+            "location": {"mdm_info_id": str(self.location.mdm_info_id)}
+        }))
+        self.assertEqual(len(events), 2)
+        self.assertNotEqual(events[0].metadata.uuid, events[1].metadata.uuid)
+        for event, adam_id in zip(events, ("408709785", "377298193")):
+            self.assertIsInstance(event, UnlimitedAssetNotificationEvent)
+            self.assertEqual(event.metadata.created_at, now)
+            self.assertEqual(event.metadata.request.ip, "127.0.0.1")
+            self.assertEqual(
+                event.payload,
+                {"asset": {"adam_id": adam_id},
+                 "location": {"pk": self.location.pk, "mdm_info_id": str(self.location.mdm_info_id)},
+                 "unlimited": True,
+                 "notification_id": notification_id}
+            )
+            self.assertEqual(event.get_linked_objects_keys(), {"mdm_location": [(self.location.pk,)]})
+        sync_unlimited_assets.assert_called_once_with(
+            self.location, client, ["408709785", "377298193"], notification_id
+        )
+
+    @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
+    @patch("zentral.contrib.mdm.preprocessors.sync_unlimited_assets")
+    def test_unlimited_asset_notification_missing_unlimited(self, sync_unlimited_assets, location_cache_get):
+        location_cache_get.return_value = self.location, Mock()
+        sync_unlimited_assets.return_value = []
+        events = list(self.preprocessor.process_raw_event({
+            "data": {"notificationType": "UNLIMITED_ASSET",
+                     "notificationId": str(uuid.uuid4()),
+                     "notification": {"adamIds": ["408709785"]}},
+            "metadata": {"request": {"user_agent": "yolo", "ip": "127.0.0.1"},
+                         "created_at": naive_utcnow().isoformat()},
+            "location": {"mdm_info_id": str(self.location.mdm_info_id)}
+        }))
+        self.assertEqual(len(events), 1)
+        self.assertIsNone(events[0].payload["unlimited"])
+        sync_unlimited_assets.assert_called_once()
+
+    @patch("zentral.contrib.mdm.preprocessors.location_cache.get")
+    @patch("zentral.contrib.mdm.preprocessors.sync_unlimited_assets")
+    def test_unlimited_asset_notification_bad_adam_ids(self, sync_unlimited_assets, location_cache_get):
+        location_cache_get.return_value = self.location, Mock()
+        for notification in (None, "yolo", {}, {"adamIds": "408709785"}, {"adamIds": []}, {"adamIds": [408709785]}):
+            data = {"notificationType": "UNLIMITED_ASSET", "notificationId": str(uuid.uuid4())}
+            if notification is not None:
+                data["notification"] = notification
+            with self.assertLogs("zentral.contrib.mdm.preprocessors", "ERROR") as cm:
+                events = list(self.preprocessor.process_raw_event({
+                    "data": data,
+                    "metadata": {"request": {"user_agent": "yolo", "ip": "127.0.0.1"},
+                                 "created_at": naive_utcnow().isoformat()},
+                    "location": {"mdm_info_id": str(self.location.mdm_info_id)}
+                }))
+            self.assertEqual(cm.output, ["ERROR:zentral.contrib.mdm.preprocessors:"
+                                         "Missing or bad UNLIMITED_ASSET adamIds"])
+            self.assertEqual(events, [])
+        sync_unlimited_assets.assert_not_called()
 
     @patch("zentral.contrib.mdm.preprocessors.logger.error")
     def test_missing_or_bad_mdm_info_id(self, logger_error):

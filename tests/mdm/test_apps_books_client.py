@@ -183,11 +183,78 @@ class MDMAppsBooksClientTestCase(TestCase):
         client, _ = self._get_client({"mdmInfo": {"id": "34d87460-aae8-45bb-ae1b-575d5fc91f9b"}}, True)
         self.assertEqual(client.get_client_config(), {"mdmInfo": {"id": "34d87460-aae8-45bb-ae1b-575d5fc91f9b"}})
 
+    def test_get_client_config_no_verify_mdm_info(self):
+        client, _ = self._get_client({"notificationTypes": []}, True)
+        self.assertEqual(client.get_client_config(verify_mdm_info=False), {"notificationTypes": []})
+
     # update_client_config
 
     def test_update_client_config(self):
-        client, _ = self._get_client({"ok": True}, True)
-        client.update_client_config(get_random_string(12))
+        client, location = self._get_client(
+            [{"notificationTypes": ["ASSET_COUNT", "YOLO", 1, "ASSET_MANAGEMENT"]}, {"ok": True}],
+            True
+        )
+        notification_auth_token = get_random_string(12)
+        self.assertEqual(client.update_client_config(notification_auth_token), {"ok": True})
+        client.session.post.assert_called_once()
+        args, kwargs = client.session.post.call_args
+        self.assertEqual(args, ("https://vpp.itunes.apple.com/mdm/v2/client/config",))
+        self.assertEqual(
+            kwargs["json"],
+            {"mdmInfo": {"id": "34d87460-aae8-45bb-ae1b-575d5fc91f9b",
+                         "metadata": "zentral",
+                         "name": "Zentral"},
+             "notificationTypes": ["ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET", "YOLO"],
+             "notificationUrl": "https://zentral/public/mdm/locations/34d87460-aae8-45bb-ae1b-575d5fc91f9b/notify/",
+             "notificationAuthToken": notification_auth_token}
+        )
+
+    def test_update_client_config_notification_types(self):
+        client, location = self._get_client({"ok": True}, True)
+        notification_auth_token = get_random_string(12)
+        self.assertEqual(client.update_client_config(notification_auth_token, ["ASSET_COUNT"]), {"ok": True})
+        client.session.get.assert_not_called()
+        self.assertEqual(client.session.post.call_args.kwargs["json"]["notificationTypes"], ["ASSET_COUNT"])
+
+    # Retry-After
+
+    def test_respect_retry_after_header_default(self):
+        client = AppsBooksClient(get_random_string(12))
+        self.assertTrue(client.session.get_adapter("https://").max_retries.respect_retry_after_header)
+
+    def test_no_respect_retry_after_header(self):
+        client = AppsBooksClient(get_random_string(12), respect_retry_after_header=False)
+        self.assertFalse(client.session.get_adapter("https://").max_retries.respect_retry_after_header)
+
+    # get_notification_types
+
+    def test_get_notification_types_no_supported_types(self):
+        client, _ = self._get_client({"limits": {}}, True)
+        self.assertEqual(client.get_notification_types(), ["ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET"])
+
+    def test_get_notification_types_bad_supported_types(self):
+        client, _ = self._get_client({"notificationTypes": "USER_MANAGEMENT"}, True)
+        self.assertEqual(client.get_notification_types(), ["ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET"])
+
+    def test_get_notification_types(self):
+        client, _ = self._get_client({"notificationTypes": ["USER_MANAGEMENT", "ASSET_COUNT"]}, True)
+        self.assertEqual(
+            client.get_notification_types(),
+            ["ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET", "USER_MANAGEMENT"]
+        )
+
+    # get_adam_id_assets
+
+    def test_get_adam_id_assets(self):
+        client, _ = self._get_client({"assets": [{"adamId": "408709785", "pricingParam": "STDQ"}]}, True)
+        self.assertEqual(client.get_adam_id_assets("408709785"), [{"adamId": "408709785", "pricingParam": "STDQ"}])
+        client.session.get.assert_called_once_with(
+            "https://vpp.itunes.apple.com/mdm/v2/assets", params={"adamId": "408709785"}
+        )
+
+    def test_get_adam_id_assets_no_assets(self):
+        client, _ = self._get_client({"currentPageIndex": 0}, True)
+        self.assertEqual(client.get_adam_id_assets("408709785"), [])
 
     # get_service_config
 

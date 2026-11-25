@@ -343,6 +343,12 @@ To set up *Apps and Books* to work with Zentral, follow these steps:
 
 Content in ASM/ABM *Apps and Books > "AppName" > Manage Licenses* that is assigned or removed from the content token will sync and automatically populate. You will see the total apps and licenses available reflected in Zentral Cloud in the *MDM > Overview > Store apps* section.
 
+Apple gives the free apps an unlimited number of licenses. Zentral shows `unlimited` for the available and total counts of these apps, and does not open an availability incident for them. The Zentral API returns the value that Apple sends, 2147483647.
+
+Apple sends a notification to Zentral when the licenses of a location change. Zentral subscribes to all the notification types that Apple lists. Zentral checks the notification settings of each location at Apple when it syncs the location, and updates them when they are not correct.
+
+A notification that Zentral does not process, for example the test notification that Apple sends when the settings change, is kept as an `mdm_apps_books_notification` event. When a free app is removed from a location, Zentral sets its counts to 0 and deletes its device assignments. The store apps that use it stay in Zentral.
+
 ### Renew the content token
 
 A content token becomes invalid one year after its creation. It also becomes invalid when the password of the Managed Apple Account that downloaded it changes. Apple then rejects the license assignments, and the devices do not get their apps. The location page in Zentral shows the expiration date of the token, with a warning 15 days before this date.

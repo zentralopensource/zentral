@@ -12,17 +12,19 @@ from zentral.contrib.mdm.apps_books import (_sync_asset_d,
                                             associate_location_asset,
                                             bulk_assign_location_asset,
                                             disassociate_location_asset,
+                                            ensure_client_config,
                                             ensure_target_asset_assignments,
                                             get_otf_association_cache_key,
                                             iter_location_assets_to_refresh,
                                             location_cache,
                                             refresh_asset_metadata,
-                                            sync_asset, sync_assets,
+                                            sync_asset, sync_assets, sync_unlimited_assets,
                                             update_location_asset_counts)
 from zentral.contrib.mdm.events import (AssetCreatedEvent, AssetUpdatedEvent,
                                         DeviceAssignmentCreatedEvent, DeviceAssignmentDeletedEvent,
                                         LocationAssetCreatedEvent, LocationAssetUpdatedEvent)
-from zentral.contrib.mdm.models import Asset, DEPDevice, DeviceAssignment, Location, LocationAsset
+from zentral.contrib.mdm.models import (Asset, DEPDevice, DeviceAssignment, Location, LocationAsset,
+                                        hash_location_notification_auth_token)
 from zentral.core.incidents.models import Severity
 from .utils import force_asset, force_dep_device, force_location, force_location_asset
 
@@ -500,7 +502,7 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
     @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
     def test_sync_assets(self, post_event, AppsBooksClient):
         location = force_location()
-        client = Mock()
+        client, _ = self._get_client_config_client(location)
         AppsBooksClient.from_location.return_value = client
         client.iter_assets.return_value = [
             {"adamId": "408709785",
@@ -521,6 +523,251 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         client.iter_asset_device_assignments.return_value = [serial_number]
         sync_assets(location)
         self.assertEqual(len(post_event.call_args_list), 3)
+        client.update_client_config.assert_not_called()
+
+    @patch("zentral.contrib.mdm.apps_books.logger.exception")
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient")
+    def test_sync_assets_client_config_error(self, AppsBooksClient, logger_exception):
+        location = force_location()
+        client = Mock()
+        client.get_client_config.side_effect = AppsBooksAPIError("Invalid server token")
+        client.iter_assets.return_value = []
+        AppsBooksClient.from_location.return_value = client
+        sync_assets(location)
+        logger_exception.assert_called_once_with("Location %s: could not check the client config", location.name)
+        client.iter_assets.assert_called_once_with()
+
+    # ensure_client_config
+
+    def _get_client_config_client(self, location, **config):
+        notification_auth_token = location.set_notification_auth_token()
+        location.save()
+        notification_url = f"https://zentral/public/mdm/locations/{location.mdm_info_id}/notify/"
+        client = Mock()
+        client.mdm_info_id = str(location.mdm_info_id)
+        client.get_notification_url.return_value = notification_url
+        client.get_notification_types.return_value = ["ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET"]
+        client_config = {
+            "mdmInfo": {"id": str(location.mdm_info_id)},
+            "notificationAuthToken": notification_auth_token,
+            "notificationUrl": notification_url,
+            "subscribedNotificationTypes": ["UNLIMITED_ASSET", "ASSET_MANAGEMENT", "ASSET_COUNT"],
+        }
+        client_config.update(config)
+        client.get_client_config.return_value = {k: v for k, v in client_config.items() if v is not None}
+        return client, notification_auth_token
+
+    def test_ensure_client_config_ok(self):
+        location = force_location()
+        client, _ = self._get_client_config_client(location)
+        notification_auth_token_hash = location.notification_auth_token_hash
+        self.assertFalse(ensure_client_config(location, client))
+        client.get_client_config.assert_called_once_with(verify_mdm_info=False)
+        client.update_client_config.assert_not_called()
+        location.refresh_from_db()
+        self.assertEqual(location.notification_auth_token_hash, notification_auth_token_hash)
+
+    @patch("zentral.contrib.mdm.apps_books.logger.error")
+    def test_ensure_client_config_other_mdm(self, logger_error):
+        location = force_location()
+        client, _ = self._get_client_config_client(location, mdmInfo={"id": str(uuid.uuid4())},
+                                                   subscribedNotificationTypes=["ASSET_COUNT"])
+        self.assertFalse(ensure_client_config(location, client))
+        client.update_client_config.assert_not_called()
+        logger_error.assert_called_once_with("Location %s: client config of another MDM, not updated", location.name)
+
+    def test_ensure_client_config_missing_notification_type(self):
+        location = force_location()
+        client, notification_auth_token = self._get_client_config_client(
+            location, subscribedNotificationTypes=["ASSET_MANAGEMENT", "ASSET_COUNT"]
+        )
+        notification_auth_token_hash = location.notification_auth_token_hash
+        with self.assertLogs("zentral.contrib.mdm.apps_books", "INFO") as cm:
+            self.assertTrue(ensure_client_config(location, client))
+        self.assertEqual(cm.output, [f"INFO:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                                     "update client config"])
+        client.update_client_config.assert_called_once_with(notification_auth_token)
+        location.refresh_from_db()
+        self.assertEqual(location.notification_auth_token_hash, notification_auth_token_hash)
+
+    def test_ensure_client_config_no_notification_types(self):
+        location = force_location()
+        client, notification_auth_token = self._get_client_config_client(location, subscribedNotificationTypes=None)
+        self.assertTrue(ensure_client_config(location, client))
+        client.update_client_config.assert_called_once_with(notification_auth_token)
+
+    def test_ensure_client_config_bad_notification_url(self):
+        location = force_location()
+        client, notification_auth_token = self._get_client_config_client(
+            location, notificationUrl="https://example.com/notify/"
+        )
+        self.assertTrue(ensure_client_config(location, client))
+        client.update_client_config.assert_called_once_with(notification_auth_token)
+
+    def test_ensure_client_config_bad_notification_auth_token(self):
+        location = force_location()
+        client, notification_auth_token = self._get_client_config_client(
+            location, notificationAuthToken=get_random_string(12)
+        )
+        notification_auth_token_hash = location.notification_auth_token_hash
+        # changed in the database during the check, must not be overwritten
+        new_name = get_random_string(12)
+        Location.objects.filter(pk=location.pk).update(name=new_name)
+        self.assertTrue(ensure_client_config(location, client))
+        client.update_client_config.assert_called_once()
+        new_notification_auth_token = client.update_client_config.call_args.args[0]
+        self.assertNotEqual(new_notification_auth_token, notification_auth_token)
+        location.refresh_from_db()
+        self.assertEqual(location.name, new_name)
+        self.assertNotEqual(location.notification_auth_token_hash, notification_auth_token_hash)
+        self.assertEqual(
+            location.notification_auth_token_hash,
+            hash_location_notification_auth_token(new_notification_auth_token)
+        )
+
+    def test_ensure_client_config_notification_auth_token_changed_during_check(self):
+        location = force_location()
+        client, _ = self._get_client_config_client(location, notificationAuthToken=get_random_string(12))
+        other_hash = hash_location_notification_auth_token(get_random_string(12))
+        set_notification_auth_token = location.set_notification_auth_token
+
+        def concurrent_set_notification_auth_token():
+            Location.objects.filter(pk=location.pk).update(notification_auth_token_hash=other_hash)
+            return set_notification_auth_token()
+
+        location.set_notification_auth_token = concurrent_set_notification_auth_token
+        with self.assertLogs("zentral.contrib.mdm.apps_books", "WARNING") as cm:
+            self.assertFalse(ensure_client_config(location, client))
+        self.assertEqual(cm.output, [f"WARNING:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                                     "notification token changed during the check"])
+        client.update_client_config.assert_not_called()
+        self.assertEqual(location.notification_auth_token_hash, other_hash)
+        location.refresh_from_db()
+        self.assertEqual(location.notification_auth_token_hash, other_hash)
+
+    def test_ensure_client_config_not_configured(self):
+        location = force_location()
+        client, notification_auth_token = self._get_client_config_client(
+            location, mdmInfo=None, notificationAuthToken=None, notificationUrl=None, subscribedNotificationTypes=None
+        )
+        self.assertTrue(ensure_client_config(location, client))
+        client.update_client_config.assert_called_once()
+        new_notification_auth_token = client.update_client_config.call_args.args[0]
+        self.assertNotEqual(new_notification_auth_token, notification_auth_token)
+        location.refresh_from_db()
+        self.assertEqual(
+            location.notification_auth_token_hash,
+            hash_location_notification_auth_token(new_notification_auth_token)
+        )
+
+    # LocationAsset
+
+    def test_location_asset_unlimited_no_availability_incident(self):
+        location_asset = force_location_asset()
+        location_asset.total_count = LocationAsset.UNLIMITED_COUNT
+        location_asset.available_count = 0
+        self.assertTrue(location_asset.is_unlimited())
+        self.assertEqual(location_asset.get_availability_incident_severity(), Severity.NONE)
+
+    def test_location_asset_limited_availability_incident(self):
+        location_asset = force_location_asset()
+        location_asset.total_count = LocationAsset.UNLIMITED_COUNT - 1
+        location_asset.available_count = 0
+        self.assertFalse(location_asset.is_unlimited())
+        self.assertEqual(location_asset.get_availability_incident_severity(), Severity.MAJOR)
+
+    # sync_unlimited_assets
+
+    def test_sync_unlimited_assets(self):
+        location = force_location()
+        client = Mock()
+        client.get_adam_id_assets.side_effect = [
+            [{"adamId": "408709785",
+              "assignedCount": 1,
+              "availableCount": LocationAsset.UNLIMITED_COUNT - 1,
+              "deviceAssignable": True,
+              "pricingParam": "STDQ",
+              "productType": "App",
+              "retiredCount": 0,
+              "revocable": True,
+              "supportedPlatforms": ["iOS"],
+              "totalCount": LocationAsset.UNLIMITED_COUNT}],
+            [],
+        ]
+        client.get_asset_metadata.return_value = {"name": get_random_string(12), "bundleId": "pro.zentral.tests"}
+        client.iter_asset_device_assignments.return_value = []
+        notification_id = str(uuid.uuid4())
+        with self.assertNoLogs("zentral.contrib.mdm.apps_books", "INFO"):
+            events = list(sync_unlimited_assets(location, client, ["408709785", "377298193"], notification_id))
+        self.assertEqual(client.get_adam_id_assets.call_args_list, [call("408709785"), call("377298193")])
+        self.assertEqual(len(events), 2)
+        self.assertIsInstance(events[0], AssetCreatedEvent)
+        self.assertIsInstance(events[1], LocationAssetCreatedEvent)
+        self.assertEqual(events[1].payload["notification_id"], notification_id)
+        self.assertEqual(
+            events[1].metadata.incident_updates[0].severity,
+            Severity.NONE
+        )
+        location_asset = LocationAsset.objects.get(location=location, asset__adam_id="408709785")
+        self.assertTrue(location_asset.is_unlimited())
+
+    def test_sync_unlimited_assets_removed(self):
+        location = force_location()
+        removed_location_asset = force_location_asset(location=location)
+        adam_id = removed_location_asset.asset.adam_id
+        kept_location_asset = force_location_asset(
+            asset=Asset.objects.create(adam_id=adam_id, pricing_param="STDQ", product_type=Asset.ProductType.APP,
+                                       device_assignable=True, revocable=True, supported_platforms=["iOS"]),
+            location=location
+        )
+        for location_asset in (removed_location_asset, kept_location_asset):
+            location_asset.assigned_count = 1
+            location_asset.available_count = location_asset.total_count = LocationAsset.UNLIMITED_COUNT
+            location_asset.save()
+        serial_number = get_random_string(12)
+        DeviceAssignment.objects.create(location_asset=removed_location_asset, serial_number=serial_number)
+        # no change for the other location
+        other_location_asset = force_location_asset(asset=removed_location_asset.asset)
+        other_location_asset.total_count = LocationAsset.UNLIMITED_COUNT
+        other_location_asset.save()
+        client = Mock()
+        client.get_adam_id_assets.return_value = [
+            {"adamId": adam_id,
+             "assignedCount": 1,
+             "availableCount": LocationAsset.UNLIMITED_COUNT,
+             "deviceAssignable": True,
+             "pricingParam": "STDQ",
+             "productType": "App",
+             "retiredCount": 0,
+             "revocable": True,
+             "supportedPlatforms": ["iOS"],
+             "totalCount": LocationAsset.UNLIMITED_COUNT}
+        ]
+        client.get_asset_metadata.return_value = None
+        client.iter_asset_device_assignments.return_value = []
+        notification_id = str(uuid.uuid4())
+        with self.assertLogs("zentral.contrib.mdm.apps_books", "INFO") as cm:
+            events = list(sync_unlimited_assets(location, client, [adam_id], notification_id))
+        self.assertEqual(cm.output, [f"INFO:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                                     f"asset {adam_id}/{removed_location_asset.asset.pricing_param} removed"])
+        self.assertEqual(len(events), 2)
+        self.assertIsInstance(events[0], LocationAssetUpdatedEvent)
+        self.assertEqual(events[0].payload["notification_id"], notification_id)
+        self.assertEqual(events[0].payload["total_count"], 0)
+        self.assertEqual(events[0].metadata.incident_updates, [])
+        self.assertIsInstance(events[1], DeviceAssignmentDeletedEvent)
+        self.assertEqual(events[1].metadata.machine_serial_number, serial_number)
+        removed_location_asset.refresh_from_db()
+        for attr in LocationAsset.count_attrs:
+            self.assertEqual(getattr(removed_location_asset, attr), 0)
+        self.assertEqual(removed_location_asset.deviceassignment_set.count(), 0)
+        kept_location_asset.refresh_from_db()
+        self.assertTrue(kept_location_asset.is_unlimited())
+        other_location_asset.refresh_from_db()
+        self.assertTrue(other_location_asset.is_unlimited())
+        # nothing left to do, nothing logged
+        with self.assertNoLogs("zentral.contrib.mdm.apps_books", "INFO"):
+            self.assertEqual(list(sync_unlimited_assets(location, client, [adam_id], notification_id)), [])
 
     # iter_location_assets_to_refresh
 

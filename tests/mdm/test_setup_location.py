@@ -13,7 +13,7 @@ from django.utils.crypto import get_random_string
 from accounts.models import User
 from tests.zentral_test_utils.login_case import LoginCase
 from zentral.contrib.mdm.apps_books import AppsBooksAPIError
-from zentral.contrib.mdm.models import Location
+from zentral.contrib.mdm.models import Location, hash_location_notification_auth_token
 
 
 class SetupLocationViewsTestCase(TestCase, LoginCase):
@@ -183,6 +183,22 @@ class SetupLocationViewsTestCase(TestCase, LoginCase):
         self.assertFormError(response.context["form"], "server_token_file", "Could not get client information")
 
     @patch("zentral.contrib.mdm.forms.AppsBooksClient")
+    def test_create_location_post_service_config_error(self, AppsBooksClient):
+        client = Mock()
+        client.get_client_config.return_value = {}
+        client.get_notification_types.side_effect = AppsBooksAPIError("Error 9646")
+        AppsBooksClient.return_value = client
+        self.login("mdm.add_location")
+        vppserver_token, server_token_hash = self._build_vppserver_token()
+        with self.assertLogs("zentral.contrib.mdm.forms", "ERROR") as cm:
+            response = self.client.post(reverse("mdm:create_location"),
+                                        {"server_token_file": vppserver_token})
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context["form"], "server_token_file", "Could not get service configuration")
+        self.assertEqual(len(cm.output), 1)
+        self.assertFalse(Location.objects.filter(server_token_hash=server_token_hash).exists())
+
+    @patch("zentral.contrib.mdm.forms.AppsBooksClient")
     def test_create_location_post_invalid_config(self, AppsBooksClient):
         client = Mock()
         client.get_client_config.return_value = {"un": "deux"}
@@ -251,16 +267,32 @@ class SetupLocationViewsTestCase(TestCase, LoginCase):
             'tokenExpirationDate': '2043-11-16T12:16:43+0000',
             'websiteURL': 'https://business.apple.com'
         }
+        notification_types = ["ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET", "USER_MANAGEMENT"]
+        client.get_notification_types.return_value = notification_types
         AppsBooksClient.return_value = client
+        post_save_client = Mock()
+        AppsBooksClient.from_location.return_value = post_save_client
         self.login("mdm.add_location", "mdm.view_location")
         vppserver_token, server_token_hash = self._build_vppserver_token()
-        response = self.client.post(reverse("mdm:create_location"),
-                                    {"server_token_file": vppserver_token}, follow=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("mdm:create_location"),
+                                        {"server_token_file": vppserver_token}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "mdm/location_detail.html")
         self.assertContains(response, "zentral.example.com")
         location = Location.objects.get(server_token_hash=server_token_hash)
         self.assertEqual(location.name, "zentral.example.com")
+        # no Retry-After wait in the form, the service config is read in the form
+        AppsBooksClient.assert_called_once_with(vppserver_token.getvalue().decode("utf-8"),
+                                                respect_retry_after_header=False)
+        client.get_notification_types.assert_called_once_with()
+        AppsBooksClient.from_location.assert_called_once_with(location)
+        post_save_client.update_client_config.assert_called_once()
+        notification_auth_token, sent_notification_types = post_save_client.update_client_config.call_args.args
+        self.assertEqual(location.notification_auth_token_hash,
+                         hash_location_notification_auth_token(notification_auth_token))
+        self.assertEqual(sent_notification_types, notification_types)
+        post_save_client.get_notification_types.assert_not_called()
 
     # update server server_token
 

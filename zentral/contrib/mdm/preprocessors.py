@@ -5,11 +5,12 @@ from zentral.core.incidents.models import Severity
 from .apns import send_enrolled_device_notification
 from .apps_books import (associate_location_asset, disassociate_location_asset,
                          get_otf_association_cache_key,
-                         location_cache, update_location_asset_counts)
-from .events import (AssetCountNotificationEvent,
+                         location_cache, sync_unlimited_assets, update_location_asset_counts)
+from .events import (AppsBooksNotificationEvent, AssetCountNotificationEvent,
                      AssetAssociationEvent, AssetAssociationErrorEvent,
                      AssetDisassociationEvent, AssetDisassociationErrorEvent,
-                     AssetRevocationEvent, AssetRevocationErrorEvent)
+                     AssetRevocationEvent, AssetRevocationErrorEvent,
+                     UnlimitedAssetNotificationEvent)
 from .incidents import MDMAssetAssociationIncident, MDMAssetDisassociationIncident, MDMAssetRevocationIncident
 from .models import EnrolledDevice
 
@@ -60,6 +61,29 @@ class AppsBooksNotificationPreprocessor:
              "total_count": count_delta},
             notification_id
         )
+
+    def _process_unlimited_asset_notification(self, location, client, notification_id, raw_event):
+        notification = raw_event["data"].get("notification")
+        if not isinstance(notification, dict):
+            notification = {}
+        adam_ids = notification.get("adamIds")
+        if not isinstance(adam_ids, list) or not adam_ids or not all(isinstance(i, str) for i in adam_ids):
+            logger.error("Missing or bad UNLIMITED_ASSET adamIds")
+            return
+        unlimited = notification.get("unlimited")
+
+        # notification events
+        for adam_id in adam_ids:
+            yield UnlimitedAssetNotificationEvent(
+                self._get_event_metadata(raw_event),
+                {"asset": {"adam_id": adam_id},
+                 "location": location.serialize_for_event(keys_only=True),
+                 "unlimited": unlimited,
+                 "notification_id": notification_id}
+            )
+
+        # the notification has no license details
+        yield from sync_unlimited_assets(location, client, adam_ids, notification_id)
 
     def _process_asset_management_notification(self, location, client, notification_id, raw_event):
         notification = raw_event["data"]["notification"]
@@ -166,9 +190,6 @@ class AppsBooksNotificationPreprocessor:
         if not isinstance(notification_type, str):
             logger.error("Missing or bad notification type")
             return
-        if notification_type not in ("ASSET_COUNT", "ASSET_MANAGEMENT"):
-            logger.warning("Unknown notification type: %s", notification_type)
-            return
         notification_id = data["notificationId"]
         if not cache.add(f"apps_books_notification_{notification_id}", 1, timeout=600):  # TODO hard-coded
             logger.warning("Notification %s already received", notification_id)
@@ -182,6 +203,21 @@ class AppsBooksNotificationPreprocessor:
             yield from self._process_asset_count_notification(location, client, notification_id, raw_event)
         elif notification_type == "ASSET_MANAGEMENT":
             yield from self._process_asset_management_notification(location, client, notification_id, raw_event)
+        elif notification_type == "UNLIMITED_ASSET":
+            yield from self._process_unlimited_asset_notification(location, client, notification_id, raw_event)
+        else:
+            if notification_type == "TEST_NOTIFICATION":
+                # Apple sends it when the client config is updated
+                logger.info("Location %s: test notification", location.name)
+            else:
+                logger.warning("Unknown notification type: %s", notification_type)
+            yield AppsBooksNotificationEvent(
+                self._get_event_metadata(raw_event),
+                {"location": location.serialize_for_event(keys_only=True),
+                 "notification_type": notification_type,
+                 "notification": data.get("notification"),
+                 "notification_id": notification_id}
+            )
 
 
 def get_preprocessors():

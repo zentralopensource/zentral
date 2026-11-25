@@ -1594,11 +1594,19 @@ class LocationForm(forms.ModelForm):
         except Exception:
             self.add_error("server_token_file", "Could not get organization name.")
             return
-        ab_client = AppsBooksClient(server_token)
+        # urllib3 does not cap a Retry-After wait, and the user waits for the response
+        ab_client = AppsBooksClient(server_token, respect_retry_after_header=False)
         try:
             config = ab_client.get_client_config()
         except Exception:
             msg = "Could not get client information"
+            logger.exception(msg)
+            self.add_error("server_token_file", msg)
+            return
+        try:
+            self.cleaned_data["notification_types"] = ab_client.get_notification_types()
+        except Exception:
+            msg = "Could not get service configuration"
             logger.exception(msg)
             self.add_error("server_token_file", msg)
             return
@@ -1640,10 +1648,11 @@ class LocationForm(forms.ModelForm):
         location.save()
         location.set_server_token(self.cleaned_data["server_token"])
         location.save()
+        notification_types = self.cleaned_data["notification_types"]
 
         def update_client_config():
             ab_client = AppsBooksClient.from_location(location)
-            ab_client.update_client_config(notification_auth_token)
+            ab_client.update_client_config(notification_auth_token, notification_types)
             # TODO: retry
 
         transaction.on_commit(update_client_config)
