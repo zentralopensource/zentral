@@ -1,3 +1,4 @@
+import datetime
 import logging
 import threading
 import time
@@ -9,8 +10,9 @@ import requests
 from base.utils import deployment_info
 from django.core.cache import cache
 from django.db import connection, transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.functional import SimpleLazyObject
 
 from zentral.conf import settings
@@ -27,12 +29,17 @@ from .events import (
     LocationAssetUpdatedEvent,
 )
 from .incidents import MDMAssetAvailabilityIncident
-from .models import Asset, DEPDevice, Location, LocationAsset, hash_location_notification_auth_token
+from .models import (Asset, DEPDevice, DeviceAssignment, Location, LocationAsset,
+                     hash_location_notification_auth_token)
 
 logger = logging.getLogger("zentral.contrib.mdm.apps_books")
 
 
 BATCH_DB_OPS_SIZE = 5000
+
+
+# updated_at is set with the clock of the host that saves the location asset
+SYNC_CLOCK_SKEW_MARGIN = datetime.timedelta(minutes=1)
 
 
 NOTIFICATION_TYPES = ("ASSET_COUNT", "ASSET_MANAGEMENT", "UNLIMITED_ASSET")
@@ -620,16 +627,26 @@ def sync_asset(location, client, adam_id, pricing_param, notification_id):
     yield from _sync_asset_d(location, client, asset_d, notification_id)
 
 
-def _clear_location_asset(location, location_asset, notification_id):
+def _clear_location_asset(location, location_asset, notification_id=None, changed_before=None):
+    asset = location_asset.asset
     with transaction.atomic():
-        collected_objects = {"asset": location_asset.asset}
-        yield from _update_or_create_location_asset(
+        if changed_before is not None and not (
+            LocationAsset.objects.select_for_update()
+                                 .filter(pk=location_asset.pk, updated_at__lt=changed_before)
+                                 .exists()
+        ):
+            return []
+        collected_objects = {"asset": asset}
+        events = list(_update_or_create_location_asset(
             location,
             {attr: 0 for attr in LocationAsset.count_attrs},
             notification_id,
             collected_objects
-        )
-        yield from _update_assignments(location, set(), notification_id, collected_objects)
+        ))
+        events.extend(_update_assignments(location, set(), notification_id, collected_objects))
+    if events:
+        logger.info("Location %s: asset %s/%s removed", location.name, asset.adam_id, asset.pricing_param)
+    return events
 
 
 def sync_unlimited_assets(location, client, adam_ids, notification_id):
@@ -644,11 +661,7 @@ def sync_unlimited_assets(location, client, adam_ids, notification_id):
                                        .select_related("asset")
                                        .filter(asset__adam_id=adam_id)
                                        .exclude(asset__pricing_param__in=pricing_params)):
-            events = list(_clear_location_asset(location, location_asset, notification_id))
-            if events:
-                logger.info("Location %s: asset %s/%s removed",
-                            location.name, adam_id, location_asset.asset.pricing_param)
-            yield from events
+            yield from _clear_location_asset(location, location_asset, notification_id)
 
 
 def sync_assets(location):
@@ -657,9 +670,27 @@ def sync_assets(location):
         ensure_client_config(location, client)
     except Exception:
         logger.exception("Location %s: could not check the client config", location.name)
+    # A notification can create or change a location asset after Apple listed the assets,
+    # so the location assets changed since this time are not cleared.
+    started_at = timezone.now() - SYNC_CLOCK_SKEW_MARGIN
+    listed_assets = set()
     for asset_d in client.iter_assets():
+        listed_assets.add((asset_d["adamId"], asset_d["pricingParam"]))
         for event in _sync_asset_d(location, client, asset_d):
             event.post()
+    # Only after a complete iteration (iter_assets raises otherwise).
+    # The notification of a removed asset can be lost, and the location asset is kept for the store apps.
+    for location_asset in (location.locationasset_set
+                                   .select_related("asset")
+                                   .filter(updated_at__lt=started_at)
+                                   .filter(Q(assigned_count__gt=0)
+                                           | Q(available_count__gt=0)
+                                           | Q(retired_count__gt=0)
+                                           | Q(total_count__gt=0)
+                                           | Exists(DeviceAssignment.objects.filter(location_asset=OuterRef("pk"))))):
+        if (location_asset.asset.adam_id, location_asset.asset.pricing_param) not in listed_assets:
+            for event in _clear_location_asset(location, location_asset, changed_before=started_at):
+                event.post()
 
 
 def iter_location_assets_to_refresh(location, only_without_metadata=True):

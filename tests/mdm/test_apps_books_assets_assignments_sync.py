@@ -1,14 +1,19 @@
+import datetime
 from unittest.mock import call, patch, Mock
 import uuid
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 from django.utils.crypto import get_random_string
-from zentral.contrib.mdm.apps_books import (_sync_asset_d,
+from zentral.contrib.mdm.apps_books import (SYNC_CLOCK_SKEW_MARGIN,
+                                            _clear_location_asset,
+                                            _sync_asset_d,
                                             _update_assignments,
                                             _update_or_create_asset,
                                             _update_or_create_location_asset,
                                             _update_location_asset_counts,
                                             AppsBooksAPIError,
+                                            FetchedDataUpdatedError,
                                             associate_location_asset,
                                             bulk_assign_location_asset,
                                             disassociate_location_asset,
@@ -524,6 +529,187 @@ class MDMAppsBooksAssetsAssignmentsSyncTestCase(TestCase):
         sync_assets(location)
         self.assertEqual(len(post_event.call_args_list), 3)
         client.update_client_config.assert_not_called()
+
+    def _force_unlisted_location_assets(self, location):
+        removed_location_asset = force_location_asset(location=location)
+        removed_location_asset.assigned_count = 1
+        removed_location_asset.available_count = removed_location_asset.total_count = LocationAsset.UNLIMITED_COUNT
+        removed_location_asset.save()
+        serial_number = get_random_string(12)
+        DeviceAssignment.objects.create(location_asset=removed_location_asset, serial_number=serial_number)
+        # already cleared
+        cleared_location_asset = force_location_asset(location=location)
+        # only an assignment left
+        assignment_location_asset = force_location_asset(location=location)
+        DeviceAssignment.objects.create(location_asset=assignment_location_asset, serial_number=serial_number)
+        self._set_updated_at(2 * SYNC_CLOCK_SKEW_MARGIN,
+                             removed_location_asset, cleared_location_asset, assignment_location_asset)
+        return removed_location_asset, cleared_location_asset, assignment_location_asset, serial_number
+
+    def _set_updated_at(self, age, *location_assets):
+        # auto_now cannot be set with save()
+        LocationAsset.objects.filter(pk__in=[la.pk for la in location_assets]).update(updated_at=timezone.now() - age)
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_sync_assets_clears_unlisted_location_assets(self, post_event, AppsBooksClient):
+        location = force_location()
+        removed_location_asset, cleared_location_asset, assignment_location_asset, serial_number = \
+            self._force_unlisted_location_assets(location)
+        # listed, same adam ID as a removed one, other pricing param
+        listed_location_asset = force_location_asset(
+            asset=Asset.objects.create(adam_id=removed_location_asset.asset.adam_id, pricing_param="STDQ",
+                                       product_type=Asset.ProductType.APP, device_assignable=True,
+                                       revocable=True, supported_platforms=["iOS"]),
+            location=location
+        )
+        listed_location_asset.total_count = listed_location_asset.available_count = 10
+        listed_location_asset.save()
+        # other location, not listed, not cleared
+        other_location_asset = force_location_asset()
+        other_location_asset.total_count = 10
+        other_location_asset.save()
+        client, _ = self._get_client_config_client(location)
+        AppsBooksClient.from_location.return_value = client
+        client.iter_assets.return_value = [
+            {"adamId": listed_location_asset.asset.adam_id,
+             "assignedCount": 0,
+             "availableCount": 10,
+             "deviceAssignable": True,
+             "pricingParam": "STDQ",
+             "productType": "App",
+             "retiredCount": 0,
+             "revocable": True,
+             "supportedPlatforms": ["iOS"],
+             "totalCount": 10}
+        ]
+        client.get_asset_metadata.return_value = None
+        client.iter_asset_device_assignments.return_value = []
+        with self.assertLogs("zentral.contrib.mdm.apps_books", "INFO") as cm:
+            sync_assets(location)
+        self.assertEqual(
+            sorted(cm.output),
+            sorted(f"INFO:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                   f"asset {la.asset.adam_id}/{la.asset.pricing_param} removed"
+                   for la in (removed_location_asset, assignment_location_asset))
+        )
+        events = [c.args[0] for c in post_event.call_args_list]
+        self.assertEqual(
+            sorted((type(e).__name__, e.payload["asset"]["adam_id"]) for e in events),
+            sorted([("LocationAssetUpdatedEvent", removed_location_asset.asset.adam_id),
+                    ("DeviceAssignmentDeletedEvent", removed_location_asset.asset.adam_id),
+                    ("DeviceAssignmentDeletedEvent", assignment_location_asset.asset.adam_id)])
+        )
+        self.assertTrue(all("notification_id" not in e.payload for e in events))
+        removed_location_asset.refresh_from_db()
+        for attr in LocationAsset.count_attrs:
+            self.assertEqual(getattr(removed_location_asset, attr), 0)
+        self.assertFalse(DeviceAssignment.objects.filter(serial_number=serial_number).exists())
+        listed_location_asset.refresh_from_db()
+        self.assertEqual(listed_location_asset.total_count, 10)
+        other_location_asset.refresh_from_db()
+        self.assertEqual(other_location_asset.total_count, 10)
+        # a second sync has nothing to clear
+        post_event.reset_mock()
+        with self.assertNoLogs("zentral.contrib.mdm.apps_books", "INFO"):
+            sync_assets(location)
+        post_event.assert_not_called()
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_sync_assets_keeps_location_assets_changed_during_the_sync(self, post_event, AppsBooksClient):
+        location = force_location()
+        removed_location_asset = force_location_asset(location=location)
+        removed_location_asset.total_count = removed_location_asset.available_count = 10
+        removed_location_asset.save()
+        self._set_updated_at(2 * SYNC_CLOCK_SKEW_MARGIN, removed_location_asset)
+        client, _ = self._get_client_config_client(location)
+        AppsBooksClient.from_location.return_value = client
+        new_location_assets = []
+
+        def iter_assets():
+            # Apple listed the assets, then a notification creates a location asset
+            new_location_asset = force_location_asset(location=location)
+            new_location_asset.total_count = new_location_asset.available_count = LocationAsset.UNLIMITED_COUNT
+            new_location_asset.save()
+            new_location_assets.append(new_location_asset)
+            yield from []
+
+        client.iter_assets.side_effect = iter_assets
+        with self.assertLogs("zentral.contrib.mdm.apps_books", "INFO") as cm:
+            sync_assets(location)
+        self.assertEqual(cm.output, [f"INFO:zentral.contrib.mdm.apps_books:Location {location.name}: "
+                                     f"asset {removed_location_asset.asset.adam_id}/"
+                                     f"{removed_location_asset.asset.pricing_param} removed"])
+        removed_location_asset.refresh_from_db()
+        self.assertEqual(removed_location_asset.total_count, 0)
+        new_location_asset = new_location_assets[0]
+        new_location_asset.refresh_from_db()
+        self.assertTrue(new_location_asset.is_unlimited())
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_sync_assets_clock_skew_margin(self, post_event, AppsBooksClient):
+        location = force_location()
+        old_location_asset = force_location_asset(location=location)
+        recent_location_asset = force_location_asset(location=location)
+        for location_asset in (old_location_asset, recent_location_asset):
+            location_asset.total_count = location_asset.available_count = 10
+            location_asset.save()
+        self._set_updated_at(SYNC_CLOCK_SKEW_MARGIN + datetime.timedelta(seconds=10), old_location_asset)
+        # changed on a host with a clock a few seconds behind, after the sync started
+        self._set_updated_at(SYNC_CLOCK_SKEW_MARGIN - datetime.timedelta(seconds=10), recent_location_asset)
+        client, _ = self._get_client_config_client(location)
+        AppsBooksClient.from_location.return_value = client
+        client.iter_assets.return_value = []
+        sync_assets(location)
+        old_location_asset.refresh_from_db()
+        self.assertEqual(old_location_asset.total_count, 0)
+        recent_location_asset.refresh_from_db()
+        self.assertEqual(recent_location_asset.total_count, 10)
+
+    def test_clear_location_asset_changed_after_the_query(self):
+        location = force_location()
+        location_asset = force_location_asset(location=location)
+        location_asset.total_count = location_asset.available_count = 10
+        location_asset.save()
+        serial_number = get_random_string(12)
+        DeviceAssignment.objects.create(location_asset=location_asset, serial_number=serial_number)
+        # the sync selected the row, then a notification saved it
+        changed_before = location_asset.updated_at
+        with self.assertNoLogs("zentral.contrib.mdm.apps_books", "INFO"):
+            self.assertEqual(_clear_location_asset(location, location_asset, changed_before=changed_before), [])
+        location_asset.refresh_from_db()
+        self.assertEqual(location_asset.total_count, 10)
+        self.assertTrue(DeviceAssignment.objects.filter(serial_number=serial_number).exists())
+        # not changed since the cutoff
+        events = _clear_location_asset(location, location_asset,
+                                       changed_before=changed_before + datetime.timedelta(seconds=1))
+        self.assertEqual(len(events), 2)
+        location_asset.refresh_from_db()
+        self.assertEqual(location_asset.total_count, 0)
+        self.assertFalse(DeviceAssignment.objects.filter(serial_number=serial_number).exists())
+
+    @patch("zentral.contrib.mdm.apps_books.AppsBooksClient")
+    @patch("zentral.core.queues.backends.kombu.EventQueues.post_event")
+    def test_sync_assets_incomplete_iteration_clears_nothing(self, post_event, AppsBooksClient):
+        location = force_location()
+        removed_location_asset, _, assignment_location_asset, serial_number = \
+            self._force_unlisted_location_assets(location)
+        client, _ = self._get_client_config_client(location)
+        AppsBooksClient.from_location.return_value = client
+
+        def iter_assets():
+            raise FetchedDataUpdatedError
+            yield
+
+        client.iter_assets.side_effect = iter_assets
+        with self.assertRaises(FetchedDataUpdatedError):
+            sync_assets(location)
+        post_event.assert_not_called()
+        removed_location_asset.refresh_from_db()
+        self.assertTrue(removed_location_asset.is_unlimited())
+        self.assertEqual(DeviceAssignment.objects.filter(serial_number=serial_number).count(), 2)
 
     @patch("zentral.contrib.mdm.apps_books.logger.exception")
     @patch("zentral.contrib.mdm.apps_books.AppsBooksClient")

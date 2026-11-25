@@ -347,7 +347,7 @@ Apple gives the free apps an unlimited number of licenses. Zentral shows `unlimi
 
 Apple sends a notification to Zentral when the licenses of a location change. Zentral subscribes to all the notification types that Apple lists. Zentral checks the notification settings of each location at Apple when it syncs the location, and updates them when they are not correct.
 
-A notification that Zentral does not process, for example the test notification that Apple sends when the settings change, is kept as an `mdm_apps_books_notification` event. When a free app is removed from a location, Zentral sets its counts to 0 and deletes its device assignments. The store apps that use it stay in Zentral.
+A notification that Zentral does not process, for example the test notification that Apple sends when the settings change, is kept as an `mdm_apps_books_notification` event. When a free app is removed from a location, Zentral sets its counts to 0 and deletes its device assignments. The sync of the location does the same for any app that Apple no longer lists. The store apps that use it stay in Zentral.
 
 ### Renew the content token
 
