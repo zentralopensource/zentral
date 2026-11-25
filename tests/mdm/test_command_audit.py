@@ -1,7 +1,7 @@
+import ast
 import glob
 import json
 import plistlib
-import re
 from django.test import TestCase
 from django.utils.crypto import get_random_string
 from zentral.contrib.inventory.models import MetaBusinessUnit
@@ -18,6 +18,26 @@ ENCRYPTED_KWARGS = {"PIN", "new_password", "admin_password", "encryption_key"}
 
 SENTINEL = "sentinel-must-never-be-serialized"
 
+SECRET_ENGINE_FUNCTIONS = {"encrypt", "encrypt_str", "decrypt", "decrypt_str", "rewrap"}
+
+
+def iter_command_module_calls():
+    for path in glob.glob("zentral/contrib/mdm/commands/*.py"):
+        for node in ast.walk(ast.parse(open(path).read())):
+            if isinstance(node, ast.Call):
+                yield path, node
+
+
+def get_called_name(call):
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+
+
+def is_str_constant(node):
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
 
 class CommandAuditTestCase(TestCase):
     maxDiff = None
@@ -32,13 +52,42 @@ class CommandAuditTestCase(TestCase):
     # the policy itself
 
     def test_no_encrypted_kwarg_is_missing_from_this_list(self):
-        # get_secret_engine_kwargs() declares the encrypted field name in each command
+        # get_secret_engine_kwargs() gets the encrypted field name in each command
         # module. Anything new there has to be classified, or it would be serialized
         # verbatim the moment somebody adds it to audit_public_kwargs.
         found = set()
-        for path in glob.glob("zentral/contrib/mdm/commands/*.py"):
-            found.update(re.findall(r"""field=["'](\w+)["']""", open(path).read()))
-        self.assertEqual(found - ENCRYPTED_KWARGS, set())
+        for _, call in iter_command_module_calls():
+            if (
+                get_called_name(call) == "get_secret_engine_kwargs"
+                and len(call.args) == 2
+                and is_str_constant(call.args[1])
+            ):
+                found.add(call.args[1].value)
+        self.assertEqual(found, ENCRYPTED_KWARGS)
+
+    def test_no_secret_engine_context_outside_get_secret_engine_kwargs(self):
+        # A context written another way is not found by the test above,
+        # and rewrap_secrets would not rewrap it.
+        call_count = 0
+        found = []
+        for path, call in iter_command_module_calls():
+            name = get_called_name(call)
+            if name not in SECRET_ENGINE_FUNCTIONS:
+                continue
+            call_count += 1
+            context_call = None
+            if len(call.keywords) == 1 and call.keywords[0].arg is None:
+                context_call = call.keywords[0].value
+            if not (
+                isinstance(context_call, ast.Call)
+                and get_called_name(context_call) == "get_secret_engine_kwargs"
+                and len(context_call.args) == 2
+                # rewrap() only encrypts again what encrypt() wrote, so its field can come from secret_kwargs
+                and (name == "rewrap" or is_str_constant(context_call.args[1]))
+            ):
+                found.append(f"{path}:{call.lineno}")
+        self.assertGreater(call_count, 0)
+        self.assertEqual(found, [])
 
     def test_encrypted_kwargs_are_never_public(self):
         for db_name, command_class in registered_commands.items():
@@ -49,7 +98,7 @@ class CommandAuditTestCase(TestCase):
         for db_name, command_class in registered_commands.items():
             with self.subTest(db_name):
                 self.assertEqual(
-                    set(command_class.audit_public_kwargs) & set(command_class.audit_secret_kwargs),
+                    set(command_class.audit_public_kwargs) & set(command_class.secret_kwargs),
                     set()
                 )
 

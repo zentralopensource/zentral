@@ -1260,40 +1260,45 @@ class EnrolledDevice(models.Model):
     def block(self):
         if not self.blocked_at:
             self.blocked_at = naive_utcnow()
-            self.save()
+            self.save(update_fields=["blocked_at", "updated_at"])
 
     def unblock(self):
         if self.blocked_at:
             self.blocked_at = None
-            self.save()
+            self.save(update_fields=["blocked_at", "updated_at"])
 
     def purge_state(self, full=False):
-        self.declarative_management = False
-        # reset the DDM sync state as a group: the token and its advertised-declarations snapshot must be
-        # cleared together, otherwise a stale token/snapshot could survive a purge and be served/compared.
-        self.declarations_token = ""
-        self.declaration_items_snapshot = {}
-        self.last_ip = None
-        self.last_seen_at = None
-        self.last_notified_at = None
-        self.notification_queued_at = None
-        self.device_information_updated_at = None
-        self.security_info_updated_at = None
-        self.apps_updated_at = None
-        self.certificates_updated_at = None
-        self.profiles_updated_at = None
-        self.dep_enrollment = None
-        self.user_enrollment = None
-        self.user_approved_enrollment = None
-        self.supervised = None
-        self.filevault_escrow_key = None
-        self.filevault_config_uuid = None
-        self.device_lock_pin = None
-        self.device_lock_pin_updated_at = None
+        values = {
+            "declarative_management": False,
+            # reset the DDM sync state as a group: the token and its advertised-declarations snapshot must be
+            # cleared together, otherwise a stale token/snapshot could survive a purge and be served/compared.
+            "declarations_token": "",
+            "declaration_items_snapshot": {},
+            "last_ip": None,
+            "last_seen_at": None,
+            "last_notified_at": None,
+            "notification_queued_at": None,
+            "device_information_updated_at": None,
+            "security_info_updated_at": None,
+            "apps_updated_at": None,
+            "certificates_updated_at": None,
+            "profiles_updated_at": None,
+            "dep_enrollment": None,
+            "user_enrollment": None,
+            "user_approved_enrollment": None,
+            "supervised": None,
+            "filevault_escrow_key": None,
+            "filevault_config_uuid": None,
+            "device_lock_pin": None,
+            "device_lock_pin_updated_at": None,
+        }
         if full:
-            self.checkout_at = None
-            self.blocked_at = None
-        self.save()
+            values["checkout_at"] = None
+            values["blocked_at"] = None
+        for attr, value in values.items():
+            setattr(self, attr, value)
+        # not the other fields, that rewrap_secrets can change after the device is loaded
+        self.save(update_fields=[*values, "updated_at"])
         self.commands.all().delete()
         self.target_artifacts.all().delete()
         self.status_reports.all().delete()
@@ -1305,7 +1310,9 @@ class EnrolledDevice(models.Model):
         self.token = self.push_magic = self.bootstrap_token = self.unlock_token = None
         self.checkout_at = timezone.now()
         self.purge_state()
-        self.save()
+        self.save(
+            update_fields=["token", "push_magic", "bootstrap_token", "unlock_token", "checkout_at", "updated_at"]
+        )
 
     def can_be_poked(self):
         now = timezone.now()
@@ -3643,6 +3650,21 @@ class Command(models.Model):
             # Unknown command class, so nothing is declared as safe to serialize.
             return {key: AUDIT_OMITTED for key in self.kwargs}
         return command_class.build_audit_kwargs(self.kwargs)
+
+    @classmethod
+    def rewrap_secrets_queryset(cls):
+        from zentral.contrib.mdm.commands.base import registered_commands
+        lookup = Q(pk__in=[])
+        for name, command_class in registered_commands.items():
+            if command_class.secret_kwargs:
+                lookup |= Q(name=name, kwargs__has_any_keys=list(command_class.secret_kwargs))
+        return cls.objects.filter(lookup)
+
+    def rewrap_secrets(self):
+        from zentral.contrib.mdm.commands.base import registered_commands
+        command_class = registered_commands.get(self.name)
+        if command_class is not None:
+            self.kwargs = command_class.rewrap_kwargs(self.uuid, self.kwargs)
 
     def serialize_for_event(self, keys_only=False):
         d = {"pk": self.pk, "uuid": str(self.uuid), "name": self.name}

@@ -240,6 +240,17 @@ class DEPDeviceSearchForm(forms.Form):
                 return qs.first()
 
 
+class EnrolledDeviceBlueprintForm(forms.ModelForm):
+    class Meta:
+        model = EnrolledDevice
+        fields = ("blueprint",)
+
+    def save(self):
+        # not the other fields, that rewrap_secrets can change after the device is loaded
+        self.instance.save(update_fields=["blueprint", "updated_at"])
+        return self.instance
+
+
 class EnrolledDeviceSearchForm(forms.Form):
     template_name = "django/forms/search.html"
 

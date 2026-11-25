@@ -27,7 +27,8 @@ from zentral.contrib.mdm.forms import (ArtifactSearchForm, ArtifactVersionForm,
                                        CreateCertAssetForm, CreateDeclarationForm,
                                        AssignDEPDeviceEnrollmentForm, BlueprintArtifactForm,
                                        CreateAssetArtifactForm,
-                                       DEPDeviceSearchForm, EnrolledDeviceSearchForm,
+                                       DEPDeviceSearchForm, EnrolledDeviceBlueprintForm,
+                                       EnrolledDeviceSearchForm,
                                        FileVaultConfigForm,
                                        OTAEnrollmentForm,
                                        RealmGroupTagMappingForm,
@@ -1509,7 +1510,7 @@ class PokeEnrolledDeviceView(PermissionRequiredMixin, View):
 class ChangeEnrolledDeviceBlueprintView(PermissionRequiredMixin, UpdateViewWithAudit):
     permission_required = "mdm.change_enrolleddevice"
     model = EnrolledDevice
-    fields = ("blueprint",)
+    form_class = EnrolledDeviceBlueprintForm
 
     def get_audit_machine_serial_number(self):
         return self.object.serial_number

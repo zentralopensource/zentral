@@ -15,7 +15,7 @@ from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt, encrypt
 from zentral.utils.time import naive_utcnow
 
-from .base import Command, CommandBaseForm, register_command
+from .base import Command, CommandBaseForm, get_secret_engine_kwargs, register_command
 from .security_info import SecurityInfo
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.rotate_filevault_key")
@@ -54,7 +54,7 @@ class RotateFileVaultKey(Command):
     display_name = "Rotate FileVault key"
     verify_target_before_delivery = True
     form_class = RotateFileVaultKeyForm
-    audit_secret_kwargs = ("encryption_key",)
+    secret_kwargs = ("encryption_key",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
@@ -79,9 +79,7 @@ class RotateFileVaultKey(Command):
         return super().create_for_target(
             target,
             kwargs={"encryption_key": encrypt(get_encryption_key_der_bytes(),
-                                              model="mdm.devicecommand",
-                                              field="encryption_key",
-                                              uuid=str(uuid))},
+                                              **get_secret_engine_kwargs(uuid, "encryption_key"))},
             queue=queue, delay=delay,
             uuid=uuid,
         )
@@ -96,9 +94,7 @@ class RotateFileVaultKey(Command):
     def load_encryption_key(self):
         encrypted_encryption_key = self.db_command.kwargs["encryption_key"]
         encryption_key = decrypt(encrypted_encryption_key,
-                                 model="mdm.devicecommand",
-                                 field="encryption_key",
-                                 uuid=str(self.uuid))
+                                 **get_secret_engine_kwargs(self.uuid, "encryption_key"))
         return load_der_private_key(encryption_key, password=None)
 
     def build_command(self):
@@ -121,7 +117,7 @@ class RotateFileVaultKey(Command):
         if prk:
             if prk != self.enrolled_device.get_filevault_prk():
                 self.enrolled_device.set_filevault_prk(prk)
-                self.enrolled_device.save()
+                self.enrolled_device.save(update_fields=["filevault_prk", "filevault_prk_updated_at", "updated_at"])
                 transaction.on_commit(lambda: post_filevault_prk_updated_event(self))
         else:
             # the new key is optional in the response, and it can fail to decrypt:

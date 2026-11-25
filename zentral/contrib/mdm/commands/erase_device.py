@@ -3,7 +3,7 @@ from django import forms
 from rest_framework import serializers
 from zentral.contrib.mdm.models import Channel, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
-from .base import register_command, Command, CommandBaseForm, CommandBaseSerializer
+from .base import register_command, Command, CommandBaseForm, CommandBaseSerializer, get_secret_engine_kwargs
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.erase_device")
@@ -40,7 +40,7 @@ class EraseDeviceHelperMixin:
         if self.pin_required:
             kwargs["PIN"] = encrypt_str(
                 data.get("pin"),
-                model="mdm.devicecommand", field="PIN", uuid=str(uuid)
+                **get_secret_engine_kwargs(uuid, "PIN")
             )
         return kwargs
 
@@ -86,7 +86,7 @@ class EraseDevice(Command):
     form_class = EraseDeviceForm
     serializer_class = EraseDeviceSerializer
     audit_public_kwargs = ("DisallowProximitySetup", "PreserveDataPlan")
-    audit_secret_kwargs = ("PIN",)
+    secret_kwargs = ("PIN",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
@@ -95,7 +95,7 @@ class EraseDevice(Command):
     def load_pin(self):
         encrypted_pin = self.db_command.kwargs.get("PIN")
         if encrypted_pin:
-            return decrypt_str(encrypted_pin, model="mdm.devicecommand", field="PIN", uuid=str(self.uuid))
+            return decrypt_str(encrypted_pin, **get_secret_engine_kwargs(self.uuid, "PIN"))
 
     def build_command(self):
         payload = {}

@@ -7,7 +7,7 @@ from zentral.contrib.mdm.events import post_admin_password_updated_event
 from zentral.contrib.mdm.models import Channel, DEPEnrollment, Platform
 from zentral.core.secret_engines import decrypt_str, encrypt_str
 from zentral.utils.passwords import build_password_hash_dict, serialize_password_hash_dict
-from .base import register_command, Command, CommandBaseForm
+from .base import register_command, Command, CommandBaseForm, get_secret_engine_kwargs
 
 
 logger = logging.getLogger("zentral.contrib.mdm.commands.set_auto_admin_password")
@@ -34,14 +34,10 @@ def get_password_complexity(enrolled_device):
     return complexity
 
 
-def get_secret_engine_kwargs(uuid):
-    return {"model": "mdm.devicecommand", "field": "new_password", "uuid": str(uuid)}
-
-
 def get_command_kwargs(uuid, new_password=None, complexity=3):
     if not new_password:
         new_password = generate_password(complexity)
-    return {"new_password": encrypt_str(new_password, **get_secret_engine_kwargs(uuid))}
+    return {"new_password": encrypt_str(new_password, **get_secret_engine_kwargs(uuid, "new_password"))}
 
 
 class SetAutoAdminPasswordForm(CommandBaseForm):
@@ -62,7 +58,7 @@ class SetAutoAdminPassword(Command):
     reschedule_notnow = True
     verify_target_before_delivery = True
     form_class = SetAutoAdminPasswordForm
-    audit_secret_kwargs = ("new_password",)
+    secret_kwargs = ("new_password",)
 
     @staticmethod
     def verify_channel_and_device(channel, enrolled_device):
@@ -88,7 +84,7 @@ class SetAutoAdminPassword(Command):
 
     def load_new_password(self):
         new_password = self.db_command.kwargs.get("new_password")
-        return decrypt_str(new_password, **get_secret_engine_kwargs(self.uuid))
+        return decrypt_str(new_password, **get_secret_engine_kwargs(self.uuid, "new_password"))
 
     def build_command(self):
         return {
@@ -99,7 +95,7 @@ class SetAutoAdminPassword(Command):
     def command_acknowledged(self):
         new_password = self.load_new_password()
         self.enrolled_device.set_admin_password(new_password)
-        self.enrolled_device.save()
+        self.enrolled_device.save(update_fields=["admin_password", "admin_password_updated_at", "updated_at"])
         transaction.on_commit(lambda: post_admin_password_updated_event(self))
 
 
