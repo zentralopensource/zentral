@@ -17,8 +17,17 @@ class Command(BaseCommand):
         if kwargs["role"]:
             user_qs = user_qs.distinct().filter(groups__name__in=kwargs["role"])
         if kwargs.get("json", False):
-            output = [{"username": u.username, "email": u.email} for u in user_qs]
-            permissions = json.dumps(output, indent=2)
-            self.stdout.write(permissions)
+            output = [
+                {"id": u.pk,
+                 "username": u.username,
+                 "email": u.email,
+                 "is_active": u.is_active,
+                 "is_superuser": u.is_superuser,
+                 "is_remote": u.is_remote,
+                 "is_service_account": u.is_service_account,
+                 "roles": sorted(g.name for g in u.groups.all())}
+                for u in user_qs.prefetch_related("groups")
+            ]
+            self.stdout.write(json.dumps(output, indent=2))
         else:
             self.stdout.write("\n".join(str(u) for u in user_qs))

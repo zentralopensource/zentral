@@ -12,6 +12,8 @@ A task that produces several files has a manifest in its result. The download en
 
 `create_zentral_user` adds the new user to roles with the `--role` option now. Give the name of a role, and repeat the option for several of them. An unknown role stops the command, a role the user already has is skipped, and the roles are in the audit event of the user and in the `--json` output. Use it with `--service-account` to make the account an automation logs in with: the command creates it, adds the roles and prints its first API token.
 
+`list_users --json` gives the id of each user, its `is_active`, `is_superuser`, `is_remote` and `is_service_account` flags, and the names of its roles, in addition to the username and the email. Automation can tell the service accounts from the users now.
+
 A read-only HTTP API is available for the compliance checks. `/api/compliance_checks/compliance_checks/` lists the compliance checks, with the number of machines for each status, and the number of machines with a status from a previous version of the check. `/api/compliance_checks/machine_statuses/` lists the status of each machine for each check, and you can filter it on the serial number of the machine and on the compliance check.
 
 Zentral emits a `zentral_audit` event for each creation and each update of a realm in the console. The event does not contain the realm secrets: its `changed_secrets` attribute lists the keys of the secrets that the change sets, changes or removes.
