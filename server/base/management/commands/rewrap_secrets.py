@@ -1,9 +1,10 @@
 import copy
 import logging
-from django.db import transaction
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 from tqdm import tqdm
+from zentral.core.secret_engines import DecryptionError, EncryptionError
 
 
 logger = logging.getLogger("zentral.server.base.management.commands.rewrap_secrets")
@@ -18,6 +19,21 @@ def get_field_values(obj):
             value = copy.deepcopy(value)
         field_values[field.name] = value
     return field_values
+
+
+def rewrap_object(qs, pk):
+    with transaction.atomic():
+        # Read again with a lock, so that a value saved after the pks were listed is not overwritten.
+        obj = qs.select_for_update(of=("self",)).filter(pk=pk).first()
+        if obj is None:
+            return
+        old_values = get_field_values(obj)
+        obj.rewrap_secrets()
+        # updated_at is not one of the fields to save, so it keeps its value.
+        update_fields = [name for name, value in get_field_values(obj).items()
+                         if value != old_values[name]]
+        if update_fields:
+            super(qs.model, obj).save(update_fields=update_fields)
 
 
 class Command(BaseCommand):
@@ -36,14 +52,16 @@ class Command(BaseCommand):
                     qs = model_class.rewrap_secrets_queryset()
                 else:
                     qs = content_type.get_all_objects_for_this_type()
-                print(f"{model_class.__name__}:", qs.count(), "objects to update")
+                count = qs.count()
+                print(f"{model_class.__name__}:", count, "objects to update")
                 if not dry_run:
-                    with transaction.atomic():
-                        for obj in tqdm(qs.iterator(), total=qs.count()):
-                            old_values = get_field_values(obj)
-                            obj.rewrap_secrets()
-                            # updated_at is not one of the fields to save, so it keeps its value.
-                            update_fields = [name for name, value in get_field_values(obj).items()
-                                             if value != old_values[name]]
-                            if update_fields:
-                                super(model_class, obj).save(update_fields=update_fields)
+                    # One transaction for each object. One transaction for the model would lock each saved row
+                    # until the last one, and the requests that update these rows would wait.
+                    # A rewrapped token can be rewrapped again, so a run that stops can be started again.
+                    for pk in tqdm(qs.values_list("pk", flat=True).iterator(), total=count):
+                        try:
+                            rewrap_object(qs, pk)
+                        except (DecryptionError, EncryptionError) as exc:
+                            raise CommandError(
+                                f"Could not rewrap the secrets of {model_class._meta.label} {pk}"
+                            ) from exc
