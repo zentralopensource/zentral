@@ -69,6 +69,88 @@ Both carry the same two managed keys:
 
 Bumping the version of an enrollment (the [Bump Enrollment] button) does not change the secret – it is a signal for the agents, which poll the [enrollment info endpoint](#publicturboenrollment) and can react to a bump. Updating an enrollment through the API bumps its version too.
 
+### Privacy preference policy control
+
+Turbo runs its jobs as root, and macOS applies its privacy protections (TCC) to root too. Without Full Disk Access, a job cannot read a protected location, for example `~/Library/Mail` or `~/Library/Safari`. Some compliance checks need to read such a location. A [script](#scripts) that reads one fails with `Operation not permitted`, and a [file export](#file-exports) lists the files it could not read as unreadable in its manifest.
+
+To give Turbo Full Disk Access, distribute a [privacy preference policy control payload](https://developer.apple.com/documentation/devicemanagement/privacypreferencespolicycontrol) that allows the *System Policy All Files* (`SystemPolicyAllFiles` key) [Service](https://developer.apple.com/documentation/devicemanagement/privacypreferencespolicycontrol/services-data.dictionary) for Turbo, identified by its bundle ID and its code requirement.
+
+|IdentifierType|Identifier|CodeRequirement|Allowed|
+|---|---|---|:---:|
+|bundleID|com.zentral.turbo|anchor apple generic and identifier "com.zentral.turbo" and (certificate leaf[field.1.2.840.113635.100.6.1.9] /\* exists \*/ or certificate 1[field.1.2.840.113635.100.6.2.6] /\* exists \*/ and certificate leaf[field.1.2.840.113635.100.6.1.13] /\* exists \*/ and certificate leaf[subject.OU] = WQ28ZDJ49Y)|true|
+
+The code requirement can be validated using the following command. Everything after `designated =>` should be included in the profile.
+
+```
+$ codesign -dr - /opt/zentral/lib/Turbo.app
+```
+
+This payload is separate from the enrollment payload: the configuration profile that Zentral generates for an enrollment does not contain it. macOS accepts it only from an MDM, so it cannot be installed by hand.
+
+Here is an example of a configuration profile with this payload. Replace the organization, the payload identifiers and the payload UUIDs with your own.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadScope</key>
+	<string>System</string>
+	<key>PayloadDisplayName</key>
+	<string>Turbo TCC settings</string>
+	<key>PayloadDescription</key>
+	<string>Configures your Mac to automatically give Turbo full disk access</string>
+	<key>PayloadOrganization</key>
+	<string>Example</string>
+	<key>PayloadIdentifier</key>
+	<string>com.example.turbo.TCC</string>
+	<key>PayloadUUID</key>
+	<string>8F301CC3-8051-4389-B721-71494483660A</string>
+	<key>PayloadRemovalDisallowed</key>
+	<true/>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>PayloadType</key>
+			<string>com.apple.TCC.configuration-profile-policy</string>
+			<key>Services</key>
+			<dict>
+				<key>SystemPolicyAllFiles</key>
+				<array>
+					<dict>
+						<key>Allowed</key>
+						<true/>
+						<key>CodeRequirement</key>
+						<string>anchor apple generic and identifier "com.zentral.turbo" and (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = WQ28ZDJ49Y)</string>
+						<key>Identifier</key>
+						<string>com.zentral.turbo</string>
+						<key>IdentifierType</key>
+						<string>bundleID</string>
+						<key>StaticCode</key>
+						<false/>
+					</dict>
+				</array>
+			</dict>
+			<key>PayloadDisplayName</key>
+			<string>Privacy Preferences Policy Control</string>
+			<key>PayloadOrganization</key>
+			<string>Example</string>
+			<key>PayloadIdentifier</key>
+			<string>com.example.turbo.TCC.0</string>
+			<key>PayloadUUID</key>
+			<string>2E4671D1-B91A-426A-BCF7-83BC8C3DBAE2</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+</dict>
+</plist>
+```
+
 ### How the agent enrolls
 
 The agent posts its serial number, its hardware UUID and the `EnrollmentSecret` to the [enroll endpoint](#publicturboenroll), and gets a per-device token back. That token authenticates every subsequent request, in an `Authorization: TurboEnrolledMachine <token>` header.
