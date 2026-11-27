@@ -161,17 +161,22 @@ The agent matches the patterns with `fnmatch`, which macOS provides. The syntax 
 
 |Pattern|Matches|
 |---|---|
-|`*`|Any sequence of characters, up to the next `/`. `/var/log/*` matches `/var/log/install.log`, and does not match `/var/log/sub/deep.log`.|
+|`*`|Zero or more characters, `/` included. `/var/log/*.log` matches `/var/log/install.log` and `/var/log/sub/deep.log`.|
 |`?`|Any single character.|
 |`[abc]`|One character of the set.|
 
-**There is no recursive wildcard.** `fnmatch` reads `**` as a single `*`, so `/Library/Logs/**/*.log` would match `/Library/Logs/a/b.log` and not `/Library/Logs/a/b/c.log` — one level, not every level. Zentral refuses a pattern that contains `**`, because a pattern written for recursion would otherwise collect one level and give no error. Name each level you want instead:
+The agent matches without the `FNM_PATHNAME` flag, and below the deepest directory of the pattern that exists. Thus, one `*` matches the files at all depths. Zentral refuses `**`, because it does the same as `*` and does not match a file at the top level: `/Library/Logs/**/*.log` does not match `/Library/Logs/a.log`. Use `/Library/Logs/*.log`.
 
-```
-/Library/Logs/Foo/*.log
-/Library/Logs/Foo/*/*.log
-/Library/Logs/Foo/*/*/*.log
-```
+Examples:
+
+|Pattern|Collects|
+|---|---|
+|`/Library/Managed Installs/Logs`|All the Munki logs. A directory brings in all the files below it.|
+|`/Library/Managed Installs/Logs/*.log`|The Munki files that end in `.log`.|
+|`/var/log/install.log*`|The installer log, and its compressed archives.|
+|`/Library/Logs/DiagnosticReports/*.ips`|The crash reports.|
+
+The agent rejects a pattern whose deepest existing directory is the root directory, because it would examine the full disk. For example, `/*`, `/*.log` and `/Missing/*.log`, when `/Missing` does not exist.
 
 A file export run produces two files: a manifest, which lists what was matched, collected, skipped and unreadable, and an archive of the collected files. The manifest is a separate file so an operator can read what a run collected without downloading the archive. A run that matched nothing uploads the manifest and no archive.
 

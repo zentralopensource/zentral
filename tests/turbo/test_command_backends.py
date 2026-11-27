@@ -145,15 +145,12 @@ class TurboCommandBackendsTestCase(TestCase):
         self.assertEqual(cm.exception.detail["patterns"][0][0], "Must not contain a .. segment")
 
     def test_file_export_recursive_wildcard(self):
-        # fnmatch accepts **, and reads two stars as one. With FNM_PATHNAME,
-        # "/Library/Logs/**/*.log" matches one level, not two. A pattern for a recursive walk
-        # collects one level with no error, which is worse than an error.
         with self.assertRaises(serializers.ValidationError) as cm:
             self._validate_file_export({"patterns": ["/Library/Logs/**/*.log"]})
-        self.assertIn("no recursive wildcard", cm.exception.detail["patterns"][0][0])
+        self.assertIn("a * already matches the files at all depths", cm.exception.detail["patterns"][0][0])
 
     def test_file_export_single_wildcard_per_level_is_fine(self):
-        # one pattern for each level
+        # the agent's * already matches at all depths, so these patterns overlap, but they are valid
         data = self._validate_file_export(
             {"patterns": ["/Library/Logs/*.log", "/Library/Logs/*/*.log", "/Library/Logs/*/*/*.log"]})
         self.assertEqual(len(data["patterns"]), 3)

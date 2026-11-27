@@ -10,8 +10,6 @@ from .base import Artifact, BaseCommand
 logger = logging.getLogger("zentral.contrib.turbo.command_backends.file_export")
 
 
-# fnmatch has no recursive wildcard, so a tree needs one pattern for each level. See
-# validate_pattern. A support workflow with a few directories uses many patterns.
 MAX_PATTERNS = 32
 MAX_PATTERN_LENGTH = 1024
 DEFAULT_MAX_SIZE = 100 * 2**20
@@ -28,15 +26,11 @@ def validate_pattern(value):
     # normalize it, so that the agent walks what the operator reads.
     if ".." in value.split("/"):
         raise serializers.ValidationError("Must not contain a .. segment")
-    # The agent matches with fnmatch(3), which macOS supplies. fnmatch has no recursive
-    # wildcard, and it accepts **: two stars are two stars. With FNM_PATHNAME,
-    # `/Library/Logs/**/*.log` matches `/Library/Logs/a/b.log` but not
-    # `/Library/Logs/a/b/c.log`. A pattern for a recursive walk collects one level only, with no
-    # error. Refuse the pattern here, or the operator finds this out from a short archive.
+    # The agent matches with fnmatch(3) without FNM_PATHNAME, so a * already matches at all depths.
+    # A ** does the same, and `/Library/Logs/**/*.log` misses `/Library/Logs/a.log`.
     if "**" in value:
         raise serializers.ValidationError(
-            "Must not contain **: the patterns are matched with fnmatch, which has no recursive "
-            "wildcard. Add one pattern for each directory level."
+            "Must not contain **: a * already matches the files at all depths."
         )
     return value
 
@@ -44,7 +38,7 @@ def validate_pattern(value):
 class FileExportKwargsSerializer(serializers.Serializer):
     # A list, because a support workflow collects several paths in one run, one archive and one
     # limit. One pattern is a list of one. The syntax is fnmatch: `*`, `?` and `[...]`. A `*`
-    # stops at a `/` (FNM_PATHNAME), so a pattern names one directory level.
+    # also matches a `/`.
     patterns = serializers.ListField(
         child=serializers.CharField(max_length=MAX_PATTERN_LENGTH, validators=[validate_pattern]),
         min_length=1,
