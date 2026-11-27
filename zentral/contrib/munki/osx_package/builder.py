@@ -17,7 +17,8 @@ class MunkiZentralEnrollPkgBuilder(EnrollmentPackageBuilder):
 
     def get_extra_installcheck_script(self):
         # the Turbo agent runs the Zentral preflight and postflight itself
-        return '[[ -d "/opt/zentral/lib/Turbo.app" ]] && exit 1\n'
+        # the first path is the one of the agent before it moved to /Applications
+        return '[[ -d "/opt/zentral/lib/Turbo.app" || -d "/Applications/Turbo.app" ]] && exit 1\n'
 
     def extra_build_steps(self):
         fqdn = self.get_api_fqdn()

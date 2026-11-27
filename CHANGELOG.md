@@ -106,6 +106,8 @@ The Munki web console publishes a `zentral_audit` event when a user creates an e
 
 The audit events of a Munki enrollment are also on the page of its configuration now, like the Osquery, Santa and Turbo enrollments. The Munki enrollment gave no link to its configuration, so its events were only on the enrollment.
 
+The installcheck script of the Munki enrollment package finds the Turbo agent in `/Applications/Turbo.app` too. It only looked at `/opt/zentral/lib/Turbo.app`. On a machine with the agent in `/Applications`, Munki installed the enrollment package, and its postinstall script replaced the preflight and the postflight of the agent. The script is in the pkginfo of each enrollment package: run `rebuild_manifest_enrollment_packages` after the update, before a machine gets an agent in the new location.
+
 
 #### Osquery
 
