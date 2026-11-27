@@ -182,7 +182,7 @@ class MonolithModelsTestCase(TestCase):
         # the Turbo test comes before every test that installs the package
         self.assertIn(
             'PLUTIL="/usr/bin/plutil"\n'
-            '[[ -d "/opt/zentral/lib/Turbo.app" ]] && exit 1\n'
+            '[[ -d "/opt/zentral/lib/Turbo.app" || -d "/Applications/Turbo.app" ]] && exit 1\n'
             '[[ ! -f "$ENROLLMENT_PLIST" ]] && exit 0\n',
             installcheck_script
         )
